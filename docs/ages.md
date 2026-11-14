@@ -1,7 +1,7 @@
 # Les âges
 
 > Fichiers : `src/build/catalog.ts` (`AGES`, `AgeDef`, `minAge` / `maxAge`), `src/sim/sim.ts` (`ageProgress`, `reqKindsOf`, `usedBefore`, `advance`, `ready`), `src/sim/missions.ts` (`mandatoriesFor`), `src/main.ts` (`sim.onAgeUp`), `src/render/buildings.ts` (évolution des modèles), `src/ui/ui.ts` (`#agePanel`, `showNewAge`, `lockOf`), `src/sim/difficulty.ts` (`newOnly`).
-> Tests : `tests/difficulty.test.ts` (passage d'âge en Normal), `tests/baseAges.test.ts`, `tests/rail.test.ts`, `tests/briques.test.ts`.
+> Tests : `tests/difficulty.test.ts` (passage d'âge en Normal), `tests/baseAges.test.ts`, `tests/rail.test.ts`, `tests/briques.test.ts`, `tests/or.test.ts`.
 > Voir aussi : [besoins-population.md](besoins-population.md), [economie-ressources.md](economie-ressources.md), [difficulte.md](difficulte.md), [batiments-catalogue.md](batiments-catalogue.md), [rendu-modeles.md](rendu-modeles.md), [portail-ile.md](portail-ile.md), [chemin-de-fer.md](chemin-de-fer.md).
 
 ## En bref
@@ -20,18 +20,19 @@ Six âges, de 0 à 5. Le village est à un âge (`Sim.age`) ; il passe au suivan
 | 5 | Futuriste | Arcologies, maglev et fusées | 180 |
 
 ### Conditions pour atteindre l'âge `n` (en Facile et Bac à sable)
-Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`, `ratio` = moyenne de `min(1, have/need)`. Dans l'ordre : habitants, bâtiments (`reqKinds`), minerai, briques, expéditions obligatoires de l'âge **actuel**, bâtiments de fin d'âge (`reqLate`), chemin de fer.
+Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`, `ratio` = moyenne de `min(1, have/need)`. Dans l'ordre : habitants, bâtiments (`reqKinds`), minerai, briques, or (archipel accepté seulement), expéditions obligatoires de l'âge **actuel**, bâtiments de fin d'âge (`reqLate`), chemin de fer.
 
-| Pour atteindre | Bâtiments (`reqKinds`) | Minerai | Briques | Expéditions obligatoires (à réussir dans l'âge d'avant) | Fin d'âge |
-|---|---|---|---|---|---|
-| Antiquité | house 4, farm 1, well 1, workshop 1 | | | herd, mammoth | |
-| Médiéval | house 8, temple 1, workshop 2, gather 1 | | | seeds, kraken, portal (si la carte a un portail) | |
-| Industriel | house 12, temple 1, mill 1, quarry 1, landmark 1, gather 2, health 1 | 12 | | mine, dragon, caravel | |
-| Moderne | house 18, mill 2, landmark 1, gather 3, farm 2, school 1 | 30 | 40 | railway, motorcar, oil | `reqLate` : refinery 1, oilwell 2 ; `reqRail` : une première ligne et deux gares reliées |
-| Futuriste | house 24, workshop 3, school 2, lab 1, health 1, gather 4 | 50 | 80 | summit | |
+| Pour atteindre | Bâtiments (`reqKinds`) | Minerai | Briques | Or (archipel) | Expéditions obligatoires (à réussir dans l'âge d'avant) | Fin d'âge |
+|---|---|---|---|---|---|---|
+| Antiquité | house 4, farm 1, well 1, workshop 1 | | | | herd, mammoth | |
+| Médiéval | house 8, temple 1, workshop 2, gather 1 | | | | seeds, kraken, portal (si la carte a un portail) | |
+| Industriel | house 12, temple 1, mill 1, quarry 1, landmark 1, gather 2, health 1 | 12 | | 20 | mine, dragon, caravel | |
+| Moderne | house 18, mill 2, landmark 1, gather 3, farm 2, school 1 | 30 | 40 | 50 | railway, motorcar, oil | `reqLate` : refinery 1, oilwell 2 ; `reqRail` : une première ligne et deux gares reliées |
+| Futuriste | house 24, workshop 3, school 2, lab 1, health 1, gather 4 | 50 | 80 | 100 | summit | |
 
 - Les expéditions obligatoires sont celles de `mandatoriesFor(age)` (`missions.ts`, `mandatory: true` : 12 en tout). L'âge 5 n'en a aucune. `portal` n'est demandé que si `world.portal` existe.
 - Le minerai et les briques sont comptés **en réserve** (`world.ore`, `world.brick`) : en dépenser fait reculer la condition. En ressources illimitées, ces deux conditions sont réputées remplies.
+- **L'or** (`reqGold`, `world.gold`, voir [economie-ressources.md](economie-ressources.md)) : en réserve lui aussi, réputé rempli en ressources illimitées. Il n'existe que si l'archipel est accepté (`archipelagoOn`), et seulement à partir de l'âge qui suit l'acceptation (`goldNeed`, `firstGoldAge`, `trade.ts`) : `Sim.update` retient dans `world.trade.since` l'âge du village quand l'archipel apparaît. Accepté en entrant au Médiéval (le moment où on le propose) ou avant : l'or compte dès l'Industriel. Accepté plus tard, à l'âge `a` : rien pour le passage suivant, l'or compte à partir de l'âge `a + 2` (accepté à l'Industriel : rien pour le Moderne, 100 pour le Futuriste ; accepté au Moderne : jamais). Qui accepte tard n'est donc pas bloqué. Le libellé de la ligne est `GOLD_LABEL` (`sim.ts`) ; un clic ouvre le comptoir, et le conseil y mène (`messageGold`).
 - La raffinerie est débloquée par l'expédition `oil` ; la fin d'âge (`reqLate`, rail) ne vient qu'après les expéditions dans la liste, c'est l'ordre du conseil.
 - Un bâtiment **amélioré** compte pour son genre d'origine (`lineOf`, `UPGRADES` : une gare devenue gare centrale reste une gare ; une maison devenue manoir reste une maison).
 - L'île du portail, l'invasion et les Enfers sont **facultatifs** et ne conditionnent plus le passage (commit 66acbf4).
@@ -78,6 +79,6 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - À vérifier : les capacités des bâtiments (`b.age`) montent pendant l'animation d'évolution sans que `world.version` change ; elles peuvent ne se refléter dans les jauges qu'au prochain changement du village.
 
 ## Pour modifier
-- **Changer une condition** : `AGES[n]` (`catalog.ts`) ; la variante Normal se déduit toute seule ; mettre à jour `tests/difficulty.test.ts` (` passage d'âge en Normal`) et le conseil si c'est un nouveau type de condition (`ageProgress` + `computeMessage` + `reqOf` dans `ui.ts` + traduction).
+- **Changer une condition** : `AGES[n]` (`catalog.ts`) ; pour l'or, aussi `firstGoldAge` (`trade.ts`) ; la variante Normal se déduit toute seule ; mettre à jour `tests/difficulty.test.ts` (` passage d'âge en Normal`) et le conseil si c'est un nouveau type de condition (`ageProgress` + `computeMessage` + `reqOf` dans `ui.ts` + traduction).
 - **Rendre une expédition obligatoire** : `mandatory: true` dans `MISSIONS` ; elle apparaît d'elle-même dans les conditions (`mandatoriesFor`).
 - **Ajouter un bâtiment à un âge** : `minAge` et tableaux par âge dans `KINDS` ; la fenêtre de nouveaux bâtiments le liste seule.

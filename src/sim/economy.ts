@@ -14,7 +14,8 @@ import type { World } from '../world/world';
 
 /** Prix d'un bâtiment : bois et pierre, et des briques pour quelques grands bâtiments industriels (absentes : aucune) */
 export interface Cost { wood: number; stone: number; brick?: number }
-export type Resource = 'wood' | 'stone' | 'ore' | 'crude' | 'fuel' | 'brick';
+/** (l'or ne se produit pas : il ne vient que du comptoir des voisins, voir `trade.ts`) */
+export type Resource = 'wood' | 'stone' | 'ore' | 'crude' | 'fuel' | 'brick' | 'gold';
 
 /** Stock au départ d'une partie (et d'une ancienne sauvegarde qui n'en avait pas) */
 export const START_WOOD = 100, START_STONE = 100;
@@ -97,4 +98,4 @@ export const REFINE_CRUDE = 12, FUEL_PER_CRUDE = 0.75;
 /** Carburant que brûlent chaque jour les automobiles d'une usine automobile (sans carburant, elles restent au garage) */
 export const CAR_FUEL = 2;
 
-export const RES_NAME: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', crude: 'pétrole brut', fuel: 'carburant', brick: 'briques' };
+export const RES_NAME: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', crude: 'pétrole brut', fuel: 'carburant', brick: 'briques', gold: 'or' };

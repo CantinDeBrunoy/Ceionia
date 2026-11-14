@@ -193,6 +193,18 @@ button.pop:hover { background: rgba(255, 255, 255, 0.7); }
 #needInfo .crow.total span { font-weight: 800; }
 #needInfo .hint.warn, #needInfo .hint.full, #needInfo .hint.ok { font-weight: 700; }
 #needInfo button { width: 100%; justify-content: center; margin-top: 4px; }
+/* comptoir des voisins (fiche de l'or) : une ligne par ressource, vendre et acheter */
+#needInfo.trade { width: 360px; }
+#needInfo .tlot { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 12px; color: var(--ink2); }
+#needInfo .tlot button { width: auto; margin: 0; padding: 3px 10px; font-size: 12px; }
+#needInfo .tlot button.on { background: var(--accent); color: #fff; }
+#needInfo .trow { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px solid rgba(0, 0, 0, 0.06); }
+#needInfo .trow .tn { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; min-width: 0; }
+#needInfo .trow .tn > span { display: flex; flex-direction: column; line-height: 1.1; }
+#needInfo .trow .tn small { font-weight: 600; font-size: 11px; color: var(--ink2); }
+#needInfo .trow button { width: auto; margin: 0; padding: 4px 8px; font-size: 12px; display: flex; flex-direction: column; align-items: center; line-height: 1.15; min-width: 82px; }
+#needInfo .trow button small { display: flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#needInfo .trow button:disabled { opacity: 0.45; }
 #info .cost { font-weight: 700; display: flex; align-items: center; gap: 6px; }
 #info .cost.short { color: var(--bad); }
 #census { position: absolute; z-index: 7; width: 290px; max-width: calc(100vw - 16px); padding: 12px 14px; pointer-events: auto; animation: rise 0.18s ease-out; border-radius: 18px; }

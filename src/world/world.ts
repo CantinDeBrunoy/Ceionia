@@ -8,6 +8,7 @@ import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/diffic
 import { GEN, GEN_FIXED, GEN_VAR, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
 import { archLayout, type ArchLayout } from './archipelago';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
+import { TradeState, newTradeState, readTradeState } from '../sim/trade';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Crossing, crossingMap, nearestOnDeck } from './crossings';
 
@@ -274,6 +275,10 @@ export class World {
   fuel = 0;
   /** briques de la briqueterie (les anciennes sauvegardes n'en ont pas : zéro) */
   brick = 0;
+  /** or, tiré du seul comptoir des voisins, dans une partie qui a accepté l'archipel (les anciennes sauvegardes : zéro) */
+  gold = 0;
+  /** comptoir des voisins : saturation des cours, âge où l'or est apparu (sauvegardé) */
+  trade: TradeState = newTradeState();
   /** Gisements de pétrole : cases où le brut suinte (1), tirées de la graine de la carte ; seul un puits de pétrole s'y pose */
   oil = new Uint8Array(N * N);
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
@@ -1694,6 +1699,8 @@ export class World {
       crude: this.crude,
       fuel: this.fuel,
       brick: this.brick,
+      ...(this.gold ? { gold: this.gold } : {}),
+      ...(this.trade.since >= 0 || Object.keys(this.trade.sat).length ? { trade: this.trade } : {}),
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       exp: this.exp,
       difficulty: this.difficulty,
@@ -1823,6 +1830,8 @@ export class World {
     this.crude = Math.max(0, +d.crude || 0);
     this.fuel = Math.max(0, +d.fuel || 0);
     this.brick = Math.max(0, +d.brick || 0);
+    this.gold = Math.max(0, +d.gold || 0);
+    this.trade = readTradeState(d.trade);
     // une ancienne sauvegarde n'a pas de gisements : ils se tirent de la graine au chargement (addDefaultDecor)
     this.oil.fill(0);
     for (const k of Array.isArray(d.oil) ? d.oil : []) if (k >= 0 && k < N * N) this.oil[k] = 1;
