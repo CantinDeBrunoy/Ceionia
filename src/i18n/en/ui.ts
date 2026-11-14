@@ -228,12 +228,10 @@ registerDict('ui', {
   'Deux îles et leurs villes': 'Two islands and their towns',
   'Une alliance, de l’or, un conflit': 'An alliance, gold, a conflict',
   'Voie ouverte': 'Path open',
-  'Pas encore': 'Not yet',
   'Pas sur cette carte': 'Not on this map',
   'Rouvrir le portail': 'Reopen the portal',
   'Le portail est ouvert : les démons vous attendent sur l’île.': 'The portal is open: the demons await you on the island.',
   'Le monde s’est agrandi : les deux îles sont là, au large.': 'The world has grown: the two islands lie offshore.',
-  'Elle s’ouvrira à la fin de l’Antiquité.': 'It opens at the end of Antiquity.',
   'Sauvegarde impossible : le monde ne s’est pas agrandi.': 'Save failed: the world did not grow.',
   // l'or et le comptoir des voisins (archipel accepté)
   'Or': 'Gold',

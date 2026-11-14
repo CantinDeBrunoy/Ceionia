@@ -827,7 +827,7 @@ body.hell #resPanel { display: none !important; }
 
 /* l'onglet « Voies » des expéditions (`ui/ways.ts`) : les deux voies du grand choix, une carte chacune, comme la carte du
    choix : parchemin bordé d'or (violet pour les Enfers), diorama en tête, nom en Fraunces, une phrase d'envie, ce qu'elle
-   ouvre, le pavé d'état en haut à droite, le bouton d'or en pied ; « pas encore » et « pas sur cette carte » s'effacent */
+   ouvre, le pavé d'état en haut à droite, le bouton d'or en pied ; « pas sur cette carte » s'efface */
 .expModal .waysBox { padding: 4px 2px 10px; }
 .expModal .wyLead { margin: 2px 0 34px; text-align: center; font-family: var(--hSerif); font-style: italic; font-size: 15px; color: var(--hInk2); }
 .expModal .wayCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
@@ -851,9 +851,8 @@ body.hell #resPanel { display: none !important; }
 .expModal .wyGo:hover { background: linear-gradient(180deg, #FFEDB8, #F7CA6A); }
 .expModal .wyGo .pic { width: 26px; height: 26px; }
 .expModal .wyNote { margin: auto 0 0; padding-top: 6px; font-family: var(--hSerif); font-style: italic; font-size: 14px; color: var(--hInk2); }
-.expModal .wayCard.st-soon, .expModal .wayCard.st-none { filter: saturate(0.45); }
-.expModal .wayCard.st-soon .wyArt img, .expModal .wayCard.st-none .wyArt img { opacity: 0.7; }
-.expModal .wayCard.st-none { opacity: 0.7; }
+.expModal .wayCard.st-none { filter: saturate(0.45); opacity: 0.7; }
+.expModal .wayCard.st-none .wyArt img { opacity: 0.7; }
 @media (max-width: 640px) {
   .expModal .wayCards { grid-template-columns: 1fr; gap: 40px; }
   .expModal .wayCard { padding-top: 112px; }

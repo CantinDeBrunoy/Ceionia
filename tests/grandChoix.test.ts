@@ -3,7 +3,7 @@ import { World, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { canExpand, expandWorld } from '../src/world/expand';
-import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, waysTabShown, waysSoon, wayBadge, CROSSROADS_AGE } from '../src/sim/crossroads';
+import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, waysTabShown, wayBadge, CROSSROADS_AGE } from '../src/sim/crossroads';
 import { War } from '../src/sim/war';
 import { Sim } from '../src/sim/sim';
 import { Agents } from '../src/sim/agents';
@@ -69,23 +69,17 @@ describe('le grand choix : les règles', () => {
     expect(crossroadsSettled(w, 'open', 'open')).toBe(false);
   });
 
-  it('l’onglet « Voies » : dès l’Antiquité (au bac à sable, tout de suite), s’il reste une voie sur la carte ; « pas encore » avant le grand choix', () => {
-    expect(waysTabShown({ sandbox: false }, 0, 'open', 'open')).toBe(false);
-    expect(waysTabShown({ sandbox: false }, 1, 'open', 'open')).toBe(true);
-    expect(waysTabShown({ sandbox: true }, 0, 'ask', 'open')).toBe(true);
-    expect(waysTabShown({ sandbox: false }, 3, 'none', 'none')).toBe(false);
+  it('l’onglet « Voies » : une fois le grand choix fait (au bac à sable, tout de suite), s’il reste une voie sur la carte', () => {
+    expect(waysTabShown({ sandbox: false, crossroads: false }, 'open', 'open')).toBe(false);
+    expect(waysTabShown({ sandbox: false, crossroads: true }, 'open', 'open')).toBe(true);
+    expect(waysTabShown({ sandbox: true, crossroads: false }, 'open', 'open')).toBe(true);
+    expect(waysTabShown({ sandbox: false, crossroads: true }, 'none', 'none')).toBe(false);
     // (les deux prises : l'onglet reste, il dit ce qui est fait)
-    expect(waysTabShown({ sandbox: false }, 3, 'taken', 'taken')).toBe(true);
-    // à l'Antiquité, avant le choix : pas encore ; après lui (ou au Médiéval, ou au bac à sable) : à prendre
-    expect(waysSoon({ sandbox: false, crossroads: false }, 1)).toBe(true);
-    expect(waysSoon({ sandbox: false, crossroads: true }, 1)).toBe(false);
-    expect(waysSoon({ sandbox: false, crossroads: false }, 2)).toBe(false);
-    expect(waysSoon({ sandbox: true, crossroads: false }, 0)).toBe(false);
-    expect(wayBadge('open', false)).toBe('free');
-    expect(wayBadge('ask', false)).toBe('free');
-    expect(wayBadge('open', true)).toBe('soon');
-    expect(wayBadge('taken', true)).toBe('taken');
-    expect(wayBadge('none', false)).toBe('none');
+    expect(waysTabShown({ sandbox: false, crossroads: true }, 'taken', 'taken')).toBe(true);
+    expect(wayBadge('open')).toBe('free');
+    expect(wayBadge('ask')).toBe('free');
+    expect(wayBadge('taken')).toBe('taken');
+    expect(wayBadge('none')).toBe('none');
   });
 });
 
@@ -135,7 +129,7 @@ describe('le grand choix : une partie', () => {
     const back = reload(w);
     expect(back.crossroads).toBe(true);
     expect(crossroadsDue(back, 3, 'open', 'open', true)).toBe(false);
-    expect(waysTabShown(back, 3, 'open', 'open')).toBe(true);
+    expect(waysTabShown(back, 'open', 'open')).toBe(true);
     expect(ways(back, war)).toEqual({ hell: 'open', world: 'open' });
   });
 
@@ -344,10 +338,6 @@ describe('l’onglet « Voies » des expéditions', () => {
     expect(taken).toContain('Voie ouverte');
     expect(taken).toContain('data-way="world"');
     expect(waysHtml({ hell: 'taken', world: 'taken' })).not.toContain('data-way=');
-    // avant le grand choix : pas encore, pas de bouton
-    const soon = waysHtml({ hell: 'open', world: 'open' }, true);
-    expect(soon).not.toContain('data-way=');
-    expect(soon.match(/st-soon/g)).toHaveLength(2);
     // le portail refermé se rouvre ; une voie impossible sur la carte est grisée, sans bouton
     expect(waysHtml({ hell: 'ask', world: 'none' })).toContain('Rouvrir le portail');
     expect(waysHtml({ hell: 'ask', world: 'none' })).toContain('st-none');

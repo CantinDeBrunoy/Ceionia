@@ -15,16 +15,15 @@ Deux contenus de fin de partie arrivaient en même temps au début du Médiéval
 - Deux tuiles côte à côte, le diorama qui déborde en haut de chacune : « Les Enfers » (violette, l'arche du portail) et « Explorer le monde » (dorée, la caravelle) ; puis « Ni l'un ni l'autre » (crème) sur toute la largeur. Une voie impossible sur la carte (pas d'île du portail ; monde qui ne peut plus s'agrandir) est grisée avec sa raison. La note dit « Il faut choisir pour passer au Médiéval. Rien n'est définitif : l'autre voie restera ouverte », sans dire où.
 - **Les Enfers** : le portail s'ouvre tout de suite, **sans expédition** (`World.portalWoken`), et le joueur affronte les démons d'emblée (`War.wake` : `pve = 'on'`, `choiceSeen`). Pas de seconde carte « affronter / refermer » : le grand choix la remplace, comme il remplace l'expédition « Le portail de l'autre rive ». La vue va sur l'île (`pveStart` : chapitre `pve` du tutoriel, `commandIsle`).
 - **Explorer le monde** : la cinématique (ci-dessous), la carte s'agrandit à l'archipel (`expandWorld`), les deux îles apparaissent.
-- **Ni l'un ni l'autre** : rien ne change ; `crossroads` passe à vrai.
+- **Ni l'un ni l'autre** : rien ne change ; `crossroads` passe à vrai (l'onglet « Voies » apparaît).
 - Chaque réponse marque `World.crossroads` (sauvegardé) : la carte ne revient plus.
 
 ### L'onglet « Voies » des expéditions
-- Bouton « Voies » (boussole) à droite de la barre des expéditions, dès l'Antiquité (au bac à sable, tout de suite), dès qu'une voie existe sur la carte (`waysTabShown`). Rien ne le signale.
+- Bouton « Voies » (boussole) à droite de la barre des expéditions, une fois le grand choix fait (`World.crossroads` ; décision de l'auteur : « Après le grand choix »), et au bac à sable dès le départ, s'il existe une voie sur la carte (`waysTabShown`). Rien ne le signale.
 - Une carte par voie (`ui/ways.ts`, styles « l'onglet Voies » de `hudTheme.css`), dans l'habillage de la carte du grand choix : parchemin bordé d'or (violet pour les Enfers), diorama en tête (l'arche du portail, la caravelle), nom en Fraunces souligné d'un filet doré, une phrase d'envie, deux pastilles « ce qu'elle ouvre », le pavé d'état en haut à droite, le bouton d'or en pied.
-- Quatre états (`wayBadge`) :
+- Trois états (`wayBadge`) :
   - **Disponible** : pavé doré et bouton « Ouvrir le portail » (« Rouvrir le portail » s'il a été refermé) ou « Explorer le monde ». C'est la voie non prise, ou les deux après « Ni l'un ni l'autre ».
   - **Voie ouverte** : pavé vert, une phrase dit ce qui est là, pas de bouton.
-  - **Pas encore** : à l'Antiquité, tant que le grand choix n'a pas eu lieu (`waysSoon`). Carte un peu éteinte, « Elle s'ouvrira à la fin de l'Antiquité. », pas de bouton.
   - **Pas sur cette carte** : pas d'île du portail, ou monde qui ne peut plus s'agrandir. Carte grisée, pas de bouton.
 - Le bouton ferme la fenêtre et ouvre la carte de cette seule voie pour confirmer (`WorldChoice.show(way)` : la voie et « Pas maintenant »). Le portail refermé (état `ask` de la voie) ouvre plutôt la carte du portail (« Affronter les démons » / « Garder le portail fermé ») ; ouvert sans choix (ancienne partie, bac à sable), c'est la carte de la voie des Enfers, qui passe `pve` à `on`.
 - Au téléphone (≤ 640 px), les deux cartes s'empilent.
@@ -77,6 +76,6 @@ Demande de l'auteur : « il faut une vraie cinématique comme celle de fin. Elle
 - Le jeu ne guide pas vers l'onglet : ne pas ajouter de message, de bulle ou de ligne de rayon qui y mène (décision de l'auteur).
 
 ## Pour modifier
-- **Changer l'âge du choix** : `CROSSROADS_AGE` (la condition, `crossroadsDue`, `waysTabShown`).
+- **Changer l'âge du choix** : `CROSSROADS_AGE` (la condition, `crossroadsDue`).
 - **Ajouter une voie** : un état dans `crossroads.ts`, une tuile dans `WorldChoice.grand`, une carte dans `waysHtml`, une branche dans `takeWay` ; tests dans `grandChoix.test.ts`.
 - **Retoucher la cinématique** : plans, durées, bandeaux et fondus dans `voyageCine.ts` (tests `cinematiqueVoyage.test.ts`) ; caméra et navires de chaque plan dans `VoyageStage.place` ; l'écran d'attente dans `VOYAGE_PLATE` et les styles de `style.css`.
