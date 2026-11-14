@@ -53,7 +53,7 @@ const SAMPLES: Record<string, { file: string; rate?: number; max?: number }> = {
 const SAMPLE_PEAK = 0.16;
 
 /** Ambiances musicales hors des âges : le menu principal, les Enfers, la fin (chute du roi, voyage des colons, victoire) */
-export type MusicScene = 'menu' | 'hell' | 'end';
+export type MusicScene = 'menu' | 'hell' | 'end' | 'voyage';
 /**
  * Musique enregistrée, en attendant celle composée pour le jeu : fichiers de `public/sons/musique/` (sans extension),
  * une liste par âge (`age0` … `age5`) et par scène. Sources et licences : `docs/audio.md` et la page Crédits. Une liste
@@ -68,6 +68,11 @@ export const MUSIC: Record<string, string[]> = {
   age5: ['futuriste-synthwave', 'futuriste-aout', 'futuriste-lifewave'],
   menu: ['menu'], hell: ['enfers-oppression', 'enfers-com-mecha', 'enfers-croisade', 'enfers-rituel'], end: ['fin'],
 };
+/**
+ * Les scènes qui reprennent un morceau d'une liste d'âge (un morceau n'appartient qu'à une liste de `MUSIC`) : la cinématique
+ * « Explorer le monde » joue celui de l'exploration, du Médiéval
+ */
+const SCENE_TRACKS: Record<string, string[]> = { voyage: ['medieval-exploration'] };
 const RECORDED_MUSIC = true;
 /** durée du fondu enchaîné entre deux morceaux (s) */
 const MUSIC_FADE = 4;
@@ -247,7 +252,7 @@ export class AudioEngine {
    * laisse la musique générée
    */
   private playTrack(key: string) {
-    const ctx = this.ctx!, list = (MUSIC[key] ?? []).filter((n) => !this.missing.has(n));
+    const ctx = this.ctx!, list = (MUSIC[key] ?? SCENE_TRACKS[key] ?? []).filter((n) => !this.missing.has(n));
     if (!list.length) { this.track = null; return; }
     const prev = this.lastTrack.get(key), pool = list.length > 1 ? list.filter((n) => n !== prev) : list;
     const name = pool[Math.floor(Math.random() * pool.length)];

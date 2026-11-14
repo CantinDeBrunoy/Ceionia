@@ -590,8 +590,18 @@ export class War {
   /** « Affronter les démons » : le joueur joue le PvE (le portail se rouvre au besoin) ; le guidage prend le relais */
   acceptPve(): boolean {
     if (this.pve === 'on') return false;
-    this.pve = 'on'; this.choiceSeen = true;
+    this.pve = 'on'; this.choiceSeen = true; this.legacyPve = false;
     return true;
+  }
+
+  /**
+   * Le grand choix « Les Enfers » vient d'ouvrir le portail (`World.portalWoken`) : le joueur affronte les démons, sans autre
+   * carte. Une ancienne sauvegarde dont le portail n'avait jamais été ouvert n'a pas d'historique à relire : l'invasion
+   * commence au début (sans quoi, passé l'Antiquité, `readLegacyInvasion` la croirait faite)
+   */
+  wake() {
+    this.legacyInv = false;
+    this.acceptPve();
   }
 
   /** Le moment de l'invasion, « Affronter » dans la barre : elle part (compte à rebours INVASION_DELAY) ; false si elle n'est pas prête */

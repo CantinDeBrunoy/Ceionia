@@ -10,7 +10,7 @@ Quand le joueur accepte d'« explorer le monde » (passage au Médiéval, ou plu
 ## Règles du jeu
 
 ### L'archipel accepté
-`archipelagoOn(w)` (`world/expand.ts`, réexportée par `diplomacy.ts`) = `!!w.isles` : la place des îles n'existe que dans une partie agrandie par « Explorer le monde » (ou née archipel, version 4). C'est la seule question à poser ; toute la diplomatie la lit. L'âge d'acceptation est `world.exploredAt` (session « carte plus grande »). À la fin de la cinématique des îles (`Game.onIslesRevealed`), un message mène à l'expédition du premier contact.
+`archipelagoOn(w)` (`world/expand.ts`, réexportée par `diplomacy.ts`) = `!!w.isles` : la place des îles n'existe que dans une partie agrandie par « Explorer le monde » (ou née archipel, version 4). C'est la seule question à poser ; toute la diplomatie la lit. L'âge d'acceptation est `world.exploredAt` (session « carte plus grande »). À la fin de la cinématique des îles (`Game.onIslesRevealed`), la bannière « Le premier contact » paraît, et un message mène à l'expédition du même nom.
 
 ### La découverte (Médiéval)
 - Mission `contact` « Le premier contact » (`missions.ts`, âge 2, non obligatoire, en mer, scène `voyage`) : deux choix, prudent (pavillon blanc, risque 0,08) et audacieux (accoster, 0,22). Elle peut échouer et se retente. Réussie : effet `{ t: 'diplo', act: 'meet' }` → `diplo.met` = les deux peuples. Ses imprévus propres : `warsails`, `gifts` (`events.ts`), plus ceux de la mer.

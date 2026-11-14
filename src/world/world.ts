@@ -339,8 +339,16 @@ export class World {
    * îles. Tirées de la graine et écrites dans la sauvegarde ; null avant la version 4 (une seule île)
    */
   isles: ArchLayout | null = null;
-  /** « Explorer le monde » : 'ask' tant que le joueur n'a pas répondu, 'no' s'il reste sur son île (sauvegardé) */
+  /**
+   * L'ancienne carte « Explorer le monde » : 'no' si le joueur est resté sur son île (sauvegardé). Plus lu par le jeu depuis le
+   * grand choix (`crossroads`) : gardé pour relire et réécrire les sauvegardes telles quelles
+   */
   explore: 'ask' | 'no' = 'ask';
+  /**
+   * Le grand choix de la fin de l'Antiquité (les Enfers, explorer le monde, ni l'un ni l'autre) a été fait, ou n'a plus lieu
+   * d'être (une voie déjà prise) : sa carte ne s'ouvre plus d'elle-même (sauvegardé ; voir `sim/crossroads.ts`)
+   */
+  crossroads = false;
   /**
    * Version du générateur de l'île principale (sauvegardée si ce n'est pas la 3) : une ancienne partie (version 1 ou 2)
    * agrandie à l'archipel garde le climat, la rivière et les biomes de son île (`mainGenOf`)
@@ -367,12 +375,13 @@ export class World {
   war: unknown = null;
 
   /**
-   * Bac à sable : le portail s'est ouvert de lui-même à l'Antiquité, sans l'expédition (voir `Sim.update`). Elle reste jouable mais
-   * n'est pas comptée comme faite (trophées, récompenses) ; une fois ouvert, le portail le reste, même si l'on revient en arrière
+   * Le portail s'est ouvert sans l'expédition : au bac à sable, de lui-même à l'Antiquité (voir `Sim.update`) ; ailleurs, par
+   * le grand choix (« Les Enfers », ou la voie prise plus tard dans l'onglet des expéditions). Une fois ouvert, il le reste,
+   * même si l'on revient en arrière
    */
   portalWoken = false;
 
-  /** le portail est ouvert : l'expédition « Le portail de l'autre rive » a réussi, ou le bac à sable l'a ouvert (on peut bâtir sur l'île) */
+  /** le portail est ouvert : le grand choix ou le bac à sable l'a ouvert, ou l'expédition « Le portail de l'autre rive » d'une ancienne partie a réussi (on peut bâtir sur l'île) */
   get portalOpen() { return !!this.portal && (this.portalWoken || this.exp.done.includes('portal')); }
 
   /** La case est sur l'île du portail ou dans ses eaux (le bras de mer qui la sépare du continent est bien plus large) */
@@ -1741,6 +1750,7 @@ export class World {
       gen: this.gen,
       ...(this.isles ? { isles: this.isles } : {}),
       ...(this.explore === 'no' ? { explore: 'no' } : {}),
+      ...(this.crossroads ? { crossroads: true } : {}),
       ...(this.exploredAt !== null ? { exploredAt: this.exploredAt } : {}),
       ...(this.isles && this.mainGen !== GEN_VAR ? { mainGen: this.mainGen } : {}),
       ...(this.reveal ? { reveal: 1 } : {}),
@@ -1867,6 +1877,7 @@ export class World {
     // (la place des îles se tire de la graine : celle de la sauvegarde n'est là que pour qui la lit au dehors)
     this.isles = this.gen === GEN_ARCH ? archLayout(this.seed, N) : null;
     this.explore = d.explore === 'no' ? 'no' : 'ask';
+    this.crossroads = d.crossroads === true;
     this.exploredAt = Number.isInteger(d.exploredAt) && this.isles ? d.exploredAt : null;
     this.mainGen = this.isles && [GEN_FIXED, 2, 5].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;

@@ -24,6 +24,8 @@ import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCost
 import { choiceStyles, riskDots, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
 import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
+import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/crossroads';
+import { waysHtml } from './ways';
 import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -59,11 +61,14 @@ export interface UIHost {
   underZone(): string | null;
   /** prendre le commandement de la garnison de l'île du portail (tour de garde, caserne) */
   commandIsle?(): void;
-  /** la ligne « Portail refermé · Rouvrir » du rayon Militaire (null : rien à proposer) et l'ouverture de la carte du choix */
-  pveLine?(): { text: string; button: string } | null;
-  exploreLine?(): { text: string; button: string } | null;
-  openWorldChoice?(): void;
-  openPortalChoice?(): void;
+  /**
+   * Les deux voies du grand choix (les Enfers, explorer le monde), pour l'onglet « Voies » des expéditions : où elles en sont,
+   * et les prendre (la carte de la voie s'ouvre pour confirmer)
+   */
+  ways?(): { hell: WayState; world: WayState };
+  takeWay?(way: Way): void;
+  /** rouvrir la carte du grand choix (condition du passage au Médiéval) */
+  openCrossroads?(): void;
   /** la diplomatie de l'archipel : la ligne du conflit des deux îles (rayon Vie) et sa carte */
   diploLine?(): { text: string; button: string } | null;
   openDiploChoice?(): void;
@@ -286,7 +291,7 @@ const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string;
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
-const reqOf = (label: string) => (label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
+const reqOf = (label: string) => (label === CHOICE_LABEL ? 'choice' : label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
@@ -686,6 +691,7 @@ export class UI {
         return;
       }
       if (req === 'pop') { this.openNeed('housing'); return; }
+      if (req === 'choice') { this.host.audio.sfxClick(); this.host.openCrossroads?.(); return; }
       if (req === 'isle') { this.host.audio.sfxClick(); this.host.commandIsle?.(); return; }
       // le chemin de fer : la gare qui manque, ou le tracé d'une ligne depuis une gare
       if (req === 'rail') { const nx = this.host.sim.railNext(); this.host.audio.sfxClick(); if ('kind' in nx) this.pick(nx.kind); else this.host.startRailEdit({ stop: nx.stop }); return; }
@@ -698,7 +704,7 @@ export class UI {
     window.addEventListener('pointerdown', (e) => { if (!$('#notifPanel').hidden && !(e.target as HTMLElement).closest('#notifPanel, #bBell')) this.toggleNotifPanel(false); }, true);
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
     $('#helpBtn').onclick = () => { this.help = !this.help; try { localStorage.setItem('ceionia.aides', this.help ? '1' : '0'); } catch { /* sans stockage */ } this.host.audio.sfxClick(); this.renderMessage(); };
-    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageChoice) { this.host.audio.sfxClick(); this.host.openCrossroads?.(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info(tr('Le brouillard se lève.')); };
     $('#bSpeed').onclick = () => {
@@ -827,7 +833,7 @@ export class UI {
   /** Ce que montrent les vignettes du rayon ouvert (nombre de chaque bâtiment, cadenas) : elles se redessinent quand ça change */
   private tilesKey = '';
   private tilesNow() {
-    return this.tab === 'build' ? (this.cat === 'war' ? this.host.pveLine?.()?.button ?? '' : this.cat === 'prod' ? this.host.exploreLine?.()?.button ?? '' : '') + (this.cat === 'life' ? this.host.diploLine?.()?.text ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
+    return this.tab === 'build' ? (this.cat === 'life' ? this.host.diploLine?.()?.text ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
   }
 
   /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
@@ -885,20 +891,14 @@ export class UI {
       const tool = (id: string) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; };
       html = LAND_SUBS.find((l) => l.id === this.land)!.groups.map((g) => `<div class="grp"><div class="gh">${ic(g.icon, 13, 2)}<span>${tr(g.label)}</span></div><div class="gt">${g.tools.map(tool).join('')}</div></div>`).join('');
     }
-    // le portail à rouvrir (ou le PvE à choisir) : une ligne en tête du rayon Militaire
-    const pve = build && this.cat === 'war' ? this.host.pveLine?.() : null;
-    if (pve) html = `<div class="grp pvehead"><span>${pve.text}</span><button data-pve="1">${pve.button}</button></div>${html}`;
-    // « Explorer le monde », pour qui est resté sur son île : une ligne en tête du rayon Production (celui du port)
-    const exp = build && this.cat === 'prod' ? this.host.exploreLine?.() : null;
-    if (exp) html = `<div class="grp pvehead"><span>${exp.text}</span><button data-explore="1">${exp.button}</button></div>${html}`;
+    // (les voies du grand choix, les Enfers et l'archipel, ne s'annoncent pas ici : elles sont dans l'onglet « Voies » des
+    // expéditions, que le jeu ne montre pas du doigt)
     // le conflit des deux îles (archipel, âge industriel) : une ligne en tête du rayon Vie
     const dip = build && this.cat === 'life' ? this.host.diploLine?.() : null;
     if (dip) html = `<div class="grp pvehead diplohead"><span>${dip.text}</span><button data-diplo="1">${dip.button}</button></div>${html}`;
     const items = $('#items'), left = items.scrollLeft;
     items.innerHTML = html;
     items.scrollLeft = keep ? left : 0;
-    items.querySelector<HTMLButtonElement>('[data-pve]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openPortalChoice?.(); });
-    items.querySelector<HTMLButtonElement>('[data-explore]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openWorldChoice?.(); });
     items.querySelector<HTMLButtonElement>('[data-diplo]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); });
     this.markFirst();
     this.bindTools(items);
@@ -994,8 +994,6 @@ export class UI {
     if (h.world.sandbox) return null;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
-      // le portail : on dit où il mène (le public ne sait pas qu'il y a des Enfers derrière la faille violette)
-      if (d.reqMission === 'portal') return tr('Débloqué par l’expédition « {title} » : la faille violette mène aux Enfers', { title: tr(m?.title ?? d.reqMission) });
       return tr('Débloqué par l’expédition « {title} »', { title: tr(m?.title ?? d.reqMission) });
     }
     if (d.reqKind && !h.sim.built(d.reqKind)) return tr('Il faut d’abord « {name} » au village', { name: h.sim.nameOf(d.reqKind) });
@@ -1226,15 +1224,15 @@ export class UI {
     el.hidden = quiet || !!this.tutorial?.active || fighting || this.host.world.sandbox;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
-    const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, gold = !k && sim.messageGold, key = `${tone}|${k}|${ready}|${exp}|${rail}|${gold}|${sim.message}`;
+    const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, gold = !k && sim.messageGold, choice = !k && sim.messageChoice, key = `${tone}|${k}|${ready}|${exp}|${rail}|${gold}|${choice}|${sim.message}`;
     if (el.dataset.v === key) return;
     el.dataset.v = key;
-    el.className = `tone-${tone}${k || ready || exp || rail || gold ? ' link' : ''}`;
-    el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : gold ? tr('Cliquer pour ouvrir le comptoir des voisins') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
+    el.className = `tone-${tone}${k || ready || exp || rail || gold || choice ? ' link' : ''}`;
+    el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : gold ? tr('Cliquer pour ouvrir le comptoir des voisins') : choice ? tr('Cliquer pour faire le grand choix') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
     const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     // un picto selon le ton (manque, objectif, tout va bien) ; un conseil qui mène quelque part finit par son geste et un chevron
     const go = (w: string) => `<b class="go">${w}<i>›</i></b>`;
-    el.innerHTML = `<span class="mi">${pic(tone === 'warn' ? '⚠' : tone === 'goal' ? '⬆' : '✅', 24)}</span><span>${text}</span>${k ? go(tr('Bâtir')) : exp ? go(tr('Ouvrir')) : rail ? go(tr('Tracer')) : gold ? go(tr('Échanger')) : ready ? go(tr('Passer')) : ''}`;
+    el.innerHTML = `<span class="mi">${pic(tone === 'warn' ? '⚠' : tone === 'goal' ? '⬆' : '✅', 24)}</span><span>${text}</span>${k ? go(tr('Bâtir')) : exp ? go(tr('Ouvrir')) : rail ? go(tr('Tracer')) : gold ? go(tr('Échanger')) : choice ? go(tr('Choisir…')) : ready ? go(tr('Passer')) : ''}`;
     void el.offsetWidth;
     el.classList.add('flash');
   }
@@ -1819,15 +1817,19 @@ export class UI {
     for (const [key, card] of this.incCards) if (!liveI.has(key)) { card.remove(); this.incCards.delete(key); }
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
-    $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => (m.id !== 'portal' || !!h.world.portal) && !ex.done(m) && !ex.running(m)));
+    $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
     this.offerPending();
   }
 
-  openExpeditions(tab: 'missions' | 'gear' | 'rail' = 'missions') {
+  openExpeditions(tab: 'missions' | 'gear' | 'rail' | 'ways' = 'missions') {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
     // le chemin de fer ne vient qu'à l'âge industriel : avant, pas d'onglet
     const railOn = age >= 3;
     if (tab === 'rail' && !railOn) tab = 'missions';
+    // les voies du grand choix (les Enfers, explorer le monde) : passé l'Antiquité (au bac à sable, tout de suite)
+    const ways = h.ways?.() ?? { hell: 'none' as WayState, world: 'none' as WayState };
+    const waysOn = waysTabShown(h.world, age, ways.hell, ways.world);
+    if (tab === 'ways' && !waysOn) tab = 'missions';
     const next = max < partyLimit(1e9) ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: max * 30, pop }) : tr('Équipes au maximum');
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${pic(a.m.icon, 18)} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
@@ -1867,6 +1869,7 @@ export class UI {
         <span class="grow"></span>
         <button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('ex-gear', 19, 1.8)}${tr('Équipement')}</button>
         ${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('ex-rail', 19, 1.8)}${tr('Chemin de fer')}</button>` : ''}
+        ${waysOn ? `<button data-tab="ways" class="${tab === 'ways' ? 'on' : ''}">${ic('compass', 19, 1.8)}${tr('Voies')}</button>` : ''}
       </nav>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}
@@ -1875,7 +1878,8 @@ export class UI {
         <p class="emptyMsg" hidden></p>
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
-      ${railOn ? `<section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>` : ''}`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
+      ${railOn ? `<section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>` : ''}
+      ${waysOn ? `<section data-sec="ways" ${tab === 'ways' ? '' : 'hidden'}>${waysHtml(ways)}</section>` : ''}`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
     $('.expModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, age))}.webp)`);
 
     // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section
@@ -1923,6 +1927,14 @@ export class UI {
       if (!go) return;
       h.audio.sfxClick();
       if (go.dataset.kind) { close(); this.pick(go.dataset.kind as KindId); } else this.gotoMission(go.dataset.goto!);
+    });
+    // une voie du grand choix : la fenêtre se ferme, la carte de la voie s'ouvre pour confirmer
+    ov.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-way]');
+      if (!b || b.disabled) return;
+      h.audio.sfxClick();
+      close();
+      h.takeWay?.(b.dataset.way as Way);
     });
     // « Envoyer une équipe » : la petite fenêtre de départ s'ouvre par-dessus
     ov.addEventListener('click', (e) => {

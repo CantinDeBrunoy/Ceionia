@@ -104,7 +104,6 @@ registerDict('tutorial', {
   '« Village », ou un clic sur le portail, vous ramène au village ; vos troupes restent ici.': '“Village”, or a click on the portal, takes you back to the village; your troops stay here.',
 
   // ---------------- Aides militaires (src/ui/warTips.ts) ----------------
-  '🌀 La faille violette mène aux Enfers ! Réussissez l’expédition « Le portail de l’autre rive ».': '🌀 The purple rift leads to Hell! Complete the expedition “The portal on the other shore”.',
   '🗼 Portail ouvert ! Posez une tour de garde et une caserne sur son île. Cliquez pour y aller.': '🗼 Portal open! Build a watchtower and barracks on its island. Click to go.',
   '⚔️ Vos soldats gardent l’île. Cliquez pour les commander.': '⚔️ Your soldiers guard the island. Click to command them.',
   '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. 🎺 : vague suivante. « ? » : aide.': '🖱️ Click or drag a box: select. Right-click: move, attack. 🎺: next wave. “?”: help.',

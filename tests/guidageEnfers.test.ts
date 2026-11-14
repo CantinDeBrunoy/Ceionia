@@ -95,14 +95,6 @@ describe('Échap dans le commandement', () => {
 });
 
 describe('textes d’aide', () => {
-  it('l’annonce du portail dit où il mène et que faire, en une phrase courte, traduite', () => {
-    const fr = WAR_TIP_TEXT.portal;
-    expect(fr).toMatch(/Enfers/);
-    expect(fr).toMatch(/Le portail de l’autre rive/);
-    expect(fr.length).toBeLessThanOrEqual(WAR_TIP_MAX);
-    setLang('en', false);
-    expect(tr(fr)).toMatch(/Hell/);
-  });
   it('l’aide des contrôles dit comment déplacer la vue, zoomer et passer le portail', () => {
     const all = CONTROLS_HELP.map(([k, t]) => `${k} ${t}`).join(' ');
     for (const w of ['Flèches', 'Maj + clic droit', 'clic milieu', 'Molette', 'tourner la vue', 'portail']) expect(all).toContain(w);

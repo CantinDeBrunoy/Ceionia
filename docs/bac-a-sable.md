@@ -15,7 +15,7 @@ Ce n'est pas un réglage à part : c'est `World.difficulty === 'sandbox'`. Le mo
 - **Ressources** : infinies. Aucun coût n'est prélevé, la barre affiche « ∞ » (bois, pierre, minerai, briques, carburant). L'équipement des expéditions et le recrutement sont gratuits aussi.
 - **Besoins** : aucun ne freine le village. Il grandit dès qu'il reste des places (logement). Pas de famine, pas de départs, pas de ralentissement après un manque.
 - **Portail** : dès l'Antiquité (au départ ou en changeant d'âge), le portail s'ouvre de lui-même, sans l'expédition « Le portail de l'autre rive » ; la carte du choix (affronter les démons ou refermer le portail) arrive aussitôt. Une fois ouvert, il le reste, même si l'on revient à la Préhistoire. L'expédition reste jouable.
-- **Coupé** : le tutoriel, le conseil du moment (la pastille est cachée), les bulles d'aide militaire (`warTips.update` n'est pas appelé), la liste « nouveaux bâtiments » au changement d'âge, l'astuce du portail à l'Antiquité.
+- **Coupé** : le tutoriel, le conseil du moment (la pastille est cachée), les bulles d'aide militaire (`warTips.update` n'est pas appelé), la liste « nouveaux bâtiments » au changement d'âge, la carte du grand choix (les deux voies sont dans l'onglet « Voies » des expéditions dès le départ, voir [grand-choix.md](grand-choix.md)).
 - **Marque** : le panneau de l'âge porte « Bac à sable » et sa jauge reste pleine ; le menu « Reprendre mon village » et les réglages affichent le mode.
 - **Fin de partie** : la fusée reste possible (ses expéditions sont débloquées comme les autres) ; elle ne dépend de rien d'autre.
 
