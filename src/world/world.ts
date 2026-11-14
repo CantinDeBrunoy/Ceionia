@@ -916,13 +916,15 @@ export class World {
       const x = px - 0.5, z = pz - 0.5, cx = Math.floor(x), cz = Math.floor(z), u = x - cx, v = z - cz;
       return (paint(cx, cz) * (1 - u) + paint(cx + 1, cz) * u) * (1 - v) + (paint(cx, cz + 1) * (1 - u) + paint(cx + 1, cz + 1) * u) * v;
     };
-    for (let z = Math.max(1, wz0); z <= Math.min(VS - 2, wz1); z++)
-      for (let x = Math.max(1, wx0); x <= Math.min(VS - 2, wx1); x++) {
+    for (let z = wz0; z <= wz1; z++)
+      for (let x = wx0; x <= wx1; x++) {
         const i = z * VS + x, h = vis[i];
         if (this.visPin[i] || h <= C.floor || h >= C.rim) continue;
-        // seulement sur les rampes des marches (pente d'au moins 0,5) : pas de cuvette sur les pentes douces
-        const gx = (up[i + 1] - up[i - 1]) * VR / 2, gz = (up[i + VS] - up[i - VS]) * VR / 2;
-        const s = smoothstep(0.35, 0.6, Math.hypot(gx, gz));
+        // seulement sur les rampes des marches (pente d'au moins 0,5, mesurée sur une case de part et d'autre : un poids qui
+        // suivrait la pente de près bosselerait les pentes moyennes) ; pas de cuvette sur les pentes douces
+        const xl = Math.max(0, x - VR), xr = Math.min(VS - 1, x + VR), zu = Math.max(0, z - VR), zd = Math.min(VS - 1, z + VR);
+        const gx = (up[z * VS + xr] - up[z * VS + xl]) * VR / (xr - xl), gz = (up[zd * VS + x] - up[zu * VS + x]) * VR / (zd - zu);
+        const s = smoothstep(0.5, 0.72, Math.hypot(gx, gz));
         if (s <= 0) continue;
         const m = mask(x / VR, z / VR) * s;
         if (m <= 0) continue;
