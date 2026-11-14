@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { World, N, setMapSize, VEG_FOREST } from '../src/world/world';
 import { newWorld, CONTINENT } from '../src/world/mapgen';
-import { GEN, GEN_ARCH, GEN_FIXED, GEN_PLAN } from '../src/world/continent';
+import { GEN, GEN_ARCH, GEN_FIXED, GEN_PLAN, GEN_VAR } from '../src/world/continent';
 import { ARCH_N, MAIN_N, archLayout } from '../src/world/archipelago';
 import { expandWorld, canExpand } from '../src/world/expand';
 
@@ -26,7 +26,7 @@ function village(gen = GEN) {
 describe('le monde s’agrandit : une partie de 192 passe sur l’archipel', () => {
   afterAll(() => setMapSize(192));
 
-  it.each([['3', GEN], ['2', GEN_PLAN], ['1', GEN_FIXED]])('version %s : le village est intact, décalé dans le cadre de l’île principale, et les îles rivales l’entourent', (_, gen) => {
+  it.each([['5', GEN], ['3', GEN_VAR], ['2', GEN_PLAN], ['1', GEN_FIXED]])('version %s : le village est intact, décalé dans le cadre de l’île principale, et les îles rivales l’entourent', (_, gen) => {
     const w = village(gen), old = JSON.parse(JSON.stringify(w.toJSON()));
     expect(canExpand(old)).toBe(true);
     const oldBiome = Array.from(w.biome), oldBuildings = [...w.buildings.values()].map((b) => [b.kind, b.x, b.z, b.rot] as const);

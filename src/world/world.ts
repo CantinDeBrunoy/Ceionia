@@ -1792,10 +1792,10 @@ export class World {
     // les sauvegardes d'avant le plan du continent n'ont pas de version : leur climat reste celui de la version 1
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     // (la place des îles se tire de la graine : celle de la sauvegarde n'est là que pour qui la lit au dehors)
-    this.isles = this.gen >= GEN_ARCH ? archLayout(this.seed, N) : null;
+    this.isles = this.gen === GEN_ARCH ? archLayout(this.seed, N) : null;
     this.explore = d.explore === 'no' ? 'no' : 'ask';
     this.exploredAt = Number.isInteger(d.exploredAt) && this.isles ? d.exploredAt : null;
-    this.mainGen = this.isles && [GEN_FIXED, 2].includes(d.mainGen) ? d.mainGen : GEN_VAR;
+    this.mainGen = this.isles && [GEN_FIXED, 2, 5].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);
     for (let i = 0; i + 1 < (d.biomes ?? []).length; i += 2) if (d.biomes[i] >= 0 && d.biomes[i] < N * N && d.biomes[i + 1] >= 1 && d.biomes[i + 1] <= BIOME_NAMES.length) biomePaint[d.biomes[i]] = d.biomes[i + 1];

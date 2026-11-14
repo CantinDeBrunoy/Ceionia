@@ -18,10 +18,10 @@ import { smoothstep, lerp } from '../core/rng';
 export const archipelagoOn = (w: { isles: unknown }) => !!w.isles;
 
 /**
- * La partie peut-elle s'agrandir ? Le continent sur la carte de 192, quelle que soit sa version (1, 2 ou 3 ; une sauvegarde sans
+ * La partie peut-elle s'agrandir ? Le continent sur la carte de 192, quelle que soit sa version (1, 2, 3 ou 5 ; une sauvegarde sans
  * version est de la 1) : son île garde la sienne (`World.mainGen`)
  */
-export const canExpand = (world: { n?: number; gen?: number }) => world?.n === MAIN_N && (world.gen ?? GEN_FIXED) <= GEN_VAR;
+export const canExpand = (world: { n?: number; gen?: number }) => world?.n === MAIN_N && (world.gen ?? GEN_FIXED) !== GEN_ARCH;
 
 /**
  * Sauvegarde du monde (`World.toJSON`) agrandie à l'archipel, pour la carte `map` et la graine `seed`. Change la taille de la
