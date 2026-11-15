@@ -25,7 +25,7 @@ Une partie se sauve dans le `localStorage` du navigateur, en un seul JSON, **un 
 - **Pas sauvé** : la vue de la caméra, la pause (`time.paused`), les jours écoulés (`time.days`), la météo, l'outil et les piles annuler / rétablir, les habitants (ils sont recréés à partir de la population et des bâtiments), les animaux, les véhicules, les incendies en cours, les expéditions en route, le mode de vue (on revient toujours en surface), la position des trains (relancés depuis les lignes).
 
 ### Quand
-- `Game.saveNow()` (n'écrit que si `running`) : minuterie de 15 s dans `frame` (`saveTimer`), `visibilitychange` (onglet caché), `pagehide`, bouton Sauvegarder, `exitUnder`, `toMenu`, changement de langue.
+- `Game.saveNow()` (n'écrit que si `running`) : minuterie de 15 s dans `frame` (`saveTimer`, puis au prochain moment de repos : `whenIdle`, voir [chargement-performances.md](chargement-performances.md)), `visibilitychange` (onglet caché), `pagehide`, bouton Sauvegarder, `exitUnder`, `toMenu`, changement de langue.
 - Les réglages seuls : `applySettings()` (`saveSettings`, clé séparée) à chaque curseur ou bouton, et à chaque changement de palier du réglage Auto.
 - `saveSlot` rend `false` si le navigateur refuse (quota plein, stockage bloqué) ; `saveNow` ignore ce résultat : **aucun message au joueur**.
 - Coût : toute la carte est sérialisée à chaque sauvegarde (`heights` : (192+1)² nombres) ; non mesuré ici, voir [chargement-performances.md](chargement-performances.md).

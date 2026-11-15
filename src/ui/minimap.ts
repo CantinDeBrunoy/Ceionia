@@ -23,6 +23,12 @@ export class MiniMap {
   private drawnAt = -Infinity;
   private ray = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  /**
+   * Largeur affichée de la toile (px CSS), tenue par un `ResizeObserver` ; 0 : la carte est cachée. Lire `offsetParent` ou
+   * `clientWidth` à chaque image forçait le style et la mise en page en plein script dès que le DOM avait changé (une popup
+   * qui s'ouvre : jusqu'à 42 ms), puis le jeu réécrivait l'interface : deux mises en page dans la même image
+   */
+  private shownW = 0;
 
   /** (le monde et la caméra relus à chaque fois : une nouvelle partie peut les remplacer) */
   private get world() { return this.src.world; }
@@ -48,6 +54,7 @@ export class MiniMap {
     const up = () => { held = false; };
     this.cv.addEventListener('pointerup', up);
     this.cv.addEventListener('pointercancel', up);
+    new ResizeObserver(([e]) => { this.shownW = e.contentRect.width; }).observe(this.cv);
     // le cadre de la vue suit la caméra à chaque image (et non au rythme de l'interface, 4 fois par seconde : il sautait)
     const loop = () => { this.follow(); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
@@ -56,9 +63,9 @@ export class MiniMap {
   /** La position de la caméra au dernier dessin du cadre : on ne redessine que si elle a bougé */
   private camKey = '';
   private follow() {
-    if (!this.el.offsetParent || this.drawnAt === -Infinity) return;
+    if (!this.shownW || this.drawnAt === -Infinity) return;
     const c = this.cam.camera, p = c.position, q = c.quaternion;
-    const key = `${p.x.toFixed(3)}|${p.y.toFixed(3)}|${p.z.toFixed(3)}|${q.x.toFixed(4)}|${q.y.toFixed(4)}|${q.z.toFixed(4)}|${c.aspect.toFixed(3)}|${this.cv.clientWidth}`;
+    const key = `${p.x.toFixed(3)}|${p.y.toFixed(3)}|${p.z.toFixed(3)}|${q.x.toFixed(4)}|${q.y.toFixed(4)}|${q.z.toFixed(4)}|${c.aspect.toFixed(3)}|${this.shownW}`;
     if (key === this.camKey) return;
     this.camKey = key;
     this.draw();
@@ -66,7 +73,7 @@ export class MiniMap {
 
   /** Appelée à chaque mise à jour de l'interface : le cadre de la vue, et le fond quand le monde a changé */
   update() {
-    if (!this.el.offsetParent) return;
+    if (!this.shownW) return;
     const now = performance.now(), w = this.world;
     const key = `${N}|${w.version}|${w.buildings.size}|${w.terrainDirty ? now : ''}`;
     if (key !== this.key && now - this.drawnAt > REDRAW_MS) { this.key = key; this.drawnAt = now; this.drawBase(); this.draw(); }
@@ -109,7 +116,7 @@ export class MiniMap {
   /** Le fond, puis le cadre de la vue : les quatre coins de l'écran projetés sur le sol */
   private draw() {
     // la toile à la taille affichée (fois la densité de l'écran) : le cadre glisse au sous-pixel près
-    const cv = this.cv, S = Math.max(N * PX, Math.round(cv.clientWidth * (window.devicePixelRatio || 1))), K = S / N;
+    const cv = this.cv, S = Math.max(N * PX, Math.round(this.shownW * (window.devicePixelRatio || 1))), K = S / N;
     if (cv.width !== S) { cv.width = cv.height = S; }
     const g = cv.getContext('2d')!;
     g.clearRect(0, 0, S, S);

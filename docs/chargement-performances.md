@@ -1,6 +1,6 @@
 # Chargement et performances
 
-> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/style.css` (`#loadScreen`)
+> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/style.css` (`#loadScreen`), `src/ui/preload.ts` (`preloadPics`, `whenIdle`), `src/ui/minimap.ts` (`shownW`)
 > Tests : `tests/chargement.test.ts`, `tests/qualite.test.ts`
 > Voir aussi : [architecture.md](architecture.md), [rendu-modeles.md](rendu-modeles.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [traduction.md](traduction.md)
 
@@ -78,6 +78,39 @@ Mesuré (Chrome sans fenêtre, 1 600 × 900, halo actif, nouvelle partie) : en t
 
 Après : 8 essais sur 8 sans image au-dessus de 34 ms pendant 5 s de rotation. Coût : environ 0,4 s de plus à la construction (bêtes et silhouettes) et 0,5 s à l'image de premier usage, sous l'écran.
 
+## L'ouverture des fenêtres (popups)
+Mesure du 15 nov. 2026 : Chrome sans fenêtre, RTX 3060, Direct3D 11, 1 600 × 900, build de production, qualité « Auto » (descendue au palier sans halo sur cette machine chargée), partie au Médiéval avec 82 bâtiments et 176 habitants. Chaque fenêtre ouverte une fois juste après le chargement, cache du navigateur vidé ; trois essais, en alternant l'ancienne et la nouvelle version. On compte l'image la plus longue et les images au-dessus de 33 ms dans la seconde qui suit l'ouverture (60 images en tout). Base au repos : 17 ms.
+
+| Fenêtre | Image la plus longue (ms), avant → après | Images > 33 ms, avant → après |
+| --- | --- | --- |
+| Nouvel âge (`showNewAge`) | 33 → 17 | 2 → 0 |
+| Retour d'expédition (`showReport`) | 17 → 33 | 0 → 1 |
+| Grand choix (`WorldChoice`) | 17 → 17 | 0 → 0 |
+| Choix de l'allié, dénouement (`DiploChoice`) | 17 → 17 | 0 → 0 |
+| Portail (`PortalChoice`) | 33 → 33 | 1 → 1 |
+| Message, conseil, bannière | 17 → 17 | 0 → 0 |
+| Expéditions | 34 → 33 | 2 → 1 |
+| Paramètres | 17 → 17 | 0 → 0 |
+
+(médiane des trois essais ; 33 ms = une seule image ratée). Ce que coûte une fenêtre, mesuré à part : construction du DOM 0 à 5 ms, style et mise en page 1 à 9 ms (expéditions : le plus lourd), aucun shader neuf. Une expédition jouée de bout en bout (départ, imprévu, décision, retour) dans une partie rechargée : aucune image au-dessus de 45 ms, aucun programme neuf. Sur cette machine, ouvrir une fenêtre ne fige donc pas le jeu ; les écarts du tableau sont du bruit.
+
+Ce qui a été corrigé quand même, parce que la mesure le montrait :
+- **La mini-carte forçait la mise en page à chaque image** (`minimap.ts`) : sa boucle lisait `offsetParent` et `clientWidth`. L'image qui suit l'ouverture d'une fenêtre, cette lecture payait le style et la mise en page de la fenêtre en plein script (1 à 8 ms selon la fenêtre, 36 à 42 ms une fois), puis le jeu réécrivait l'interface et tout se refaisait au rendu. La largeur vient maintenant d'un `ResizeObserver` : 0,1 ms après, pour toutes les fenêtres.
+- **`updateExpeditions`** (`ui.ts`) lit toutes ses tailles avant d'écrire ses styles : une mise en page de moins à chaque mise à jour de l'interface.
+- **Les images des fenêtres** (`preload.ts`, `UI.preloadArt`) se chargent et se décodent au repos, une par moment de repos : à la fin du chargement et à chaque passage d'âge (grand choix, portail, paramètres, bandeau et illustrations des expéditions de l'âge). Avant, la première ouverture allait chercher ses images sur le réseau : en ligne, la fenêtre paraissait d'abord sans elles.
+- **La sauvegarde automatique** (toutes les 15 s, synchrone : 7 à 9 ms sur ce village, davantage sur un grand) attend le prochain moment de repos (`whenIdle`) au lieu de s'ajouter à l'image en cours.
+
+Restent, vus pendant ces mesures, sans rapport direct avec les fenêtres :
+- **Le passage d'âge** : 5 à 7 images de 50 à 100 ms dans les 0,4 s qui suivent (bâtiments refaits au nouvel âge, routes, recensement de la faune). La bannière et la fenêtre du nouvel âge arrivent juste après : c'est l'à-coup le plus probable « au moment d'une fenêtre ».
+- **Un shader compilé en pleine partie** : une fois, 65 ms (`getProgramInfoLog`) au départ de la première expédition d'une session ; pas reproduit dans une partie rechargée.
+- Le flou d'arrière-plan des fenêtres (`backdrop-filter`) ne change rien ici à la durée des images (17 ms, flou ou non) ; à revoir sur une machine où le halo est actif.
+
+### Mesurer les fenêtres
+- Harnais dans la page : durée entre deux `requestAnimationFrame`, et `PerformanceObserver` `long-animation-frame` (scripts en cause, `forcedStyleAndLayoutDuration`). Une trace DevTools complète fausse tout : images de plusieurs secondes.
+- Ouvrir une fenêtre directement : `__game.ui.showNewAge(…)`, `showReport({ ok, m, redo, summary, notes, text, c })`, `openExpeditions()`, `openSettings()`, `__game.worldChoice.show()`, `__game.diploChoice.showAlly()` / `showPath()`, `__game.portalChoice.show()`.
+- Pour le premier affichage : `Network.clearBrowserCache`, puis recharger la partie.
+- Chrome sans limite d'images (`--disable-gpu-vsync --disable-frame-rate-limit`) sature la machine : à éviter.
+
 ## Pièges et invariants
 - Créer maillages et matériaux au démarrage, cachés au besoin (`visible = false`, `count = 0`), plutôt qu'à leur première apparition : tout ce qui est dans la scène se compile au chargement, même caché.
 - `setColorAt` crée `instanceColor` au premier appel, et le shader change. Appeler `setColorAt(0, blanc)` à la création (faune, éruption, particules, feuilles).
@@ -90,6 +123,7 @@ Après : 8 essais sur 8 sans image au-dessus de 34 ms pendant 5 s de rotation. C
 - Le navigateur garde les programmes compilés en cache : une partie reprise dans la même session se charge bien plus vite. Mesurer avec un profil neuf pour le pire cas.
 - `renderer.compile` ne suffit pas : un programme qui n'a jamais servi fige encore à son premier usage (Direct3D). Tout objet qui doit paraître plus tard doit être dans la scène au chargement, même caché, pour que `firstUseAll` le montre une fois.
 - Un maillage créé « au premier besoin » (silhouettes, effets, bêtes d'une sorte encore jamais vue) échappe à toute la préparation. Le créer d'avance, vide ou caché, comme `bakeSilhouettes`.
+- Ne pas lire une taille (`offsetParent`, `clientWidth`, `getBoundingClientRect`) dans un rappel d'image : dès que le DOM a changé, la lecture force le style et la mise en page en plein script. Garder la taille d'un `ResizeObserver`, ou lire toutes les tailles avant d'écrire.
 - L'écran de chargement vit dans `#app`. Le placer dans `#ui` le ferait disparaître à la construction de l'interface.
 
 ## Comment mesurer les à-coups
