@@ -115,6 +115,7 @@ import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/dif
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
 import { LoadingScreen, painted } from './ui/loading';
+import { whenIdle } from './ui/preload';
 import { VoyageStage } from './voyageStage';
 import { clearFilmMark, readFilmMark } from './ui/voyage';
 import { WarmUp } from './render/warmup';
@@ -649,6 +650,8 @@ class Game implements UIHost {
     this.sim.onAgeUp = (age) => {
       // (la fenêtre du nouvel âge s'ouvre 3,6 s après la bannière : aucune fenêtre automatique ne passe avant elle)
       this.popups.hold(5);
+      // les illustrations des expéditions du nouvel âge, d'avance
+      this.ui.preloadArt();
       // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
       this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
       // la garnison gagne en vie et en force avec l'âge
@@ -754,6 +757,8 @@ class Game implements UIHost {
     this.warmStep = (k) => screen.step('Premières images…', 0.9 + 0.1 * k);
     await this.warmUp();
     this.warmStep = null;
+    // les images des fenêtres se chargent et se décodent au repos : leur première ouverture n'attend plus le réseau
+    this.ui.preloadArt();
     s.warmUp = now() - t;
     s.programs = renderer.info.programs?.length ?? 0;
   }
@@ -2517,7 +2522,8 @@ class Game implements UIHost {
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; this.syncTrophies(); }
     this.saveTimer -= dt;
-    if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
+    // (au prochain moment de repos, hors de l'image : la sauvegarde, synchrone, ne s'ajoute pas à une image déjà chargée)
+    if (this.saveTimer <= 0) { this.saveTimer = 15; whenIdle(() => this.saveNow()); }
     return ms;
   }
 }

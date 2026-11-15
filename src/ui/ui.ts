@@ -35,6 +35,7 @@ import { eyeClick } from './homeButton';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
 import { pic, hudPic, leadPic, withPic } from './pics';
+import { POPUP_PICS, preloadPics } from './preload';
 import { menuBg, LOGO_PEAKS } from './loading';
 import { MiniMap } from './minimap';
 import { placeCard } from './xcard';
@@ -1845,7 +1846,10 @@ export class UI {
     const req = $('#agePanel').classList.contains('open') ? $('#ageReq').getBoundingClientRect().bottom : 0;
     // (sur un écran étroit, le conseil du moment s'étale jusqu'au bord gauche : la colonne passe dessous, pastille des aides
     // comprise, au lieu de le chevaucher)
+    // (toutes les mesures d'abord, les écritures ensuite : lire une taille après avoir écrit un style refait toute la mise en
+    // page, et ces lectures suivent souvent l'ouverture d'une popup, dont la mise en page se payait alors deux fois)
     const notes = $('#hudNotes').getBoundingClientRect(), lr = list.getBoundingClientRect();
+    const dm = $('#dockRow').getBoundingClientRect(), sc = $('#selCard').getBoundingClientRect();
     const under = notes.height > 0 && notes.left < lr.right && notes.right > lr.left ? notes.bottom - 2 : 0;
     list.style.top = `${Math.round(Math.max(hudB, req, under)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
@@ -1866,7 +1870,6 @@ export class UI {
     } else document.body.classList.remove('tsTop');
     // la hauteur de la barre du bas, quand elle s'étend sous la fiche d'un bâtiment (à droite) : la fiche s'arrête au-dessus
     // et défile plutôt que de passer dessous
-    const dm = $('#dockRow').getBoundingClientRect(), sc = $('#selCard').getBoundingClientRect();
     const dockH = dm.height && (!sc.width || dm.right > sc.left) ? Math.max(0, Math.round(innerHeight - dm.top)) : 0;
     if (this.root.style.getPropertyValue('--dockH') !== `${dockH}px`) this.root.style.setProperty('--dockH', `${dockH}px`);
     const live = new Set<number>();
@@ -1924,6 +1927,14 @@ export class UI {
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
     $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
     this.offerPending();
+  }
+
+  /** Précharge au repos les images des fenêtres, et celles des expéditions de l'âge en cours (bandeau, illustrations) */
+  preloadArt() {
+    const age = Math.max(0, Math.min(5, this.host.sim.age));
+    const ms = this.host.expeditions.list(age).filter((m) => m.age === age);
+    preloadPics([...POPUP_PICS, `./expeditions/banniere-${age}.webp`,
+      ...ms.map((m) => (MISSION_DIO.has(m.id) ? `./expeditions/dio-${m.id}.webp` : missionArt(m).src)).filter((s): s is string => !!s)]);
   }
 
   openExpeditions(tab: 'missions' | 'gear' | 'rail' | 'ways' = 'missions') {
