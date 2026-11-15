@@ -111,6 +111,7 @@ import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adapti
 import { weakGpu, probeRenderer } from './render/gpu';
 import { LoadingScreen, painted } from './ui/loading';
 import { VoyageStage } from './voyageStage';
+import { clearFilmMark, readFilmMark } from './ui/voyage';
 import { VOY_CONTACT } from './voyageCine';
 import { WarmUp } from './render/warmup';
 import { CompileJob, compilePaced, representatives, firstUseAll } from './render/precompile';
@@ -568,6 +569,7 @@ class Game implements UIHost {
     this.voyageStage = new VoyageStage({
       cam: this.cam, world: w, scene: this.scene, root: uiRoot,
       village: () => this.villageCenter(), age: () => this.sim.age, loading: () => !!document.getElementById('loadScreen'),
+      ready: () => !!document.querySelector('#loadScreen.ready'), skipped: () => !!readFilmMark()?.skip,
     });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
@@ -1174,19 +1176,21 @@ class Game implements UIHost {
   onIslesRevealed?: () => void;
 
   /**
-   * « Explorer le monde » : la cinématique tient lieu d'écran de chargement (partition dans `voyageCine.ts`, mise en scène dans
-   * `voyageStage.ts`). Acte I sur le monde d'avant : un navire quitte le village et prend le large, la brume se lève et couvre
-   * tout. Derrière la brume, la partie est sauvegardée, agrandie (`expandWorld`) et rechargée ; la même brume couvre le
-   * chargement (`LoadingScreen` en mode traversée, `AUTOSTART` « voyage »), puis l'acte II se joue sur le monde agrandi
+   * « Explorer le monde » : la cinématique tient lieu d'écran de chargement (partition dans `voyageCine.ts`). Le film de la
+   * traversée (`LoadingScreen` en mode traversée, `ui/voyage.ts`) part tout de suite ; une fois qu'il joue, la partie est
+   * sauvegardée, agrandie (`expandWorld`) et rechargée derrière lui. Il reprend après le rechargement au même moment
+   * (`AUTOSTART` « voyage »), couvre la préparation de la partie agrandie, puis le survol en direct des îles se joue
    */
   exploreWorld() {
     if (!this.canExplore() || this.revealing || this.voyageStage.playing) return;
     const w = this.world, app = uiRoot.parentElement!;
     w.crossroads = true;
     this.revealing = true;
-    this.voyageStage.playAct1(async () => {
-      // (la brume couvre l'écran : l'écran d'attente, à l'identique, prend le relais avant le long calcul)
-      new LoadingScreen(app, true);
+    clearFilmMark();
+    const film = new LoadingScreen(app, true).film!;
+    // (le film doit jouer avant le long calcul : au plus 2 s d'attente si la vidéo tarde, puis un peu de film à l'écran)
+    const started = Promise.race([film.started(), new Promise<void>((r) => setTimeout(r, 2000))]);
+    void started.then(() => new Promise<void>((r) => setTimeout(r, 1200))).then(async () => {
       await painted();
       const save = this.buildSave();
       this.running = false;
@@ -1194,20 +1198,21 @@ class Game implements UIHost {
       save.world.exploredAt = this.sim.age;
       if (!saveSlot(save)) { this.ui.toast(trx('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
       sessionStorage.setItem(AUTOSTART, `${w.mapId}|continue|voyage`);
+      film.mark();
       location.reload();
     });
   }
 
-  /** La partie vient d'une traversée (le monde agrandi) : l'acte II part sur la brume, sans attendre (posé par `boot`) */
+  /** La partie vient d'une traversée (le monde agrandi) : le survol part sous le film, sans attendre (posé par `boot`) */
   voyage = false;
 
-  /** L'acte II de la cinématique « Explorer le monde » : les îles découvertes, puis le premier contact */
+  /** Le survol en direct de la cinématique « Explorer le monde » : les îles découvertes, puis le premier contact */
   private revealIsles() {
     if (!this.world.isles) return;
     this.revealing = true;
     const fromMist = this.voyage;
     this.voyage = false;
-    this.voyageStage.playAct2(fromMist, () => { this.revealing = false; this.onIslesRevealed?.(); this.saveNow(); });
+    this.voyageStage.play(fromMist, () => { clearFilmMark(); this.revealing = false; this.onIslesRevealed?.(); this.saveNow(); });
   }
 
   /** Ce que regardent les aides du volet militaire */
@@ -2198,6 +2203,9 @@ class Game implements UIHost {
     }
     else {
       this.buildings.update(dt, this.sim.age);
+      // (pendant la cinématique « Explorer le monde », pas de bêtes appelées près de la vue : leur recensement coûtait
+      // 200 à 300 ms toutes les 3 s au-dessus de la mer, d'où les à-coups du survol)
+      this.fauna.quiet = this.voyageStage.playing;
       this.fauna.update(gdt, this.elapsed, this.time.hour, this.time.season, this.env.rainK, this.sim.age, this.cam.camera);
       // de temps en temps, une bête sauvage près de la vue crie (bêlement, brame, barrissement…) ; on l'entend de près
       this.callT -= dt;
@@ -2275,7 +2283,7 @@ class Game implements UIHost {
     if (this.uiTimer === 0.25) {
       this.homeBtn.set(this.awayFromHome());
       // la musique de la fin (chute du roi des Enfers, voyage des colons, écrans de victoire), des Enfers, sinon de l'âge
-      audio.music(this.kingStage.playing || uiRoot.querySelector('.overlay.voyage, .overlay.victory') ? 'end' : this.voyageStage.playing ? 'voyage' : this.mode === 'hell' ? 'hell' : null);
+      audio.music(this.kingStage.playing || uiRoot.querySelector('.overlay.voyage, .overlay.victory') ? 'end' : this.voyageStage.playing || document.querySelector('#loadScreen.voyage') ? 'voyage' : this.mode === 'hell' ? 'hell' : null);
     }
     // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }
@@ -2293,6 +2301,8 @@ async function boot() {
   const app = uiRoot.parentElement!;
   // (le monde qui vient de s'agrandir : la traversée de la cinématique tient lieu d'écran de chargement)
   const auto = sessionStorage.getItem(AUTOSTART), voyage = auto?.split('|')[2] === 'voyage';
+  // (une traversée d'avant, restée notée : rien à reprendre hors d'un rechargement de traversée)
+  if (!voyage) clearFilmMark();
   let screen: LoadingScreen | null = new LoadingScreen(app, voyage);
   const models = screen;
   await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * 0.2, `${done}/${total}`));
