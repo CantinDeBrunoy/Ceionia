@@ -102,6 +102,14 @@ interface Track { key: string; name: string; el: HTMLAudioElement; src: MediaEle
 /** volume de toutes les voix d'animaux (cris, chants, grillons, grenouilles, bruitages des enclos), réduit de moitié à la demande de l'auteur */
 export const ANIMAL_VOL = 0.5;
 
+/**
+ * Panoramique d'un bruitage de proximité, entre −1 et 1. Il vient de la projection de la source à l'écran, qui peut
+ * donner NaN quand la caméra n'est pas prête (pas encore d'image) : un AudioParam refuse une valeur non finie
+ */
+export function spotPan(p: number | undefined): number {
+  return p !== undefined && Number.isFinite(p) ? clamp(p, -1, 1) : 0;
+}
+
 export class AudioEngine {
   ctx: AudioContext | null = null;
   musicVol = 0.5;
@@ -439,16 +447,16 @@ export class AudioEngine {
       let v = this.voices.get(sv.kind);
       if (!v) {
         const out = ctx.createGain(); out.gain.value = 0;
-        const pan = ctx.createStereoPanner(); pan.pan.value = pans[i] ?? 0;
+        const pan = ctx.createStereoPanner(); pan.pan.value = spotPan(pans[i]);
         const inp = ctx.createGain(); inp.gain.value = VOICES[sv.kind].gain;
         inp.connect(out); out.connect(pan); pan.connect(this.ambG);
         const srcs = VOICES[sv.kind].loop?.({ ctx, noise: this.noise }, inp) ?? [];
         v = { out, pan, inp, srcs, next: T + Math.random() * 0.8, k: 0, end: 0 };
         this.voices.set(sv.kind, v);
       }
-      v.k = sv.k; v.end = 0;
-      v.out.gain.setTargetAtTime(sv.k, T, 0.25);
-      v.pan.pan.setTargetAtTime(pans[i] ?? 0, T, 0.25);
+      v.k = Number.isFinite(sv.k) ? clamp(sv.k, 0, 1) : 0; v.end = 0;
+      v.out.gain.setTargetAtTime(v.k, T, 0.25);
+      v.pan.pan.setTargetAtTime(spotPan(pans[i]), T, 0.25);
     });
     for (const [kind, v] of this.voices) {
       if (seen.has(kind)) continue;
