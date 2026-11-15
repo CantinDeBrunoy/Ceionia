@@ -147,6 +147,8 @@ const P: Record<string, string> = {
   masks: '<path d="M3 4h8v5a4 4 0 0 1-8 0z"/><path d="M13 9h8v5a4 4 0 0 1-8 0z"/><path d="M5.5 7h.01M8.5 7h.01M5.5 10.5q1.5 1 3 0M15.5 12h.01M18.5 12h.01M15.5 16.5q1.5-1 3 0"/>',
   acropolis: '<path d="M2 21h20l-3-5H5z"/><path d="M7 16v-5M10.3 16v-5M13.7 16v-5M17 16v-5"/><path d="M6 11h12l-6-4z"/>',
   arch: '<path d="M4 21V9h16v12"/><path d="M9 21v-6a3 3 0 0 1 6 0v6"/><path d="M3 9h18M5 5h14v4H5z"/>',
+  // la balance du changeur : le comptoir
+  scales: '<path d="M12 3v18M7 21h10"/><path d="M4 7h16"/><path d="M6 7l-3 7a3 3 0 0 0 6 0z"/><path d="M18 7l-3 7a3 3 0 0 0 6 0z"/>',
   // trois piliers sous un anneau : le monument de la concorde
   concord: '<path d="M3 21h18"/><path d="M6 21v-9M12 21v-9M18 21v-9"/><path d="M4 12h16"/><ellipse cx="12" cy="7" rx="7" ry="3"/>',
   dome: '<path d="M3 21h18"/><path d="M5 21v-8h14v8"/><path d="M8 21v-5M12 21v-5M16 21v-5"/><path d="M4 13h16"/><path d="M7 13a5 5 0 0 1 10 0"/><path d="M12 8V4"/>',
@@ -198,7 +200,7 @@ export const KIND_ICON: Record<KindId, string> = {
   arcology: 'arcology', vfarm: 'tower', fusion: 'atom', spaceport: 'rocket', research: 'qubit', maglev: 'maglev',
   watchtower: 'watchtower', barracks: 'shield', wall: 'wall', gate: 'gate',
   shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
-  concord: 'concord',
+  concord: 'concord', tradepost: 'scales',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */

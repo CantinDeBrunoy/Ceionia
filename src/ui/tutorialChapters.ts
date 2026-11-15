@@ -1,4 +1,4 @@
-import { KINDS } from '../build/catalog';
+import { AGES, KINDS } from '../build/catalog';
 import { tr, localize, fmt } from '../i18n';
 import type { Chapter, ChapterId, Step, StepText, Tutorial } from './tutorial';
 import type { UI } from './ui';
@@ -7,7 +7,9 @@ import type { UI } from './ui';
  * Les chapitres du tutoriel : de courtes suites d'étapes qu'un événement lance, une seule fois (voir `Tutorial.chapter`).
  * « Affronter les démons » guide sur l'île du portail quand le joueur choisit le PvE : ses défenses (les joueurs ne
  * comprenaient pas qu'elles se bâtissent sur l'île), la garnison, les ordres, l'invasion. « Les Enfers », à la première
- * entrée : la cible, les troupes, l'attaque, le retour. Le tutoriel principal n'en dépend pas (le PvE est facultatif)
+ * entrée : la cible, les troupes, l'attaque, le retour. « L'or des voisins », quand le joueur choisit son allié : un port chez
+ * soi, un port et un comptoir chez l'allié, puis à quoi sert l'or. Le tutoriel principal n'en dépend pas (le PvE et
+ * l'archipel sont facultatifs)
  */
 
 /** Les textes des chapitres (une phrase courte par étape ; `{tower}`, `{barracks}`, `{n}` : remplis selon la partie) */
@@ -37,6 +39,31 @@ export const CHAPTER_TEXT = {
       title: 'L’invasion',
       text: 'Avec {n} soldats sur l’île, « Affronter » lance l’invasion : repoussez-la pour ouvrir les Enfers.',
       tasks: [] as string[],
+    },
+  },
+  arch: {
+    title: 'L’or des voisins',
+    goAlly: 'Aller sur l’île alliée',
+    home: {
+      title: 'Un port chez vous',
+      text: 'Le commerce passe par la mer : bâtissez {harbor} sur la côte de votre île.',
+      tasks: ['{harbor} sur votre île'],
+    },
+    allyHarbor: {
+      title: 'Un port chez l’allié',
+      text: 'Bâtissez aussi {harbor} sur la côte de {isle}, hors de leur ville : les navires iront d’un port à l’autre.',
+      tasks: ['{harbor} sur l’île alliée'],
+    },
+    post: {
+      title: 'Le comptoir',
+      text: 'Bâtissez {post} sur {isle} : c’est là qu’on échange avec vos alliés.',
+      tasks: ['{post} sur l’île alliée'],
+    },
+    gold: {
+      title: 'L’or',
+      text: 'L’or fait passer les âges : {a} pour l’Industriel, {b} pour le Moderne, {c} pour le Futuriste.',
+      tasks: [] as string[],
+      how: 'Un clic sur l’or ouvre le comptoir : vendez-y du bois, de la pierre ou du minerai pour en gagner.',
     },
   },
   hell: {
@@ -97,6 +124,15 @@ export interface ChapterHost {
   lastOrder(): object | null;
   /** prendre le commandement de l'île (la vue y va) */
   commandIsle(): void;
+  /** l'archipel et un allié choisi ; le nom de son île */
+  arch(): boolean;
+  allyIsle(): string;
+  /** ports bâtis sur notre île et sur celle de l'allié ; comptoirs chez l'allié */
+  harbors(): { home: number; ally: number };
+  posts(): number;
+  /** la vue regarde l'île de l'allié ; l'y mener */
+  atAlly(): boolean;
+  goAlly(): void;
 }
 
 /** Une étape de chapitre : ses textes et sa logique */
@@ -115,6 +151,12 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
   const goIsle = () => (!isle() && !h.atIsle() ? { label: P.goIsle, run: () => h.commandIsle() } : null);
   const command = () => (!isle() ? { label: P.command, run: () => h.commandIsle() } : null);
   let village = { towers: 0, barracks: 0 }, troops = 0, order: object | null = null;
+  const A = CHAPTER_TEXT.arch;
+  const kname = (k: 'harbor' | 'tradepost') => tr('« {name} »', { name: KINDS[k].names[Math.max(h.age(), KINDS[k].minAge)] });
+  const arch = (s: string) => fmt(s, { harbor: kname('harbor'), post: kname('tradepost'), isle: h.allyIsle(), a: AGES[3].reqGold ?? 0, b: AGES[4].reqGold ?? 0, c: AGES[5].reqGold ?? 0 });
+  /** l'onglet Bâtir, le rayon Production, puis la vignette du bâtiment */
+  const tile = (k: 'harbor' | 'tradepost') => (ui.tab !== 'build' ? q('#modes [data-t="build"]') : ui.cat !== 'prod' ? q('#subcats [data-c="prod"]') : q(`#items [data-kind="${k}"]`));
+  const goAlly = () => (!h.atAlly() ? { label: A.goAlly, run: () => h.goAlly() } : null);
 
   const pve: Step[] = [
     step('pveDefenses', P.defenses, {
@@ -154,6 +196,33 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
     }),
   ];
 
+  const archSteps: Step[] = [
+    step('archHome', A.home, {
+      text: () => arch(A.home.text), tasks: () => A.home.tasks.map(arch),
+      check: () => [h.harbors().home > 0],
+      anchor: () => (h.harbors().home ? null : tile('harbor')),
+    }),
+    step('archAllyHarbor', A.allyHarbor, {
+      begin: () => { if (!h.atAlly()) h.goAlly(); },
+      text: () => arch(A.allyHarbor.text), tasks: () => A.allyHarbor.tasks.map(arch),
+      check: () => [h.harbors().ally > 0],
+      anchor: () => (h.atAlly() && !h.harbors().ally ? tile('harbor') : null),
+      act: goAlly,
+    }),
+    step('archPost', A.post, {
+      text: () => arch(A.post.text), tasks: () => A.post.tasks.map(arch),
+      check: () => [h.posts() > 0],
+      anchor: () => (h.atAlly() && !h.posts() ? tile('tradepost') : null),
+      act: goAlly,
+    }),
+    step('archGold', A.gold, {
+      read: true, check: () => [],
+      text: () => arch(A.gold.text),
+      note: () => A.gold.how,
+      anchor: () => q('#res .res[data-r="gold"]'),
+    }),
+  ];
+
   const hell: Step[] = [
     step('hellGoal', E.goal, {
       check: () => [tuto.clicked('goal')],
@@ -177,6 +246,8 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
     pve: { title: () => P.title, steps: pve, live: () => h.pve(), away: () => h.mode() !== 'surface' },
     // le chapitre des Enfers s'achève quand on les quitte (il ne se joue qu'une fois, à la première entrée)
     hell: { title: () => E.title, steps: hell, live: () => h.mode() === 'hell' },
+    // l'archipel : tant qu'il a un sens (un allié), à la surface
+    arch: { title: () => A.title, steps: archSteps, live: () => h.arch(), away: () => h.mode() !== 'surface' },
   };
 }
 

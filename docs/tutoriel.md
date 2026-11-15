@@ -1,6 +1,6 @@
 # Tutoriel
 
-> Fichiers : `src/ui/tutorial.ts` (la bulle, la suite principale, l'état enregistré, le moteur des chapitres), `src/ui/tutorialChapters.ts` (les chapitres de l'île du portail et des Enfers), `src/ui/portalChoice.ts` (la carte du choix PvE), `src/main.ts` (création, déclencheurs, messages sans tutoriel), `src/style.css` (bloc « Tutoriel guidé »), `src/i18n/en/tutorial.ts` (anglais)
+> Fichiers : `src/ui/tutorial.ts` (la bulle, la suite principale, l'état enregistré, le moteur des chapitres), `src/ui/tutorialChapters.ts` (les chapitres de l'île du portail, des Enfers et de l'archipel), `src/ui/portalChoice.ts` (la carte du choix PvE), `src/main.ts` (création, déclencheurs, messages sans tutoriel), `src/style.css` (bloc « Tutoriel guidé »), `src/i18n/en/tutorial.ts` (anglais)
 > Tests : `tests/tutoriel.test.ts`, `tests/tutorielChapitres.test.ts`, `tests/invasion.test.ts` (le tutoriel ne lit pas le PvE)
 > Voir aussi : [interface.md](interface.md), [portail-ile.md](portail-ile.md), [enfers.md](enfers.md), [armee-combat.md](armee-combat.md), [sauvegarde.md](sauvegarde.md), [traduction.md](traduction.md)
 
@@ -57,9 +57,15 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   2. `hellPick` : choisir des troupes (sans troupe : « Renforts » fait venir la garnison).
   3. `hellAttack` : un ordre d'un clic droit sur la cible (la bulle se tient à l'écart).
   4. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.
+- **Chapitre « L'or des voisins »** (`arch`, 4 étapes), lancé 3,2 s après le choix de l'allié (`DiploChoice` › `ally`, `main.ts`), le temps de la bannière « Une alliance ! » :
+  1. `archHome` « Un port chez vous » : un port (`harbor`) sur l'île principale. Déjà bâti : l'étape passe.
+  2. `archAllyHarbor` « Un port chez l'allié » : la vue va sur l'île de l'allié (`Game.goAlly`, le lobe le plus loin de la ville) ; un port sur sa côte, hors de sa ville. Ailleurs, la bulle propose « Aller sur l'île alliée ».
+  3. `archPost` « Le comptoir » : un comptoir (`tradepost`) sur l'île de l'allié.
+  4. `archGold` « L'or » (à lire) : l'or fait passer les âges (20, 50, 100 : lus dans `AGES[n].reqGold`), et un clic sur l'or ouvre le comptoir pour vendre bois, pierre ou minerai. La bulle montre l'or de la barre des stocks.
+  Il s'achève si l'archipel ou l'allié manque (`live`), se cache hors de la surface (`away`).
 - **Quand les chapitres se lancent** : une seule fois chacun, même le tutoriel fini, même s'il est en cours (la suite
   principale reprend après le chapitre). Jamais si le joueur a mis le tutoriel de côté (« Passer le tutoriel », ou
-  désactivé à l'accueil ou dans les réglages). « Passer ce chapitre » ne passe que le chapitre. « Recommencer » les réarme.
+  désactivé à l'accueil ou dans les réglages). Sauf « L'or des voisins » (`ALWAYS`, `chapterDue`) : un mécanisme neuf que le joueur ne connaît pas ; il ne se tait que si le tutoriel est désactivé à l'accueil (`off`). « Passer ce chapitre » ne passe que le chapitre. « Recommencer » les réarme.
 - **Sans tutoriel**, la règle des défenses sur l'île est dite trois fois :
   - la carte du portail : « Pour les affronter : « Tour de garde » et « Caserne » sur l'île du portail, pas au village… » ;
   - à l'arrivée sur l'île sans ses défenses (`Game.commandIsle`) : menu sur « Bâtir » et un message, une fois par session ;

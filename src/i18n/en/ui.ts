@@ -292,4 +292,11 @@ registerDict('ui', {
   "Changer…": "Change…",
   "Choisir…": "Choose…",
   "🤝 Deux peuples vivent sur ces îles : l’expédition « Le premier contact » peut aller les saluer.": "🤝 Two peoples live on these islands: the expedition “First Contact” can go and greet them.",
+  // le comptoir à bâtir (fiche de l'or)
+  'Bâtissez un comptoir sur l’île de votre allié : l’échange passera par lui.': 'Build a trading post on your ally’s island: trade will go through it.',
+  'Choisissez d’abord votre allié parmi les deux peuples des îles : l’échange se fait chez lui.': 'First choose your ally between the two island peoples: trade happens at their place.',
+  'Pas encore de comptoir : bâtissez « {name} » sur {isle}, hors de leur ville. On y vendra nos matériaux contre de l’or.': 'No trading post yet: build “{name}” on {isle}, outside their town. Our materials will be sold there for gold.',
+  'L’or ne vient que de l’échange avec le peuple allié ; il sert à passer les âges.': 'Gold only comes from trading with the allied people; it is needed to move through the ages.',
+  'Voir l’île alliée': 'See the allied island',
+  'Choisissez d’abord votre allié : le comptoir se bâtit chez lui': 'Choose your ally first: the trading post is built at their place',
 });

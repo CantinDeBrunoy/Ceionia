@@ -172,9 +172,17 @@ export interface Step {
   need?: number;
 }
 
-/** Les chapitres : l'île du portail quand le joueur choisit d'affronter les démons, la première entrée dans les Enfers */
-export type ChapterId = 'pve' | 'hell';
-export const CHAPTERS: readonly ChapterId[] = ['pve', 'hell'];
+/**
+ * Les chapitres : l'île du portail quand le joueur choisit d'affronter les démons, la première entrée dans les Enfers, et
+ * l'archipel (ports, comptoir et or) quand il choisit son allié
+ */
+export type ChapterId = 'pve' | 'hell' | 'arch';
+export const CHAPTERS: readonly ChapterId[] = ['pve', 'hell', 'arch'];
+/**
+ * Les chapitres qui se lancent même si le joueur a passé la suite principale : un mécanisme neuf, qu'il ne connaît pas
+ * (l'or et le comptoir ; l'auteur, en partie, n'avait pas compris l'or). Désactivé à l'accueil, il ne se lance pas
+ */
+const ALWAYS: readonly ChapterId[] = ['arch'];
 
 /** Un chapitre : une courte suite d'étapes qu'un événement lance, une seule fois */
 export interface Chapter {
@@ -238,7 +246,8 @@ export function setAside(s: TutoState | null): boolean {
 
 /** Un chapitre se lance-t-il ? Une seule fois, même si le tutoriel est fini ; pas s'il a été mis de côté */
 export function chapterDue(s: TutoState | null, id: ChapterId): boolean {
-  return !setAside(s) && !(s?.seen ?? []).includes(id);
+  if ((s?.seen ?? []).includes(id)) return false;
+  return ALWAYS.includes(id) ? !s?.off : !setAside(s);
 }
 
 /**
