@@ -82,6 +82,8 @@ export class Sim {
   messageChoice = false;
   /** le conseil parle du conflit des deux îles à régler : un clic rouvre la carte de la diplomatie */
   messageConflict = false;
+  /** le conseil signale un besoin non comblé (manger, boire, travail, rencontre, santé) : il reste visible aides coupées */
+  messageNeed = false;
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
   moisture = 0.7;
@@ -293,6 +295,8 @@ export class Sim {
     const say = (k: KindId) => tr('« {name} » ({where})', { name: this.nameOf(k), where: this.whereOf(k) });
     const quote = (k: KindId) => tr('« {name} »', { name: this.nameOf(k) });
     const about = (k: KindId, text: string) => { this.messageKind = k; return text; };
+    // un besoin non comblé : seul conseil qui reste affiché quand le joueur a coupé les aides
+    const need = (k: KindId, text: string) => { this.messageNeed = true; return about(k, text); };
     // le titre d'une expédition, dans la langue du jeu
     const title = (id: string) => tr(MISSIONS.find((x) => x.id === id)?.title ?? id);
     // le bâtiment conseillé coûte du bois ou de la pierre que le village n'a pas, et rien n'en produit : on dit d'abord
@@ -306,23 +310,23 @@ export class Sim {
       }
       return about(k, text);
     };
-    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false; this.messageGold = false; this.messageChoice = false; this.messageConflict = false;
+    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false; this.messageGold = false; this.messageChoice = false; this.messageConflict = false; this.messageNeed = false;
     // au bac à sable, aucun conseil : on bâtit comme on veut
     if (w.sandbox) return tr('Bac à sable : tout est ouvert et gratuit, bâtissez comme vous voulez.');
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
     if (w.buildings.size === 0) return about('gather', tr('Pour commencer, posez {name} au centre : c’est la place du village.', { name: quote('gather') }));
     if (!this.counts.house) return about('house', tr('Autour de la place, le centre du village : {house}, {farm} et {well}.', { house: quote('house'), farm: quote('farm'), well: quote('well') }));
     if (!this.counts.house) return about('house', tr('Pour accueillir des habitants : {k}.', { k: say('house') }));
-    if (!this.food.ok && this.fled >= 1) return about('farm', DIFF_TEXT.famine(say('farm')));
-    if (!this.food.ok) return about('farm', this.drought ? tr('Sécheresse : les champs donnent moins ; {farm} ou {pier} de plus aiderait.', { farm: say('farm'), pier: quote('pier') }) : tr('Il manque de quoi manger : {farm} ou un champ.', { farm: say('farm') }));
-    if (!this.water.ok) return about('well', tr('Il manque de l’eau : {k}.', { k: say('well') }));
+    if (!this.food.ok && this.fled >= 1) return need('farm', DIFF_TEXT.famine(say('farm')));
+    if (!this.food.ok) return need('farm', this.drought ? tr('Sécheresse : les champs donnent moins ; {farm} ou {pier} de plus aiderait.', { farm: say('farm'), pier: quote('pier') }) : tr('Il manque de quoi manger : {farm} ou un champ.', { farm: say('farm') }));
+    if (!this.water.ok) return need('well', tr('Il manque de l’eau : {k}.', { k: say('well') }));
     // à la Préhistoire, dans les premières minutes, les premiers bâtiments qui travaillent pour le village : le bûcheron (bois), puis le pierrier (pierre) ; le séchoir à grains nourrit déjà
     const young = this.age === 0 && p < 8;
     if (young && !this.producing('wood')) return about('lumber', this.counts.farm ? tr('Un bûcheron : le premier bâtiment qui travaille pour vous. {lumber}.', { lumber: say('lumber') }) : tr('Un bûcheron et un séchoir : les premiers bâtiments qui travaillent pour vous. {lumber}, puis {farm}.', { lumber: say('lumber'), farm: say('farm') }));
     if (young && !this.producing('stone')) return about('quarry', tr('Il vous faut aussi de la pierre pour les grands bâtiments : {k}.', { k: say('quarry') }));
-    if (!this.jobs.ok) return about('workshop', tr('Les habitants cherchent du travail : {k}.', { k: say('workshop') }));
-    if (!this.joy.ok) return about('gather', tr('Les habitants aimeraient un lieu de rencontre : {k}, une arène ou un lieu de culte.', { k: say('gather') }));
-    if (!this.health.ok) return about('health', tr('Les habitants tombent malades : il faut {k}.', { k: say('health') }));
+    if (!this.jobs.ok) return need('workshop', tr('Les habitants cherchent du travail : {k}.', { k: say('workshop') }));
+    if (!this.joy.ok) return need('gather', tr('Les habitants aimeraient un lieu de rencontre : {k}, une arène ou un lieu de culte.', { k: say('gather') }));
+    if (!this.health.ok) return need('health', tr('Les habitants tombent malades : il faut {k}.', { k: say('health') }));
     if (this.recovering > 0 && this.housing.ok) return DIFF_TEXT.recovering;
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
     const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;

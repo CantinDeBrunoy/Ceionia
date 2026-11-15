@@ -66,7 +66,7 @@ Calculé à chaque `update`, stocké dans `message`, avec des drapeaux : `messag
 
 Le helper `build(k, texte)` remplace le conseil par « Il manque du bois / de la pierre / des briques pour X : <producteur> » quand le bâtiment conseillé coûte une ressource que le village n'a pas **et** qu'aucun bâtiment n'en produit (`producing`), hors ressources illimitées.
 
-Affichage (`ui.ts` › `renderMessage`) : ton `warn` (un besoin hors logement manque, ou sécheresse), `goal` (âge suivant en vue, ou village plein), `calm`. À partir de l'âge 1, le conseil est masqué (`quiet`) sauf manque ou passage d'âge prêt, ou si l'aide est activée (bouton cible, clé `ceionia.aides` du `localStorage`). Masqué aussi pendant le tutoriel guidé et en plein commandement.
+Affichage (`ui.ts` › `renderMessage`) : ton `warn` (un besoin hors logement manque, ou sécheresse), `goal` (âge suivant en vue, ou village plein), `calm`. À partir de l'âge 1, le conseil est masqué (`quiet`) sauf passage d'âge prêt ou conseil qui signale lui-même un besoin non comblé (`sim.messageNeed` : manger, boire, travail, rencontre, santé ; un besoin sans conseil, comme la sécurité, ne fait plus paraître le conseil de l'âge suivant), ou si l'aide est activée (bouton cible, clé `ceionia.aides` du `localStorage`). Masqué aussi pendant le tutoriel guidé et en plein commandement.
 
 ## Fonctionnement dans le code
 - `Sim.recalc()` : parcourt `world.buildings`, remplit `src` (détail par sorte pour les fiches), les totaux, compte les champs et les forêts, appelle `computeCoverage`. Déclenché par `Sim.update` quand `world.version` a changé **et** au plus tous les 0,25 s réelles (`recalcTimer`). `advance()` et le constructeur de `Game` l'appellent aussi.

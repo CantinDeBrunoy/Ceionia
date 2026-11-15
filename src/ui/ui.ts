@@ -1297,8 +1297,9 @@ export class UI {
     // une petite pastille « Aides » et son interrupteur, en tête de la colonne de gauche, sous la carte du village (l'œil du
     // milieu de l'écran était trop voyant, et on ne savait pas à quoi il servait)
     if (!hb.firstElementChild) hb.innerHTML = `${ic('bulb', 15, 2)}<span>${tr('Aides')}</span><i class="sw"></i>`;
-    // à partir de l’Antiquité, seuls restent visibles un besoin à combler (orange) ou le passage d’âge
-    const quiet = late && !this.help && !(sim.ready && !k) && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) && !sim.drought;
+    // à partir de l’Antiquité, aides coupées, seuls restent visibles un conseil qui signale un besoin à combler (manger,
+    // boire…) ou le passage d’âge ; un besoin sans conseil (la sécurité) ne fait plus afficher le conseil de l'âge suivant
+    const quiet = late && !this.help && !(sim.ready && !k) && !sim.messageNeed;
     // pendant le tutoriel guidé, sa propre bulle suffit : pas de conseil en plus
     // (et en plein commandement, le conseil du village se tait : le combat a ses propres aides)
     const fighting = !!document.getElementById('troopBar') && document.getElementById('troopBar')!.style.display !== 'none';

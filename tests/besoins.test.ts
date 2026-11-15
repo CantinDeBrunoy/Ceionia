@@ -81,4 +81,19 @@ describe('croissance jusqu’à la dernière place', () => {
     expect(sim.message).toMatch(/^Bâtissez « .+ » \(.+\) : le village manque de place pour grandir \(\d+\/12 habitants pour l’âge suivant\)\.$/);
     expect(sim.messageKind).toBe('house');
   });
+
+  it('aides coupées : seul un conseil qui signale un besoin non comblé reste affiché (messageNeed)', () => {
+    // un village sans eau : le conseil dit de bâtir un puits, c'est un besoin
+    const dry = new Sim(village('normal', [['gather', 0, 1], ['house', 0, 4], ['farm', 0, 4], ['lumber', 0, 1], ['quarry', 0, 1]]));
+    dry.recalc(); dry.pop = 10; dry.update(0, 1);
+    expect(dry.water.ok).toBe(false);
+    expect(dry.messageNeed).toBe(true);
+    // un village qui a tout ce qu'il faut et manque de place : le conseil vise l'âge suivant, pas un besoin
+    const w = village('normal', [['gather', 0, 1], ['house', 0, 2], ['farm', 0, 4], ['well', 0, 4], ['lumber', 0, 1], ['quarry', 0, 1]]);
+    const sim = new Sim(w);
+    sim.recalc(); sim.pop = sim.housing.cap;
+    for (let i = 0; i < 10; i++) sim.update(0.5, 0.5);
+    expect(sim.messageKind).toBe('house');
+    expect(sim.messageNeed).toBe(false);
+  });
 });
