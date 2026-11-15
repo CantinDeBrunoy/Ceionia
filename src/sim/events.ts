@@ -295,7 +295,7 @@ export const EVENTS: ExpEvent[] = [
   // ---------------- La traversée vers l'île du portail ----------------
   {
     id: 'crossing', where: ['river'], scenes: ['portal'], arrive: true, title: 'La houle du bras de mer',
-    text: 'À mi-chemin de l’île, le vent forcit : de longues vagues soulèvent la galère et la poussent de travers.',
+    text: 'La galère quitte la rive et le vent forcit : de longues vagues la soulèvent et la poussent de travers.',
     options: [
       { label: 'Ramer en cadence, face aux vagues', risk: 0.85, work: 4, text: 'Tous aux rames, en cadence : la galère a tenu son cap jusqu’à la plage.' },
       { wait: true, label: 'Attendre que le vent tombe', risk: 0.9, work: 6, text: 'On a laissé passer le coup de vent avant de reprendre la traversée.' },
