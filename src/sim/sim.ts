@@ -8,6 +8,7 @@ import { priceIn, YIELD } from './economy';
 import { goldNeed, goldSince } from './trade';
 import { archipelagoOn, canExpand } from '../world/expand';
 import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from './crossroads';
+import { CONFLICT_LABEL, conflictItem } from './diplomacy';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -79,6 +80,8 @@ export class Sim {
   messageGold = false;
   /** le conseil mène au grand choix de la fin de l'Antiquité (un clic dessus rouvre sa carte) */
   messageChoice = false;
+  /** le conseil parle du conflit des deux îles à régler : un clic rouvre la carte de la diplomatie */
+  messageConflict = false;
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
   moisture = 0.7;
@@ -266,6 +269,9 @@ export class Sim {
       const met = crossroadsMet(w, hellWay(w, 'ask'), worldWay(w, canExpand({ n: N, gen: w.gen })));
       items.push({ label: CHOICE_LABEL, have: met ? 1 : 0, need: 1 });
     }
+    // l'archipel : le conflit des deux îles réglé (paix ou guerre) pour passer au Moderne, voir `sim/diplomacy.ts`
+    const conflict = conflictItem(w, n);
+    if (conflict) items.push({ label: CONFLICT_LABEL, ...conflict });
     // la fin de l'âge : la raffinerie (ouverte par l'expédition « L'or noir ») et ses puits, puis le chemin de fer
     kinds(true);
     if (req.reqRail) {
@@ -300,7 +306,7 @@ export class Sim {
       }
       return about(k, text);
     };
-    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false; this.messageGold = false; this.messageChoice = false;
+    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false; this.messageGold = false; this.messageChoice = false; this.messageConflict = false;
     // au bac à sable, aucun conseil : on bâtit comme on veut
     if (w.sandbox) return tr('Bac à sable : tout est ouvert et gratuit, bâtissez comme vous voulez.');
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
@@ -336,6 +342,7 @@ export class Sim {
       const miss = ap.items.find((i) => i.have < i.need);
       if (!miss) return tr('Tout est prêt pour l’âge suivant ({age}) : passez-y quand vous voulez.', { age: AGES[ap.next].name });
       if (miss.label === CHOICE_LABEL) { this.messageChoice = true; return tr('Pour l’âge suivant : faites le grand choix, les Enfers, le monde, ou ni l’un ni l’autre (cliquez ici).'); }
+      if (miss.label === CONFLICT_LABEL) { this.messageConflict = true; return tr('Pour l’âge suivant : réglez le conflit des deux îles, par la paix ou par la guerre (cliquez ici).'); }
       if (miss?.mission) {
         // toutes celles qui restent à réussir (la Préhistoire en demande deux)
         const left = ap.items.filter((i) => i.mission && i.have < i.need).map((i) => tr('« {name} »', { name: tr(i.mission!) }));

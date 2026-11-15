@@ -103,7 +103,8 @@ import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
-import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, endgameOpen, peopleName, settleAtAge, startAllyBattle } from './sim/diplomacy';
+import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, peopleName, settleLate, startAllyBattle, WAR_MISSION, PEACE_CHAIN } from './sim/diplomacy';
+import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
@@ -111,7 +112,6 @@ import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adapti
 import { weakGpu, probeRenderer } from './render/gpu';
 import { LoadingScreen, painted } from './ui/loading';
 import { VoyageStage } from './voyageStage';
-import { VOY_CONTACT } from './voyageCine';
 import { WarmUp } from './render/warmup';
 import { CompileJob, compilePaced, representatives, firstUseAll } from './render/precompile';
 
@@ -234,6 +234,11 @@ class Game implements UIHost {
   diploChoice!: DiploChoice;
   /** la bataille aux côtés de l'allié est en cours (à venir : toujours faux pour l'instant) ; on ne change pas d'âge pendant */
   allyBattle = false;
+  /**
+   * L'allié vient d'être choisi (crochet pour le tutoriel de l'archipel et la construction chez l'allié) ; l'allié se lit
+   * aussi à tout moment dans `world.diplo.ally`
+   */
+  onAllyChosen?: (p: People) => void;
   /** temps passé en jeu depuis la fin du dernier écran de chargement (s) : la carte du portail attend que le joueur soit arrivé */
   private portalCalm = 0;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
@@ -560,6 +565,7 @@ class Game implements UIHost {
         if (!chooseAlly(this.world.diplo, p)) return;
         this.ui.banner(trx('Une alliance !'), trx('{people} sont nos alliés', { people: peopleName(p).replace(/^./, (c) => c.toUpperCase()) }));
         this.ui.update(); this.saveNow();
+        this.onAllyChosen?.(p);
       },
       path: (p) => this.choosePath(p),
     });
@@ -612,18 +618,13 @@ class Game implements UIHost {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       show();
     };
-    // la diplomatie de l'archipel : pas de passage d'âge pendant la bataille, et l'avertissement du traité, dit une fois
-    // les îles découvertes (fin de la cinématique) : un navire peut aller saluer leurs peuples
-    this.onIslesRevealed = () => {
-      if (this.world.exp.done.includes('contact')) return;
-      this.ui.banner(trx(VOY_CONTACT.title), trx(VOY_CONTACT.sub));
-      this.ui.toast(trx('🤝 Deux peuples vivent sur ces îles : l’expédition « Le premier contact » peut aller les saluer.'), () => this.ui.gotoMission('contact'));
-    };
+    // les îles découvertes (fin de la cinématique) : la carte du choix de l'allié, obligatoire
+    this.onIslesRevealed = () => { if (allyPending(this.world)) this.diploChoice.showAlly(); };
+    // la diplomatie de l'archipel : pas de passage d'âge pendant la bataille (le conflit à régler est une condition de l'âge)
     this.sim.beforeAdvance = () => {
-      const g = ageGate(this.world, this.sim.age, this.allyBattle);
-      if (!g) return true;
-      if (g.warn) this.world.diplo.warned = true;
-      this.ui.toast(g.why);
+      const why = ageGate(this.allyBattle);
+      if (!why) return true;
+      this.ui.toast(why);
       return false;
     };
     this.sim.onAgeUp = (age) => {
@@ -639,8 +640,6 @@ class Game implements UIHost {
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
       // (au bac à sable, tout est déjà ouvert : pas de liste)
       if (!this.world.sandbox) setTimeout(() => this.ui.showNewAge(age), 3600);
-      // le Moderne : les deux îles règlent sans nous un conflit encore ouvert (après la bannière du nouvel âge)
-      if (settleAtAge(this.world.diplo, age, archipelagoOn(this.world))) setTimeout(() => this.treatyBanner(), 4600);
       audio.sfxAgeUp();
       this.propsDirty = true;
     };
@@ -1052,29 +1051,27 @@ class Game implements UIHost {
   }
 
   /**
-   * La diplomatie de l'archipel, à chaque image : le traité d'une partie chargée déjà au Moderne, puis, au calme (en jeu
-   * depuis 3 s, en surface, sans fenêtre ni fondu ni autre carte), la carte du choix de l'allié tant qu'il n'est pas choisi,
-   * et celle du dénouement une fois, à l'âge industriel
+   * La diplomatie de l'archipel, à chaque image : l'état du conflit donné au conflit naval ; le règlement d'office d'une partie
+   * déjà au-delà de l'Industriel ; puis, au calme (aucune autre fenêtre, ni cinématique ni fondu), la carte du choix de l'allié
+   * tant qu'il n'est pas choisi (une partie rechargée, une ancienne partie), et celle du dénouement une fois, à l'Industriel
    */
   private stepDiplo() {
     const w = this.world, d = w.diplo;
     if (!archipelagoOn(w)) return;
-    if (settleAtAge(d, this.sim.age, true)) this.treatyBanner();
-    const calm = this.portalCalm > 3 && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading && !this.portalChoice.visible && !this.diploChoice.visible && !this.tutorial.active;
-    if (!calm) return;
+    const cs = conflictState(w);
+    if (cs && cs.kind !== this.naval.state.kind) this.naval.state = cs;
+    if (settleLate(d, this.sim.age, true)) { this.ui.banner(trx('Le traité des deux îles'), trx('Les deux îles ont fait la paix entre elles')); this.saveNow(); }
+    if (this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing) return;
     if (allyPending(w)) this.diploChoice.showAlly();
-    else if (endgameOpen(w, this.sim.age) && !d.asked) { d.asked = true; this.diploChoice.showPath(); }
+    else if (endgameOpen(w, this.sim.age) && !d.asked && !this.tutorial.active) { d.asked = true; this.diploChoice.showPath(); }
   }
 
-  /** Le traité des deux îles : la bannière, une seule fois (au passage au Moderne) */
-  private treatyBanner() { this.ui.banner(trx('Le traité des deux îles'), trx('Les deux îles ont fait la paix entre elles, sans nous')); this.saveNow(); }
-
-  /** La voie du dénouement : la paix ouvre les pourparlers, la guerre attend sa bataille, la neutralité ne fait rien */
-  private choosePath(p: 'peace' | 'war' | 'neutral') {
+  /** La voie du dénouement : la paix ouvre les pourparlers, la guerre l'expédition militaire (puis, plus tard, la bataille) */
+  private choosePath(p: 'peace' | 'war') {
     if (!choosePath(this.world.diplo, p)) return;
-    if (p === 'peace') this.ui.toast(trx('🕊️ La voie de la paix : l’expédition « Les émissaires » vous attend.'), () => this.ui.gotoMission('envoys'));
-    else if (p === 'war') { if (!startAllyBattle(this.world)) this.ui.toast(trx('⚔️ La guerre est engagée aux côtés de notre allié. La grande bataille reste à venir.')); }
-    else this.ui.toast(trx('Notre village reste à l’écart : au Moderne, les deux îles régleront leur conflit sans nous.'));
+    const first = PEACE_CHAIN.find((id) => !this.world.exp.done.includes(id)) ?? 'feast';
+    if (p === 'peace') this.ui.toast(trx('🕊️ La voie de la paix : des pourparlers vous attendent (menu Expéditions).'), () => this.ui.gotoMission(first));
+    else if (!startAllyBattle(this.world)) this.ui.toast(trx('⚔️ La guerre aux côtés de notre allié : l’expédition « Aux côtés de notre allié » vous attend.'), () => this.ui.gotoMission(WAR_MISSION));
     this.ui.update(); this.saveNow();
   }
 
@@ -1082,10 +1079,11 @@ class Game implements UIHost {
   diploLine() {
     if (!endgameOpen(this.world, this.sim.age)) return null;
     const p = this.world.diplo.path;
-    const now = p === 'peace' ? trx('la paix') : p === 'war' ? trx('la guerre') : p === 'neutral' ? trx('à l’écart') : null;
+    const now = p === 'peace' ? trx('la paix') : p === 'war' ? trx('la guerre') : null;
     return { text: now ? trx('⚖️ Le conflit des deux îles : {path}', { path: now }) : trx('⚖️ Le conflit des deux îles'), button: now ? trx('Changer…') : trx('Choisir…') };
   }
-  openDiploChoice() { this.diploChoice.showPath(); }
+  /** La carte de la diplomatie (condition du panneau des âges, conseil, ligne du rayon Vie) : l'allié d'abord, s'il manque */
+  openDiploChoice() { if (allyPending(this.world)) this.diploChoice.showAlly(); else this.diploChoice.showPath(); }
 
   /** La partie peut-elle encore s'agrandir à l'archipel ? (continent de 192, version 3) */
   canExplore() { return canExpand({ n: N, gen: this.world.gen }); }

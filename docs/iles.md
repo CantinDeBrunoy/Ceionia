@@ -2,7 +2,7 @@
 
 > Fichiers : `src/world/archipelago.ts` (place et relief des îles, replat des villages), `src/world/rivalTown.ts` (plan des villes des peuples rivaux), `src/render/townModels.ts` (aiguillage des modèles par peuple, cache, socles), `src/render/models/oriental.ts` (les modèles du peuple oriental), `src/render/models/asian.ts` (les modèles du peuple asiatique), `src/render/townRuins.ts` (ruines et reconstruction), `src/render/rivalTowns.ts` (`RivalTowns` : les villes posées sur la carte), `src/main.ts` (création et mise à jour dans `Game`), `src/render/vegetation.ts` (pas d'herbe dans les villes)
 > Tests : `tests/archipel.test.ts`, `tests/villesPeuples.test.ts` (dont les états de bataille)
-> Voir aussi : [diplomatie.md](diplomatie.md) (premier contact, allié, dénouement), [monde-carte.md](monde-carte.md), [rendu-modeles.md](rendu-modeles.md), [ages.md](ages.md)
+> Voir aussi : [diplomatie.md](diplomatie.md) (allié, dénouement), [monde-carte.md](monde-carte.md), [rendu-modeles.md](rendu-modeles.md), [ages.md](ages.md)
 
 ## En bref
 Sur une carte de 384 cases (version 4 du générateur), deux îles rivales font face à l'île principale : celle du peuple oriental (sable, palmiers) et celle du peuple asiatique (tempérée, humide). Chacune porte une ville **de décor** : on n'y bâtit pas, rien n'y est simulé. La ville a un **squelette fixe** (édifice religieux au centre, palais sur le point haut, marché entre les deux, port sur la côte la plus proche, remparts) rempli de façon **procédurale** à partir de la graine (rues, maisons, jardins, champs). Elle suit l'âge du village du joueur : elle se densifie et ses modèles changent à chaque âge.

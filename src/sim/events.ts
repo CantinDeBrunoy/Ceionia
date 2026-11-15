@@ -71,21 +71,20 @@ export const EVENTS: ExpEvent[] = [
   // ---------------- La diplomatie de l'archipel : le premier contact, puis les pourparlers de la paix ----------------
   // (les pourparlers ne peuvent pas échouer : leurs options changent le récit et les petits gains, jamais le risque)
   {
-    id: 'warsails', where: ['river'], missions: ['contact'], water: 'sea', title: 'Des voiles de guerre',
-    text: 'Deux escadres des îles s’affrontent droit devant. Notre navire est encore loin.',
+    id: 'blockade', where: ['river'], missions: ['allywar'], water: 'sea', title: 'Le blocus en vue',
+    text: 'Les navires rivaux barrent l’entrée du port allié, bord contre bord.',
     options: [
-      { wait: true, label: 'Attendre qu’elles s’éloignent', risk: 0.85, work: 8, text: 'On a attendu que les escadres rentrent au port avant d’avancer.' },
-      { label: 'Contourner largement', risk: 1, work: 4, text: 'On a fait un grand détour par le large.' },
-      { label: 'Passer entre elles, pavillon blanc hissé', risk: 1.3, work: -4, bonus: [joy(1, 4)], text: 'On est passé entre les deux escadres, pavillon blanc au mât : les deux camps ont salué notre audace.' },
+      { label: 'Attaquer de front', risk: 1.2, work: -4, text: 'On a foncé droit sur la ligne rivale.' },
+      { label: 'Attendre la flotte alliée', risk: 0.85, work: 8, wait: true, text: 'On a attendu la flotte alliée pour attaquer ensemble.' },
+      { label: 'Contourner par les récifs', risk: 0.95, work: 4, text: 'On a contourné la ligne rivale par les récifs.' },
     ],
   },
   {
-    id: 'gifts', where: ['river'], missions: ['contact'], water: 'sea', title: 'Quels présents offrir ?',
-    text: 'Une barque vient à notre rencontre. Que lui offrir pour saluer son peuple ?',
+    id: 'parley', where: ['river'], missions: ['allywar'], water: 'sea', from: 0.4, title: 'Un émissaire rival',
+    text: 'Une barque rivale hisse un drapeau blanc : son chef veut parlementer.',
     options: [
-      { label: 'Nos plus belles poteries', risk: 0.9, text: 'Nos poteries ont fait sensation.' },
-      { label: 'Des semences de nos champs', risk: 0.9, bonus: [{ t: 'need', need: 'food', n: 2, days: 4 }], text: 'Nos semences ont été échangées contre des fruits inconnus.' },
-      { label: 'Un simple salut, sans rien donner', risk: 1.2, work: -3, text: 'Un salut sans présent : l’accueil a été plus froid.' },
+      { label: 'Exiger sa reddition', risk: 0.9, text: 'On a exigé la reddition du rival, qui a fini par plier.' },
+      { label: 'Refuser et poursuivre', risk: 1.1, work: -3, text: 'On a renvoyé l’émissaire et poursuivi l’assaut.' },
     ],
   },
   {

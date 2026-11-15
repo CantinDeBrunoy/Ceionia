@@ -2,7 +2,7 @@ import type { World } from '../world/world';
 import { Danger, GearId, Stock, emptyStock, GEAR_BY } from './gear';
 import type { KindId } from '../build/catalog';
 import { tr, plural } from '../i18n';
-import { applyDiplo, DiploAct } from './diplomacy';
+import { applyDiplo, DiploAct, WAR_SPOILS } from './diplomacy';
 
 /**
  * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant, deux à la
@@ -602,27 +602,6 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
-  {
-    // l'archipel (seulement s'il est accepté, voir `diplomacy.ts`) : on rencontre les deux peuples, puis on choisit son allié
-    id: 'contact', age: 2, mandatory: false, icon: '🤝', title: 'Le premier contact',
-    intro: 'Par-delà la mer, deux îles et deux peuples, les Sablais et les Jadéens, qui se font la guerre. Un navire chargé de présents part les saluer, l’un après l’autre. À son retour, il faudra choisir un allié.',
-    choices: [
-      {
-        label: 'Hisser le pavillon blanc et attendre', text: 'Prudent : on mouille au large et on attend qu’on vienne à nous.',
-        dest: 'river', sea: true, scene: 'voyage', fail: 'fog', doing: 'mouille au large des deux îles, pavillon blanc hissé', danger: ['water'], party: 3, work: 40, risk: 0.08, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'meet' }, joy(1, 4)], lose: [],
-        winText: 'Des barques sont venues à notre navire, d’une île puis de l’autre. Présents échangés, mains serrées : les Sablais et les Jadéens connaissent notre village. Reste à choisir notre allié.',
-        loseText: 'La brume est tombée sur le bras de mer : le navire n’a trouvé personne et il est rentré. Il faudra retenter.',
-      },
-      {
-        label: 'Accoster tout de suite, présents en main', text: 'Audacieux : on débarque sur chaque île, au risque de surprendre.',
-        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'accoste chaque île, les bras chargés de présents', danger: ['water', 'weather'], party: 4, work: 28, risk: 0.22, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'meet' }, joy(3, 6), jobs(1, 6)], lose: [hurt(1, 2)],
-        winText: 'Nos marins ont été reçus au palais de chaque île, festin compris. Les Sablais et les Jadéens connaissent notre village ; ils attendent de savoir qui sera notre allié.',
-        loseText: 'Pris pour des pillards, nos marins ont dû rembarquer en hâte ; un blessé. Il faudra retenter.',
-      },
-    ],
-  },
   // ---------------- Âge industriel ----------------
   // la paix de l'archipel (voie choisie à l'âge industriel) : des pourparlers, seulement des choix, sans échec possible
   {
@@ -684,6 +663,28 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'diplo', act: 'feast' }, joy(4), jobs(1, 6)], lose: [],
         winText: 'Courses de barques, musiques des trois peuples, et le soir des fusées bleues, turquoise et rouges : les trois peuples sont amis.',
         loseText: 'Les invités n’ont pas pu venir.',
+      },
+    ],
+  },
+  // la guerre de l'archipel (voie choisie à l'âge industriel) : une expédition militaire, en attendant la grande bataille.
+  // Réussie, elle gagne la guerre (butin, tribut) ; ratée, elle se retente
+  {
+    id: 'allywar', age: 3, mandatory: false, icon: '⚔️', title: 'Aux côtés de notre allié',
+    intro: 'La flotte rivale bloque le port de notre allié. Nos soldats embarquent pour briser le blocus et faire plier le rival.',
+    choices: [
+      {
+        label: 'Escorter la flotte alliée', text: 'Prudent : nos navires se joignent aux leurs, en bon ordre.',
+        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'escorte la flotte alliée contre le blocus', danger: ['beast', 'water'], party: 5, work: 44, risk: 0.22, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'victory' }, joy(2, 6)], lose: [hurt(1, 3)],
+        winText: 'Nos navires et ceux de notre allié ont brisé le blocus ensemble : le rival demande la paix et paiera un tribut. Le butin est au village.',
+        loseText: 'Une tempête a dispersé les deux flottes avant la bataille ; un soldat blessé. Il faudra retenter.',
+      },
+      {
+        label: 'Débarquer et prendre leur fort', text: 'Audacieux : un coup de main sur la côte du rival.',
+        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'débarque sur la côte rivale et monte à l’assaut du fort', danger: ['beast', 'water'], party: 6, work: 32, risk: 0.38, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'victory' }, joy(3, 6), { t: 'ore', n: 10 }], lose: [hurt(2, 3), joy(-1, 3)],
+        winText: 'Le fort est tombé à l’aube : le rival se rend, paiera un tribut, et nos soldats rentrent chargés de butin.',
+        loseText: 'Le fort a tenu : nos soldats ont rembarqué, deux blessés. Il faudra retenter.',
       },
     ],
   },
@@ -1127,7 +1128,12 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
     else if (e.t === 'need') { if (e.days) s.temp.push({ need: e.need, n: e.n, until: s.clock + e.days * dayLen }); else s.bonus[e.need] += e.n; }
     else if (e.t === 'injured') { injured += e.n; days = Math.max(days, e.days); }
     else if (e.t === 'unherd') for (let i = 0; i < e.n; i++) { const j = s.herd.lastIndexOf(e.kind); if (j >= 0) s.herd.splice(j, 1); }
-    else if (e.t === 'diplo') applyDiplo(w.diplo, e.act);
+    else if (e.t === 'diplo') {
+      // la guerre gagnée : le butin d'or du vaincu (le tribut vient ensuite chaque jour, voir `Expeditions.mineStep`)
+      const won = e.act === 'victory' && w.diplo.conflict === 'open';
+      applyDiplo(w.diplo, e.act);
+      if (won && w.diplo.conflict === 'won') w.gold += WAR_SPOILS.loot;
+    }
   }
   w.version++;
   return { injured, days };
@@ -1145,8 +1151,8 @@ PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place d
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** Ce que la diplomatie gagne, en clair et en pastille */
-const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la trêve des deux îles : les combats cessent', feast: 'l’amitié des trois peuples' };
-const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉' };
+const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la trêve des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', victory: 'la guerre gagnée : butin et tribut d’or' };
+const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', victory: '🏆' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

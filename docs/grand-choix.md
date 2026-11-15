@@ -46,7 +46,7 @@ Demande de l'auteur : « il faut une vraie cinématique comme celle de fin. Elle
    - **les flottes** (7 s) : au milieu du bras de mer (`navalSites().battle`), trois navires de chaque peuple s'avancent les uns vers les autres, vus de côté au ras de l'eau (« Deux peuples, deux flottes · Une vieille rivalité les oppose ») ;
    - **le retour** (4,5 s) : la vue revient au village et s'y pose, sans bandeau.
 
-   À la fin, l'interface revient, la bannière « Le premier contact · Un navire peut aller saluer ces deux peuples » paraît (`VOY_CONTACT`), avec le message qui mène à l'expédition du premier contact (`onIslesRevealed`).
+   À la fin, l'interface revient et la carte du choix de l'allié s'ouvre (`onIslesRevealed`, voir [diplomatie.md](diplomatie.md)). `VOY_CONTACT` (l'ancienne bannière du premier contact) n'est plus affichée.
 
 - **Navires** : la caravelle est le navire de commerce (`vesselModel('caravel')`). Ceux des deux peuples sont leurs navires de guerre (`warshipModel(warshipKind(peuple, max(âge, 2)))`), donc des boutres et des jonques même à l'Antiquité. Tout est préparé au début de l'acte (chemins, modèles) : rien ne se calcule en plein plan.
 - **Musique** : le morceau de l'exploration (`medieval-exploration`, scène `voyage`, `SCENE_TRACKS` dans `audio.ts`), au volume de la musique, choisi par `main.ts` tant que `voyageStage.playing`. Après le rechargement, le navigateur ne laisse le son repartir qu'au premier geste du joueur (un clic qui passe la cinématique, par exemple).
@@ -72,7 +72,7 @@ Demande de l'auteur : « il faut une vraie cinématique comme celle de fin. Elle
 - **Anciennes sauvegardes** : sans `crossroads`, la partie n'a pas choisi. Une partie encore à l'Antiquité reçoit la condition (remplie d'office si son portail est déjà ouvert). Un portail dont on affronte les démons (`on`) ou qu'on a refermé (`off`), ou un archipel accepté, marque le choix fait au premier pas (rien ne change). Un portail ouvert en attente (`ask` : l'expédition réussie sans réponse à l'ancienne carte du portail) tombe dans le grand choix ; « Les Enfers » y passe `pve` à `on`. Une partie au Médiéval ou plus, sans l'un ni l'autre (même restée sur son île à l'ancienne carte « Explorer le monde », `explore: 'no'`), voit la carte une fois. `World.explore` n'est plus lu, mais toujours relu et réécrit.
 - Une ancienne partie qui a l'expédition du portail **en route** la garde visible (`Expeditions.list`) jusqu'au retour ; réussie, elle ouvre le portail (`exp.done`), sans carte : il tombe dans le grand choix (ou l'onglet « Voies » si le choix est déjà fait).
 - L'acte II se tient sur la brume tant que `#loadScreen` existe (`VoyageHost.loading`) : garder l'id `loadScreen` à l'écran d'attente (toutes les gardes de fenêtres le lisent aussi). Son voile de brume (`#voyCine .vc-mist`, sous `#loadScreen`) a la même couleur que l'écran : l'écran s'efface sur lui sans coupure.
-- `body.cinematic` cache les bannières : les bandeaux de la cinématique sont les siens (`.kc-cap`), pas `ui.banner`. À la fin, la classe n'est retirée que si la cinématique du royaume ne la tient pas ; la bannière du premier contact passe après.
+- `body.cinematic` cache les bannières : les bandeaux de la cinématique sont les siens (`.kc-cap`), pas `ui.banner`. À la fin, la classe n'est retirée que si la cinématique du royaume ne la tient pas ; la carte de l'allié s'ouvre après.
 - Le jeu ne guide pas vers l'onglet : ne pas ajouter de message, de bulle ou de ligne de rayon qui y mène (décision de l'auteur).
 
 ## Pour modifier

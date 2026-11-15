@@ -5,7 +5,7 @@ import { Underground, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGM
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
-import { missionOffered, missionWhy } from './diplomacy';
+import { missionOffered, missionWhy, tributePerDay } from './diplomacy';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { recover } from './trade';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
@@ -893,6 +893,8 @@ export class Expeditions {
     const rate = this.yields(), w = this.world, day = dt / this.dayLen();
     // les cours du comptoir remontent au fil des jours
     recover(w.trade, day);
+    // le tribut d'or de l'île vaincue, chaque jour, une fois la guerre de l'archipel gagnée
+    w.gold += tributePerDay(w.diplo) * day;
     for (const r of ['wood', 'stone', 'ore', 'brick', 'crude'] as Resource[]) {
       if (!rate[r]) continue;
       // bois, pierre, minerai et briques arrivent au fil des heures, en petites parts (l'affichage arrondit), et non d'un coup chaque

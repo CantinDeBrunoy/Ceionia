@@ -16,7 +16,7 @@ import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expedi
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { kindOffered, treatyAhead } from '../sim/diplomacy';
+import { kindOffered, CONFLICT_LABEL } from '../sim/diplomacy';
 import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
@@ -291,7 +291,7 @@ const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string;
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
-const reqOf = (label: string) => (label === CHOICE_LABEL ? 'choice' : label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
+const reqOf = (label: string) => (label === CHOICE_LABEL ? 'choice' : label === CONFLICT_LABEL ? 'conflict' : label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
@@ -692,6 +692,8 @@ export class UI {
       }
       if (req === 'pop') { this.openNeed('housing'); return; }
       if (req === 'choice') { this.host.audio.sfxClick(); this.host.openCrossroads?.(); return; }
+      // le conflit des deux îles à régler : la carte de la diplomatie (paix ou guerre ; l'allié d'abord s'il manque)
+      if (req === 'conflict') { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); return; }
       if (req === 'isle') { this.host.audio.sfxClick(); this.host.commandIsle?.(); return; }
       // le chemin de fer : la gare qui manque, ou le tracé d'une ligne depuis une gare
       if (req === 'rail') { const nx = this.host.sim.railNext(); this.host.audio.sfxClick(); if ('kind' in nx) this.pick(nx.kind); else this.host.startRailEdit({ stop: nx.stop }); return; }
@@ -704,7 +706,7 @@ export class UI {
     window.addEventListener('pointerdown', (e) => { if (!$('#notifPanel').hidden && !(e.target as HTMLElement).closest('#notifPanel, #bBell')) this.toggleNotifPanel(false); }, true);
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
     $('#helpBtn').onclick = () => { this.help = !this.help; try { localStorage.setItem('ceionia.aides', this.help ? '1' : '0'); } catch { /* sans stockage */ } this.host.audio.sfxClick(); this.renderMessage(); };
-    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageChoice) { this.host.audio.sfxClick(); this.host.openCrossroads?.(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageChoice) { this.host.audio.sfxClick(); this.host.openCrossroads?.(); } else if (this.host.sim.messageConflict) { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info(tr('Le brouillard se lève.')); };
     $('#bSpeed').onclick = () => {
@@ -1224,11 +1226,11 @@ export class UI {
     el.hidden = quiet || !!this.tutorial?.active || fighting || this.host.world.sandbox;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
-    const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, gold = !k && sim.messageGold, choice = !k && sim.messageChoice, key = `${tone}|${k}|${ready}|${exp}|${rail}|${gold}|${choice}|${sim.message}`;
+    const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, gold = !k && sim.messageGold, choice = !k && sim.messageChoice, conflict = !k && sim.messageConflict, key = `${tone}|${k}|${ready}|${exp}|${rail}|${gold}|${choice}|${conflict}|${sim.message}`;
     if (el.dataset.v === key) return;
     el.dataset.v = key;
-    el.className = `tone-${tone}${k || ready || exp || rail || gold || choice ? ' link' : ''}`;
-    el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : gold ? tr('Cliquer pour ouvrir le comptoir des voisins') : choice ? tr('Cliquer pour faire le grand choix') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
+    el.className = `tone-${tone}${k || ready || exp || rail || gold || choice || conflict ? ' link' : ''}`;
+    el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : gold ? tr('Cliquer pour ouvrir le comptoir des voisins') : choice ? tr('Cliquer pour faire le grand choix') : conflict ? tr('Cliquer pour régler le conflit des deux îles') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
     const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     // un picto selon le ton (manque, objectif, tout va bien) ; un conseil qui mène quelque part finit par son geste et un chevron
     const go = (w: string) => `<b class="go">${w}<i>›</i></b>`;
@@ -1451,9 +1453,7 @@ export class UI {
     const sbReq = sb ? `<b>${tr('Changer d’âge : sans condition')}</b>${AGES.map((a, i) => `<button type="button" class="ageSet${i === sim.age ? ' now' : ''}" data-setage="${i}">${a.name}<small>${a.tagline}</small></button>`).join('')}` : null;
     if (sbReq !== null) { if ($('#ageReq').dataset.v !== sbReq) { $('#ageReq').innerHTML = sbReq; $('#ageReq').dataset.v = sbReq; } } else { delete $('#ageReq').dataset.v; $('#ageReq').innerHTML = ap
       ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
-      : tr('Dernier âge atteint : profitez de votre village !');
-      // l'archipel : avant le Moderne, un conflit encore ouvert entre les deux îles se réglera sans nous (dit ici tant qu'il dure)
-      if (ap && treatyAhead(this.host.world, sim.age)) $('#ageReq').insertAdjacentHTML('beforeend', `<span class="treatyNote">${pic('⚖️', 14)} ${tr('Les deux îles vont régler leur conflit sans vous.')}</span>`); }
+      : tr('Dernier âge atteint : profitez de votre village !');}
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
       const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);

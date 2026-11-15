@@ -1347,7 +1347,6 @@ body.under #troopBar .tstate { top: calc(var(--hudB, 82px) + 66px); }
 #items .pvehead button { padding: 6px 12px; border-radius: 10px; border: 2px solid #7a3fb0; background: #f3eafc; color: #4b1f78; font-weight: 800; cursor: pointer; }
 /* (le conflit des deux îles, rayon Vie : le même bouton, aux couleurs du parchemin) */
 #items .diplohead button { border-color: #b8862a; background: #fff3d1; color: #5a3b00; }
-#ageReq .treatyNote { display: block; margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: #fff3d1; color: #5a3b00; font-weight: 700; }
 #portalChoice h4, #worldChoice h4 { margin: 0 0 6px; font-size: 19px; }
 #portalChoice p, #worldChoice p { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
 #portalChoice small, #worldChoice small { display: block; color: var(--ink2); margin-bottom: 12px; }

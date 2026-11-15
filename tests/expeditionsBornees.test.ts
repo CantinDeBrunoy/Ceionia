@@ -47,6 +47,8 @@ function run(v: ReturnType<typeof village>, m: Mission, ci: number, pick: number
   for (const g of v.agents.agents) g.rest = 0;
   // (une étape de la diplomatie ne se refait pas : chaque choix se joue comme la première fois)
   v.w.exp.done = v.w.exp.done.filter((id) => id !== m.id);
+  // (la guerre de l'archipel se joue sur sa voie, le conflit encore ouvert ; la paix sur la sienne)
+  if (m.id === 'allywar') { v.w.diplo.path = 'war'; v.w.diplo.conflict = 'open'; } else if (m.talks) { v.w.diplo.path = 'peace'; if (v.w.diplo.conflict === 'won') v.w.diplo.conflict = 'open'; }
   const a = v.ex.start(m, ci, m.age);
   if (!a) return null;
   let i = 0;

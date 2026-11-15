@@ -6,10 +6,11 @@ import { DiploState, Path, isleName, peopleName, rivalOf } from '../sim/diplomac
 /**
  * Les cartes de la diplomatie de l'archipel, dans le style de la carte du choix du portail (parchemin bordé d'or, titre en
  * Fraunces, deux ou trois grands choix) :
- * - **le choix de l'allié**, au retour de l'expédition « Le premier contact » : les deux peuples côte à côte, chacun avec son
- *   blason, son île et ses mœurs ; le choix est définitif (la carte n'a pas de croix) ;
- * - **le dénouement**, à l'âge industriel : aider notre allié (la guerre), négocier la paix, ou ne pas s'en mêler. Elle s'ouvre
- *   d'elle-même une fois, puis depuis la ligne en tête du rayon Vie ; on peut changer de voie tant que le conflit dure
+ * - **le choix de l'allié**, à la fin de la cinématique des îles : les deux peuples côte à côte, chacun avec son blason, son
+ *   île et ses mœurs ; le choix est obligatoire et définitif (la carte n'a pas de croix) ;
+ * - **le dénouement**, au début de l'âge industriel : négocier la paix ou aider notre allié (la guerre). Il faut régler le
+ *   conflit pour passer au Moderne. Elle s'ouvre d'elle-même une fois, puis depuis la condition du panneau des âges (ou la
+ *   ligne en tête du rayon Vie) ; on peut changer de voie tant que le conflit dure
  */
 export class DiploChoice {
   private el: HTMLElement;
@@ -27,7 +28,7 @@ export class DiploChoice {
       const a = b.dataset.a!;
       this.hide();
       if (a === 'orient' || a === 'asie') this.host.ally(a);
-      else if (a === 'peace' || a === 'war' || a === 'neutral') this.host.path(a);
+      else if (a === 'peace' || a === 'war') this.host.path(a);
     });
     root.append(this.el);
   }
@@ -59,10 +60,9 @@ export class DiploChoice {
       <p class="pcSub">${tr('Nos alliés, {ally}, sont toujours en guerre contre {rival}. Que fera notre village ?', { ally: peopleName(ally), rival: peopleName(rival) })}</p>
       <div class="pcBtns dcCol">
         ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('des pourparlers, sans risque : un comptoir, un monument, une fête'), d.path === 'peace')}
-        ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('la guerre à ses côtés : butin et tribut d’or'), d.path === 'war')}
-        ${choice('neutral', 'pcNo', hudPic('neutre', 34), tr('Ne pas s’en mêler'), tr('au Moderne, les deux îles régleront leur conflit sans vous'), d.path === 'neutral')}
+        ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('une expédition militaire : butin et tribut d’or'), d.path === 'war')}
       </div>
-      <small class="pcNote">${tr('Vous pourrez changer de voie tant que le conflit dure, jusqu’à l’âge moderne.')}</small>`;
+      <small class="pcNote">${tr('Il faut régler ce conflit pour passer à l’âge moderne. Vous pourrez changer de voie tant qu’il dure.')}</small>`;
   }
 
   hide() { this.el.style.display = 'none'; }

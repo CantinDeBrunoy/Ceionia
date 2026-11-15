@@ -5,31 +5,28 @@ import { tr } from '../i18n';
 import { archipelagoOn } from '../world/expand';
 
 /**
- * La diplomatie de l'archipel (voir `docs/diplomatie.md`) : les deux peuples des îles rivales, l'allié qu'on choisit parmi eux,
- * et leur conflit, qu'on règle à l'âge industriel par la paix, par la guerre, ou qu'on laisse se régler sans nous (au passage
- * au Moderne, les deux îles signent un traité). Tout est facultatif : rien de ceci n'existe sans l'archipel accepté
- * (`archipelagoOn`), et rien ne conditionne un âge
+ * La diplomatie de l'archipel (voir `docs/diplomatie.md`) : les deux peuples des îles rivales, l'allié qu'on choisit parmi eux
+ * à la fin de la cinématique des îles, et leur conflit, qu'on règle à l'âge industriel par la paix ou par la guerre : il doit
+ * l'être pour passer au Moderne. Rien de ceci n'existe sans l'archipel accepté (`archipelagoOn`)
  */
 
-/** Voie choisie pour le dénouement : la paix (une chaîne de pourparlers), la guerre aux côtés de l'allié, ou rester à l'écart */
-export type Path = 'peace' | 'war' | 'neutral';
+/** Voie choisie pour le dénouement : la paix (une chaîne de pourparlers) ou la guerre aux côtés de l'allié */
+export type Path = 'peace' | 'war';
 /**
- * Le conflit entre les deux îles : en cours, réglé par notre paix, gagné par la guerre, ou réglé sans nous par le traité du
- * Moderne
+ * Le conflit entre les deux îles : en cours, réglé par notre paix, gagné par la guerre, ou réglé d'office par un traité
+ * entre les deux îles (une partie déjà au-delà de l'Industriel, voir `settleLate`)
  */
 export type Conflict = 'open' | 'peace' | 'won' | 'treaty';
 
 export interface DiploState {
-  /** peuples rencontrés (l'expédition de premier contact les rencontre tous les deux) */
+  /** peuples rencontrés (tous les deux dès que l'allié est choisi) */
   met: People[];
   /** l'île alliée, choisie sur la carte du choix de l'allié (définitif) */
   ally: People | null;
   /** la voie du dénouement (null : pas encore choisie) */
   path: Path | null;
   conflict: Conflict;
-  /** le panneau d'âge a prévenu que les deux îles régleront leur conflit sans nous (une seule fois) */
-  warned: boolean;
-  /** la carte du dénouement s'est ouverte d'elle-même (une seule fois ; on la rouvre ensuite depuis le rayon Vie) */
+  /** la carte du dénouement s'est ouverte d'elle-même (une seule fois ; on la rouvre ensuite depuis le panneau des âges) */
   asked: boolean;
   /** paix : le comptoir chez l'île rivale est ouvert */
   post: boolean;
@@ -37,10 +34,10 @@ export interface DiploState {
   feast: boolean;
 }
 
-export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', warned: false, asked: false, post: false, feast: false });
+export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false });
 
 const PEOPLES: People[] = ['orient', 'asie'];
-const PATHS: Path[] = ['peace', 'war', 'neutral'];
+const PATHS: Path[] = ['peace', 'war'];
 const CONFLICTS: Conflict[] = ['open', 'peace', 'won', 'treaty'];
 
 /** Relit l'état sauvegardé (ancienne partie : état vierge) */
@@ -51,10 +48,11 @@ export function readDiplo(d: any): DiploState {
   s.ally = PEOPLES.includes(d.ally) ? d.ally : null;
   // (un allié sans rencontre n'a pas de sens : la rencontre est sous-entendue)
   if (s.ally && !s.met.length) s.met = [...PEOPLES];
+  // (l'ancienne neutralité n'existe plus : la voie est à choisir de nouveau)
   s.path = PATHS.includes(d.path) ? d.path : null;
   s.conflict = CONFLICTS.includes(d.conflict) ? d.conflict : 'open';
-  s.warned = d.warned === true;
-  s.asked = d.asked === true;
+  // (une ancienne partie restée neutre revoit la carte du dénouement)
+  s.asked = d.asked === true && d.path !== 'neutral';
   s.post = d.post === true;
   s.feast = d.feast === true;
   return s;
@@ -95,10 +93,13 @@ export function onRival(isle: RivalIsle, x: number, z: number) {
 
 // ---------------- Les étapes ----------------
 
-/** Les missions de la diplomatie (voir `MISSIONS`) : le premier contact, puis la chaîne de la paix */
-export const CONTACT = 'contact';
+/**
+ * Les missions de la diplomatie (voir `MISSIONS`) : la chaîne de la paix, et l'expédition militaire de la guerre (en
+ * attendant la grande bataille). Le premier contact (`contact`) n'existe plus : l'allié se choisit à la fin de la cinématique
+ */
 export const PEACE_CHAIN = ['envoys', 'truce', 'feast'] as const;
-const DIPLO_MISSIONS = new Set<string>([CONTACT, ...PEACE_CHAIN]);
+export const WAR_MISSION = 'allywar';
+const DIPLO_MISSIONS = new Set<string>([...PEACE_CHAIN, WAR_MISSION]);
 
 /** Une mission de la diplomatie est-elle proposée dans cette partie ? (les autres le sont toujours) */
 export function missionOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string): boolean {
@@ -106,9 +107,11 @@ export function missionOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: st
   if (!archipelagoOn(w)) return false;
   // (une étape déjà réussie reste dans la liste, en petit : ce qu'on a fait)
   if (w.exp.done.includes(id)) return true;
-  if (id === CONTACT) return true;
+  const d = w.diplo;
+  if (!d.ally) return false;
+  if (id === WAR_MISSION) return d.path === 'war' && d.conflict === 'open';
   // (la chaîne de la paix : la trêve règle le conflit, la fête vient après)
-  return w.diplo.path === 'peace' && !!w.diplo.ally && (w.diplo.conflict === 'open' || w.diplo.conflict === 'peace');
+  return d.path === 'peace' && (d.conflict === 'open' || d.conflict === 'peace');
 }
 
 /** Pourquoi une mission de la diplomatie ne peut pas partir (null : rien ne l'empêche de ce côté-là) */
@@ -116,82 +119,93 @@ export function missionWhy(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string
   if (!DIPLO_MISSIONS.has(id)) return null;
   if (!archipelagoOn(w)) return tr('Il faut d’abord explorer le monde.');
   if (w.exp.done.includes(id)) return tr('C’est fait : cette étape ne se refait pas.');
-  if (id === CONTACT) return null;
-  if (!w.diplo.ally) return tr('Il faut d’abord choisir votre allié.');
-  if (w.diplo.conflict !== 'open' && w.diplo.conflict !== 'peace') return tr('Le conflit des deux îles est déjà réglé.');
-  if (w.diplo.path !== 'peace') return tr('Il faut d’abord choisir la voie de la paix.');
+  const d = w.diplo;
+  if (!d.ally) return tr('Il faut d’abord choisir votre allié.');
+  if (id === WAR_MISSION) {
+    if (d.conflict !== 'open') return tr('Le conflit des deux îles est déjà réglé.');
+    if (d.path !== 'war') return tr('Il faut d’abord choisir d’aider notre allié.');
+    return null;
+  }
+  if (d.conflict !== 'open' && d.conflict !== 'peace') return tr('Le conflit des deux îles est déjà réglé.');
+  if (d.path !== 'peace') return tr('Il faut d’abord choisir la voie de la paix.');
   return null;
 }
 
-/** Ce que font les effets de la diplomatie (`Effect` `diplo`) au retour d'une expédition réussie */
-export type DiploAct = 'meet' | 'post' | 'truce' | 'feast';
+/**
+ * Ce que font les effets de la diplomatie (`Effect` `diplo`) au retour d'une expédition réussie. `meet` ne sert plus qu'aux
+ * anciennes sauvegardes (l'expédition du premier contact) ; `victory` : la guerre gagnée par l'expédition militaire
+ */
+export type DiploAct = 'meet' | 'post' | 'truce' | 'feast' | 'victory';
 export function applyDiplo(d: DiploState, act: DiploAct) {
   if (act === 'meet') d.met = [...PEOPLES];
   else if (act === 'post') d.post = true;
   // la trêve signée : le conflit est réglé par notre paix (les escarmouches cessent)
   else if (act === 'truce') { if (d.conflict === 'open') d.conflict = 'peace'; d.path = 'peace'; }
   else if (act === 'feast') d.feast = true;
+  else if (act === 'victory') winAllyWar(d);
 }
 
-/** La carte du choix de l'allié est à montrer : les deux peuples rencontrés, aucun allié encore */
+/**
+ * La carte du choix de l'allié est à montrer : l'archipel accepté, aucun allié encore. Elle s'ouvre à la fin de la
+ * cinématique des îles, puis au calme tant que le choix manque (une partie rechargée, une ancienne partie)
+ */
 export function allyPending(w: Pick<World, 'isles' | 'diplo'>) {
-  return archipelagoOn(w) && w.diplo.met.length === PEOPLES.length && !w.diplo.ally;
+  return archipelagoOn(w) && !w.diplo.ally;
 }
 
-/** Choisir son allié (une seule fois) */
+/** Choisir son allié (une seule fois) : les deux peuples sont alors rencontrés */
 export function chooseAlly(d: DiploState, p: People) {
-  if (d.ally || !d.met.includes(p)) return false;
+  if (d.ally || !PEOPLES.includes(p)) return false;
   d.ally = p;
+  d.met = [...PEOPLES];
   return true;
 }
+
+/** L'âge du dénouement : l'industriel ; le conflit doit y être réglé pour passer au Moderne */
+export const ENDGAME_AGE = 3;
 
 /** Le dénouement est ouvert : l'âge industriel, un allié, le conflit en cours */
 export function endgameOpen(w: Pick<World, 'isles' | 'diplo'>, age: number) {
   return archipelagoOn(w) && !!w.diplo.ally && w.diplo.conflict === 'open' && age === ENDGAME_AGE;
 }
-/** L'âge du dénouement : l'industriel ; il se clôt au passage au Moderne */
-export const ENDGAME_AGE = 3;
 
 /**
- * Choisir (ou changer) sa voie tant que le conflit dure. La guerre engagée attend la bataille (`startAllyBattle`, à venir) ;
- * la paix ouvre la chaîne de pourparlers ; la neutralité ne fait rien
+ * Choisir (ou changer) sa voie tant que le conflit dure : la paix ouvre la chaîne de pourparlers, la guerre l'expédition
+ * militaire (`allywar`)
  */
 export function choosePath(d: DiploState, p: Path) {
-  if (!d.ally || d.conflict !== 'open') return false;
+  if (!d.ally || d.conflict !== 'open' || !PATHS.includes(p)) return false;
   d.path = p;
   return true;
 }
 
-/** La guerre est engagée aux côtés de l'allié, la bataille reste à livrer */
+/** La guerre est engagée aux côtés de l'allié, l'expédition (puis la bataille) reste à gagner */
 export function warEngaged(d: DiploState) { return d.path === 'war' && d.conflict === 'open'; }
 
 /**
- * Le passage au Moderne : un conflit encore ouvert se règle sans nous, par un traité entre les deux îles. Renvoie vrai si
- * le traité vient d'être signé (la bannière l'annonce)
+ * La condition du passage au Moderne, dans le panneau des âges (`Sim.ageProgress`) : le conflit des deux îles réglé, par la
+ * paix (la trêve) ou par la guerre (l'expédition militaire gagnée). Seulement avec l'archipel. Son libellé la fait
+ * reconnaître par le panneau (`reqOf` → `conflict` : un clic rouvre la carte) et par le conseil (`Sim.messageConflict`)
  */
-export function settleAtAge(d: DiploState, age: number, on: boolean) {
+export const CONFLICT_LABEL = 'le conflit des deux îles, réglé';
+export function conflictItem(w: Pick<World, 'isles' | 'diplo'>, next: number): { have: number; need: number } | null {
+  if (!archipelagoOn(w) || next !== ENDGAME_AGE + 1) return null;
+  return { have: w.diplo.conflict === 'open' ? 0 : 1, need: 1 };
+}
+
+/**
+ * Une partie déjà au-delà de l'Industriel avec un conflit ouvert (une ancienne partie, ou un archipel accepté au Moderne)
+ * ne reste pas bloquée : le conflit est réglé d'office, par un traité entre les deux îles. Renvoie vrai s'il vient de l'être
+ */
+export function settleLate(d: DiploState, age: number, on: boolean) {
   if (!on || age <= ENDGAME_AGE || d.conflict !== 'open') return false;
   d.conflict = 'treaty';
-  if (d.path !== 'peace' && d.path !== 'war') d.path = 'neutral';
   return true;
 }
 
-/**
- * Le panneau d'âge doit-il prévenir que les îles régleront leur conflit sans nous ? Vers le Moderne, quand le conflit
- * dure encore (quelle que soit la voie : une guerre ou une paix commencée et pas finie se règle aussi par le traité)
- */
-export function treatyAhead(w: Pick<World, 'isles' | 'diplo'>, age: number) {
-  return archipelagoOn(w) && age === ENDGAME_AGE && w.diplo.conflict === 'open';
-}
-
-/**
- * Le passage d'âge vers `next` peut-il se faire ? Pas pendant la bataille aux côtés de l'allié ; et, vers le Moderne, une
- * première fois seulement après l'avertissement (`warned`). Renvoie le refus à dire au joueur, ou null
- */
-export function ageGate(w: Pick<World, 'isles' | 'diplo'>, age: number, battle: boolean): { why: string; warn: boolean } | null {
-  if (battle) return { why: tr('Une bataille est en cours : on ne change pas d’âge avant son issue.'), warn: false };
-  if (treatyAhead(w, age) && !w.diplo.warned) return { why: tr('Les deux îles vont régler leur conflit sans vous. Cliquez encore pour passer à l’âge suivant.'), warn: true };
-  return null;
+/** Le passage d'âge peut-il se faire ? Pas pendant la bataille aux côtés de l'allié (à venir). Renvoie le refus, ou null */
+export function ageGate(battle: boolean): string | null {
+  return battle ? tr('Une bataille est en cours : on ne change pas d’âge avant son issue.') : null;
 }
 
 // ---------------- Le conflit en décor (session « conflit naval ») ----------------
@@ -263,7 +277,7 @@ export function kindOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, k: KindId
 export function spaceportWhy(w: Pick<World, 'isles' | 'diplo'>, x: number, z: number, s: number): string | null {
   if (!archipelagoOn(w)) return null;
   const ally = w.diplo.ally;
-  if (!ally) return tr('Le cosmodrome se bâtit sur l’île de votre allié : rencontrez d’abord les peuples des îles (expédition « Le premier contact »).');
+  if (!ally) return tr('Le cosmodrome se bâtit sur l’île de votre allié : choisissez d’abord votre allié.');
   const isle = isleOf(w, ally)!;
   const corners = [[x, z], [x + s - 1, z], [x, z + s - 1], [x + s - 1, z + s - 1]];
   if (!corners.every(([cx, cz]) => onRival(isle, cx + 0.5, cz + 0.5))) return tr('Le cosmodrome se bâtit sur l’île de votre allié ({isle}).', { isle: isleName(ally) });
