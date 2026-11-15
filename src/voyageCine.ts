@@ -1,27 +1,34 @@
 /**
- * La cinématique « Explorer le monde » : sa partition, sans rien de graphique (la mise en scène est dans `voyageStage.ts`).
- * Elle fait office d'écran de chargement et se joue en deux actes, de part et d'autre du rechargement de la partie agrandie :
- * - acte I, sur le monde d'avant : un navire quitte le village et prend le large, puis la brume se lève et couvre tout ;
- * - l'attente : la brume tient (le même voile, avec la silhouette du navire), aussi longtemps que l'agrandissement, le
- *   rechargement, la génération des îles et des villes et la préparation des shaders le demandent (`LoadingScreen` en mode
- *   traversée) ;
- * - acte II, sur le monde agrandi : la brume se dissipe et l'horizon recule, l'île d'Orient (sa mosquée, son port qui
- *   s'anime), l'île d'Asie (sa pagode, ses jonques), les deux flottes face à face, puis le retour au village.
- * Des bandeaux de texte courts, des fondus au noir entre les plans de l'acte II. Passable (clic, Échap, Espace) : l'acte I
- * file à l'attente, l'acte II au village ; jamais pendant l'attente (le chargement n'est pas fini)
+ * La cinématique « Explorer le monde » : sa partition, sans rien de graphique (la mise en scène est dans `voyageStage.ts`,
+ * le film dans `ui/voyage.ts`). Elle fait office d'écran de chargement, en deux temps :
+ * - **le film** : une vidéo enregistrée, la même pour tous (une caravelle en pleine mer, puis la brume ; `VOY_FILM`). Elle joue
+ *   pendant la sauvegarde, l'agrandissement, le rechargement, la génération des îles et des villes et la préparation des
+ *   shaders, sans à-coups (une vidéo joue même quand le jeu calcule). Finie avant la fin du chargement, la brume peinte tient ;
+ * - **le survol en direct** (`VOY_ACT2`), une fois tout prêt et le film fini : la brume se dissipe et l'horizon recule, l'île
+ *   d'Orient (sa mosquée, son port qui s'anime), l'île d'Asie (sa pagode, ses jonques), les deux flottes face à face, puis le
+ *   retour au village.
+ * Des bandeaux de texte courts, des fondus au noir entre les plans du survol. Passable partout (clic, Échap, Espace) : pendant
+ * le film, il s'arrête sur la brume et le survol ne se jouera pas ; pendant le survol, on va tout de suite au village.
+ *
+ * (Avant, un acte en direct sur le monde d'avant ouvrait la cinématique, et l'attente était une brume animée en CSS : l'auteur
+ * l'a vue saccader en partie réelle, le 15 nov. 2026. Mesure en build de production : voir docs/grand-choix.md)
  */
 
-export type VoyShot = 'depart' | 'mist' | 'horizon' | 'orient' | 'asie' | 'fleets' | 'home';
+export type VoyShot = 'horizon' | 'orient' | 'asie' | 'fleets' | 'home';
 export interface VoyPlan { id: VoyShot; dur: number }
 
-/** Acte I (secondes) : le départ, puis la brume qui se lève (≈ 9 s) */
-export const VOY_ACT1: readonly VoyPlan[] = [
-  { id: 'depart', dur: 5.5 },
-  { id: 'mist', dur: 3.5 },
-];
-/** Acte II (secondes) : l'horizon, les deux îles, les deux flottes, le retour (≈ 32 s) */
+/** Le film (s) : sa durée, et ses bandeaux, au temps de la vidéo (la brume monte de 15,5 à 19,5 s, voir docs/grand-choix.md) */
+export const VOY_FILM = {
+  dur: 20,
+  captions: [
+    { at: 1.2, dur: 5.6, text: 'Un navire prend la mer', sub: 'Cap sur l’inconnu' },
+    { at: 15.6, dur: 4.4, text: 'La brume se lève…' },
+  ] as { at: number; dur: number; text: string; sub?: string }[],
+};
+
+/** Le survol en direct (secondes) : l'horizon, les deux îles, les deux flottes, le retour (≈ 30 s) */
 export const VOY_ACT2: readonly VoyPlan[] = [
-  { id: 'horizon', dur: 6.5 },
+  { id: 'horizon', dur: 5 },
   { id: 'orient', dur: 7 },
   { id: 'asie', dur: 7 },
   { id: 'fleets', dur: 7 },
@@ -29,24 +36,28 @@ export const VOY_ACT2: readonly VoyPlan[] = [
 ];
 export const actTotal = (plan: readonly VoyPlan[]) => plan.reduce((s, p) => s + p.dur, 0);
 
-/** Les bandeaux : à quel moment du plan (s) ils paraissent, combien de temps ils restent ; textes français, traduits à l'affichage */
+/** Les bandeaux du survol : à quel moment du plan (s) ils paraissent, combien de temps ils restent ; textes français */
 export const VOY_CAPTIONS: { shot: VoyShot; at: number; dur: number; text: string; sub?: string }[] = [
-  { shot: 'depart', at: 0.8, dur: 4.2, text: 'Un navire prend la mer', sub: 'Cap sur l’inconnu' },
-  { shot: 'mist', at: 0.4, dur: 3, text: 'La brume se lève…' },
-  { shot: 'horizon', at: 1.6, dur: 4.4, text: 'La mer s’ouvre', sub: 'et l’horizon recule' },
+  { shot: 'horizon', at: 1.4, dur: 3.4, text: 'La mer s’ouvre', sub: 'et l’horizon recule' },
   { shot: 'orient', at: 0.9, dur: 5.4, text: 'Une île de sable et de palmiers', sub: 'Sa mosquée, son port, tout un peuple' },
   { shot: 'asie', at: 0.9, dur: 5.4, text: 'Une île verte aux pitons rocheux', sub: 'Sa pagode, ses jonques, un autre peuple' },
   { shot: 'fleets', at: 0.9, dur: 5.4, text: 'Deux peuples, deux flottes', sub: 'Une vieille rivalité les oppose' },
 ];
-/** Le bandeau de l'attente (la brume tient tant que le monde se prépare) */
+/** Le bandeau de l'attente (le film fini, la brume tient tant que le monde se prépare) */
 export const VOY_WAIT = { text: 'Au-delà de la brume…', sub: 'le monde s’agrandit' };
 
-/** Durée d'un fondu au noir entre deux plans de l'acte II (s, de chaque côté de la coupe) */
+/** Durée d'un fondu au noir entre deux plans du survol (s, de chaque côté de la coupe) */
 export const VOY_DIP = 0.55;
-/** La brume se dissipe au début de l'acte II (s) */
+/** La brume se dissipe au début du survol (s) */
 export const VOY_LIFT = 2.6;
 
-/** Où en est l'acte à l'instant t : le plan, son avancée (0 … 1) et le temps passé dedans ; null une fois l'acte fini */
+/** Le bandeau du film au temps `t` de la vidéo ; le film fini, celui de l'attente ; null entre deux */
+export function voyFilmCaptionAt(t: number, ended: boolean): { text: string; sub?: string } | null {
+  if (ended) return VOY_WAIT;
+  return VOY_FILM.captions.find((c) => t >= c.at && t < c.at + c.dur) ?? null;
+}
+
+/** Où en est le survol à l'instant t : le plan, son avancée (0 … 1) et le temps passé dedans ; null une fois fini */
 export function voyShotAt(plan: readonly VoyPlan[], t: number): { shot: VoyShot; k: number; local: number } | null {
   let t0 = 0;
   for (const p of plan) {
@@ -56,7 +67,7 @@ export function voyShotAt(plan: readonly VoyPlan[], t: number): { shot: VoyShot;
   return null;
 }
 
-/** Le bandeau visible à l'instant t dans l'acte (il apparaît et s'efface en douceur), ou null */
+/** Le bandeau visible à l'instant t du survol (il apparaît et s'efface en douceur), ou null */
 export function voyCaptionAt(plan: readonly VoyPlan[], t: number): { text: string; sub?: string; alpha: number } | null {
   let t0 = 0;
   for (const p of plan) {
@@ -71,15 +82,11 @@ export function voyCaptionAt(plan: readonly VoyPlan[], t: number): { text: strin
 }
 
 /**
- * Les voiles à l'instant t : `mist` (la brume, 0 … 1) et `black` (le fondu au noir, 0 … 1). Acte I : la brume monte sur le
- * plan « mist » et couvre tout à la fin. Acte II : elle se dissipe en `VOY_LIFT` secondes (`fromMist` : on sort de
- * l'attente ; sinon un fondu au noir ouvre l'acte), puis un fondu au noir à chaque coupe
+ * Les voiles du survol à l'instant t : `mist` (la brume, 0 … 1) et `black` (le fondu au noir, 0 … 1). La brume se dissipe en
+ * `VOY_LIFT` secondes (`fromMist` : on sort du film ; sinon, partie rechargée autrement, un fondu au noir ouvre le survol),
+ * puis un fondu au noir à chaque coupe
  */
-export function voyVeilAt(act: 1 | 2, t: number, fromMist = true): { mist: number; black: number } {
-  if (act === 1) {
-    const d = VOY_ACT1[0].dur, m = VOY_ACT1[1].dur;
-    return { mist: Math.max(0, Math.min(1, (t - d) / (m * 0.85))), black: 0 };
-  }
+export function voyVeilAt(t: number, fromMist = true): { mist: number; black: number } {
   const mist = fromMist ? Math.max(0, 1 - t / VOY_LIFT) : 0;
   let black = fromMist ? 0 : Math.max(0, 1 - t / VOY_DIP);
   let t0 = 0;
