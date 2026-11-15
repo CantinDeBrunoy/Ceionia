@@ -21,8 +21,11 @@ export interface TrophyStageHost {
   audio: { sfxTrophy(delay?: number): void };
   /** les trophées gagnés */
   won: () => string[];
-  /** le joueur est tranquille : en surface, ni pose de bâtiment, ni fenêtre ouverte, ni autre cinématique */
-  calm: () => boolean;
+  /**
+   * le joueur est tranquille : en surface, ni pose de bâtiment, ni fenêtre ouverte, ni autre cinématique (les notifications ne
+   * comptent pas : l'interface s'efface). passing : compter aussi une bannière qui passe (elle s'en va d'elle-même)
+   */
+  calm: (passing?: boolean) => boolean;
   /** on est toujours en surface (sinon la cinématique s'arrête) */
   surface: () => boolean;
   /** hauteur du sol */
@@ -81,14 +84,15 @@ export class TrophyStage {
    * `after` (le récit) attend sa fin ; rend vrai dans ce cas. Sinon le trophée attend son tour, et c'est à l'appelant de
    * montrer le récit tout de suite
    */
-  report(after: () => void) { return this.q.detect(this.host.won(), after, this.host.calm() && !this.cur); }
+  report(after: () => void) { return this.q.detect(this.host.won(), after, this.host.calm(false) && !this.cur); }
 
   /** Un tour (temps réel, s) */
   update(dt: number) {
     const h = this.host;
     if (!this.cur) this.q.detect(h.won());
     if (this.cur && !h.surface()) { this.skip(); return; }
-    const r = this.q.update(dt, !this.cur && h.calm());
+    const r = this.q.update(dt, !this.cur && h.calm(true));
+    r.release?.();
     if (r.end) this.finish(r.end, false);
     if (r.start) this.begin(r.start);
     if (this.cur) this.step();
