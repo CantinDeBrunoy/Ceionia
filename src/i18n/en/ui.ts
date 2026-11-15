@@ -288,7 +288,6 @@ registerDict('ui', {
   // la diplomatie de l'archipel au Médiéval : la bataille, la cinématique de la paix
   "une ambassade, sans risque : un comptoir, un monument, une fête": "an embassy, without risk: a trading post, a monument, a feast",
   "une expédition militaire, puis la bataille : butin et tribut d’or": "a military expedition, then the battle: gold spoils and tribute",
-  "Il faut régler ce conflit pour passer à l’âge suivant. Vous pourrez changer de voie tant que la bataille n’est pas engagée.": "This conflict must be settled to reach the next age. You can change paths until the battle has begun.",
   "Choisissez des troupes (clic, ou « Tous »), puis un clic droit pour les envoyer. Sans ordre, elles marchent sur l’objectif.": "Select troops (click, or “All”), then right-click to send them. Without orders, they march on the objective.",
   "Défaite": "Defeat",
   "Installez d’abord un port et un comptoir sur l’île de votre allié.": "First set up a port and a trading post on your ally’s island.",
@@ -327,4 +326,17 @@ registerDict('ui', {
   'L’or ne vient que de l’échange avec le peuple allié ; il sert à passer les âges.': 'Gold only comes from trading with the allied people; it is needed to move through the ages.',
   'Voir l’île alliée': 'See the allied island',
   'Choisissez d’abord votre allié : le comptoir se bâtit chez lui': 'Choose your ally first: the trading post is built at their place',
+  // la carte paix ou guerre : « Plus tard » ; le conflit dans l'onglet « Grands choix »
+  "Plus tard": "Later",
+  "rester au Médiéval et continuer à jouer": "stay in the Medieval age and keep playing",
+  "Il faut régler ce conflit pour passer à l’âge suivant. Pour y revenir : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.": "This conflict must be settled to reach the next age. To come back to it: the “conflict of the two islands” condition, or the “Great choices” tab of the expeditions.",
+  "La paix est signée entre les deux îles.": "Peace is signed between the two islands.",
+  "La guerre est gagnée : le rival paie son tribut.": "The war is won: the rival pays its tribute.",
+  "Les deux îles ont fait la paix entre elles.": "The two islands made peace between themselves.",
+  "Changer de voie": "Change path",
+  "Choisir la paix ou la guerre": "Choose peace or war",
+  "Pas encore": "Not yet",
+  "La paix par deux pourparlers, ou la guerre aux côtés de notre allié. Il faut régler ce conflit pour passer à l’âge industriel.": "Peace through two rounds of talks, or war at our ally’s side. This conflict must be settled to reach the Industrial age.",
+  "Paix : un comptoir, une fête, un monument": "Peace: a trading post, a feast, a monument",
+  "Guerre : une bataille, butin et tribut d’or": "War: a battle, gold spoils and tribute",
 });

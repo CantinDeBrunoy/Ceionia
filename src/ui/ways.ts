@@ -1,6 +1,14 @@
 import { tr } from '../i18n';
 import { wayBadge, type Way, type WayBadge, type WayState } from '../sim/crossroads';
 import { hudPic } from './pics';
+import type { People } from '../world/archipelago';
+import { crest } from './diploChoice';
+
+/**
+ * La carte du conflit des deux îles dans l'onglet (archipel et allié choisi) : `free`, à régler (le bouton ouvre la carte paix
+ * ou guerre, ou mène à la bataille) ; `wait`, pas encore (ce qui manque) ; `taken`, réglé (comment)
+ */
+export interface ConflictWay { ally: People; badge: 'free' | 'wait' | 'taken'; button?: string; note?: string }
 
 /** Ce que dit chaque voie : son illustration, son nom, une phrase d'envie, ce qu'elle ouvre */
 const WAYS: Record<Way, { img: string; icon: string; title: string; pitch: string; gives: string[] }> = {
@@ -27,7 +35,7 @@ const BADGE: Record<WayBadge, string> = { taken: 'Choix fait', free: 'Disponible
  * deux après « Ni l'un ni l'autre ») ; ouverte, elle le dit ; impossible sur la carte, grisée. L'onglet n'existe qu'une fois
  * le grand choix fait (`waysTabShown`). Rien ne mène ici (ni message ni bulle) : le joueur le découvre en ouvrant les expéditions
  */
-export function waysHtml(ways: { hell: WayState; world: WayState }) {
+export function waysHtml(ways: { hell: WayState; world: WayState }, conflict: ConflictWay | null = null) {
   const card = (way: Way) => {
     const st = ways[way], b = wayBadge(st), d = WAYS[way];
     const label = way === 'hell' ? (st === 'ask' ? tr('Rouvrir le portail') : tr('Ouvrir le portail')) : tr('Explorer le monde');
@@ -43,5 +51,14 @@ export function waysHtml(ways: { hell: WayState; world: WayState }) {
       <div class="wyFoot">${go}</div>
     </article>`;
   };
-  return `<div class="waysBox"><p class="wyLead">${tr('Deux grands choix, à faire quand vous voulez : l’un, l’autre ou les deux.')}</p><div class="wayCards">${card('hell')}${card('world')}</div></div>`;
+  // (le conflit des deux îles, une fois l'allié choisi : le blason des deux peuples en tête, la même tenue que les voies)
+  const war = conflict ? `<article class="wayCard conflict st-${conflict.badge === 'wait' ? 'none' : conflict.badge}" data-wayc="conflict">
+      <div class="wyArt wyCrests">${crest(conflict.ally, 96)}<span class="dcVs">⚔</span>${crest(conflict.ally === 'orient' ? 'asie' : 'orient', 96)}</div>
+      <span class="wyState">${conflict.badge === 'taken' ? '✓ ' : ''}${tr(conflict.badge === 'taken' ? 'Choix fait' : conflict.badge === 'free' ? 'Disponible' : 'Pas encore')}</span>
+      <h4>${tr('Le conflit des deux îles')}</h4>
+      <p class="wyPitch">${tr('La paix par deux pourparlers, ou la guerre aux côtés de notre allié. Il faut régler ce conflit pour passer à l’âge industriel.')}</p>
+      <ul class="wyGives"><li>${tr('Paix : un comptoir, une fête, un monument')}</li><li>${tr('Guerre : une bataille, butin et tribut d’or')}</li></ul>
+      <div class="wyFoot">${conflict.button ? `<button class="wyGo" data-conflict="1">${hudPic('militaire', 26)}<span>${conflict.button}</span></button>` : `<p class="wyNote">${conflict.note ?? ''}</p>`}</div>
+    </article>` : '';
+  return `<div class="waysBox"><p class="wyLead">${tr('Deux grands choix, à faire quand vous voulez : l’un, l’autre ou les deux.')}</p><div class="wayCards${war ? ' three' : ''}">${card('hell')}${card('world')}${war}</div></div>`;
 }

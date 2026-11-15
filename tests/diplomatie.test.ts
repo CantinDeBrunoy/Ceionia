@@ -9,7 +9,7 @@ import { Sim } from '../src/sim/sim';
 import {
   newDiplo, readDiplo, saveDiplo, archipelagoOn, missionOffered, missionWhy, allyPending, chooseAlly, endgameOpen, choosePath,
   warEngaged, winAllyWar, tributePerDay, settleLate, ageGate, conflictState, conflictItem, rivalPost, kindOffered, spaceportWhy,
-  onRival, isleOf, rivalOf, PEACE_CHAIN, PEACE_MISSION, WAR_MISSION, WAR_SPOILS, CONFLICT_LABEL, bindPostReady, endgameWhy, claimVictory,
+  onRival, isleOf, rivalOf, PEACE_CHAIN, PEACE_MISSION, WAR_MISSION, WAR_SPOILS, CONFLICT_LABEL, bindPostReady, endgameWhy, claimVictory, pathDue,
 } from '../src/sim/diplomacy';
 
 /** Un petit continent (192 cases), sans archipel */
@@ -111,6 +111,20 @@ describe('diplomatie : le dénouement (au Médiéval)', () => {
     w.diplo.ally = null;
     expect(endgameOpen(w, 2)).toBe(false);
     expect(choosePath(w.diplo, 'peace')).toBe(false);
+  });
+
+  it('la carte s’ouvre d’elle-même quand les autres conditions de l’Industriel sont remplies, une seule fois (« Plus tard » ne la fait pas revenir)', () => {
+    const w = allied();
+    expect(pathDue(w, 2, false)).toBe(false);
+    expect(pathDue(w, 2, true)).toBe(true);
+    bindPostReady(() => false);
+    expect(pathDue(w, 2, true)).toBe(false);
+    bindPostReady(() => true);
+    // montrée une fois (puis « Plus tard ») : elle ne revient plus seule
+    w.diplo.asked = true;
+    expect(pathDue(w, 2, true)).toBe(false);
+    w.diplo.asked = false;
+    expect(pathDue(w, 3, true)).toBe(false);
   });
 
   it('le conflit réglé est une condition de l’Industriel, seulement avec l’archipel', () => {

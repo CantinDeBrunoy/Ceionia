@@ -841,6 +841,13 @@ body.hell #resPanel { display: none !important; }
 .expModal .wyArt { flex: 1 1 auto; min-height: 140px; max-height: 360px; width: 100%; display: flex; align-items: flex-end; justify-content: center; pointer-events: none; }
 .expModal .wyArt img { max-width: 86%; max-height: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; filter: drop-shadow(0 8px 8px rgba(60, 30, 70, 0.28)); }
 .expModal .wayCard.world .wyArt img { max-width: 62%; }
+/* la carte du conflit des deux îles (archipel, allié choisi) : trois cartes côte à côte, les deux blasons en tête */
+.expModal .wayCards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.expModal .wayCard.conflict { border-color: #B8862A; }
+.expModal .wyCrests { align-items: center; gap: 14px; }
+.expModal .wyCrests .dcCrest { flex: none; width: auto; height: min(100%, 96px); filter: drop-shadow(0 6px 6px rgba(80, 50, 15, 0.3)); }
+.expModal .wyCrests .dcVs { font-size: 30px; color: #8a5a2a; }
+@media (max-width: 640px) { .expModal .wayCards.three { grid-template-columns: minmax(0, 1fr); } }
 .expModal .wyState { position: absolute; top: 12px; right: 12px; z-index: 1; padding: 4px 10px; border-radius: 999px; font-family: var(--hSerif); font-size: 12.5px; font-weight: 800; letter-spacing: 0.02em;
   background: #FFFCF4; border: 1.5px solid var(--hEdge); color: #5A4030; box-shadow: 0 1px 3px rgba(110, 70, 20, 0.18); }
 .expModal .st-free .wyState { background: linear-gradient(180deg, #FFE7A6, #F3BE58); border-color: #D29A35; color: #4A2C0E; }

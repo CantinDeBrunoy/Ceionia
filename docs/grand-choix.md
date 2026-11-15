@@ -28,6 +28,7 @@ Deux contenus de fin de partie arrivaient en même temps au début du Médiéval
   - **Pas sur cette carte** : pas d'île du portail, ou monde qui ne peut plus s'agrandir. Carte grisée, pas de bouton.
 - Le bouton ferme la fenêtre et ouvre la carte de cette seule voie pour confirmer (`WorldChoice.show(way)` : la voie et « Pas maintenant »). Le portail refermé (état `ask` de la voie) ouvre plutôt la carte du portail (« Affronter les démons » / « Garder le portail fermé ») ; ouvert sans choix (ancienne partie, bac à sable), c'est la carte de la voie des Enfers, qui passe `pve` à `on`.
 - Au téléphone (≤ 640 px), les deux cartes s'empilent.
+- **Le conflit des deux îles** (archipel, allié choisi) : une troisième carte, à côté des deux voies (`ConflictWay`, `Game.conflictWay`) ; son bouton ouvre la carte paix ou guerre (`openDiploChoice`). Voir [diplomatie.md](diplomatie.md).
 
 ### La cinématique « Explorer le monde » : un film, puis le survol en direct
 Elle fait office de chargement. Décision de l'auteur (15 nov. 2026), après une partie complète où la première version saccadait : « une vidéo enregistrée + un survol en direct ». L'habillage est celui de la cinématique de fin du volet militaire : bandes noires, bandeaux dorés, fondus, « Passer ». La partition est dans `voyageCine.ts` (testée), le film dans `ui/voyage.ts`, le survol dans `voyageStage.ts`.
