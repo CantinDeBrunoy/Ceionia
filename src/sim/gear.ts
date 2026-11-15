@@ -39,7 +39,7 @@ export interface Gear {
   /** bois et pierre par pièce, en Normal seulement (les pièces sans métal, gratuites ailleurs) */
   wood?: number;
   stone?: number;
-  /** temps de fabrication d'une pièce (secondes de jeu) */
+  /** temps de fabrication d'une pièce (secondes de jeu, ×1 à vitesse normale) : quelques secondes, une équipe entière se munit en moins d'une demi-minute */
   time: number;
   /** bâtiment nécessaire pour le fabriquer */
   needs?: KindId;
@@ -54,22 +54,22 @@ export interface Gear {
 }
 
 export const GEAR: Gear[] = [
-  { id: 'spear', name: 'Lance', plural: 'Lances', icon: 'spear', age: 0, last: 1, ore: 0, wood: 2, stone: 1, time: 10, guards: 'beast', also: 'monster', cut: 0.25, per: (n) => n, desc: 'Un bâton durci au feu, une pointe de silex.' },
-  { id: 'bow', name: 'Arc', plural: 'Arcs', icon: 'bow', age: 1, last: 1, ore: 0, wood: 4, time: 14, guards: 'beast', also: 'monster', cut: 0.38, per: (n) => n, desc: 'Tient les bêtes à distance, et rapporte parfois le dîner.' },
-  { id: 'sword', name: 'Épée', plural: 'Épées', icon: 'sword', age: 2, last: 2, ore: 1, time: 18, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.5, per: (n) => n, desc: 'Forgée à l’atelier : loups et sangliers n’ont qu’à bien se tenir.' },
-  { id: 'crossbow', name: 'Arbalète', plural: 'Arbalètes', icon: 'crossbow', age: 2, last: 2, ore: 1, wood: 3, time: 20, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.56, per: (n) => n, desc: 'Un carreau d’acier tendu d’un cran.' },
-  { id: 'rifle', name: 'Fusil', plural: 'Fusils', icon: 'rifle', age: 3, last: 3, ore: 2, time: 22, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.65, per: (n) => n, desc: 'Un coup en l’air suffit souvent à disperser une meute.' },
-  { id: 'assault', name: 'Fusil d’assaut', plural: 'Fusils d’assaut', icon: 'assault', age: 4, last: 4, ore: 3, fuel: 1, time: 26, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.76, per: (n) => n, desc: 'Rafales et chargeur long : une meute n’approche pas.' },
-  { id: 'grenade', name: 'Grenades', plural: 'Grenades', icon: 'grenade', age: 4, last: 4, ore: 2, fuel: 1, time: 20, needs: 'workshop', guards: 'monster', also: 'beast', cut: 0.7, per: (n) => Math.ceil(n / 2), desc: 'Grenades et roquettes : de quoi déloger la pire créature.' },
-  { id: 'plasma', name: 'Fusil à plasma', plural: 'Fusils à plasma', icon: 'plasma', age: 5, ore: 4, fuel: 2, time: 30, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.86, per: (n) => n, desc: 'Un trait de plasma bleu, sans bruit ni recul.' },
-  { id: 'rope', name: 'Corde', plural: 'Cordes', icon: 'rope', age: 0, ore: 0, wood: 2, time: 8, guards: 'fall', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'On s’encorde deux par deux pour les passages au-dessus du vide.' },
-  { id: 'torch', name: 'Torche', plural: 'Torches', icon: 'torch', age: 0, last: 2, ore: 0, wood: 1, time: 6, guards: 'dark', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'Pour ne pas se perdre dans les galeries.' },
-  { id: 'lamp', name: 'Lampe frontale', plural: 'Lampes frontales', icon: 'flashlight', age: 3, ore: 1, time: 8, guards: 'dark', cut: 0.6, per: (n) => Math.ceil(n / 2), desc: 'Un faisceau blanc et franc : les galeries n’ont plus de secrets.' },
-  { id: 'boat', name: 'Barque', plural: 'Barques', icon: 'boat', age: 1, ore: 0, wood: 10, time: 30, guards: 'water', cut: 0.5, per: (n) => Math.ceil(n / 3), desc: 'Trois places : on traverse, on pêche au large, on passe les crues.' },
-  { id: 'armor', name: 'Armure', plural: 'Armures', icon: 'shield', age: 2, last: 4, ore: 2, time: 28, needs: 'workshop', guards: 'monster', cut: 0.6, per: (n) => n, desc: 'Cotte de mailles, casque et bouclier : les crocs glissent.' },
-  { id: 'energyArmor', name: 'Armure énergétique', plural: 'Armures énergétiques', icon: 'energyArmor', age: 5, ore: 4, fuel: 1, time: 34, needs: 'workshop', guards: 'monster', cut: 0.82, per: (n) => n, desc: 'Une exo-armure à champ de force : griffes et flammes glissent.' },
-  { id: 'fieldShield', name: 'Bouclier de champ', plural: 'Boucliers de champ', icon: 'fieldShield', age: 5, ore: 3, fuel: 2, time: 32, needs: 'workshop', guards: 'weather', also: 'fall', cut: 0.5, per: (n) => Math.ceil(n / 2), desc: 'Une bulle d’énergie : vent, pluie et éboulis rebondissent.' },
-  { id: 'kit', name: 'Trousse de soins', plural: 'Trousses de soins', icon: 'kit', age: 2, ore: 1, time: 16, needs: 'health', guards: null, cut: 0.1, per: () => 1, desc: 'Un peu plus sûr partout ; les blessés guérissent deux fois plus vite.' },
+  { id: 'spear', name: 'Lance', plural: 'Lances', icon: 'spear', age: 0, last: 1, ore: 0, wood: 2, stone: 1, time: 2, guards: 'beast', also: 'monster', cut: 0.25, per: (n) => n, desc: 'Un bâton durci au feu, une pointe de silex.' },
+  { id: 'bow', name: 'Arc', plural: 'Arcs', icon: 'bow', age: 1, last: 1, ore: 0, wood: 4, time: 3, guards: 'beast', also: 'monster', cut: 0.38, per: (n) => n, desc: 'Tient les bêtes à distance, et rapporte parfois le dîner.' },
+  { id: 'sword', name: 'Épée', plural: 'Épées', icon: 'sword', age: 2, last: 2, ore: 1, time: 4, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.5, per: (n) => n, desc: 'Forgée à l’atelier : loups et sangliers n’ont qu’à bien se tenir.' },
+  { id: 'crossbow', name: 'Arbalète', plural: 'Arbalètes', icon: 'crossbow', age: 2, last: 2, ore: 1, wood: 3, time: 4, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.56, per: (n) => n, desc: 'Un carreau d’acier tendu d’un cran.' },
+  { id: 'rifle', name: 'Fusil', plural: 'Fusils', icon: 'rifle', age: 3, last: 3, ore: 2, time: 4, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.65, per: (n) => n, desc: 'Un coup en l’air suffit souvent à disperser une meute.' },
+  { id: 'assault', name: 'Fusil d’assaut', plural: 'Fusils d’assaut', icon: 'assault', age: 4, last: 4, ore: 3, fuel: 1, time: 5, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.76, per: (n) => n, desc: 'Rafales et chargeur long : une meute n’approche pas.' },
+  { id: 'grenade', name: 'Grenades', plural: 'Grenades', icon: 'grenade', age: 4, last: 4, ore: 2, fuel: 1, time: 4, needs: 'workshop', guards: 'monster', also: 'beast', cut: 0.7, per: (n) => Math.ceil(n / 2), desc: 'Grenades et roquettes : de quoi déloger la pire créature.' },
+  { id: 'plasma', name: 'Fusil à plasma', plural: 'Fusils à plasma', icon: 'plasma', age: 5, ore: 4, fuel: 2, time: 6, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.86, per: (n) => n, desc: 'Un trait de plasma bleu, sans bruit ni recul.' },
+  { id: 'rope', name: 'Corde', plural: 'Cordes', icon: 'rope', age: 0, ore: 0, wood: 2, time: 2, guards: 'fall', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'On s’encorde deux par deux pour les passages au-dessus du vide.' },
+  { id: 'torch', name: 'Torche', plural: 'Torches', icon: 'torch', age: 0, last: 2, ore: 0, wood: 1, time: 1, guards: 'dark', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'Pour ne pas se perdre dans les galeries.' },
+  { id: 'lamp', name: 'Lampe frontale', plural: 'Lampes frontales', icon: 'flashlight', age: 3, ore: 1, time: 2, guards: 'dark', cut: 0.6, per: (n) => Math.ceil(n / 2), desc: 'Un faisceau blanc et franc : les galeries n’ont plus de secrets.' },
+  { id: 'boat', name: 'Barque', plural: 'Barques', icon: 'boat', age: 1, ore: 0, wood: 10, time: 6, guards: 'water', cut: 0.5, per: (n) => Math.ceil(n / 3), desc: 'Trois places : on traverse, on pêche au large, on passe les crues.' },
+  { id: 'armor', name: 'Armure', plural: 'Armures', icon: 'shield', age: 2, last: 4, ore: 2, time: 5, needs: 'workshop', guards: 'monster', cut: 0.6, per: (n) => n, desc: 'Cotte de mailles, casque et bouclier : les crocs glissent.' },
+  { id: 'energyArmor', name: 'Armure énergétique', plural: 'Armures énergétiques', icon: 'energyArmor', age: 5, ore: 4, fuel: 1, time: 7, needs: 'workshop', guards: 'monster', cut: 0.82, per: (n) => n, desc: 'Une exo-armure à champ de force : griffes et flammes glissent.' },
+  { id: 'fieldShield', name: 'Bouclier de champ', plural: 'Boucliers de champ', icon: 'fieldShield', age: 5, ore: 3, fuel: 2, time: 6, needs: 'workshop', guards: 'weather', also: 'fall', cut: 0.5, per: (n) => Math.ceil(n / 2), desc: 'Une bulle d’énergie : vent, pluie et éboulis rebondissent.' },
+  { id: 'kit', name: 'Trousse de soins', plural: 'Trousses de soins', icon: 'kit', age: 2, ore: 1, time: 3, needs: 'health', guards: null, cut: 0.1, per: () => 1, desc: 'Un peu plus sûr partout ; les blessés guérissent deux fois plus vite.' },
 ];
 export const GEAR_BY = Object.fromEntries(GEAR.map((g) => [g.id, g])) as Record<GearId, Gear>;
 // noms, pluriels et descriptions lus dans la langue courante (dictionnaire src/i18n/en/gear.ts)

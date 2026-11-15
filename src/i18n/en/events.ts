@@ -136,7 +136,7 @@ registerDict('events', {
   'Charger à travers les flammes': 'Charge through the flames',
   'On a chargé à travers les flammes, les barbes roussies.': 'We charged through the flames, beards singed.',
   'La houle du bras de mer': 'The swell of the sea channel',
-  'À mi-chemin de l’île, le vent forcit : de longues vagues soulèvent la galère et la poussent de travers.': 'Halfway to the island, the wind picks up: long waves lift the galley and push it sideways.',
+  'La galère quitte la rive et le vent forcit : de longues vagues la soulèvent et la poussent de travers.': 'The galley leaves the shore and the wind picks up: long waves lift it and push it sideways.',
   'Ramer en cadence, face aux vagues': 'Row in rhythm, facing the waves',
   'Tous aux rames, en cadence : la galère a tenu son cap jusqu’à la plage.': 'All hands on the oars, in rhythm: the galley held its course all the way to the beach.',
   'Attendre que le vent tombe': 'Wait for the wind to drop',

@@ -37,7 +37,31 @@ Dangers (`Danger`) : `beast`, `fall`, `water`, `dark`, `weather`, `monster`. Un 
 
 ### Fabrication
 - Condition (`Expeditions.whyCraft`) : âge de la pièce atteint, bâtiment `needs` présent (atelier, lieu de soins pour la trousse), de quoi payer, file non pleine (`MAX_CRAFT = 6`). Le prix est prélevé tout de suite ; annuler une pièce de la file le rend (`cancelCraft`).
-- La file se fabrique une pièce à la fois (`craftStep`) : durée `g.time` secondes de jeu, ×1,5 avec un atelier (`has('workshop')`), ×`FORGE_CRAFT` (1,5) avec la forge infernale. Fin de file : message « L'équipement commandé est prêt ».
+- La file se fabrique une pièce à la fois (`craftStep`) : durée `g.time` secondes de jeu, ×1,5 avec un atelier (`has('workshop')`), ×`FORGE_CRAFT` (1,5) avec la forge infernale. Fin de file : message « L'équipement commandé est prêt ». À vitesse ×1, une seconde de jeu est une seconde réelle (`GameTime.update` : `dt × speed`).
+- **Durées (raccourcies le 15 nov. 2026)** : l'auteur attendait des minutes devant un équipement. Une pièce se fabrique en secondes, mais une équipe en demande une par membre (`per`) : cinq armures et cinq épées, c'était 230 s. Toutes les durées ont été divisées par cinq environ :
+
+| Pièce | Avant (s) | Après (s) |
+|---|---|---|
+| Torche | 6 | 1 |
+| Lance, corde, lampe | 10, 8, 8 | 2, 2, 2 |
+| Arc, trousse | 14, 16 | 3, 3 |
+| Épée, arbalète, fusil, grenades | 18, 20, 22, 20 | 4, 4, 4, 4 |
+| Fusil d'assaut, armure | 26, 28 | 5, 5 |
+| Barque, fusil à plasma, bouclier de champ | 30, 30, 32 | 6, 6, 6 |
+| Armure énergétique | 34 | 7 |
+
+  Tout l'équipement d'un choix, réserve vide, à vitesse ×1 et sans atelier (médiane / pire choix de l'âge, trousse non comptée) :
+
+| Âge | Avant | Après |
+|---|---|---|
+| 0 Préhistoire | 30 s / 74 s | 6 s / 16 s |
+| 1 Antiquité | 42 s / 144 s | 9 s / 30 s |
+| 2 Médiéval | 40 s / 180 s | 8 s / 36 s |
+| 3 Industriel | 46 s / 88 s | 10 s / 16 s |
+| 4 Moderne | 16 s / 60 s | 4 s / 12 s |
+| 5 Futuriste | 64 s / 124 s | 12 s / 24 s |
+
+  Avec un atelier, un tiers de moins. Le pire cas (une pièce par membre contre deux dangers) tient en une demi-minute ; le prix (minerai, bois, pierre) reste le vrai frein.
 - `whyCraftAll(ids, age)` : pour la commande d'un lot (bouton « Tout fabriquer », garnison) : tout ou rien, total du prix et place dans la file.
 - L'onglet Équipement (`renderArsenal`) : une carte par pièce **de l'âge** (`gearCurrent` : ni à venir, ni dépassée) avec son illustration en fond (le bas de la carte, en verre clair, la laisse voir), réserve, en route, prix, raison du refus ; puis la file avec annulation.
 
