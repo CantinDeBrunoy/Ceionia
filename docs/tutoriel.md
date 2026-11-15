@@ -57,7 +57,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   2. `hellPick` : choisir des troupes (sans troupe : « Renforts » fait venir la garnison).
   3. `hellAttack` : un ordre d'un clic droit sur la cible (la bulle se tient à l'écart).
   4. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.
-- **Chapitre « L'or des voisins »** (`arch`, 4 étapes), lancé 3,2 s après le choix de l'allié (`DiploChoice` › `ally`, `main.ts`), le temps de la bannière « Une alliance ! » :
+- **Chapitre « L'or des voisins »** (`arch`, 4 étapes), lancé 3,2 s après le choix de l'allié, le temps de la bannière « Une alliance ! » : `Game.watchAlly` (`main.ts`, à chaque pas de `stepDiplo`) voit `world.diplo.ally` changer pendant la session, quelle que soit la carte qui l'a fait choisir ; une partie chargée avec son allié déjà choisi ne le relance pas :
   1. `archHome` « Un port chez vous » : un port (`harbor`) sur l'île principale. Déjà bâti : l'étape passe.
   2. `archAllyHarbor` « Un port chez l'allié » : la vue va sur l'île de l'allié (`Game.goAlly`, le lobe le plus loin de la ville) ; un port sur sa côte, hors de sa ville. Ailleurs, la bulle propose « Aller sur l'île alliée ».
   3. `archPost` « Le comptoir » : un comptoir (`tradepost`) sur l'île de l'allié.

@@ -561,8 +561,6 @@ class Game implements UIHost {
         if (!chooseAlly(this.world.diplo, p)) return;
         this.ui.banner(trx('Une alliance !'), trx('{people} sont nos alliés', { people: peopleName(p).replace(/^./, (c) => c.toUpperCase()) }));
         this.ui.update(); this.saveNow();
-        // le chapitre de l'archipel : un port chez soi, un port et le comptoir chez l'allié, puis l'or (après la bannière)
-        setTimeout(() => this.tutorial.chapter('arch'), 3200);
       },
       path: (p) => this.choosePath(p),
     });
@@ -1093,12 +1091,26 @@ class Game implements UIHost {
    */
   private stepDiplo() {
     const w = this.world, d = w.diplo;
+    this.watchAlly();
     if (!archipelagoOn(w)) return;
     if (settleAtAge(d, this.sim.age, true)) this.treatyBanner();
     const calm = this.portalCalm > 3 && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading && !this.portalChoice.visible && !this.diploChoice.visible && !this.tutorial.active;
     if (!calm) return;
     if (allyPending(w)) this.diploChoice.showAlly();
     else if (endgameOpen(w, this.sim.age) && !d.asked) { d.asked = true; this.diploChoice.showPath(); }
+  }
+
+  /**
+   * L'allié vient d'être choisi (pendant cette session, quelle que soit la carte qui l'a fait choisir) : le chapitre
+   * « L'or des voisins » démarre après la bannière. Une partie chargée avec son allié déjà choisi ne le relance pas
+   */
+  private allySeen: string | null | undefined = undefined;
+  private watchAlly() {
+    const ally = this.world.diplo.ally;
+    if (this.allySeen === undefined) { this.allySeen = ally; return; }
+    if (ally === this.allySeen) return;
+    this.allySeen = ally;
+    if (ally) setTimeout(() => this.tutorial.chapter('arch'), 3200);
   }
 
   /** Le traité des deux îles : la bannière, une seule fois (au passage au Moderne) */
