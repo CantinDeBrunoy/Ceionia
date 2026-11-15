@@ -6,6 +6,8 @@ import { GEN } from '../src/world/continent';
 import { expandWorld } from '../src/world/expand';
 import { VOY_ACT2, VOY_CAPTIONS, VOY_DIP, VOY_FILM, VOY_LIFT, VOY_WAIT, VOY_CONTACT, actTotal, voyCaptionAt, voyFilmCaptionAt, voyShotAt, voyVeilAt } from '../src/voyageCine';
 import { resumeAt } from '../src/ui/voyage';
+import { horizonPath } from '../src/voyageStage';
+import { navalSites, SHALLOW } from '../src/sim/navalConflict';
 import { MUSIC } from '../src/audio/audio';
 import { tr, setLang } from '../src/i18n';
 import '../src/i18n/en';
@@ -33,12 +35,12 @@ describe('la cinématique « Explorer le monde » : le film', () => {
     expect(voyFilmCaptionAt(3, true)).toEqual(VOY_WAIT);
   });
 
-  it('après le rechargement, il reprend où il en était, le temps écoulé compris (borné au film)', () => {
-    expect(resumeAt(null, 1000)).toBe(0);
-    expect(resumeAt({ t: 4, at: 10_000 }, 12_500)).toBeCloseTo(6.5, 5);
-    expect(resumeAt({ t: 18, at: 0 }, 60_000)).toBe(VOY_FILM.dur);
-    // (une horloge qui recule ne fait pas revenir le film en arrière)
-    expect(resumeAt({ t: 4, at: 10_000 }, 9_000)).toBe(4);
+  it('après le rechargement, il reprend là où il s’était arrêté, sans compter le temps du rechargement (borné au film)', () => {
+    expect(resumeAt(null)).toBe(0);
+    // (en ligne, le rechargement dure longtemps : le film ne doit pas sauter à sa fin)
+    expect(resumeAt({ t: 4, at: 10_000 })).toBe(4);
+    expect(resumeAt({ t: 25, at: 0 })).toBe(VOY_FILM.dur);
+    expect(resumeAt({ t: -1, at: 0 })).toBe(0);
   });
 });
 
@@ -92,6 +94,26 @@ describe('la cinématique « Explorer le monde » : le survol en direct', () => 
       for (const c of [...VOY_CAPTIONS, ...VOY_FILM.captions]) { expect(tr(c.text)).not.toBe(c.text); if (c.sub) expect(tr(c.sub)).not.toBe(c.sub); }
       for (const s of [VOY_WAIT.text, VOY_WAIT.sub, VOY_CONTACT.title, VOY_CONTACT.sub]) expect(tr(s)).not.toBe(s);
     } finally { setLang('fr', false); }
+  });
+});
+
+describe('la cinématique « Explorer le monde » : le navire de l’horizon', () => {
+  it('il file en pleine eau, jamais à travers un îlot de l’archipel (le premier plan en direct le suit)', () => {
+    for (const seed of [2026, 11]) {
+      setMapSize(192);
+      const w0 = new World();
+      newWorld(w0, 3, seed, GEN);
+      const big = expandWorld(JSON.parse(JSON.stringify(w0.toJSON())), w0.mapId, w0.seed);
+      setMapSize(big.n);
+      try {
+        const w = new World();
+        w.fromJSON(big);
+        const s = navalSites(w)!;
+        const path = horizonPath(w, s.battle);
+        expect(path.length, `graine ${seed}`).toBeGreaterThan(20);
+        for (const [x, z] of path) expect(w.cellAvg(Math.floor(x), Math.floor(z)), `graine ${seed} (${x.toFixed(0)}, ${z.toFixed(0)})`).toBeLessThan(SHALLOW);
+      } finally { setMapSize(192); }
+    }
   });
 });
 

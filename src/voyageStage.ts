@@ -3,7 +3,7 @@ import type { CameraRig } from './core/camera';
 import { World, SEA } from './world/world';
 import type { People } from './world/archipelago';
 import { townPlans, type TownPlan } from './world/rivalTown';
-import { DEEP, SHALLOW, nearestWater, navalSites, warshipKind, waterPath, resample, type NavalSites } from './sim/navalConflict';
+import { DEEP, SHALLOW, nearestWater, navalSites, openSea, warshipKind, waterPath, resample, type NavalSites } from './sim/navalConflict';
 import { warshipModel } from './render/warships';
 import { vesselModel } from './render/seaTraffic';
 import { mats } from './render/materials';
@@ -79,6 +79,23 @@ class Boat {
 /** Un chemin droit (échantillonné tous les demi-cases) */
 const line = (a: P, b: P): P[] => resample([a, b], 0.5);
 
+/**
+ * Le chemin du navire de l'horizon : il part de l'eau libre au large de l'île principale (dégagée sur 3 cases, reliée au
+ * large) et file vers le milieu des deux îles rivales en suivant l'eau. Avant, un trait droit traversait parfois un îlot de
+ * l'archipel : le premier plan en direct montrait des palmiers, et le navire caché dedans (signalé par l'auteur en ligne)
+ */
+export function horizonPath(w: World, mid: P): P[] {
+  const f = w.isles!.main, c: P = [f.x + f.n / 2, f.z + f.n / 2];
+  const d = Math.hypot(mid[0] - c[0], mid[1] - c[1]) || 1, u: P = [(mid[0] - c[0]) / d, (mid[1] - c[1]) / d];
+  const sea = openSea(w, DEEP), at = (k: number): P => [c[0] + u[0] * k, c[1] + u[1] * k];
+  const from = nearestWater(w, ...at(f.n * 0.62), DEEP, 3, 40, sea) ?? nearestWater(w, ...at(f.n * 0.62), DEEP, 1, 40, sea);
+  if (!from) return line(at(f.n * 0.62), at(f.n * 0.62 + 40));
+  const goal = nearestWater(w, from[0] + u[0] * 40, from[1] + u[1] * 40, DEEP, 2, 30, sea) ?? nearestWater(w, mid[0], mid[1], DEEP, 1, 30, sea);
+  const path = goal ? waterPath(w, from, goal, DEEP) : null;
+  // (au plus une quarantaine de cases : le plan ne dure que 5 s)
+  return path && path.length > 4 ? path.slice(0, 90) : line(from, [from[0] + u[0] * 40, from[1] + u[1] * 40]);
+}
+
 /** Les plans que le survol prépare sous la brume, une image chacun, avant de se lever (maillages, ombres, impostures) */
 const PRIME: { shot: VoyShot; k: number }[] = [{ shot: 'orient', k: 0.5 }, { shot: 'asie', k: 0.5 }, { shot: 'fleets', k: 0.5 }, { shot: 'horizon', k: 0 }];
 
@@ -124,11 +141,8 @@ export class VoyageStage {
     this.begin(onEnd);
     this.sites = navalSites(w);
     this.towns = townPlans(w);
-    // le navire de l'horizon : du bord de l'île principale, cap sur le milieu des deux îles rivales
-    const f = lay.main, c: P = [f.x + f.n / 2, f.z + f.n / 2], mid = this.mid();
-    const d = Math.hypot(mid[0] - c[0], mid[1] - c[1]) || 1, u: P = [(mid[0] - c[0]) / d, (mid[1] - c[1]) / d];
-    const from = nearestWater(w, c[0] + u[0] * f.n * 0.62, c[1] + u[1] * f.n * 0.62, DEEP, 1, 30) ?? [c[0] + u[0] * f.n * 0.62, c[1] + u[1] * f.n * 0.62] as P;
-    this.lead = this.boat(vesselModel('caravel').geo, line(from, [from[0] + u[0] * 40, from[1] + u[1] * 40]), 1.4, 2.2, 0, false);
+    // le navire de l'horizon : du bord de l'île principale, cap sur le milieu des deux îles rivales, en pleine eau
+    this.lead = this.boat(vesselModel('caravel').geo, horizonPath(w, this.mid()), 1.4, 2.2, 0, false);
     // les ports qui s'animent, puis les flottes : préparés d'avance (rien ne se calcule en plein plan)
     const age = Math.max(2, h.age());
     for (const people of ['orient', 'asie'] as People[]) this.portShips(people, age);

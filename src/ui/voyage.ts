@@ -6,7 +6,7 @@ import { KINGDOM_TEXT } from './kingdom';
  * Le film de la traversée (« Explorer le monde ») : une vidéo enregistrée, la même pour tous (une caravelle en pleine mer, puis
  * la brume ; `public/voyage/`, voir docs/grand-choix.md). Elle tient lieu d'écran de chargement : elle joue pendant la
  * sauvegarde, l'agrandissement du monde et le rechargement de la page, puis pendant la préparation de la partie agrandie. Le
- * rechargement la coupe : elle reprend après, au même moment (`VOY_KEY` dans `sessionStorage`). Finie avant que la partie ne
+ * rechargement la coupe : elle reprend après, là où elle s'était arrêtée (`VOY_KEY` dans `sessionStorage`). Finie avant que la partie ne
  * soit prête, elle laisse la brume peinte (navire en ombre, nappes qui passent) jusqu'au bout. Une vidéo joue même quand le
  * fil principal est pris (agrandissement, construction du monde, shaders) : c'est pour cela qu'elle remplace l'acte en direct
  */
@@ -34,10 +34,14 @@ export function readFilmMark(): FilmMark | null {
 const writeFilmMark = (m: FilmMark) => { try { sessionStorage.setItem(VOY_KEY, JSON.stringify(m)); } catch { /* sans stockage, le film repart du début */ } };
 export const clearFilmMark = () => { try { sessionStorage.removeItem(VOY_KEY); } catch { /* rien */ } };
 
-/** Le moment où reprendre le film après le rechargement : le temps noté plus ce qui s'est écoulé depuis (borné au film) */
-export function resumeAt(m: FilmMark | null, now: number): number {
+/**
+ * Le moment où reprendre le film après le rechargement : là où il s'était arrêté (borné au film). Le temps du rechargement
+ * n'est pas compté : en ligne, modèles et code se téléchargent, et le film sautait à sa fin avant d'avoir repris (le joueur
+ * ne voyait que la brume). Rien d'autre ne suit le film : l'image continue simplement où elle en était
+ */
+export function resumeAt(m: FilmMark | null): number {
   if (!m) return 0;
-  return Math.max(0, Math.min(VOY_FILM.dur, m.t + Math.max(0, now - m.at) / 1000));
+  return Math.max(0, Math.min(VOY_FILM.dur, m.t));
 }
 
 /**
@@ -63,7 +67,7 @@ export class VoyageFilm {
     this.video = el.querySelector('video')!;
     this.cap = el.querySelector('.kc-cap b')!;
     this.sub = el.querySelector('.kc-cap small')!;
-    const v = this.video, start = resumeAt(m, Date.now());
+    const v = this.video, start = resumeAt(m);
     // (déjà passé, ou repris au-delà de la fin : la brume seule)
     if (this.skipped || start >= VOY_FILM.dur - 0.05) this.finish();
     else {
