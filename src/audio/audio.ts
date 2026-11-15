@@ -38,14 +38,16 @@ const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 /** Audio 100 % procédural (Web Audio) : musique générative + ambiances + effets */
 /**
  * Vrais enregistrements de cris (espèce de la faune → fichier de `public/sons/animaux`, sans extension). Sources et
- * licences : `docs/audio.md` et la page Crédits. Le cerf et l'élan partagent le brame du wapiti
+ * licences : `docs/audio.md` et la page Crédits. Le cerf garde son brame de synthèse (le brame enregistré du wapiti, trop proche d'un hurlement, est retiré) ; l'élan ne crie plus
  */
 const SAMPLES: Record<string, { file: string; rate?: number; max?: number }> = {
-  sheep: { file: 'mouton' }, cow: { file: 'vache' }, horse: { file: 'cheval' }, deer: { file: 'cerf' }, moose: { file: 'cerf', rate: 0.85 },
+  sheep: { file: 'mouton' }, cow: { file: 'vache' }, horse: { file: 'cheval' },
   // le caquètement dure 9 s : on en joue un passage
   hen: { file: 'poule', max: 3.5 },
   // pas de chèvre libre et légère : le bouquetin reprend le bêlement du mouton, plus aigu
   ibex: { file: 'mouton', rate: 1.3 },
+  // hurlement d'une vraie meute (28 s) : un passage de 7 s, joué quand le chef hurle (`sfxHowl`)
+  wolf: { file: 'loup', max: 7 },
 };
 /** niveau de crête des enregistrements, proche des cris de synthèse */
 const SAMPLE_PEAK = 0.16;
@@ -96,6 +98,9 @@ export function soundSettings(s: SoundSettings) {
 
 /** Un morceau en cours : l'élément audio (lu en flux, sans tout décoder), son nœud et son gain de fondu */
 interface Track { key: string; name: string; el: HTMLAudioElement; src: MediaElementAudioSourceNode; g: GainNode; next: boolean; dropped: boolean }
+
+/** volume de toutes les voix d'animaux (cris, chants, grillons, grenouilles, bruitages des enclos), réduit de moitié à la demande de l'auteur */
+export const ANIMAL_VOL = 0.5;
 
 export class AudioEngine {
   ctx: AudioContext | null = null;
@@ -330,7 +335,8 @@ export class AudioEngine {
     set(this.surfG, surf); this.surfLfo.gain.setTargetAtTime(surf * 0.8, T, 0.4);
     set(this.rainG, 0.045 * s.rain * out);
     this.waterG.gain.setTargetAtTime(0.012 * clamp(1.4 - s.camDist / 130, 0.2, 1) * out, T, 0.5);
-    set(this.villageG, Math.min(0.018, s.pop * 0.00025) * s.daylight * (1 - s.rain * 0.6) * out);
+    // plus de « murmure du village » : un bruit filtré autour de 700 Hz qui sonnait comme de la friture
+    set(this.villageG, 0);
     set(this.caveG, 0.04 * s.under);
     this.tickVoices(T);
     // grillons la nuit : une courte trille douce de temps en temps, d'un grillon puis d'un autre (hauteur et place variées)
@@ -341,7 +347,7 @@ export class AudioEngine {
     if (this.cricketTimer <= 0) {
       this.cricketTimer = 1.2 + Math.random() * 3.5;
       if (crick > 0.3) {
-        const f = 3600 + Math.random() * 700, n = 2 + Math.floor(Math.random() * 3), vol = 0.004 * crick;
+        const f = 3600 + Math.random() * 700, n = 2 + Math.floor(Math.random() * 3), vol = 0.004 * crick * ANIMAL_VOL;
         for (let i = 0; i < n; i++) this.tone(f, T + 0.02 + i * 0.09, 0.05, 'sine', vol, this.ambG, 0, 0.012);
       }
     }
@@ -357,30 +363,31 @@ export class AudioEngine {
     this.gullTimer -= dt;
     if (this.gullTimer <= 0) {
       this.gullTimer = 8 + Math.random() * 12;
-      if ((s.coast ?? 0) > 0.3 && near > 0.2 && s.daylight > 0.4 && s.rain < 0.5 && out > 0.5) this.gull(T + 0.05, s.coast! * near);
+      if ((s.coast ?? 0) > 0.3 && near > 0.2 && s.daylight > 0.4 && s.rain < 0.5 && out > 0.5) this.gull(T + 0.05, s.coast! * near * ANIMAL_VOL);
     }
     this.eagleTimer -= dt;
     if (this.eagleTimer <= 0) {
       this.eagleTimer = 8 + Math.random() * 12;
-      if (high > 0.2 && near > 0.2 && s.daylight > 0.5 && s.rain < 0.4 && out > 0.5) this.eagle(T + 0.05, high * near);
+      if (high > 0.2 && near > 0.2 && s.daylight > 0.5 && s.rain < 0.4 && out > 0.5) this.eagle(T + 0.05, high * near * ANIMAL_VOL);
     }
     this.crackleTimer -= dt;
+    // crépitement du feu : quelques claquements espacés et doux, de près seulement (serrés et forts, ils faisaient un grésillement continu)
     if ((s.fire ?? 0) > 0.05 && this.crackleTimer <= 0 && out > 0.5) {
-      this.crackleTimer = (0.04 + Math.random() * 0.25) / s.fire!;
-      this.burst(T + 0.01, 0.025 + Math.random() * 0.03, 2500 + Math.random() * 3000, 0.12 * s.fire! * (0.4 + Math.random()));
+      this.crackleTimer = (0.3 + Math.random() * 0.9) / Math.min(1.5, s.fire! + 0.3);
+      if (near > 0.2) this.burst(T + 0.01, 0.02 + Math.random() * 0.025, 1800 + Math.random() * 1800, 0.03 * s.fire! * near * (0.5 + Math.random() * 0.5));
     }
     // grenouilles : un concert au crépuscule et la nuit, plus fourni après la pluie
     this.frogTimer -= dt;
     if (this.frogTimer <= 0) {
       const k = (s.frogs ?? 0) * (0.25 + 0.75 * night) * (1 + s.rain) * out * near;
       this.frogTimer = k > 0.05 ? (0.4 + Math.random() * 1.8) / Math.min(1.5, k + 0.3) : 2;
-      if (k > 0.05 && s.season !== 3) this.croak(T + 0.02, Math.min(1, k));
+      if (k > 0.05 && s.season !== 3) this.croak(T + 0.02, Math.min(1, k) * ANIMAL_VOL);
     }
     // oiseaux
     this.birdTimer -= dt;
     if (this.birdTimer <= 0 && near > 0.3 && s.daylight > 0.5 && s.rain < 0.3 && s.season !== 3 && s.under < 0.5) {
       this.birdTimer = 4 + Math.random() * 7;
-      this.chirp(T + 0.05, near);
+      this.chirp(T + 0.05, near * ANIMAL_VOL);
     } else if (this.birdTimer <= 0) this.birdTimer = 2;
 
     // musique : l'enregistrement de l'âge (ou de la scène) s'il y en a un, sinon la musique générée
@@ -578,7 +585,8 @@ export class AudioEngine {
     const src = ctx.createBufferSource(); src.buffer = this.noise;
     const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    // attaque de 3 ms : un départ à pleine force d'un coup fait un clic sec
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f); f.connect(g); g.connect(this.sfxG);
     src.start(t, Math.random() * 2); src.stop(t + dur + 0.05);
   }
@@ -646,6 +654,7 @@ export class AudioEngine {
    */
   sfxCall(kind: string, k: number) {
     if (!this.ctx || k <= 0) return;
+    k *= ANIMAL_VOL;
     const ctx = this.ctx, t = ctx.currentTime + 0.02, def = SAMPLES[kind], smp = def && this.samples.get(def.file);
     const g = ctx.createGain(); g.connect(this.ambG);
     if (def && smp) {
@@ -699,6 +708,9 @@ export class AudioEngine {
    */
   sfxHowl(k: number) {
     if (!this.ctx) return;
+    // le vrai hurlement enregistré s'il est chargé ; sinon la meute de synthèse
+    if (this.samples.has(SAMPLES.wolf.file)) { this.sfxCall('wolf', k); return; }
+    k *= ANIMAL_VOL;
     const ctx = this.ctx, t0 = ctx.currentTime + 0.02;
     // écho de la vallée : le hurlement porte loin
     const echo = ctx.createDelay(1); echo.delayTime.value = 0.31;

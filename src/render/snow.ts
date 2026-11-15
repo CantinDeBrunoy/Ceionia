@@ -4,23 +4,60 @@ import * as THREE from 'three';
 export const SNOW = { value: 0 };
 /** Direction de la lumière principale (soleil, ou lune la nuit), vers elle : nuance des facettes enneigées (`env.ts`) */
 export const SNOW_SUN = { value: new THREE.Vector3(0.4, 0.8, 0.3).normalize() };
-/** Part de la neige que retient chaque case de la carte (déserts et tropiques presque rien), et taille de la carte */
+/** Carte de la neige et du froid par case (voir `snowMapData`), et taille de la carte */
 const SNOW_MAP = { value: null as THREE.Texture | null };
 const SNOW_SIZE = { value: 1 };
-/** Carte de la neige que retient chaque case, pour les shaders qui en ont besoin (glace de l'eau) */
+/** Carte de la neige (r) et du froid (g) par case, pour les shaders qui en ont besoin (glace de la mer, des lacs, des torrents) */
 export const SNOW_U = { uSnowMap: SNOW_MAP, uSnowSize: SNOW_SIZE };
 let map: THREE.DataTexture | null = null;
 
-/** Neige que retient chaque case (0 … 1), d'après son biome : à refaire quand la carte change */
+/** Rayon (cases) du froid rogné autour des cases chaudes : un fond de vallée de moins de 2 × ICE_ERODE cases au milieu du désert ne gèle pas */
+export const ICE_ERODE = 4;
+/** Rayon (cases) du flou des deux cartes : des bords doux au lieu de marches au pas de la grille */
+export const SNOW_BLUR = 2;
+
+/** Moyenne (`min` = false) ou minimum glissant sur 2r + 1 cases, ligne puis colonne ; aux bords, sur les cases présentes */
+function slide(src: Float32Array, n: number, r: number, min: boolean) {
+  const tmp = new Float32Array(n * n), out = new Float32Array(n * n);
+  for (const [a, b, sx, sz] of [[src, tmp, 1, 0], [tmp, out, 0, 1]] as [Float32Array, Float32Array, number, number][])
+    for (let z = 0; z < n; z++)
+      for (let x = 0; x < n; x++) {
+        let acc = min ? 1 : 0, c = 0;
+        for (let d = -r; d <= r; d++) {
+          const xx = x + d * sx, zz = z + d * sz;
+          if (xx < 0 || zz < 0 || xx >= n || zz >= n) continue;
+          const v = a[zz * n + xx];
+          if (min) acc = Math.min(acc, v); else acc += v;
+          c++;
+        }
+        b[z * n + x] = min ? acc : acc / c;
+      }
+  return out;
+}
+
+/**
+ * Deux octets par case : r = neige que retient la case (0 … 1, d'après son biome), adoucie ; g = froid qui laisse l'eau geler :
+ * le minimum sur `ICE_ERODE` cases alentour, adouci. Le désert et les tropiques retiennent à peine la neige : pas de glace à
+ * moins de quatre cases d'eux, même au fond vert d'un canyon du désert
+ */
+export function snowMapData(n: number, snowy: (k: number) => number) {
+  const s = new Float32Array(n * n);
+  for (let k = 0; k < n * n; k++) s[k] = Math.min(1, Math.max(0, snowy(k)));
+  const snow = slide(s, n, SNOW_BLUR, false), cold = slide(slide(s, n, ICE_ERODE, true), n, SNOW_BLUR, false);
+  const d = new Uint8Array(n * n * 2);
+  for (let k = 0; k < n * n; k++) { d[k * 2] = Math.round(snow[k] * 255); d[k * 2 + 1] = Math.round(cold[k] * 255); }
+  return d;
+}
+
+/** Neige et froid de chaque case, d'après son biome : à refaire quand la carte change */
 export function setSnowMap(n: number, snowy: (k: number) => number) {
   if (!map || map.image.width !== n) {
     map?.dispose();
-    map = new THREE.DataTexture(new Uint8Array(n * n), n, n, THREE.RedFormat);
+    map = new THREE.DataTexture(new Uint8Array(n * n * 2), n, n, THREE.RGFormat);
     map.magFilter = map.minFilter = THREE.LinearFilter;
     SNOW_MAP.value = map;
   }
-  const d = map.image.data as Uint8Array;
-  for (let k = 0; k < n * n; k++) d[k] = Math.round(Math.min(1, Math.max(0, snowy(k))) * 255);
+  (map.image.data as Uint8Array).set(snowMapData(n, snowy));
   map.needsUpdate = true;
   SNOW_SIZE.value = n;
 }

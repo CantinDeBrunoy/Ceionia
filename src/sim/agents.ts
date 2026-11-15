@@ -3,7 +3,7 @@ import { World, N, VEG_FIELD } from '../world/world';
 import { Building, KINDS, KindId, hasDoor, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
-import { makeFolk, folkStep, holdFolk, Folk, FolkHold, FolkPose } from '../render/folk';
+import { makeFolk, folkStep, holdFolk, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
 import { makeRider, rideStep, Rider } from '../render/riders';
 import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { Parts } from '../render/parts';
@@ -149,6 +149,35 @@ const PROP_FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const SADDLE = 0.12 + 0.42 * (0.3 - HUMAN), RIDE_SPEED = 1.6;
 /** au volant d'une petite voiture d'expédition : hauteur du siège, allure */
 const CAR_SEAT = 0.035, CAR_SPEED = 2.1;
+/** Une place à bord plus loin que `GLIDE_MIN` cases se rejoint en glissant, à la vitesse `GLIDE_RATE` (part de l'écart par seconde, en exponentielle) */
+const GLIDE_MIN = 0.25, GLIDE_RATE = 5;
+const SEAT_P = new THREE.Vector3();
+/** La selle, au-dessus de l'os du dos : sa hauteur au-dessus de l'os (repère du cheval de 0,34), le creux du dos où l'on s'assied */
+export const SADDLE_UP = 0.04;
+
+/**
+ * Selle et tapis sur le dos du cheval de la faune (repère du modèle, avant = +z), accrochés à l'os du dos comme le harnais
+ * des charrettes ; `userData.seat` : le point où s'assied le cavalier, sur la selle. Rien sans l'os (autre modèle) : le
+ * cavalier garde alors sa hauteur fixe
+ */
+export function saddle(m: Actor) {
+  let back: THREE.Object3D | undefined;
+  m.root.traverse((o) => { if ((o as THREE.Bone).isBone && o.name === 'Torso2') back = o; });
+  if (!back) return;
+  m.root.updateMatrixWorld(true);
+  const at = back.getWorldPosition(new THREE.Vector3()).sub(m.root.position);
+  const p = new Parts();
+  p.box(0.07, 0.006, 0.07, 0, at.y + SADDLE_UP - 0.008, at.z, 0x7a2f2a);
+  p.box(0.05, 0.012, 0.05, 0, at.y + SADDLE_UP - 0.002, at.z, 0x4a3426);
+  p.box(0.04, 0.014, 0.01, 0, at.y + SADDLE_UP + 0.004, at.z + 0.024, 0x4a3426);
+  for (const s of [-1, 1]) p.box(0.006, 0.05, 0.012, s * 0.036, at.y + SADDLE_UP - 0.03, at.z, 0x4a3426);
+  const mesh = new THREE.Mesh(p.build(false).body, mats.body);
+  mesh.castShadow = true;
+  const seat = new THREE.Object3D();
+  seat.position.set(0, at.y + SADDLE_UP + 0.004, at.z);
+  for (const o of [mesh, seat]) { m.root.add(o); o.updateMatrixWorld(true); back.attach(o); }
+  m.root.userData.seat = seat;
+}
 
 /**
  * Petite voiture tout-terrain de l'âge industriel, pour les expéditions (avant = +z) : caisse ouverte, capot et calandre,
@@ -287,6 +316,8 @@ interface Agent {
   /** porté (assis dans une barque…) : position et cap imposés ; et l'endroit de la berge où il est monté */
   ride: Ride | null;
   shore: [number, number] | null;
+  /** il rejoint sa place à bord (ou la suivante, loin de lui) en glissant, au lieu d'y être posé d'un coup */
+  glide?: boolean;
   /** équipement d'expédition porté ; objets accrochés au modèle ; son cheval (monté en route, à brouter sur place) */
   kit: Kit | null;
   kitKey: string;
@@ -360,6 +391,8 @@ export class Heap {
 
 /** Habitants : agents instanciés qui marchent sur les routes et rentrent la nuit */
 export class Agents {
+  /** le pas de temps de la dernière image (les membres qui glissent jusqu'à leur place à bord, voir `ride`) */
+  private lastDt = 0.016;
   group = new THREE.Group();
   private body: THREE.InstancedMesh;
   private head: THREE.InstancedMesh;
@@ -1170,17 +1203,28 @@ export class Agents {
   /** Ce membre est arrivé (ou ne marche pas) */
   memberDone(id: number) { const a = this.byId(id); return !a || a.state !== 'walking'; }
 
-  /** Membre porté (assis dans une barque…) à la place donnée ; null le repose sur la berge, là où il est monté */
+  /**
+   * Membre porté (assis dans une barque…) à la place donnée ; null le repose sur la berge, là où il est monté. Plus personne
+   * n'y saute d'un coup (on croyait l'équipe téléportée) : une place à plus de `GLIDE_MIN` de lui (en montant à bord, en
+   * débarquant sur une plage), il la rejoint en glissant ; descendu, il repart à pied de là où il est, vers la berge
+   */
   ride(id: number, r: Ride | null) {
     const a = this.byId(id);
     if (!a) return;
     if (r) {
       if (!a.ride) a.shore = [a.x, a.z];
-      a.ride = r; a.x = r.x; a.z = r.z; a.heading = r.heading;
+      const d = Math.hypot(r.x - a.x, r.z - a.z);
+      if (d > GLIDE_MIN) a.glide = true;
+      if (a.glide && d > 0.02) {
+        const k = 1 - Math.exp(-this.lastDt * GLIDE_RATE);
+        a.x += (r.x - a.x) * k; a.z += (r.z - a.z) * k;
+      } else { a.glide = false; a.x = r.x; a.z = r.z; }
+      a.ride = r; a.heading = r.heading;
       a.state = 'doing'; a.path = []; a.act = r.act === undefined ? 'sit' : r.act;
     } else if (a.ride) {
-      a.ride = null;
-      if (a.shore) { a.x = a.shore[0]; a.z = a.shore[1]; a.shore = null; }
+      a.ride = null; a.glide = false;
+      // tout près de la berge : on l'y pose ; plus loin, il en part à pied (`startPath` part de la berge), sinon on l'y pose
+      if (a.shore && Math.hypot(a.shore[0] - a.x, a.shore[1] - a.z) <= GLIDE_MIN) { a.x = a.shore[0]; a.z = a.shore[1]; a.shore = null; }
       a.act = 'work';
     }
   }
@@ -1201,6 +1245,8 @@ export class Agents {
     const f = a?.actor;
     if (!a || !f || !f.root.visible) return null;
     const v = new THREE.Vector3();
+    // (à jour de cette image : le fanion suit la main du cavalier qui monte et descend avec le galop)
+    f.root.updateMatrixWorld(true);
     f.hands[0].getWorldPosition(v);
     return [v.x, v.y, v.z];
   }
@@ -1236,7 +1282,10 @@ export class Agents {
   private startPath(a: Agent, goal: number, hiddenAtEnd: boolean) {
     a.spot = null; a.face = null; a.deck = null; a.act = null;
     a.task = null; a.load = false; a.lane = null;
-    const start = Math.min(N - 1, Math.max(0, Math.floor(a.z))) * N + Math.min(N - 1, Math.max(0, Math.floor(a.x)));
+    // (descendu d'une barque : le chemin part de la berge où il était monté, il y marche depuis sa place à bord)
+    const [fx, fz] = a.shore ?? [a.x, a.z];
+    a.shore = null;
+    const start = Math.min(N - 1, Math.max(0, Math.floor(fz))) * N + Math.min(N - 1, Math.max(0, Math.floor(fx)));
     const p = this.findPath(start, goal);
     this.pathBudget--;
     if (!p) { a.state = 'doing'; a.timer = 2 + this.rnd() * 2; a.targetHidden = false; a.path = []; if (a.goingHome) { a.goingHome = false; a.state = 'inside'; a.hidden = true; } return; }
@@ -1252,6 +1301,7 @@ export class Agents {
   /** `season` : 0 printemps, 1 été, 2 automne, 3 hiver (les travaux des champs en dépendent) */
   update(dt: number, hour: number, age: number, sheltering: boolean, popTarget: number, glowNight: number, season = 0) {
     const w = this.world;
+    this.lastDt = dt;
     this.popTarget = popTarget;
     this.season = season; this.age = age;
     if (w.version !== this.lastVersion) { this.lastVersion = w.version; this.refreshTargets(); }
@@ -1419,15 +1469,22 @@ export class Agents {
     // aux champs : le geste de son ouvrage (au volant du tracteur, assis), sa charge portée à deux bras jusqu'à la grange
     const field = a.mission ? null : a.state === 'walking' && a.load ? (['carry', 1.6] as const) : a.state === 'doing' && a.task ? FIELD_POSE[a.task] : null;
     const lift = riding ? (a.kit?.car ? CAR_SEAT : SADDLE) : a.state === 'doing' && a.task === 'drive' ? seatOf(a.rig != null ? this.rigs.get(a.rig)?.kind : null) : 0;
-    act.root.position.set(a.x, this.groundY(a) + lift, a.z);
-    act.root.rotation.y = a.heading;
+    const seat = riding && !a.kit?.car ? (a.mount?.root.userData.seat as THREE.Object3D | undefined) : undefined;
+    if (seat) {
+      // en selle : la hanche sur la selle, qui suit le dos du cheval (montée, descente, tangage du galop, virages)
+      seat.getWorldPosition(SEAT_P); seat.getWorldQuaternion(act.root.quaternion);
+      act.root.position.set(SEAT_P.x, SEAT_P.y - FOLK_SEAT * act.root.scale.y, SEAT_P.z);
+    } else {
+      act.root.position.set(a.x, this.groundY(a) + lift, a.z);
+      act.root.rotation.set(0, a.heading, 0);
+    }
     const running = a.child && (!a.act || a.act === 'run');
-    const pose: FolkPose = riding ? 'sit'
+    const pose: FolkPose = seat ? 'ride' : riding ? 'sit'
       : field ? field[0]
       : a.state === 'walking' || (running && a.state === 'doing') ? ((running && a.state === 'doing') || a.urgent ? 'run' : 'walk')
       : a.state === 'doing' ? (a.act === 'sit' ? 'sit' : a.act === 'box' ? 'box' : a.act === 'cheer' || a.act === 'play' ? 'cheer' : a.act === 'stroll' || (a.mission && !a.act) ? (a.tool === 'book' || a.job?.kind === 'merchant' ? 'talk' : 'idle') : 'work')
       : 'idle';
-    folkStep(act, a.phase * (field && !riding ? field[1] : pose === 'run' ? 1.1 : pose === 'walk' ? 1.6 : 1), pose);
+    folkStep(act, a.phase * (field && !riding ? field[1] : pose === 'run' ? 1.1 : pose === 'walk' ? 1.6 : 1), pose, seat && a.state === 'walking' ? 1 : 0);
     void dt;
     return true;
   }
@@ -1517,9 +1574,21 @@ export class Agents {
   }
 
   /** Son cheval : sous lui en route ; sur place, il broute là où il a mis pied à terre. Renvoie vrai s'il est en selle */
+  /**
+   * Son cheval (robe baie ou blanche, selon l'habitant) : en selle, il galope sous lui ; pied à terre, il broute à côté. La
+   * selle est accrochée à l'os du dos (`Torso2`, sous le creux du dos) : elle monte, descend et tangue avec le galop, et le
+   * cavalier y est assis à chaque image (voir `animateActor`)
+   */
   private stepMount(a: Agent, dt: number) {
-    if (!a.kit?.horse || !hasModel('horse')) return false;
-    if (!a.mount) { a.mount = makeActor('horse', 0.34); if (!a.mount) return false; a.mount.mixer.setTime(a.id * 0.7); this.group.add(a.mount.root); }
+    const robe = a.id % 2 && hasModel('horse_white') ? 'horse_white' : 'horse';
+    if (!a.kit?.horse || !hasModel(robe)) return false;
+    if (!a.mount) {
+      a.mount = makeActor(robe, 0.34);
+      if (!a.mount) return false;
+      saddle(a.mount);
+      a.mount.mixer.setTime(a.id * 0.7);
+      this.group.add(a.mount.root);
+    }
     const m = a.mount, riding = a.mounted && !a.ride && !a.hidden;
     m.root.visible = !a.hidden;
     if (riding) {
@@ -1534,6 +1603,7 @@ export class Agents {
       play(m, ['Idle_Eating', 'Idle']);
     }
     m.mixer.update(dt);
+    if (riding) m.root.updateMatrixWorld(true);
     return riding;
   }
 

@@ -174,14 +174,14 @@ describe('maisons et tours', () => {
       }
   });
 
-  it('la Préhistoire, les puits, l’éclairage et les bâtiments antiques enrichis restent sous le plafond (3 000 triangles par case, 4 500 en 2 × 2)', () => {
+  it('la Préhistoire (les six huttes), les puits, l’éclairage et les bâtiments antiques enrichis restent sous le plafond (3 000 triangles par case, 4 500 en 2 × 2)', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
     const cases: [KindId, number][] = [];
     for (const kind of KIND_ORDER) if (KINDS[kind].minAge === 0) cases.push([kind, 0]);
     for (const age of [0, 1, 2, 3]) cases.push(['well', age], ['lamp', age]);
     cases.push(['health', 1], ['senate', 1], ['school', 1], ['workshop', 2], ['fire', 2]);
     for (const [kind, age] of cases)
-      for (let v = 0; v < 3; v++) {
+      for (let v = 0; v < (kind === 'house' && age === 0 ? 6 : 3); v++) {
         const m = getModel(kind, age, { v, L: false, R: false, F: true });
         const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + tris(m.rotor?.geo) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
         expect(n, `${kind} à l’âge ${age}, variante ${v}`).toBeLessThan(CAP[KINDS[kind].size]);
@@ -196,7 +196,7 @@ describe('maisons et tours', () => {
     cases.push(['workshop', 1], ['lumber', 1], ['quarry', 1], ['apiary', 1]);
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
     for (const [kind, age] of cases)
-      for (let v = 0; v < 3; v++) {
+      for (let v = 0; v < (kind === 'house' && age === 0 ? 6 : 3); v++) {
         const pos = getModel(kind, age, { v, L: false, R: false, F: true }).body.attributes.position, s = KINDS[kind].size;
         let big = 0;
         for (let t = 0; t + 2 < pos.count; t += 3) {

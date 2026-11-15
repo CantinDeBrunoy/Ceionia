@@ -21,7 +21,7 @@ import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, is
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
-import { choiceStyles, riskDots, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
+import { choiceStyles, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
 import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
 import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/crossroads';
@@ -2061,18 +2061,28 @@ export class UI {
     const cs = m.choices.map((c0) => choiceAt(c0, age)), styles = choiceStyles(cs);
     const i = Math.min(sel, cs.length - 1), c = cs[i], done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
     const why = run ? tr('Une équipe est déjà en route.') : ex.why(m, c);
-    const pv = ex.preview(c), lvl = pv.risk <= 0.12 ? 'low' : pv.risk <= 0.22 ? 'mid' : 'high', dots = riskDots(pv.risk);
+    const pv = ex.preview(c);
     const STYLE: Record<ChoiceStyleKind, string> = { cautious: 'Prudent', balanced: 'Équilibré', bold: 'Audacieux' };
     const EFFECT: Record<ChoiceEffect, string> = { fewerInjuries: 'Moins de blessés', safer: 'Plus sûr', moreRewards: 'Plus de récompenses', riskier: 'Plus risqué' };
     const art = missionArt(m), si = splitIntro(m.intro);
-    // la façon de partir : un segment par choix (son style s'il en a un, sinon son nom), ce qui le distingue dessous
-    // (rangés du plus sûr au plus risqué : prudent, équilibré, audacieux)
+    // la façon de partir (maquette « parchemin déroulé » de l'auteur) : une grande carte par choix, son emblème peint et son
+    // nom en ruban, ce qui le distingue, sa phrase, puis sa durée, son risque et ses récompenses ; la carte choisie est dorée
+    // (rangées du plus sûr au plus risqué : prudent, équilibré, audacieux)
     const ORDER: Record<string, number> = { cautious: 0, balanced: 1, bold: 2 };
+    const EMB: Record<ChoiceStyleKind, string> = { cautious: 'prudent', balanced: 'equilibre', bold: 'audacieux' };
     const order = cs.map((_, k) => k).sort((a, b) => (ORDER[styles[a].style ?? ''] ?? 3) - (ORDER[styles[b].style ?? ''] ?? 3) || a - b);
-    const seg = cs.length > 1 ? `<div class="sStyles" role="radiogroup" aria-label="${tr('Façon de partir')}">${order.map((k) => { const x = cs[k];
-      const sk = styles[k].style, name = sk ? tr(STYLE[sk]) : x.label, off = !!ex.why(m, x);
-      return `<button type="button" role="radio" data-pick="${k}" class="${k === i ? 'on' : ''} ${sk ?? ''} ${off ? 'off' : ''}" aria-checked="${k === i}" title="${attr(x.label)}"><b>${name}</b>${styles[k].effect ? `<small>${tr(EFFECT[styles[k].effect!])}</small>` : ''}</button>`;
-    }).join('')}</div>` : '';
+    const card = (k: number) => {
+      const x = cs[k], sk = styles[k].style, name = sk ? tr(STYLE[sk]) : x.label, off = !!ex.why(m, x);
+      const px = ex.preview(x), lv = px.risk <= 0.12 ? 'low' : px.risk <= 0.22 ? 'mid' : 'high';
+      const wx = done ? redoEffects(x.win) : x.win, sn = new Set<string>(), gx = effectChips(wx).filter((e) => (sn.has(e.icon) ? false : (sn.add(e.icon), true))).slice(0, 3);
+      const phrase = cardPhrase(x.text), text = sk && x.label ? `<b>${x.label}</b>${phrase ? ` — ${phrase}` : ''}` : phrase;
+      return `<button type="button" role="radio" data-pick="${k}" class="sCard ${k === i ? 'on' : ''} ${sk ?? ''} ${off ? 'off' : ''}" aria-checked="${k === i}" title="${attr(x.label)}">
+        <span class="scHead">${sk ? `<img class="scEmb" src="./expeditions/depart/embleme-${EMB[sk]}.webp" alt="" decoding="async">` : pic(m.icon, 44)}<span class="scName"><b>${name}</b>${styles[k].effect ? `<small>${tr(EFFECT[styles[k].effect!])}</small>` : ''}</span></span>
+        ${text ? `<span class="scText">${text}</span>` : ''}
+        <span class="scStats"><span class="scBox">${ic('clock', 20, 2)}<span><small>${tr('Durée')}</small><b>${tr(workLabel(x.work))}</b></span></span><span class="scBox scRisk ${lv}" title="${attr(tr('Risque d’échec : {r}', { r: `${riskLabel(px.risk)} (${pct(px.risk)})` }))}">${ic('alert', 20, 2.2)}<span><small>${tr('Risque')}</small><b>${pct(px.risk)}</b></span></span><span class="scBox scGifts"><span><small>${ic('gift', 14, 2)} ${tr('Récompenses')}</small><span class="scG">${gx.map((e) => `<i title="${attr(e.title)}">${pic(e.icon, 24)}${e.n ? `<em>${e.n.replace(/ /g, ' ')}</em>` : ''}</i>`).join('') || `<em>${tr('rien')}</em>`}</span></span></span></span>
+      </button>`;
+    };
+    const cards = `<div class="sCards n${cs.length}" role="radiogroup" aria-label="${tr('Façon de partir')}">${order.map(card).join('')}</div>`;
     // l'équipement : ce que l'équipe emporte de la réserve (prêt), et ce qui manque (à fabriquer d'un clic)
     const gaps = gearGaps(c, st.gear, st.craft, age, (g) => !g.needs || ex.has(g.needs));
     const scaled = (g: Gear, n: number) => { const k = gearCost(g, h.world.difficulty); return { wood: k.wood * n, stone: k.stone * n, ore: k.ore * n, fuel: (k.fuel ?? 0) * n }; };
@@ -2088,27 +2098,19 @@ export class UI {
     const total = todo.reduce((t, g) => { const k = scaled(g.gear, g.need - g.have - g.queued); return { wood: t.wood + k.wood, stone: t.stone + k.stone, ore: t.ore + k.ore, fuel: t.fuel + k.fuel }; }, { wood: 0, stone: 0, ore: 0, fuel: 0 });
     const gearNote = todo.length ? `<p class="gnote">${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
     // la boîte de « Tout fabriquer » doit contenir les boutons des pièces (voir le gestionnaire)
-    const gearBox = `<div class="sPanel sGear gearNeed"><div class="sHead">${ic('shield', 20, 2)}<b>${tr('Équipement nécessaire')}</b><span class="grow"></span><small>${ic('team', 15, 2)} ${tr('{n} habitants', { n: c.party })}</small></div>
-      ${ready || missing ? `<div class="gslots">${ready}${missing}</div>${gearNote}` : `<p class="gnote">${tr('Aucun équipement nécessaire : l’équipe part les mains libres.')}</p>`}</div>`;
-    const win = done ? redoEffects(c.win) : c.win;
-    const seen = new Set<string>(), gains = effectChips(win).filter((e) => (seen.has(e.icon) ? false : (seen.add(e.icon), true)));
-    const riskTip = tr('Risque d’échec : {r}', { r: `${riskLabel(pv.risk)} (${pct(pv.risk)})` });
+    // l'équipement en une ligne fine sous les cartes : titre, pièces, consigne, nombre d'habitants
+    const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement nécessaire')}</b></span>
+      ${ready || missing ? `<div class="gslots">${ready}${missing}</div>${gearNote}` : `<p class="gnote">${tr('Aucun équipement nécessaire : l’équipe part les mains libres.')}</p>`}<small class="sgP">${ic('team', 16, 2)} ${tr('{n} habitants', { n: c.party })}</small></div>`;
     // en bas : pourquoi on ne peut pas partir, sinon ce qui arrive en cas d'échec
     const lose = effectSummary(c.lose);
     const warn = why ?? (this.needsHtml(m) ? '' : lose ? tr('En cas d’échec : {what}', { what: lose }) : tr('Une expédition peut échouer : l’équipement la rend plus sûre.'));
     const needs = ex.missing(m).length ? `<div class="sNeeds req">${this.needsHtml(m)}</div>` : '';
-    return `<div class="sGrid">
-      <div class="sArt mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" decoding="async">` : art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}
-        <div class="sCap"><h3>${MISSION_DIO.has(m.id) ? '' : pic(m.icon, 28) + ' '}${m.title}</h3><span class="sEra">${hudPic(AGE_PIC[m.age] ?? AGE_PIC[0], 16)} ${AGES[m.age].name}</span><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div></div>
-      <div class="sSide">
-        ${seg}
-        ${c.label && cs.length > 1 ? `<p class="sChoice"><b>${c.label}</b>${cardPhrase(c.text) ? ` — ${cardPhrase(c.text)}` : ''}</p>` : ''}
-        ${gearBox}
-        <div class="sPanel sRow">${ic('clock', 22, 2)}<b>${tr('Durée estimée')}</b><span class="grow"></span><span class="sVal">${tr(workLabel(c.work))}</span></div>
-        <div class="sPanel sRow sRisk ${lvl}" title="${riskTip}">${ic('alert', 22, 2.2)}<b>${tr('Risque')}</b><span class="grow"></span><span class="sPct">${pct(pv.risk)}</span><span class="rdots ${lvl}">${[1, 2, 3].map((n) => `<i class="${n <= dots ? 'on' : ''}"></i>`).join('')}</span></div>
-        <div class="sPanel sRewards"><div class="sHead">${ic('gift', 20, 2)}<b>${tr('Récompenses possibles')}</b></div>
-          <div class="sGifts">${gains.map((e, k) => `<span class="gift g${k % 4}" title="${attr(e.title)}">${pic(e.icon, 38)}${e.n ? `<small>${e.n}</small>` : ''}</span>`).join('') || `<small class="hint">${tr('rien')}</small>`}</div></div>
-      </div>
+    const L = './expeditions/depart/';
+    return `<div class="sScroll">
+      <div class="sTop mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" decoding="async">` : art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}</div>
+      <div class="sCap"><h3>${MISSION_DIO.has(m.id) ? '' : pic(m.icon, 28) + ' '}${m.title}</h3><span class="sEraRow"><img class="sLaur" src="${L}laurier-g.webp" alt="" decoding="async"><span class="sEra">${hudPic(AGE_PIC[m.age] ?? AGE_PIC[0], 16)} ${AGES[m.age].name}</span><img class="sLaur" src="${L}laurier-d.webp" alt="" decoding="async"></span><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div>
+      ${cards}
+      ${gearBox}
     </div>
     ${needs}
     <div class="sFoot">
@@ -2516,7 +2518,7 @@ export function showCredits(root: HTMLElement) {
     <section class="credCard">
       <h4>${ic('heart', 18, 2)}${tr('Cris d’animaux enregistrés')}</h4>
       <ul class="credits">
-        <li>${tr('Via {src}, en CC0 ou domaine public : bêlement de mouton (aussi pour le bouquetin), hennissement, caquètement de poule (alys, PDSounds), brame du wapiti de l’US Fish and Wildlife Service (pour le cerf et l’élan).', { src: a('https://commons.wikimedia.org', 'Wikimedia Commons') })}</li>
+        <li>${tr('Via {src}, en CC0 ou domaine public : bêlement de mouton (aussi pour le bouquetin), hennissement, caquètement de poule (alys, PDSounds), hurlement d’une meute de loups, de l’US Fish and Wildlife Service.', { src: a('https://commons.wikimedia.org', 'Wikimedia Commons') })}</li>
         <li>${tr('« Single Cow Moo » par {author}, licence {lic} : meuglement de la vache.', { author: a('https://commons.wikimedia.org/wiki/File:Single_Cow_Moo.ogg', 'MichaeltheFox8621'), lic: a('https://creativecommons.org/licenses/by-sa/4.0/deed.fr', 'CC BY-SA 4.0') })}</li>
       </ul>
     </section>

@@ -34,6 +34,22 @@ interface Item {
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
+/**
+ * Les villes rivales sont des civilisations établies : on les découvre au plus tôt à la fin de l'Antiquité (cinématique
+ * « Explorer le monde »), et elles montrent alors au moins le visage du Médiéval, avec les maisons d'une ville déjà dense
+ */
+export const RIVAL_MIN_AGE = 2, RIVAL_DENSE_AGE = 3;
+/** L'âge que montrent les villes rivales quand le village est à l'âge `age` */
+export const rivalAge = (age: number) => Math.max(RIVAL_MIN_AGE, Math.min(5, age));
+/** Les lots présents à cet âge (la densité d'au moins l'Industriel) */
+export const rivalLotsAge = (age: number) => Math.max(RIVAL_DENSE_AGE, rivalAge(age));
+
+/** Sol de la ville dans les murs (terre battue, dallage), sous les rues : plus de pelouse entre les maisons */
+function townGroundColor(people: TownPlan['people'], age: number) {
+  if (people === 'orient') return [0xcdb488, 0xcdb488, 0xd2bc92, 0xcbb894, 0xc4bcaa, 0xe4e0d6][age];
+  return [0xa59a82, 0xa59a82, 0xa8a090, 0xa29c90, 0x9c9a94, 0xc8ccc8][age];
+}
+
 /** Couleur du sol des rues et des places, par peuple et par âge */
 function streetColor(people: TownPlan['people'], age: number) {
   if (people === 'orient') return [0xbfa478, 0xbfa478, 0xcbb68c, 0xc2b090, 0xa9a49a, 0xdedad2][age];
@@ -155,14 +171,14 @@ export class RivalTowns {
 
   /** L'âge des villes (celui du village du joueur, la Préhistoire montrant le bourg de l'Antiquité) */
   setAge(age: number, instant = false) {
-    const a = Math.max(1, Math.min(5, age));
+    const a = rivalAge(age), dense = rivalLotsAge(age);
     if (a === this.age) return;
     const first = this.age < 0;
     this.age = a;
     const have = new Map(this.items.map((it) => [it.lot, it]));
     for (const plan of this.plans)
       for (const lot of plan.lots) {
-        const it = have.get(lot), want = lot.from <= a;
+        const it = have.get(lot), want = lot.from <= dense;
         const geo = townModel(plan.people, lot.kind, a, lot.v, lot.w, lot.d);
         const delay = first || instant ? 0 : hash2(Math.round(lot.x * 7), Math.round(lot.z * 7), 41) * SPREAD;
         if (want && !it) {
@@ -221,6 +237,19 @@ export class RivalTowns {
         else pos.push(...a, ...c, ...b, ...a, ...d, ...c);
       };
       const pt = (x: number, z: number) => [x, this.h(x, z) + lift, z];
+      // la nappe du sol dans les murs, un peu sous les rues (une maille de 0,5 case, seulement les mailles tout à fait dedans)
+      const fill: number[] = [], gc = new THREE.Color(townGroundColor(p.people, this.age)), st = 0.5;
+      {
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (const [x, z] of p.wall) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+        const P = (x: number, z: number) => [x, this.h(x, z) + 0.025, z];
+        for (let z = Math.floor(z0 / st) * st; z < z1; z += st)
+          for (let x = Math.floor(x0 / st) * st; x < x1; x += st) {
+            if (!inPoly(x, z, p.wall) || !inPoly(x + st, z, p.wall) || !inPoly(x, z + st, p.wall) || !inPoly(x + st, z + st, p.wall)) continue;
+            const a = P(x, z), b = P(x, z + st), c = P(x + st, z + st), d = P(x + st, z);
+            fill.push(...a, ...b, ...c, ...a, ...c, ...d);
+          }
+      }
       for (const s of p.streets) {
         if (s.from > this.age) continue;
         for (let i = 0; i + 1 < s.pts.length; i++) {
@@ -245,11 +274,16 @@ export class RivalTowns {
             quad(P(r0, a0), P(r1, a0), P(r1, a1), P(r0, a1));
           }
       }
+      const nStreet = pos.length;
+      pos.push(...fill);
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       g.computeVertexNormals();
       const c = new Float32Array(pos.length);
-      for (let i = 0; i < pos.length; i += 3) { const k = 0.94 + hash2(Math.round(pos[i] * 2), Math.round(pos[i + 2] * 2), 77) * 0.08; c[i] = col.r * k; c[i + 1] = col.g * k; c[i + 2] = col.b * k; }
+      for (let i = 0; i < pos.length; i += 3) {
+        const base = i < nStreet ? col : gc, k = (i < nStreet ? 0.94 : 0.9) + hash2(Math.round(pos[i] * 2), Math.round(pos[i + 2] * 2), 77) * (i < nStreet ? 0.08 : 0.14);
+        c[i] = base.r * k; c[i + 1] = base.g * k; c[i + 2] = base.b * k;
+      }
       g.setAttribute('color', new THREE.BufferAttribute(c, 3));
       const lit = mergeLit(g, null) ?? g;
       if (lit !== g) g.dispose();

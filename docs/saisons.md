@@ -1,7 +1,7 @@
 # Saisons
 
 > Fichiers : `src/render/seasonConfig.ts` (les quatre fiches, palette de départ, proportions des essences), `src/render/season.ts` (`SeasonState`, `computeSeason`, `seasonOf`), `src/render/seasonShaders.ts` (`addPalette`, `addCover`, `pickPalette`), `src/core/time.ts` (`GameTime.mix`), et les vues qui lisent l'état : `vegetation.ts`, `terrainView.ts`, `streams.ts`, `env.ts`, `atmosphere.ts`, `life.ts`, `gardens.ts`.
-> Tests : `tests/saisons.test.ts`, `tests/neigeRoutes.test.ts`.
+> Tests : `tests/saisons.test.ts`, `tests/neigeRoutes.test.ts`, `tests/glaceBiomes.test.ts`.
 > Voir aussi : [vegetation-biomes.md](vegetation-biomes.md), [eau-rivieres.md](eau-rivieres.md), [ciel-meteo.md](ciel-meteo.md), [chargement-performances.md](chargement-performances.md)
 
 ## En bref
@@ -13,6 +13,7 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
 - Automne : feuillus orange, jaunes, rouges, quelques-uns restés verts ; chute des feuilles décalée d'un arbre à l'autre ; litière rousse sous les forêts, tas de feuilles, champignons ; feuilles qui dérivent sur l'eau ; lumière plus douce et orangée.
 - Hiver : feuillus nus (quelques-uns gardent des feuilles sèches), neige sur le sol, les branches, les buissons et les rochers ; l'eau gèle depuis les rives, le courant fort reste libre, rien ne gèle sous les tropiques ni au désert ; les lacs gardent des trous d'eau libre, les chutes coulent encore ; lumière froide, ombres bleutées, quelques flocons par temps clair.
 - La neige ne tient que la première moitié de l'hiver (fonte de `seasonT` 3,5 à 3,9) ; la glace suit la neige (`iceNow`).
+- Rien ne gèle au désert ni sous les tropiques, ni à moins de 4 cases d'eux : un fond de canyon vert au milieu du désert reste liquide.
 - Désert et tropiques gardent leurs buissons (couche `shrubDry`) et leurs fleurs propres ; les palettes ne s'appliquent qu'aux biomes à saisons.
 
 ## Fonctionnement dans le code
@@ -42,7 +43,8 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
   - Bruits de la neige projetés d'en haut (congères, traînées) : effacés sur les facettes raides (`snFlat`), où ils
     s'étiraient en longues stries.
   - Positions et normales du sol se refont donc aussi à chaque bande de reteinte (`update(…, colorsOnly)`), pas seulement les couleurs.
-- Eau de mer et rivières (`TerrainView.seasonWater`, appelée par `animateWater`) : `uShallow`/`uDeep` pointent sur la fiche ; `uFlowT` cumule `dt × water.flow` (la vitesse change sans faire sauter les stries) ; débris qui dérivent (`uFloat`, `uFloatK`) ; glace (`uIce`) selon la profondeur, le courant et la carte de neige (`SNOW_U`).
+- Eau de mer et rivières (`TerrainView.seasonWater`, appelée par `animateWater`) : `uShallow`/`uDeep` pointent sur la fiche ; `uFlowT` cumule `dt × water.flow` (la vitesse change sans faire sauter les stries) ; débris qui dérivent (`uFloat`, `uFloatK`) ; glace (`uIce`) selon la profondeur, le courant et le froid de la carte de neige (`SNOW_U`, canal g).
+- Carte de neige (`snow.ts` › `setSnowMap`, refaite par `main.ts` quand les biomes changent) : texture `RG` d'une valeur par case, tirée de `SNOWY[biome]` (`snowMapData`). Canal r : neige que retient la case, floutée sur `SNOW_BLUR` = 2 cases (toits, rochers, sapins : `addSnow`). Canal g : froid qui laisse geler l'eau, le **minimum** sur `ICE_ERODE` = 4 cases alentour, flouté pareil (mer et rivières, lacs et torrents de `Streams`). Les shaders d'eau ajoutent un bruit au seuil (`smoothstep(0.35, 0.75, g + bruit)`) : une limite naturelle, pas des marches au pas de la grille. Test : `tests/glaceBiomes.test.ts`.
 - Lacs et torrents (`Streams.update(dt, saison, …)`) : voir [eau-rivieres.md](eau-rivieres.md).
 - Rochers : `addCover` (mousse ou feuilles sur le dessus, plus épaisse près de l'eau, uniforms `COVER`), posé après `addSnow` pour passer dessous.
 - Lumière (`Environment.update`) : soleil `light.sun × sunK`, ciel teinté `light.sky × skyK`, ambiance (`hemi`) mêlée de `light.ambient`, sol `light.ground`, brouillard × `haze` ; flocons par temps clair (`fx.flurries`, 18 % des points de neige). Brume : `light.mist` (`atmosphere.ts`).
@@ -59,6 +61,7 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
 - Une palette a toujours 4 teintes et des parts qui font 1 (test).
 - Un nombre qui pilote une animation (courant) se cumule côté processeur ; ne pas multiplier un temps absolu par un réglage de saison dans un shader (les stries sauteraient pendant la transition).
 - Un réglage qui change la forme ou le nombre des décors doit entrer dans la signature de `applySeason`, sinon il ne s'applique qu'à la prochaine reconstruction.
+- Une case seule interpolée entre deux voisines n'est pas un bord doux : avant le flou, la glace d'une rivière de canyon (fond peint en prairie, parois en désert) suivait les cases en escalier. Ne pas lire `SNOWY` case par case dans un shader : passer par `SNOW_U`.
 - L'épaisseur de la neige enfonce ce qui est posé à `hAt` (0,075 au plus, 0,135 sur le rang autour des bâtiments) (arbres, cailloux, personnages) : voulu. Ce qui est posé à fleur de sol et doit rester visible (clôtures, pavés, voies) a besoin d'une exclusion dans `openW` ou d'un `yardW` non nul ; les clôtures de 0,12 au bord des bâtiments disparaissaient avec une congère contre les murs.
 - La neige des sommets (`cover`) et leur teinte doivent rester à 0 sur le cône : sinon le shader retire la neige du mélange
   (`under`) sur un sol brun et laisse des bavures rouge-noir au bord, et la couverture interpolée sur des pentes raides
