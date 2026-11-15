@@ -1286,7 +1286,7 @@ class Game implements UIHost {
   private choosePath(p: 'peace' | 'war') {
     if (!choosePath(this.world.diplo, p)) return;
     if (p === 'peace') { const next = PEACE_CHAIN.find((id) => !this.world.exp.done.includes(id)) ?? PEACE_MISSION; this.ui.toast(trx('🕊️ La voie de la paix : deux pourparlers vous attendent (menu Expéditions).'), () => this.ui.gotoMission(next)); }
-    else this.ui.toast(trx('⚔️ La guerre aux côtés de notre allié : l’expédition « Aux côtés de notre allié » vous attend.'), () => this.ui.gotoMission(WAR_MISSION));
+    else this.ui.toast(trx('⚔️ La guerre aux côtés de notre allié : envoyez d’abord des éclaireurs reconnaître la côte rivale (menu Expéditions).'), () => this.ui.gotoMission(WAR_MISSION));
     this.ui.update(); this.saveNow();
   }
 

@@ -284,7 +284,7 @@ registerDict('ui', {
   "Choisir…": "Choose…",
   // la diplomatie de l'archipel : le conflit à régler pour le Moderne
   "Il faut d’abord choisir d’aider notre allié.": "First you must choose to help our ally.",
-  "⚔️ La guerre aux côtés de notre allié : l’expédition « Aux côtés de notre allié » vous attend.": "⚔️ War at our ally’s side: the expedition “At Our Ally’s Side” awaits you.",
+  "⚔️ La guerre aux côtés de notre allié : envoyez d’abord des éclaireurs reconnaître la côte rivale (menu Expéditions).": "⚔️ War at our ally’s side: first send scouts to survey the rival coast (Expeditions menu).",
   "le conflit des deux îles, réglé": "the conflict of the two islands, settled",
   "Pour l’âge suivant : réglez le conflit des deux îles, par la paix ou par la guerre (cliquez ici).": "For the next age: settle the conflict of the two islands, by peace or by war (click here).",
   "Cliquer pour régler le conflit des deux îles": "Click to settle the conflict of the two islands",
