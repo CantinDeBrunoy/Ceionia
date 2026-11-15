@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { Traffic } from '../src/render/traffic';
@@ -47,8 +48,8 @@ describe('charrettes', () => {
     const idle = new Map<Cart, number>();
     for (let f = 0; f < 6000; f++) {
       t.update(1 / 30, 12, 2, 60);
-      // passé le départ, deux attelages ne restent jamais l'un dans l'autre (au plus un frôlement bref, deux demi-tours qui se
-      // croisent et dont l'un passe en priorité)
+      // passé le départ, deux attelages ne restent jamais l'un dans l'autre (au plus quelques secondes, rarement : deux
+      // demi-tours qui se gênent, l'un passe en priorité en pivotant au pas)
       if (f > 300) carts().forEach((a, ia) => carts().forEach((b, ib) => {
         if (ib <= ia) return;
         const key = ia + ':' + ib, n = overlap(a, b) ? (pair.get(key) ?? 0) + 1 : 0;
@@ -83,8 +84,31 @@ describe('charrettes', () => {
     // pas de charrette qui tourne en rond autour d'un point de passage
     expect(stuck).toBeLessThan(2.5);
     expect(done).toBeGreaterThan(0);
-    expect(close).toBeLessThan(2.5);
+    expect(close).toBeLessThan(6);
     expect(still).toBeLessThan(15);
     expect(worstLift).toBeLessThan(0.08);
+  });
+
+  it('le charretier est entier et assis sur son siège, à l’avant de la caisse, jamais dans le chargement', () => {
+    for (const age of [1, 2, 3, 4, 5]) {
+      const w = roads(), t = new Traffic(w);
+      for (let f = 0; f < 10; f++) t.update(1 / 30, 12, age, 60);
+      const rigs = (t as unknown as { vehicles: { rig?: { root: THREE.Group; driver: { root: THREE.Group; legs: unknown[]; arms: unknown[] } } | null }[] }).vehicles.map((v) => v.rig).filter((r) => !!r);
+      expect(rigs.length).toBeGreaterThan(0);
+      for (const r of rigs) {
+        // dans le repère de la charrette (avant = +z ; plateau à 0,16, chargement derrière z = -0,075)
+        r.root.position.set(0, 0, 0); r.root.rotation.set(0, 0, 0); r.root.updateMatrixWorld(true);
+        const b = new THREE.Box3().setFromObject(r.driver.root);
+        expect(r.driver.legs.length).toBe(2);
+        expect(r.driver.arms.length).toBe(2);
+        // les pieds descendent sous le siège vers le repose-pieds, devant la caisse ; la tête dépasse bien
+        expect(b.min.y).toBeGreaterThan(0.16);
+        expect(b.min.y).toBeLessThan(0.23);
+        expect(b.max.y).toBeGreaterThan(0.36);
+        expect(b.max.z).toBeGreaterThan(0.02);
+        // rien de lui derrière le dossier du siège (face arrière en z = -0,082), où commence le chargement
+        expect(b.min.z).toBeGreaterThan(-0.082);
+      }
+    }
   });
 });

@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { World, N, SEA } from '../world/world';
 import { Building } from '../build/catalog';
 import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from './assets';
-import { makeFolk, folkStep, Folk } from './folk';
+import { makeFolk, folkStep, Folk, FOLK_SEAT } from './folk';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { makeDraftHorse, rideStep, Rider } from './riders';
@@ -21,7 +21,9 @@ interface Vehicle {
   blockedBy?: Vehicle | null; stall?: number;
 }
 interface CartRig {
-  root: THREE.Group; wheels: THREE.Object3D[]; driver: THREE.Object3D; phase: number;
+  root: THREE.Group; wheels: THREE.Object3D[]; phase: number;
+  /** le charretier : un habitant de l'époque, assis sur son siège, rênes en main */
+  driver: Folk;
   /** le cheval animé de la faune (robe baie ou blanche) ; à défaut de modèle, le cheval de trait dessiné (`draft`) */
   actor: Actor | null; draft: Rider | null;
   /** tangage et roulis lissés (pentes, rampes des ponts), écart du cheval dans les virages, cap de l'image d'avant */
@@ -36,8 +38,16 @@ const CART_GAP = 0.82, CAR_GAP = 0.55;
 /** Vitesse des attelages (case/s) ; le pas du cheval au naturel couvre WALK_SPEED case/s, son allure suit celle de la charrette */
 const CART_SPEED = 0.6, WALK_SPEED = 0.118, WALK_PACE = 0.38;
 
-/** Teintes des charretiers (blouse, chapeau) */
-const DRIVERS: [number, number][] = [[0x5a7ab0, 0xd8c06a], [0x9a4a3a, 0x5a4636], [0x6a8a4a, 0xc8a870], [0x8a6a9a, 0x3c3c40], [0xc8b48a, 0x7a5a42]];
+/**
+ * Le charretier assis (repère de la charrette) : le siège en z = SEAT_Z, son plateau à SEAT_Y ; le repose-pieds plus bas,
+ * devant ; jambes inclinées de LEGS vers lui, mains aux rênes (bras levés de ARMS). Échelle de l'habitant : DRIVER_SIZE
+ */
+const SEAT_Z = -0.03, SEAT_Y = 0.28, LEGS = -0.8, ARMS = -0.85, DRIVER_SIZE = 1.15;
+/** Échelle du charretier, et ses mains (repère de la charrette) : là où partent les rênes */
+const DRIVER_K = HUMAN_K * DRIVER_SIZE;
+const HANDS: [number, number, number] = [0.052 * DRIVER_K, SEAT_Y + (0.1 - 0.09 * Math.cos(-ARMS)) * DRIVER_K, SEAT_Z + 0.09 * Math.sin(-ARMS) * DRIVER_K];
+/** Le repose-pieds : là où arrivent ses pieds, jambes inclinées de LEGS (longueur de jambe 0,12 avant l'échelle) */
+const FOOT_Y = SEAT_Y - 0.12 * Math.cos(LEGS) * DRIVER_K, FOOT_Z = SEAT_Z + 0.12 * Math.sin(-LEGS) * DRIVER_K;
 
 /**
  * Distance à laquelle `o` est devant `v`, sur sa voie (moins de 0,28 case de côté, jusqu'à 1,4 × `len`), sinon l'infini ; un
@@ -72,6 +82,14 @@ function boxesMeet(a: number[][], b: number[][]) {
     if (a1 < b0 || b1 < a0) return false;
   }
   return true;
+}
+
+/** Le charretier assis, jambes vers le repose-pieds, mains aux rênes ; `sway` : léger balancement des bras au pas */
+function sitDriver(d: Folk, phase: number, sway: number) {
+  folkStep(d, phase, 'sit');
+  for (const l of d.legs) l.rotation.x = LEGS;
+  for (const a of d.arms) { a.rotation.x = ARMS + Math.sin(phase) * 0.04 * sway; a.rotation.z = 0; }
+  d.arms[0].rotation.z = 0.12; d.arms[1].rotation.z = -0.12;
 }
 
 /** Courroie ou rêne droite de `a` à `b` */
@@ -123,18 +141,23 @@ function cartRig(age: number, v: number): CartRig {
   p.box(0.24, 0.016, 0.016, 0, 0.075, z0 - 0.02, dk);
   // chargement
   if (age <= 1) for (const [x, z] of [[-0.05, -0.08], [0.05, -0.08], [-0.05, 0.02], [0.05, 0.02], [0, -0.03]]) { p.cyl(0.028, 0.02, 0.07, 7, x, 0.18, z0 + z, 0xc0704a); p.cyl(0.012, 0.016, 0.02, 6, x, 0.225, z0 + z, 0xa85a3a); }
-  else if (load === 0) { p.add(new THREE.IcosahedronGeometry(0.1, 1).scale(1, 0.55, 1.35), 0, 0.2, z0 - 0.02, 0xd8c06a); for (const s of [-1, 1]) p.box(0.03, 0.006, 0.06, s * 0.05, 0.25, z0, 0xe8d488, 0.4); }
-  else if (load === 1) for (const [x, z, r] of [[-0.05, -0.08, 0.2], [0.05, -0.07, -0.3], [0, 0.03, 0.1], [0.0, -0.06, 1.6]]) p.add(new THREE.IcosahedronGeometry(0.045, 0).scale(1, 0.75, 1.3), x, r > 1 ? 0.235 : 0.18, z0 + z, 0xd8c8a0, r);
-  else if (age === 2) for (const [x, z] of [[-0.05, -0.07], [0.05, -0.07], [0, 0.04]]) { p.cyl(0.034, 0.034, 0.075, 8, x, 0.185, z0 + z, 0x8a5a3a); for (const y of [0.16, 0.21]) p.cyl(0.036, 0.036, 0.008, 8, x, y, z0 + z, 0x4a4a4e); }
+  else if (load === 0) { p.add(new THREE.IcosahedronGeometry(0.1, 1).scale(1, 0.55, 1.1), 0, 0.2, z0 - 0.05, 0xd8c06a); for (const s of [-1, 1]) p.box(0.03, 0.006, 0.06, s * 0.05, 0.25, z0 - 0.05, 0xe8d488, 0.4); }
+  else if (load === 1) for (const [x, z, r] of [[-0.05, -0.08, 0.2], [0.05, -0.07, -0.3], [0, -0.01, 0.1], [0.0, -0.06, 1.6]]) p.add(new THREE.IcosahedronGeometry(0.045, 0).scale(1, 0.75, 1.3), x, r > 1 ? 0.235 : 0.18, z0 + z, 0xd8c8a0, r);
+  else if (age === 2) for (const [x, z] of [[-0.05, -0.08], [0.05, -0.08], [0, 0.0]]) { p.cyl(0.034, 0.034, 0.075, 8, x, 0.185, z0 + z, 0x8a5a3a); for (const y of [0.16, 0.21]) p.cyl(0.036, 0.036, 0.008, 8, x, y, z0 + z, 0x4a4a4e); }
   else { for (const [x, z] of [[-0.06, -0.08], [0, -0.08], [0.06, -0.08], [-0.03, 0.02], [0.03, 0.02]]) { p.cyl(0.022, 0.022, 0.07, 8, x, 0.18, z0 + z, 0xc4cad2); p.cyl(0.012, 0.014, 0.02, 6, x, 0.225, z0 + z, 0xa8aeb6); } }
-  // banc, marchepied, brancards
-  p.box(0.17, 0.018, 0.05, 0, 0.21, z0 + 0.12, dk);
-  p.box(0.17, 0.01, 0.04, 0, 0.14, z0 + 0.165, wood);
+  // le siège du charretier à l'avant de la caisse (coffre, plateau, dossier qui le sépare du chargement), le repose-pieds
+  // devant lui sur ses deux montants
+  // (plateau et coffre en retrait sous lui : ses cuisses en dépassent, on les voit aussi de face)
+  p.box(0.15, SEAT_Y - 0.012 - 0.16, 0.036, 0, 0.16, SEAT_Z - 0.018, dk);
+  p.box(0.17, 0.012, 0.046, 0, SEAT_Y - 0.012, SEAT_Z - 0.016, wood);
+  p.box(0.17, 0.05, 0.012, 0, SEAT_Y, SEAT_Z - 0.046, dk);
+  p.box(0.15, 0.01, 0.05, 0, FOOT_Y - 0.012, FOOT_Z, wood);
+  for (const s of [-1, 1]) p.box(0.01, FOOT_Y - 0.012 - 0.13, 0.01, s * 0.065, 0.13, FOOT_Z - 0.015, dk);
   // les brancards, de l'avant du plateau aux épaules du cheval, et leur traverse ; les rênes des mains du charretier au mors
   for (const s of [-1, 1]) {
     strap(p, [s * 0.075, 0.15, z0 + 0.1], [s * 0.056, 0.155, HORSE_Z + 0.065], 0.012, dk);
     strap(p, [s * 0.056, 0.155, HORSE_Z + 0.03], [s * 0.044, 0.19, HORSE_Z - 0.03], 0.006, 0x3a2a20);
-    strap(p, [s * 0.04, 0.29, 0.03], [s * 0.014, 0.232, HORSE_Z + 0.14], 0.004, 0x3a2a20);
+    strap(p, [s * HANDS[0], HANDS[1], HANDS[2]], [s * 0.014, 0.232, HORSE_Z + 0.14], 0.004, 0x3a2a20);
   }
   p.box(0.15, 0.012, 0.012, 0, 0.144, z0 + 0.16, dk);
   const cart = new THREE.Mesh(p.build(false).body, mats.body);
@@ -153,20 +176,11 @@ function cartRig(age: number, v: number): CartRig {
     root.add(wh);
     wheels.push(wh);
   }
-  // le charretier sur son banc, rênes en main, chapeau de l'époque
-  const [coat, hat] = DRIVERS[v % DRIVERS.length], dp = new Parts();
-  dp.box(0.07, 0.025, 0.05, 0, 0.232, 0, 0x4a3c34);
-  for (const s of [-1, 1]) { dp.box(0.026, 0.024, 0.06, s * 0.022, 0.232, 0.04, 0x4a3c34); dp.box(0.024, 0.07, 0.026, s * 0.022, 0.19, 0.07, 0x3a2e28); }
-  dp.box(0.072, 0.09, 0.05, 0, 0.29, -0.005, coat);
-  for (const s of [-1, 1]) { dp.add(new THREE.BoxGeometry(0.022, 0.065, 0.024), s * 0.045, 0.3, 0.025, coat, 0, false, 0, -0.9); dp.box(0.02, 0.02, 0.02, s * 0.04, 0.28, 0.06, 0xe8b894); }
-  dp.box(0.042, 0.042, 0.042, 0, 0.36, 0, 0xe8b894);
-  if (age <= 1) dp.box(0.05, 0.02, 0.05, 0, 0.385, -0.004, coat);
-  else if (age === 2) { dp.cyl(0.05, 0.05, 0.006, 10, 0, 0.385, 0, hat); dp.cyl(0.024, 0.028, 0.026, 8, 0, 0.398, 0, hat); }
-  else { dp.cyl(0.034, 0.034, 0.006, 10, 0, 0.383, 0, hat); dp.cyl(0.024, 0.024, 0.03, 8, 0, 0.4, 0, hat); }
-  const driver = new THREE.Mesh(dp.build(false).body, mats.body);
-  driver.position.set(0, 0, z0 + 0.1);
-  driver.castShadow = true;
-  root.add(driver);
+  // le charretier : un habitant de l'époque (tenue, coiffe), corps entier, assis sur son siège (hanches sur le plateau)
+  const driver = makeFolk({ age, v: v * 7919 + 13, size: DRIVER_SIZE });
+  driver.root.position.set(0, SEAT_Y - FOLK_SEAT * DRIVER_K, SEAT_Z);
+  sitDriver(driver, 0, 0);
+  root.add(driver.root);
   const actor = hasModel('horse') ? makeActor(v % 3 === 2 && hasModel('horse_white') ? 'horse_white' : 'horse', HORSE_LEN) : null;
   let draft: Rider | null = null;
   if (actor) {
@@ -530,9 +544,11 @@ export class Traffic {
       const mv = Math.min(dist, step * (off < 0.25 ? 1 : Math.max(0.12, ahead)));
       v.x += Math.sin(v.heading) * mv; v.z += Math.cos(v.heading) * mv;
       // pas de pas (ni de virage sur place) qui mettrait le véhicule dans un autre : il attend
-      const by = this.clash(v, x0, z0, h0);
-      v.stall = by ? (v.stall ?? 0) + dt : 0; v.blockedBy = by;
-      if (by) { v.x = x0; v.z = z0; v.heading = h0; this.place(v, dt, 0); continue; }
+      // bloqué plus de STALL s derrière un véhicule lui-même en route : il passe (le compteur court tant que dure le contact,
+      // sinon il se rebloquerait à l'image suivante)
+      const by = this.clash(v, x0, z0, h0), pass = !!by && (v.stall ?? 0) > STALL && by.i < by.path.length;
+      v.stall = by ? (v.stall ?? 0) + dt : 0; v.blockedBy = pass ? null : by;
+      if (by && !pass) { v.x = x0; v.z = z0; v.heading = h0; this.place(v, dt, 0); continue; }
       // cible atteinte (ou dépassée de près) : la suivante prend le relais, sans saut de position
       if (dist - mv * ahead < Math.max(0.05, step)) v.i++;
       this.place(v, dt, mv);
@@ -548,8 +564,6 @@ export class Traffic {
    * un véhicule à l'arrêt (halte au bout de son trajet), on attend qu'il reparte. Renvoie le véhicule qui gêne, sinon null
    */
   private clash(v: Vehicle, x0: number, z0: number, h0: number): Vehicle | null {
-    const by = v.blockedBy;
-    if ((v.stall ?? 0) > STALL && by && by.i < by.path.length) return null;
     const [w, b, f] = this.horses ? CART_BOX : CAR_BOX;
     const mine = footprint(v.x, v.z, v.heading, w, b, f), before = footprint(x0, z0, h0, w, b, f), vi = this.vehicles.indexOf(v);
     for (const o of this.vehicles) {
@@ -641,8 +655,10 @@ export class Traffic {
       }
       for (const wh of r.wheels) wh.rotation.x += moved / 0.062;
       // le charretier reste assis sur son banc : un léger cahot au pas, il se penche un peu dans les virages
-      r.driver.position.y = Math.abs(Math.sin(r.phase)) * 0.004 * (speed > 0.01 ? 1 : 0);
-      r.driver.rotation.z = Math.sin(r.phase * 0.5) * 0.02 * (speed > 0.01 ? 1 : 0.3) - r.lean * 0.15;
+      const going = speed > 0.01 ? 1 : 0;
+      sitDriver(r.driver, r.phase, going);
+      r.driver.body.position.y += Math.abs(Math.sin(r.phase)) * 0.006 * going;
+      r.driver.body.rotation.z = Math.sin(r.phase * 0.5) * 0.02 * (going || 0.3) - r.lean * 0.15;
       return;
     }
     const d = this.dummy;
