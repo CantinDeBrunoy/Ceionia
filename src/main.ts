@@ -94,7 +94,7 @@ import { War, clockText } from './sim/war';
 import { INVASION_WAVES } from './sim/hell';
 import { KingdomStage } from './kingdomStage';
 import { TrophyStage } from './trophyStage';
-import { cineCalm } from './trophyCine';
+import { cineCalm, trophyOfMission } from './trophyCine';
 import { WarTips, WarTipState, type WarTipId } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
@@ -629,7 +629,8 @@ class Game implements UIHost {
         this.ui.update();
       };
       // un trophée rejoint la place : sa cinématique d'abord (avec son carillon), le récit ensuite
-      if (r.ok && this.trophyStage.report(show)) return;
+      // (une chasse refaite, le trophée déjà sur la place, y a droit aussi : il remonte de terre)
+      if (r.ok && this.trophyStage.report(show, r.redo ? trophyOfMission(r.m) : null)) return;
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       show();
     };

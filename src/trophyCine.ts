@@ -8,6 +8,15 @@
 export const CINE_TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon'] as const;
 const CINE = new Set<string>(CINE_TROPHIES);
 
+/**
+ * Le trophée qu'une mission met sur la place (sa chasse porte son nom, ou un de ses choix le rapporte) ; null s'il n'y en a pas
+ */
+export function trophyOfMission(m: { id: string; choices: readonly { win: readonly { t: string; id?: string }[] }[] }): string | null {
+  if (CINE.has(m.id)) return m.id;
+  for (const c of m.choices) for (const e of c.win) if (e.t === 'perk' && e.id && CINE.has(e.id)) return e.id;
+  return null;
+}
+
 /** Durée de la cinématique (s) */
 export const TROPHY_CINE_DUR = 5;
 /** Le joueur doit être tranquille depuis ce temps (s) : pas de cinématique dès qu'une fenêtre se ferme */
@@ -65,9 +74,10 @@ export class TrophyCineQueue {
    * Relève les trophées nouveaux et met en file ceux qui ont leur cinématique. after : à faire une fois la cinématique finie
    * (le récit de l'expédition) ; on ne le garde que si elle peut partir sous peu (ready : rien qui retienne le joueur, et
    * aucune cinématique en cours) : rend vrai dans ce cas, sinon c'est à l'appelant de le faire. Gardé, il est rendu au plus
-   * tard au bout de `HOLD_MAX` s (voir `update`)
+   * tard au bout de `HOLD_MAX` s (voir `update`). replay : le trophée d'une expédition refaite, déjà sur la place, qui a droit
+   * lui aussi à sa cinématique (il remonte de terre)
    */
-  detect(won: readonly string[], after?: () => void, ready = false): boolean {
+  detect(won: readonly string[], after?: () => void, ready = false, replay: string | null = null): boolean {
     const fresh: TrophyEntry[] = [];
     for (const id of won) {
       if (this.known.has(id)) continue;
@@ -76,6 +86,7 @@ export class TrophyCineQueue {
     }
     // (un trophée perdu, une partie remplacée : il pourra revenir)
     for (const id of [...this.known]) if (!won.includes(id)) this.known.delete(id);
+    if (replay && !fresh.length && CINE.has(replay) && won.includes(replay) && this.cur?.id !== replay && !this.hidden(replay)) fresh.push({ id: replay, t: 0 });
     this.queue.push(...fresh);
     if (!after || !fresh.length || !ready || this.cur) return false;
     const e = fresh[fresh.length - 1];
