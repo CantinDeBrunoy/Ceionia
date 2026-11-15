@@ -132,6 +132,8 @@ function trainWhere(r: Railway, t: Train) {
   return next ? tr('de {name} vers {next}', { name, next: r.stopName(next.b) }) : tr('parti de {name}', { name });
 }
 const dot = (c: number) => `<i class="lineDot" style="background:${hex(c)}"></i>`;
+/** clé du `localStorage` : la barre du bas repliée ('1') ou dépliée ('0') */
+const DOCK_MIN_KEY = 'ceionia.basReplie';
 /** Texte sûr dans un attribut (info-bulle) */
 const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 /** Un texte long en fiche : son début, et la suite repliée derrière « En savoir plus » (data-k garde l'état ouvert d'un rendu à l'autre) */
@@ -548,7 +550,7 @@ export class UI {
             <div id="ageReq"></div>
           </div>
           <div id="hudNotes">
-            <div class="msgRow"><div id="msg"></div><button id="helpBtn" type="button" aria-pressed="false"></button></div>
+            <div class="msgRow"><div id="msg"></div></div>
           </div>
         </div>
         <div id="needsPanel">
@@ -568,7 +570,7 @@ export class UI {
           </nav>
         </div>
       </header>
-      <div id="expList"><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
+      <div id="expList"><button id="helpBtn" type="button" aria-pressed="false"></button><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="bUp" title="${tr('Remonter à la surface (U)')}">${ic('up', 18)} ${tr('Remonter')}</button>
@@ -580,6 +582,7 @@ export class UI {
         <div id="info" class="panel"></div>
         <div id="dockRow">
           <div id="dockSide" class="panel">
+            <button id="bFold" type="button" aria-expanded="true"></button>
             <div id="modes"></div>
             <div class="quick" id="quickL"></div>
             <div class="quick" id="quickR">
@@ -754,9 +757,37 @@ export class UI {
     $('#itPrev').onclick = () => slide(-1);
     $('#itNext').onclick = () => slide(1);
     items.addEventListener('scroll', () => this.refreshArrows(), { passive: true });
+    // les clics sur les vignettes ne se perdent plus (retour de l'auteur, 15 nov. 2026 : « parfois, cliquer ne fait rien ») :
+    // pendant l'appui, rien ne remplace la vignette (ni la rangée qui suit le village, ni sa vignette 3D qui arrive) ; et un
+    // appui au bord, dont le relâchement tombe à côté (le bouton rétrécit sous le doigt), vaut un clic sur la même vignette
+    const tileSel = (b: HTMLElement) => (b.dataset.kind ? `button[data-kind="${b.dataset.kind}"]` : `button[data-tool="${b.dataset.tool}"]`);
+    items.addEventListener('pointerdown', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>('button[data-kind], button[data-tool]');
+      this.press = b ? { sel: tileSel(b), x: e.clientX, y: e.clientY } : null;
+    });
+    const release = () => {
+      if (!this.press) return;
+      // (après le clic, qui suit le relâchement dans la même tâche)
+      setTimeout(() => {
+        this.press = null;
+        if (this.tilesNow() !== this.tilesKey) this.renderItems(true);
+        if (this.thumbsLate) { this.thumbsLate = false; this.thumbsReady(); }
+      }, 0);
+    };
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', release, true);
+    items.addEventListener('click', (e) => {
+      const p = this.press;
+      if (!p || e.detail === 0 || (e.target as HTMLElement).closest('button')) return;
+      if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 12) return;
+      items.querySelector<HTMLButtonElement>(p.sel)?.click();
+    });
     window.addEventListener('resize', () => this.refreshArrows());
     // la mini-carte, à droite des boutons de vue
     this.mini = new MiniMap($('#dockRight'), host, () => host.audio.sfxClick());
+    // la petite flèche qui replie la barre du bas (état retenu d'une partie à l'autre)
+    $('#bFold').onclick = () => { this.setDockMin(!document.body.classList.contains('dockMin')); host.audio.sfxClick(); };
+    { let min = false; try { min = localStorage.getItem(DOCK_MIN_KEY) === '1'; } catch { /* sans stockage */ } this.setDockMin(min); }
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
@@ -793,6 +824,21 @@ export class UI {
 
   // ---------------- Barre du bas (façon Anno 1800) ----------------
   /**
+   * Replie (ou rouvre) la barre du bas : les rayons et les vignettes disparaissent, restent les modes, les outils, la vue et la
+   * mini-carte. La petite flèche `#bFold` le fait aussi ; le choix est retenu pour ce joueur (`ceionia.basReplie`)
+   */
+  setDockMin(on: boolean) {
+    document.body.classList.toggle('dockMin', on);
+    const b = $('#bFold'), t = tr(on ? 'Déplier la barre de construction' : 'Replier la barre de construction');
+    b.innerHTML = ic(on ? 'chevUp' : 'chevDown', 16, 2.6);
+    b.title = t;
+    b.setAttribute('aria-label', t);
+    b.setAttribute('aria-expanded', String(!on));
+    try { localStorage.setItem(DOCK_MIN_KEY, on ? '1' : '0'); } catch { /* sans stockage */ }
+    requestAnimationFrame(() => { this.placeCards(); this.refreshArrows(); });
+  }
+
+  /**
    * En haut, les outils rapides (voir, route, démolir, déplacer), les grands onglets (Relief, Nature, Bâtir) en relief au
    * milieu, l'historique et la vue à droite ; au centre, les vignettes ; en bas, les rayons de construction ou le pinceau
    */
@@ -803,8 +849,8 @@ export class UI {
       const why = b.dataset.t !== 'build' ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
       // l'onglet déjà ouvert : un clic replie la barre (ou la rouvre), pour laisser la place à la carte
-      if (b.dataset.t === this.tab) { document.body.classList.toggle('dockMin'); this.host.audio.sfxClick(); return; }
-      document.body.classList.remove('dockMin');
+      if (b.dataset.t === this.tab) { this.setDockMin(!document.body.classList.contains('dockMin')); this.host.audio.sfxClick(); return; }
+      this.setDockMin(false);
       this.tab = b.dataset.t!;
       // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
       if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
@@ -841,6 +887,12 @@ export class UI {
 
   /** Ce que montrent les vignettes du rayon ouvert (nombre de chaque bâtiment, cadenas) : elles se redessinent quand ça change */
   private tilesKey = '';
+  /**
+   * La vignette sous le doigt ou la souris, entre l'appui et le relâchement : tant qu'on appuie, la rangée ne se redessine pas
+   * et les vignettes 3D attendent (`thumbsLate`). Un nœud remplacé pendant l'appui ne reçoit pas de clic : le clic était perdu
+   */
+  private press: { sel: string; x: number; y: number } | null = null;
+  private thumbsLate = false;
   private tilesNow() {
     return this.tab === 'build' ? (this.cat === 'life' ? this.host.diploLine?.()?.text ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
   }
@@ -953,6 +1005,7 @@ export class UI {
 
   /** Une vignette 3D vient d'être rendue : elle remplace l'icône au trait des vignettes qui l'attendaient */
   thumbsReady() {
+    if (this.press) { this.thumbsLate = true; return; }
     this.root.querySelectorAll<HTMLElement>('#items [data-th]').forEach((el) => {
       const [k, a] = el.dataset.th!.split('|'), th = this.host.thumb?.(k as KindId, +a);
       if (!th) return;
@@ -1239,9 +1292,10 @@ export class UI {
     hb.hidden = !late || this.host.world.sandbox;
     hb.setAttribute('aria-pressed', String(this.help));
     hb.classList.toggle('on', this.help);
-    hb.title = tr(this.help ? 'Masquer les conseils' : 'Afficher les conseils');
-    // un œil (conseils affichés : bouton crème à bord doré)
-    if (!hb.firstElementChild) hb.innerHTML = ic('eye', 20, 2);
+    hb.title = tr(this.help ? 'Masquer les conseils du moment' : 'Afficher les conseils du moment (ce qu’il faut bâtir ensuite)');
+    // une petite pastille « Aides » et son interrupteur, en tête de la colonne de gauche, sous la carte du village (l'œil du
+    // milieu de l'écran était trop voyant, et on ne savait pas à quoi il servait)
+    if (!hb.firstElementChild) hb.innerHTML = `${ic('bulb', 15, 2)}<span>${tr('Aides')}</span><i class="sw"></i>`;
     // à partir de l’Antiquité, seuls restent visibles un besoin à combler (orange) ou le passage d’âge
     const quiet = late && !this.help && !(sim.ready && !k) && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) && !sim.drought;
     // pendant le tutoriel guidé, sa propre bulle suffit : pas de conseil en plus
@@ -1249,6 +1303,8 @@ export class UI {
     const fighting = !!document.getElementById('troopBar') && document.getElementById('troopBar')!.style.display !== 'none';
     // (au bac à sable : aucun conseil)
     el.hidden = quiet || !!this.tutorial?.active || fighting || this.host.world.sandbox;
+    // (la pastille des aides se tait aussi pendant le tutoriel guidé et le commandement : le conseil n'y paraît pas)
+    if (this.tutorial?.active || fighting) hb.hidden = true;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
     const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, gold = !k && sim.messageGold, choice = !k && sim.messageChoice, conflict = !k && sim.messageConflict, key = `${tone}|${k}|${ready}|${exp}|${rail}|${gold}|${choice}|${conflict}|${sim.message}`;
@@ -1452,7 +1508,7 @@ export class UI {
     this.renderCursorHint();
     if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
-    else if (this.tilesNow() !== this.tilesKey) this.renderItems(true);
+    else if (!this.press && this.tilesNow() !== this.tilesKey) this.renderItems(true);
     this.markFirst();
     if (this.host.tools.placeWhy !== this.infoWhy) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
@@ -1787,7 +1843,11 @@ export class UI {
     // les cartes des équipes : à gauche, sous la barre du haut ; la liste des conditions d'âge
     // dépliée : elles passent dessous au lieu d'être cachées
     const req = $('#agePanel').classList.contains('open') ? $('#ageReq').getBoundingClientRect().bottom : 0;
-    list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
+    // (sur un écran étroit, le conseil du moment s'étale jusqu'au bord gauche : la colonne passe dessous, pastille des aides
+    // comprise, au lieu de le chevaucher)
+    const notes = $('#hudNotes').getBoundingClientRect(), lr = list.getBoundingClientRect();
+    const under = notes.height > 0 && notes.left < lr.right && notes.right > lr.left ? notes.bottom - 2 : 0;
+    list.style.top = `${Math.round(Math.max(hudB, req, under)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
     // dans les Enfers, la frise du haut monte au niveau des boutons de droite quand elle tient (les ressources et les besoins y

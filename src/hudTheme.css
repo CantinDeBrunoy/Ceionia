@@ -27,7 +27,10 @@ button.round.on { background: var(--hGoldFill); border-color: var(--hGold); box-
 button.round svg.ic { stroke-width: 2.2; }
 /* la vitesse en pastille verte, les compteurs en rouge, bordés de blanc */
 button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); border: 1.5px solid #fff; border-radius: 7px; bottom: -7px; right: 50%; transform: translateX(50%); }
-#bellBadge:not(:empty), #expBadge:not(:empty) { background: linear-gradient(180deg, #F0584A, #C8352A) !important; border: 1.5px solid #fff; border-radius: 10px; top: -6px; bottom: auto !important; right: -5px; min-width: 19px; text-align: center; }
+#bellBadge:not(:empty) { background: linear-gradient(180deg, #F0584A, #C8352A) !important; border: 1.5px solid #fff; border-radius: 10px; top: -6px; bottom: auto !important; right: -5px; min-width: 19px; text-align: center; }
+/* les équipes en route (« 1/2 ») : une pastille sombre sous le bouton, comme la vitesse ; le point rouge en haut à droite reste
+   seul à dire qu'une expédition obligatoire attend (avant, les deux se superposaient en haut à droite) */
+#expBadge:not(:empty) { top: auto !important; bottom: -7px !important; right: 50% !important; transform: translateX(50%); background: linear-gradient(180deg, #5A4330, #33251A) !important; color: #FFF6E2; border: 1.5px solid #fff; border-radius: 7px; padding: 0 5px; font-size: 10px; line-height: 1.45; min-width: 0; white-space: nowrap; }
 
 /* ---------- haut ---------- */
 #agePanel { border-radius: var(--hR); }
@@ -58,11 +61,14 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 #clock small { color: var(--hInk); font-weight: 600; font-size: 12.5px; }
 
 /* le conseil du moment : une bulle crème bordée d'or, en Fraunces */
-#msg, #helpBtn { background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: none; -webkit-backdrop-filter: none; }
-#msg { font-family: var(--hSerif); font-weight: 700; font-size: 14px; border-radius: 18px; }
+#msg { background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* (le texte en Manrope, comme les messages et les libellés du HUD : la Fraunces grasse reste aux noms et aux chiffres ; une
+   phrase entière en Fraunces 700 paraissait lourde, retour de l'auteur du 15 nov. 2026) */
+#msg { font-family: inherit; font-weight: 600; font-size: 13.5px; letter-spacing: 0; color: var(--hInk); border-radius: 18px; }
+#msg .go { font-weight: 700; }
+@media (max-width: 860px) { #msg { font-size: 12.5px; } }
 #msg .mi { background: #FFF6E2; }
 #msg.link:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
-#helpBtn.on { background: var(--hGoldFill); border-color: var(--hGold); }
 #homeBack { background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: none; }
 
 /* ---------- bas ---------- */
@@ -1290,3 +1296,42 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   .sendModal .sTop > img.dioImg, .sendModal .sTop > img { width: 200px; }
   .sendModal .scText { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
 }
+
+/* ---------- la mini-carte toujours collée au coin bas droit (retour de l'auteur, 15 nov. 2026 : sur un écran de 2 000 px, le
+   bloc centré la laissait vers le milieu, avec un grand vide à droite). Les deux colonnes du bord prennent la place qui reste
+   (`minmax(max-content, 1fr)`) : les modes se calent contre le menu, le coin (boutons de vue, mini-carte) contre le bord droit ;
+   le menu et la place de la carte restent au milieu. Même chose pour la barre de bataille ---------- */
+@media (min-width: 861px) and (max-width: 1399px) {
+  #dock > #dockRow { grid-template-columns: minmax(max-content, 1fr) minmax(0, 800px) minmax(max-content, 1fr); justify-content: stretch; }
+  #dock #dockSide { justify-self: end; }
+  #dockRow > #dockRight { justify-self: end; }
+}
+@media (min-width: 901px) and (max-width: 1399px) {
+  #troopBar .tfoot { grid-template-columns: minmax(max-content, 1fr) minmax(0, 820px) minmax(max-content, 1fr); justify-content: stretch; }
+  #troopBar .tfoot > .ttool { justify-self: end; }
+}
+@media (min-width: 1400px) {
+  #dock > #dockRow { grid-template-columns: minmax(max-content, 1fr) fit-content(1180px) 330px minmax(max-content, 1fr); justify-content: stretch; }
+  #troopBar .tfoot { grid-template-columns: minmax(max-content, 1fr) minmax(0, 1180px) 330px minmax(max-content, 1fr); justify-content: stretch; }
+  #dock #dockSide, #troopBar .tfoot > .ttool { justify-self: end; }
+  #dockRow > #dockRight, #troopBar .tfoot > .tcorner { grid-column: 4; justify-self: end; }
+}
+
+/* ---------- la barre du bas repliable (retour de l'auteur, 15 nov. 2026) : une petite languette à flèche sur le bord haut du
+   panneau des modes replie les rayons et les vignettes (`body.dockMin`) ; restent les modes, les outils, la vue et la
+   mini-carte. Au téléphone, la languette se pose au milieu du bord haut de la barre, et « ⋯ » reste là. Ce que le tutoriel
+   désigne (`.tHi`) garde la barre ouverte ---------- */
+#dock #dockSide { position: relative; }
+#bFold { position: absolute; top: -17px; left: calc(50% - 23px); z-index: 1; display: grid; place-items: center; width: 46px; height: 17px; min-width: 0; min-height: 0; padding: 0; border: 2px solid var(--hEdge); border-bottom: none; border-radius: 10px 10px 0 0; background: #FFF8E9; color: var(--hInk2); box-shadow: 0 -2px 5px rgba(40, 30, 10, 0.14); cursor: pointer; }
+#bFold:hover { color: var(--hInk); background: var(--hGoldFill); }
+#bFold:active { transform: none; }
+#bFold svg { display: block; margin-top: 1px; }
+@media (min-width: 861px) {
+  body.dockMin #dock #dockMain:not(:has(.tHi)) { display: none; }
+}
+@media (max-width: 860px) {
+  #bFold { top: -19px; height: 19px; width: 52px; left: calc(50% - 26px); }
+  body.dockMin #dock #dockRow:not(:has(#dockMain .tHi)) :is(#subcats, #itemsWrap, #dockBottom) { display: none; }
+  body.dockMin #dock #dockTop { justify-content: flex-end; }
+}
+body.dockMin #dock > #homeBack { margin-bottom: 26px; }

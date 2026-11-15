@@ -79,6 +79,9 @@ const P: Record<string, string> = {
   volume: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/>',
   mute: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/>',
   up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  chevUp: '<path d="M6 15l6-6 6 6"/>',
+  chevDown: '<path d="M6 9l6 6 6-6"/>',
+  bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
   // besoins
   bread: '<path d="M5 11a7 5 0 0 1 14 0c0 1.2-.7 2-1.6 2.3V19H6.6v-5.7C5.7 13 5 12.2 5 11z"/><path d="M9.5 9.5l1 1M13 8.5l1 1"/>',
   drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',

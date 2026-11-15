@@ -35,8 +35,11 @@ registerDict('ui', {
   'Revenir au village (V) — une seconde fois : vue d\'ensemble': 'Back to the village (V) — press again: overview',
   'Revenir au village': 'Back to the village',
   'Taille du pinceau': 'Brush size',
-  'Masquer les conseils': 'Hide tips',
-  'Afficher les conseils': 'Show tips',
+  'Masquer les conseils du moment': 'Hide the current tips',
+  'Afficher les conseils du moment (ce qu’il faut bâtir ensuite)': 'Show the current tips (what to build next)',
+  'Aides': 'Tips',
+  'Replier la barre de construction': 'Fold the build bar',
+  'Déplier la barre de construction': 'Unfold the build bar',
 
   // ---- barre du haut : âge
   'Vers {age}': 'Towards {age}',

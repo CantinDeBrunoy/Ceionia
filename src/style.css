@@ -125,7 +125,7 @@ img.pic { display: block; flex: none; }
 .msgRow { display: flex; align-items: center; justify-content: center; gap: 6px; max-width: 100%; }
 .msgRow #msg { flex: 0 1 auto; }
 #msg[hidden] { display: none; }
-.msgRow:has(#msg[hidden]):has(#helpBtn[hidden]) { display: none; }
+.msgRow:has(#msg[hidden]) { display: none; }
 #msg { display: inline-flex; align-items: center; gap: 9px; min-width: 0; min-height: 44px; padding: 5px 12px 5px 6px; border-radius: 999px; font-size: 13px; font-weight: 700; line-height: 1.25; color: var(--hInk); background: var(--hGlass); border: 1px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: var(--hBlur); -webkit-backdrop-filter: var(--hBlur); pointer-events: none; }
 #msg .mi { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.75); }
 #msg span:not(.mi) { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
@@ -139,8 +139,16 @@ img.pic { display: block; flex: none; }
 #msg.link:hover { background: rgba(255, 255, 255, 0.85); }
 #msg.flash { animation: msgIn 0.7s ease-out; }
 @keyframes msgIn { 0% { transform: scale(0.92); opacity: 0.4; } 55% { transform: scale(1.04); opacity: 1; } 100% { transform: scale(1); } }
-#helpBtn { flex: none; display: grid; place-items: center; width: 40px; height: 40px; min-width: 0; min-height: 0; padding: 0; border-radius: 50%; color: var(--hInk2); background: var(--hGlass); border: 1px solid var(--hEdge); box-shadow: var(--hShadow); }
-#helpBtn.on { color: var(--hInk); background: var(--hCream); border-color: var(--hGold); }
+/* les aides (conseil du moment) : une petite pastille en tête de la colonne de gauche, sous la carte du village, avec son
+   interrupteur ; discrète, mais toujours au même endroit */
+#helpBtn { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 28px; padding: 2px 6px 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--hInk2); background: rgba(255, 250, 238, 0.82); border: 1px solid var(--hEdge); box-shadow: 0 1px 3px rgba(40, 30, 10, 0.18); pointer-events: auto; opacity: 0.88; }
+#helpBtn[hidden] { display: none; }
+#helpBtn:hover { opacity: 1; color: var(--hInk); background: #FFF8E9; }
+#helpBtn .sw { position: relative; flex: none; width: 24px; height: 14px; border-radius: 7px; background: #D8C9AE; transition: background 0.15s; }
+#helpBtn .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: left 0.15s; }
+#helpBtn.on { opacity: 1; color: var(--hInk); }
+#helpBtn.on .sw { background: #4FAE4A; }
+#helpBtn.on .sw::after { left: 12px; }
 
 /* au milieu : stocks et habitants, puis les besoins */
 #needsPanel { display: flex; gap: var(--gap); align-items: stretch; justify-content: center; min-width: 0; flex: 0 1 auto; pointer-events: none; }
@@ -957,8 +965,7 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   #expList { width: min(260px, 40vw); }
   .expCard small { display: none; }
 }
-/* la barre du bas repliée (on reclique l'onglet ouvert) : il ne reste que ses rayons, ses modes et ses outils rapides */
-body.dockMin #itemsWrap, body.dockMin #dockBottom { display: none; }
+/* la barre du bas repliée (la petite flèche `#bFold`, ou on reclique le mode ouvert) : voir la fin de hudTheme.css */
 body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 
 /* monde souterrain (moteur gardé pour les Enfers, hors de portée du joueur) : barre dédiée à la place des outils de surface */

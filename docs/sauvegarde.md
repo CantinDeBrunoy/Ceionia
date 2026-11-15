@@ -38,6 +38,7 @@ Une partie se sauve dans le `localStorage` du navigateur, en un seul JSON, **un 
 | `village-lowpoly:v1:tutorial` | `{ on, step }` : tutoriel guidé activé et étape | `ui/tutorial.ts` (`KEY`) |
 | `ceionia.aides` | `'1'` conseils du moment affichés, `'0'` masqués | `ui/ui.ts` (`help`), `ui/warTips.ts` (`HELP_KEY`) |
 | `ceionia.aidesMilitaires` | liste des bulles du volet militaire déjà vues | `ui/warTips.ts` (`SEEN_KEY`) |
+| `ceionia.basReplie` | `'1'` barre du bas repliée, `'0'` ou absent : dépliée | `ui/ui.ts` (`DOCK_MIN_KEY`, `setDockMin`) |
 | `ceionia.bannieres` | clés des bannières « première fois » déjà montrées | `ui/notifs.ts` (`BANNER_KEY`) |
 | `ceionia.lang` | `fr` ou `en` | `i18n/index.ts` (`LANG_KEY`) |
 
