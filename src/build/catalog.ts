@@ -468,11 +468,11 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [0, 0, 0, 0, 0, 8], joy: [0, 0, 0, 0, 0, 9],
   },
   concord: {
-    id: 'concord', size: 2, minAge: 3, icon: '🕊️', cat: 'life',
-    names: ['', '', '', 'Monument de la concorde', 'Monument de la concorde', 'Monument de la concorde'],
+    id: 'concord', size: 2, minAge: 2, icon: '🕊️', cat: 'life',
+    names: ['', '', 'Monument de la concorde', 'Monument de la concorde', 'Monument de la concorde', 'Monument de la concorde'],
     desc: 'Trois piliers, un par peuple, sous un même anneau : la paix signée entre notre village et les deux îles.',
-    joy: [0, 0, 0, 10, 12, 14], jobs: [0, 0, 0, 2, 2, 2],
-    perk: 'Débloqué par l’expédition « La trêve des deux îles », sur la voie de la paix (archipel).',
+    joy: [0, 0, 8, 10, 12, 14], jobs: [0, 0, 2, 2, 2, 2],
+    perk: 'Débloqué par l’expédition « L’ambassade de la paix », sur la voie de la paix (archipel).',
     reqMission: 'truce',
   },
   // les bâtiments militaires : au village comme sur l'île du portail (où l'on ne bâtit qu'eux, voir `World.portalRule`)

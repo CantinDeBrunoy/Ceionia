@@ -30,7 +30,8 @@ import { cardData } from './xcard';
 
 /** Le théâtre des opérations : la bataille commandée, et comment passer de l'écran au sol */
 export interface Theater {
-  kind: 'hell' | 'isle';
+  /** les Enfers, l'île du portail, ou la bataille de l'archipel (sur l'île rivale : ni garnison ni base, une retraite) */
+  kind: 'hell' | 'isle' | 'rival';
   sim: Hell;
   layer: BattleLayer;
   /** point du sol (coordonnées de la bataille) sous un pixel du canevas */
@@ -45,6 +46,9 @@ export interface Theater {
   focus(x: number, z: number, dist?: number): void;
   /** le fantôme d'un bâtiment de la base avancée à poser (null : aucun) et le cercle de la base (Enfers seulement) */
   ghost?(kind: BaseKind | null, x?: number, z?: number, ok?: boolean, camp?: [number, number] | null, line?: { x: number; z: number; ok: boolean }[]): void;
+  /** (bataille de l'archipel) le bandeau d'état en haut (HTML), et la retraite (le bouton du coin) */
+  status?(): string;
+  leave?(): void;
 }
 
 export interface CommandHost {
@@ -106,7 +110,7 @@ export const PORTAL_REACH = 2.6;
 
 /** Ce que fait Échap en commandement, dans l'ordre : lâcher le bâtiment, abandonner un mur, désarmer, désélectionner ; rien d'autre dans les Enfers */
 export type EscapeAction = 'stopPlacing' | 'cancelTrace' | 'stopTool' | 'disarm' | 'deselect' | 'closeBase' | 'leaveIsle' | 'hint';
-export function escapeAction(s: { kind: 'hell' | 'isle'; placing: boolean; trace: boolean; armed: boolean; selected: number; tool?: boolean; base?: boolean }): EscapeAction {
+export function escapeAction(s: { kind: 'hell' | 'isle' | 'rival'; placing: boolean; trace: boolean; armed: boolean; selected: number; tool?: boolean; base?: boolean }): EscapeAction {
   if (s.placing) return s.trace ? 'cancelTrace' : 'stopPlacing';
   // un outil de la base (déplacer, démolir) : on le lâche, on revient au choix des troupes
   if (s.tool) return 'stopTool';
@@ -747,7 +751,7 @@ export class CommandUI implements ToolInput {
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
     else if (a.startsWith('tool:')) { this.host.click(); this.setTool(a.slice(5) as BaseTool); return; }
     else if (a.startsWith('rech:')) { this.recruitHell(a.slice(5) as TroopKind); if (this.placing) { this.render(); return; } }
-    else if (a === 'leave') { if (this.theater.kind === 'isle') this.host.leaveIsle(); else this.host.leaveHell(); return; }
+    else if (a === 'leave') { if (this.theater.kind === 'rival') this.theater.leave?.(); else if (this.theater.kind === 'isle') this.host.leaveIsle(); else this.host.leaveHell(); return; }
     this.host.click();
     this.barKey = '';
     this.render();
@@ -857,6 +861,19 @@ export class CommandUI implements ToolInput {
       const hp = of.reduce((s, u) => s + u.hp, 0) / of.reduce((s, u) => s + u.maxHp, 0), on = of.filter((u) => sel.selected.has(u.id)).length;
       return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${tr('{who} : choisir (Maj : ajouter)', { who: `${troopForm(k, age).plural}${troopForm(k, age).name !== TROOPS[k].name ? tr(' (ex-{old})', { old: TROOPS[k].plural.toLowerCase() }) : ''}` })}"><span class="ti">${this.face(k, age, 30)}</span><span class="ttx"><b>${isle ? `${on ? `${on} / ` : ''}` : `${on} / `}${of.length}</b><span class="tn">${troopForm(k, age).plural}</span></span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
     }).join('');
+    // la bataille de l'archipel : le bandeau de l'objectif, les troupes sur le terrain, l'aide et la retraite (ni garnison ni base)
+    if (t.kind === 'rival') {
+      const field = us.length ? `<div class="tbot panel"><div class="tcards">${cards}<button class="tall" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button></div></div>` : '';
+      const corner = `<button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="${tr('Rappel des contrôles')}"><span class="tq">?</span><span class="tl">${tr('Aide')}</span></button><button data-a="leave" class="tx go" title="${tr('Rembarquer : la bataille est perdue, on pourra la retenter')}"><span class="oi">${pic('🏳️', 24)}</span><span class="tl">${tr('Retraite')}</span></button>`;
+      const html = `<div class="tstate twtop">${t.status?.() ?? ''}</div>
+      <div class="tfoot tisle">
+        ${field}
+        <div class="tbub" role="status"><span class="tbi" aria-hidden="true">i</span><p class="thint">${this.cmd.selected.size ? this.hint() : tr('Choisissez des troupes (clic, ou « Tous »), puis un clic droit pour les envoyer. Sans ordre, elles marchent sur l’objectif.')}</p></div>
+        <div class="tcorner panel">${corner}</div>
+      </div>${this.helpOpen ? `<ul class="thelp panel">${CONTROLS_HELP.map(([k, tx]) => `<li><b>${tr(k)}</b><span>${tr(tx)}</span></li>`).join('')}</ul>` : ''}`;
+      if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
+      return;
+    }
     const ctx = w.recruitCtx(this.host.age(), this.host.pop());
     // à droite : le même menu que dans les Enfers (« Ma garnison » sur l'île : Bâtir les défenses, Recruter), avec ses deux onglets
     const rec = isle ? this.isleRow(ctx, age) : this.baseRow();

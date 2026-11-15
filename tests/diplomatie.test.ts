@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld, CONTINENT } from '../src/world/mapgen';
 import { GEN_ARCH } from '../src/world/continent';
@@ -9,7 +9,7 @@ import { Sim } from '../src/sim/sim';
 import {
   newDiplo, readDiplo, saveDiplo, archipelagoOn, missionOffered, missionWhy, allyPending, chooseAlly, endgameOpen, choosePath,
   warEngaged, winAllyWar, tributePerDay, settleLate, ageGate, conflictState, conflictItem, rivalPost, kindOffered, spaceportWhy,
-  onRival, isleOf, rivalOf, PEACE_CHAIN, WAR_MISSION, WAR_SPOILS, CONFLICT_LABEL,
+  onRival, isleOf, rivalOf, PEACE_CHAIN, PEACE_MISSION, WAR_MISSION, WAR_SPOILS, CONFLICT_LABEL, bindPostReady, endgameWhy, claimVictory,
 } from '../src/sim/diplomacy';
 
 /** Un petit continent (192 cases), sans archipel */
@@ -89,108 +89,120 @@ describe('diplomatie : le choix de l’allié', () => {
   });
 });
 
-describe('diplomatie : le dénouement (âge industriel)', () => {
+describe('diplomatie : le dénouement (au Médiéval)', () => {
   const allied = () => { const w = withIsles(); chooseAlly(w.diplo, 'orient'); return w; };
+  afterEach(() => bindPostReady(() => true));
 
-  it('il ne s’ouvre qu’à l’âge industriel, avec un allié, tant que le conflit dure ; seulement la paix ou la guerre', () => {
+  it('il s’ouvre au Médiéval, une fois l’allié installé chez lui (crochet `allyPostReady`) ; seulement la paix ou la guerre', () => {
     const w = allied();
+    expect(endgameOpen(w, 1)).toBe(false);
+    expect(endgameOpen(w, 2)).toBe(true);
+    // le port et le comptoir chez l'allié manquent : la carte attend, et dit pourquoi
+    bindPostReady(() => false);
     expect(endgameOpen(w, 2)).toBe(false);
+    expect(endgameWhy(w, 2)).toMatch(/port et un comptoir/);
+    bindPostReady((x) => x === w);
+    expect(endgameOpen(w, 2)).toBe(true);
+    expect(endgameWhy(w, 2)).toBeNull();
+    // une partie déjà à l'Industriel : la carte tout de suite ; au-delà, plus rien (réglé d'office)
     expect(endgameOpen(w, 3)).toBe(true);
     expect(endgameOpen(w, 4)).toBe(false);
     expect(choosePath(w.diplo, 'neutral' as never)).toBe(false);
     expect(w.diplo.path).toBeNull();
     w.diplo.ally = null;
-    expect(endgameOpen(w, 3)).toBe(false);
+    expect(endgameOpen(w, 2)).toBe(false);
     expect(choosePath(w.diplo, 'peace')).toBe(false);
   });
 
-  it('le conflit réglé est une condition du Moderne, seulement avec l’archipel', () => {
+  it('le conflit réglé est une condition de l’Industriel (et du Moderne pour une partie déjà à l’Industriel), seulement avec l’archipel', () => {
     const w = allied();
-    expect(conflictItem(w, 3)).toBeNull();
+    expect(conflictItem(w, 2)).toBeNull();
+    expect(conflictItem(w, 3)).toEqual({ have: 0, need: 1 });
     expect(conflictItem(w, 4)).toEqual({ have: 0, need: 1 });
-    expect(conflictItem(continent(), 4)).toBeNull();
+    expect(conflictItem(continent(), 3)).toBeNull();
     const sim = new Sim(w);
-    sim.age = 3;
+    sim.age = 2;
     sim.recalc();
     expect(sim.ageProgress()!.items.find((i) => i.label === CONFLICT_LABEL)).toMatchObject({ have: 0, need: 1 });
     expect(sim.ready).toBe(false);
     w.diplo.conflict = 'peace';
     expect(sim.ageProgress()!.items.find((i) => i.label === CONFLICT_LABEL)).toMatchObject({ have: 1, need: 1 });
+    // réglé au Médiéval : plus de ligne vers le Moderne
+    expect(conflictItem(w, 4)).toBeNull();
     // sans archipel, la ligne n'existe pas
     const c = new Sim(continent());
-    c.age = 3;
+    c.age = 2;
     expect(c.ageProgress()!.items.some((i) => i.label === CONFLICT_LABEL)).toBe(false);
   });
 
-  it('la paix : trois expéditions de pourparlers, dans l’ordre, sans échec ni blessé possible', () => {
+  it('la paix : une seule ambassade, sans échec ni blessé possible ; elle règle le conflit, ouvre le comptoir, la fête et le monument, puis la cinématique', () => {
     const w = allied();
     expect(choosePath(w.diplo, 'peace')).toBe(true);
     expect(missionOffered(w, WAR_MISSION)).toBe(false);
-    const chain = PEACE_CHAIN.map((id) => MISSIONS.find((m) => m.id === id)!);
-    for (const m of chain) {
-      expect(m.age).toBe(3);
-      expect(m.talks).toBe(true);
-      for (const c of m.choices) { expect(c.risk).toBe(0); expect(c.lose).toEqual([]); expect(c.win.some((e) => e.t === 'injured')).toBe(false); }
-      // ses imprévus sont les siens : ni requin ni grain, et aucune option ne blesse
-      const ev = eventsFor({ dest: 'river', mission: m.id, scene: 'voyage', age: 3, arrive: false, sea: true, own: true, at: 0.5 });
-      expect(ev.length).toBeGreaterThan(0);
-      expect(ev.every((e) => e.missions?.includes(m.id))).toBe(true);
-      expect(ev.flatMap((e) => e.options).some((o) => o.hurt)).toBe(false);
-    }
-    expect(chain[1].requires?.missions).toEqual(['envoys']);
-    expect(chain[2].requires?.missions).toEqual(['truce']);
-    for (const id of PEACE_CHAIN) expect(missionOffered(w, id)).toBe(true);
-    // les émissaires : le comptoir chez le rival de l'allié
-    expect(rivalPost(w)).toBeNull();
-    applyEffects(w, chain[0].choices[0].win, 100); done(w, 'envoys');
-    expect(rivalPost(w)).toBe('asie');
-    // la trêve : le conflit est réglé par notre paix ; le monument de la concorde s'ouvre ; la fête reste à faire
+    expect(PEACE_CHAIN).toEqual([PEACE_MISSION]);
+    const m = MISSIONS.find((x) => x.id === PEACE_MISSION)!;
+    expect(m.age).toBe(2);
+    expect(m.talks).toBe(true);
+    expect(m.unlocks).toBe('concord');
+    for (const c of m.choices) { expect(c.risk).toBe(0); expect(c.lose).toEqual([]); expect(c.win.some((e) => e.t === 'injured')).toBe(false); }
+    // ses imprévus sont les siens : ni requin ni grain, et aucune option ne blesse
+    const ev = eventsFor({ dest: 'river', mission: m.id, scene: 'voyage', age: 2, arrive: false, sea: true, own: true, at: 0.5 });
+    expect(ev.length).toBeGreaterThan(0);
+    expect(ev.every((e) => e.missions?.includes(m.id))).toBe(true);
+    expect(ev.flatMap((e) => e.options).some((o) => o.hurt)).toBe(false);
+    expect(missionOffered(w, PEACE_MISSION)).toBe(true);
     expect(kindOffered(w, 'concord')).toBe(true);
-    applyEffects(w, chain[1].choices[1].win, 100); done(w, 'truce');
+    expect(rivalPost(w)).toBeNull();
+    applyEffects(w, m.choices[0].win, 100); done(w, PEACE_MISSION);
     expect(w.diplo.conflict).toBe('peace');
-    expect(conflictState(w)).toEqual({ kind: 'peace' });
-    expect(conflictItem(w, 4)).toEqual({ have: 1, need: 1 });
-    expect(missionWhy(w, 'feast')).toBeNull();
-    applyEffects(w, chain[2].choices[0].win, 100); done(w, 'feast');
+    expect(w.diplo.cine).toBe(true);
+    expect(rivalPost(w)).toBe('asie');
     expect(w.diplo.feast).toBe(true);
+    expect(conflictState(w)).toEqual({ kind: 'peace' });
+    expect(conflictItem(w, 3)).toEqual({ have: 1, need: 1 });
+    expect(missionWhy(w, PEACE_MISSION)).toBeTruthy();
+    // les anciens pourparlers n'existent plus ; une partie qui avait signé la trêve garde son monument (même id)
+    expect(MISSIONS.some((x) => x.id === 'envoys' || x.id === 'feast')).toBe(false);
+    expect(readExpState({ done: ['envoys', 'truce'] }).done).toEqual(['truce']);
   });
 
-  it('la guerre : une expédition militaire, qui peut échouer ; réussie, la guerre est gagnée (butin, puis tribut)', () => {
+  it('la guerre : une expédition militaire (qui peut échouer) débarque les troupes ; la bataille règle le conflit', () => {
     const w = allied();
     const m = MISSIONS.find((x) => x.id === WAR_MISSION)!;
-    expect(m.age).toBe(3);
+    expect(m.age).toBe(2);
     expect(m.mandatory).toBe(false);
     expect(m.talks).toBeFalsy();
     expect(isMilitary(m)).toBe(true);
-    for (const c of m.choices) { expect(c.risk).toBeGreaterThan(0); expect(c.win).toContainEqual({ t: 'diplo', act: 'victory' }); }
+    for (const c of m.choices) { expect(c.risk).toBeGreaterThan(0); expect(c.win).toContainEqual({ t: 'diplo', act: 'landing' }); }
     expect(missionOffered(w, WAR_MISSION)).toBe(false);
     expect(missionWhy(w, WAR_MISSION)).toMatch(/aider/);
     choosePath(w.diplo, 'war');
     expect(warEngaged(w.diplo)).toBe(true);
     expect(missionOffered(w, WAR_MISSION)).toBe(true);
     expect(missionWhy(w, WAR_MISSION)).toBeNull();
-    for (const id of PEACE_CHAIN) expect(missionOffered(w, id)).toBe(false);
+    expect(missionOffered(w, PEACE_MISSION)).toBe(false);
     expect(conflictState(w)).toEqual({ kind: 'war' });
-    expect(tributePerDay(w.diplo)).toBe(0);
     // ratée : rien ne change, on retente
     applyEffects(w, m.choices[0].lose, 100);
+    expect(w.diplo.battle).toBe('none');
+    // réussie : les troupes à terre, la bataille est prête ; l'expédition ne se propose plus
+    applyEffects(w, m.choices[0].win, 100);
+    expect(w.diplo.battle).toBe('ready');
     expect(w.diplo.conflict).toBe('open');
-    // réussie : le butin, le conflit gagné, le tribut chaque jour
+    expect(missionOffered(w, WAR_MISSION)).toBe(false);
+    expect(missionWhy(w, WAR_MISSION)).toMatch(/bataille/);
+    // la bataille gagnée : le butin, le conflit gagné, le tribut chaque jour
     const gold = w.gold;
-    applyEffects(w, m.choices[0].win, 100); done(w, WAR_MISSION);
+    expect(claimVictory(w)).toBe(true);
     expect(w.diplo.conflict).toBe('won');
     expect(w.gold).toBe(gold + WAR_SPOILS.loot);
     expect(tributePerDay(w.diplo)).toBe(WAR_SPOILS.tribute);
     expect(conflictState(w)).toEqual({ kind: 'won', winner: 'orient' });
-    expect(conflictItem(w, 4)).toEqual({ have: 1, need: 1 });
-    expect(missionWhy(w, WAR_MISSION)).toBeTruthy();
-    // une seconde victoire ne double pas le butin
-    applyEffects(w, m.choices[0].win, 100);
-    expect(w.gold).toBe(gold + WAR_SPOILS.loot);
+    expect(conflictItem(w, 3)).toEqual({ have: 1, need: 1 });
     expect(winAllyWar(w.diplo)).toBe(false);
   });
 
-  it('une partie déjà au-delà de l’Industriel avec un conflit ouvert est réglée d’office, sans blocage', () => {
+  it('une partie déjà au Moderne avec un conflit ouvert est réglée d’office, sans blocage', () => {
     const w = allied();
     expect(settleLate(w.diplo, 3, true)).toBe(false);
     expect(settleLate(w.diplo, 4, true)).toBe(true);
@@ -207,14 +219,14 @@ describe('diplomatie : le dénouement (âge industriel)', () => {
     expect(ageGate(false)).toBeNull();
     const w = continent();
     const sim = new Sim(w);
-    sim.age = 3;
-    sim.ageProgress = () => ({ next: 4, ratio: 1, items: [] });
+    sim.age = 2;
+    sim.ageProgress = () => ({ next: 3, ratio: 1, items: [] });
     let asked = 0;
     sim.beforeAdvance = () => ++asked > 1;
     expect(sim.advance()).toBe(false);
-    expect(sim.age).toBe(3);
+    expect(sim.age).toBe(2);
     expect(sim.advance()).toBe(true);
-    expect(sim.age).toBe(4);
+    expect(sim.age).toBe(3);
   });
 });
 

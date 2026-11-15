@@ -728,9 +728,10 @@ registerDict('catalog', {
   // la diplomatie de l'archipel : le monument de la concorde, le cosmodrome chez l'allié
   "Monument de la concorde": "Concord Monument",
   "Trois piliers, un par peuple, sous un même anneau : la paix signée entre notre village et les deux îles.": "Three pillars, one per people, under a single ring: the peace signed between our village and the two islands.",
-  "Débloqué par l’expédition « La trêve des deux îles », sur la voie de la paix (archipel).": "Unlocked by the expedition “The Truce of the Two Islands”, on the path of peace (archipelago).",
   "monuments de la concorde": "concord monuments",
   "Le cosmodrome se bâtit sur l’île de votre allié ({isle}).": "The spaceport is built on your ally’s island ({isle}).",
   // le cosmodrome chez l'allié
   "Le cosmodrome se bâtit sur l’île de votre allié : choisissez d’abord votre allié.": "The spaceport is built on your ally’s island: first choose your ally.",
+  // le monument de la concorde
+  "Débloqué par l’expédition « L’ambassade de la paix », sur la voie de la paix (archipel).": "Unlocked by the expedition “The Peace Embassy”, on the path of peace (archipelago).",
 });

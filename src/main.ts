@@ -103,7 +103,8 @@ import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
-import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, peopleName, settleLate, startAllyBattle, WAR_MISSION, PEACE_CHAIN } from './sim/diplomacy';
+import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
+import { RivalBattle, BattleGoal } from './sim/rivalBattle';
 import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -143,6 +144,11 @@ const OLD_SEASON_LEN = 160;
 const OLD_DAY_LEN = 100;
 /** espèces sauvages qui crient près de la vue (`CALLS` de voices.ts) */
 const CALLERS: ReadonlySet<string> = new Set(Object.keys(CALLS));
+
+/** Une majuscule en tête (noms d'îles et d'objectifs en début de phrase) */
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** Le nom d'un objectif de la bataille de l'archipel */
+const goalName = (g: BattleGoal) => ({ plage: trx('la plage'), remparts: trx('les remparts'), port: trx('le port'), palais: trx('le palais') })[g];
 
 class Game implements UIHost {
   scene = new THREE.Scene();
@@ -239,6 +245,11 @@ class Game implements UIHost {
    * aussi à tout moment dans `world.diplo.ally`
    */
   onAllyChosen?: (p: People) => void;
+  /** la bataille de l'archipel en cours (voie de la guerre), et sa vue */
+  rivalBattle: RivalBattle | null = null;
+  private rivalLayer: BattleLayer | null = null;
+  /** la bataille rejouable a été annoncée (une fois par défaite) */
+  private retrySaid = false;
   /** temps passé en jeu depuis la fin du dernier écran de chargement (s) : la carte du portail attend que le joueur soit arrivé */
   private portalCalm = 0;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
@@ -672,7 +683,7 @@ class Game implements UIHost {
       root: uiRoot, age: () => this.sim.age,
       isle: () => isleDefenses(this.world), village: () => this.villageDefenses(),
       army: () => this.war.army.troops.length + this.war.army.queue.length, need: () => this.war.invasionNeed(), pve: () => this.war.pve === 'on',
-      theater: () => this.command.theater?.kind ?? null, mode: () => this.mode, atIsle: () => this.lookingAtIsle(),
+      theater: () => { const k = this.command.theater?.kind ?? null; return k === 'rival' ? null : k; }, mode: () => this.mode, atIsle: () => this.lookingAtIsle(),
       selected: () => this.command.cmd.selected.size, lastOrder: () => this.command.cmd.lastOrder,
       commandIsle: () => this.commandIsle(),
     }));
@@ -1061,17 +1072,138 @@ class Game implements UIHost {
     const cs = conflictState(w);
     if (cs && cs.kind !== this.naval.state.kind) this.naval.state = cs;
     if (settleLate(d, this.sim.age, true)) { this.ui.banner(trx('Le traité des deux îles'), trx('Les deux îles ont fait la paix entre elles')); this.saveNow(); }
-    if (this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing) return;
+    if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine) return;
     if (allyPending(w)) this.diploChoice.showAlly();
+    else if (d.cine) this.playPeace();
+    else if (d.battle === 'ready' && battleReady(d, w.exp.clock)) this.startRivalBattle();
+    else if (d.battle === 'lost' && battleReady(d, w.exp.clock) && !this.retrySaid) { this.retrySaid = true; this.ui.toast(trx('⚔️ Nos troupes se sont refaites chez notre allié : la bataille peut reprendre. Cliquez ici.'), () => this.startRivalBattle(), 'action'); }
     else if (endgameOpen(w, this.sim.age) && !d.asked && !this.tutorial.active) { d.asked = true; this.diploChoice.showPath(); }
   }
 
-  /** La voie du dénouement : la paix ouvre les pourparlers, la guerre l'expédition militaire (puis, plus tard, la bataille) */
+  // ---------- La paix : la cinématique ----------
+
+  /** la cinématique de la paix se joue */
+  private peaceCine = false;
+  /**
+   * La cinématique de la paix, une fois l'ambassade réussie (`diplo.cine`) : la vue s'élève au-dessus du bras de mer où les
+   * deux flottes se saluent (« La paix des deux îles »), passe sur l'île rivale (son comptoir s'ouvre à nos marchands), sur
+   * l'île alliée, puis revient au village, où la fête des trois peuples éclate (feux d'artifice) et où le monument de la
+   * concorde attend d'être bâti. Elle ne se joue qu'une fois (`cine` retombe dès qu'elle commence)
+   */
+  private playPeace() {
+    const w = this.world, d = w.diplo, lay = w.isles;
+    d.cine = false;
+    if (!lay || !d.ally) return;
+    this.peaceCine = true;
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    const ally = isleOf(w, d.ally)!, rival = isleOf(w, rivalOf(d.ally))!, back = this.cam.view();
+    const home = this.villageCenter() ?? [back.x, back.z];
+    const steps: [number, () => void][] = [
+      [0, () => { this.cam.goTo((ally.village.x + rival.village.x) / 2, (ally.village.z + rival.village.z) / 2, 120); this.ui.banner(trx('La paix des deux îles'), trx('Les deux chefs ont signé, les flottes se saluent')); }],
+      [5200, () => { this.cam.goTo(rival.village.x, rival.village.z, 70); this.ui.banner(cap(isleName(rivalOf(d.ally!))), trx('Son comptoir s’ouvre à nos marchands')); }],
+      [10200, () => { this.cam.goTo(ally.village.x, ally.village.z, 70); this.ui.banner(cap(isleName(d.ally!)), trx('Notre allié fête la paix')); }],
+      [15200, () => { this.cam.goTo(home[0], home[1], VILLAGE_DIST); }],
+      [17600, () => { this.festAt(home[0], home[1]); this.festAt(home[0], home[1]); this.ui.banner(trx('La fête des trois peuples'), trx('Un monument de la concorde à bâtir')); }],
+      [19000, () => { this.peaceCine = false; this.saveNow(); this.ui.update(); }],
+    ];
+    for (const [t, f] of steps) setTimeout(f, t);
+  }
+
+  // ---------- La guerre : la bataille sur l'île rivale ----------
+
+  /**
+   * La bataille de l'archipel (voir `sim/rivalBattle.ts`) : nos troupes débarquées sur la plage rivale, les objectifs dans
+   * l'ordre (plage, remparts, port, palais). La vue va sur la plage, la barre de bataille prend la main (choisir, envoyer) ;
+   * sans ordre, les troupes marchent sur l'objectif en cours. Rien n'est sauvegardé pendant : une partie rechargée la
+   * recommence. On ne change pas d'âge pendant (`allyBattle`)
+   */
+  startRivalBattle() {
+    const w = this.world, d = w.diplo;
+    if (this.rivalBattle || !battleReady(d, w.exp.clock) || !d.ally || this.mode !== 'surface') return false;
+    let b: RivalBattle;
+    try { b = new RivalBattle(w, rivalOf(d.ally), Math.max(2, this.sim.age), w.difficulty === 'easy' || w.sandbox); } catch { return false; }
+    this.leaveIsle(true);
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.tools.setTool('none');
+    this.rivalBattle = b;
+    this.allyBattle = true;
+    this.retrySaid = false;
+    const { ox, oz } = b.map, layer = new BattleLayer(b.sim, (x, z) => w.hAt(x + ox, z + oz));
+    layer.group.position.set(ox, 0, oz);
+    layer.people = b.people;
+    layer.age = this.sim.age;
+    this.rivalLayer = layer;
+    this.scene.add(layer.group);
+    const v = new THREE.Vector3(), [bx, bz] = b.goalAt.plage;
+    this.command.setTheater({
+      kind: 'rival', sim: b.sim, layer,
+      pick: (x, y) => { const p = this.terrain.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x - ox, p.z - oz] : null; },
+      screen: (x, z) => this.toScreen(v.set(x + ox, w.hAt(x + ox, z + oz) + 0.3, z + oz)),
+      focus: (x, z, dist) => this.cam.goTo(x + ox, z + oz, dist === undefined ? this.cam.dist : Math.max(this.cam.dist, dist)),
+      status: () => this.rivalStatus(),
+      leave: () => this.endRivalBattle('lost', true),
+    });
+    this.cam.handler = this.command;
+    this.cam.goTo(bx + ox, bz + oz, 26);
+    this.cam.tiltTo(0.8);
+    this.ui.banner(trx('La bataille de {isle}', { isle: isleName(b.people) }), trx('Objectif : {goal}', { goal: goalName(b.current!) }));
+    return true;
+  }
+
+  /** Le bandeau de la bataille : l'objectif en cours, nos troupes debout, les défenseurs de l'objectif */
+  private rivalStatus() {
+    const b = this.rivalBattle;
+    if (!b) return '';
+    const g = b.current, n = b.troops().length;
+    const line = g ? trx('Objectif {k}/4 : {goal} · {n} défenseurs', { k: b.goal + 1, goal: goalName(g), n: b.defenders(g).length }) : trx('La ville est prise !');
+    return `<div class="twave gold wst" role="status"><span class="twm" aria-hidden="true">⚔️</span><div class="twc"><span class="twh">${line}</span><span class="twf">· ${nplural(n, 'soldat', 'soldats')}</span></div></div>`;
+  }
+
+  /** Un pas de la bataille (par pas de 0,25 s de jeu au plus, quatre par image), ses nouvelles, sa vue */
+  private stepRivalBattle(dt: number, gdt: number) {
+    const b = this.rivalBattle;
+    if (!b) return;
+    let left = Math.min(gdt, 1);
+    while (left > 1e-6 && !b.outcome) { const s = Math.min(0.25, left); b.step(s); left -= s; }
+    for (const n of b.news.splice(0)) {
+      if (n.type === 'goal' && n.next) { this.ui.banner(trx('{goal} : pris !', { goal: cap(goalName(n.goal)) }), trx('Objectif suivant : {goal}', { goal: goalName(n.next) })); audio.sfxAgeUp(); }
+      else if (n.type === 'end') { this.endRivalBattle(n.outcome); return; }
+    }
+    if (this.rivalLayer) { this.rivalLayer.age = this.sim.age; this.rivalLayer.update(dt, this.cam.camera, b.sim.events.splice(0)); }
+  }
+
+  /**
+   * La fin de la bataille : gagnée, le conflit est réglé (butin, puis tribut) ; perdue (ou retraite), les troupes rembarquent
+   * et la bataille se rejoue dans `RETRY_DAYS` jours. La vue revient au village
+   */
+  private endRivalBattle(outcome: 'won' | 'lost', retreat = false) {
+    const b = this.rivalBattle, w = this.world;
+    if (!b) return;
+    this.rivalBattle = null;
+    this.allyBattle = false;
+    this.command.setTheater(null);
+    if (this.mode === 'surface') this.cam.handler = this.tools;
+    canvas.style.cursor = '';
+    if (this.rivalLayer) { this.scene.remove(this.rivalLayer.group); this.rivalLayer.dispose(); this.rivalLayer = null; }
+    if (outcome === 'won' && claimVictory(w)) {
+      this.ui.banner(trx('Victoire !'), trx('Le rival se rend : {gold} or de butin, puis un tribut chaque jour', { gold: WAR_SPOILS.loot }));
+      audio.sfxAgeUp();
+      const c = this.villageCenter();
+      if (c) this.festAt(c[0], c[1]);
+    } else {
+      loseAllyBattle(w.diplo, w.exp.clock, this.time.dayLen);
+      this.ui.banner(retreat ? trx('Retraite') : trx('Défaite'), trx('Nos troupes rembarquent : nouvel essai dans {n} jours', { n: RETRY_DAYS }));
+    }
+    this.goHome();
+    this.ui.update();
+    this.saveNow();
+  }
+
+  /** La voie du dénouement : la paix ouvre l'ambassade (puis la cinématique), la guerre l'expédition militaire (puis la bataille) */
   private choosePath(p: 'peace' | 'war') {
     if (!choosePath(this.world.diplo, p)) return;
-    const first = PEACE_CHAIN.find((id) => !this.world.exp.done.includes(id)) ?? 'feast';
-    if (p === 'peace') this.ui.toast(trx('🕊️ La voie de la paix : des pourparlers vous attendent (menu Expéditions).'), () => this.ui.gotoMission(first));
-    else if (!startAllyBattle(this.world)) this.ui.toast(trx('⚔️ La guerre aux côtés de notre allié : l’expédition « Aux côtés de notre allié » vous attend.'), () => this.ui.gotoMission(WAR_MISSION));
+    if (p === 'peace') this.ui.toast(trx('🕊️ La voie de la paix : l’expédition « L’ambassade de la paix » vous attend.'), () => this.ui.gotoMission(PEACE_MISSION));
+    else this.ui.toast(trx('⚔️ La guerre aux côtés de notre allié : l’expédition « Aux côtés de notre allié » vous attend.'), () => this.ui.gotoMission(WAR_MISSION));
     this.ui.update(); this.saveNow();
   }
 
@@ -1080,10 +1212,26 @@ class Game implements UIHost {
     if (!endgameOpen(this.world, this.sim.age)) return null;
     const p = this.world.diplo.path;
     const now = p === 'peace' ? trx('la paix') : p === 'war' ? trx('la guerre') : null;
-    return { text: now ? trx('⚖️ Le conflit des deux îles : {path}', { path: now }) : trx('⚖️ Le conflit des deux îles'), button: now ? trx('Changer…') : trx('Choisir…') };
+    // (la bataille engagée : on ne change plus de voie, le bouton y mène)
+    const button = this.world.diplo.battle !== 'none' ? trx('À la bataille') : now ? trx('Changer…') : trx('Choisir…');
+    return { text: now ? trx('⚖️ Le conflit des deux îles : {path}', { path: now }) : trx('⚖️ Le conflit des deux îles'), button };
   }
-  /** La carte de la diplomatie (condition du panneau des âges, conseil, ligne du rayon Vie) : l'allié d'abord, s'il manque */
-  openDiploChoice() { if (allyPending(this.world)) this.diploChoice.showAlly(); else this.diploChoice.showPath(); }
+  /**
+   * La carte de la diplomatie (condition du panneau des âges, conseil, ligne du rayon Vie) : l'allié d'abord, s'il manque ;
+   * la bataille, si elle est prête ; sinon la carte du dénouement, ou ce qui l'empêche encore
+   */
+  openDiploChoice() {
+    const w = this.world, d = w.diplo;
+    if (allyPending(w)) { this.diploChoice.showAlly(); return; }
+    if (d.path === 'war' && d.battle !== 'none') {
+      if (battleReady(d, w.exp.clock)) this.startRivalBattle();
+      else this.ui.toast(trx('Nos troupes se refont chez notre allié : la bataille reprendra dans {n} jours.', { n: Math.max(1, Math.ceil((d.retry - w.exp.clock) / this.time.dayLen)) }));
+      return;
+    }
+    const why = endgameWhy(w, this.sim.age);
+    if (why) { this.ui.toast(why); return; }
+    this.diploChoice.showPath();
+  }
 
   /** La partie peut-elle encore s'agrandir à l'archipel ? (continent de 192, version 3) */
   canExplore() { return canExpand({ n: N, gen: this.world.gen }); }
@@ -1214,7 +1362,7 @@ class Game implements UIHost {
     return {
       age: this.sim.age, portalOpen: w.portalOpen,
       pve: war.pve === 'on', towers: d.towers, barracks: d.barracks, isleTroops: war.army.troops.filter((t) => t.where === 'isle' && t.heal <= 0).length,
-      commanding: this.command.theater?.kind ?? null, frontier: war.faction?.frontier ?? 1, ageLock: !!war.faction && war.faction.gate && war.faction.conquestFrontier > war.faction.frontier, camp: !!war.base?.countOf('camp'), victory: !!war.faction?.victory,
+      commanding: this.command.theater && this.command.theater.kind !== 'rival' ? this.command.theater.kind : null, frontier: war.faction?.frontier ?? 1, ageLock: !!war.faction && war.faction.gate && war.faction.conquestFrontier > war.faction.frontier, camp: !!war.base?.countOf('camp'), victory: !!war.faction?.victory,
     };
   }
 
@@ -2133,14 +2281,14 @@ class Game implements UIHost {
     // la guerre : la faction des Enfers, ses incursions sur l'île, la garnison
     this.stepWar(dt, gdt);
     this.stepDiplo();
+    this.stepRivalBattle(dt, gdt);
     this.stepFarewell(dt);
     this.stepKingCrowd();
     this.railway.update(gdt);
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);
     // une équipe rentre victorieuse : tout le village fait la fête au cœur du village, à la mode de son âge
-    // (la fête des trois peuples : deux fois plus de feux et de musique)
-    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); if (a.m.id === 'feast') this.festAt(a.base[0], a.base[1]); }
+    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
     this.fest.update(dt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe

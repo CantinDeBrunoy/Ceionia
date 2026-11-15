@@ -11,14 +11,14 @@ Une mission = plusieurs **choix** (en général deux, parfois trois, un seul pou
 ## Règles du jeu
 
 ### Les missions
-`MISSIONS` (`missions.ts`) : 39 missions, de l’âge 0 à l'âge 5. Une mission affichée est celle de l'âge du village ou d'un âge passé (`Expeditions.list`), et, pour les quatre de la diplomatie de l'archipel (la paix, la guerre), seulement quand la partie en est là (`missionOffered`, voir [diplomatie.md](diplomatie.md)). Réussie, elle peut se refaire (`redoEffects`, voir plus bas).
+`MISSIONS` (`missions.ts`) : 37 missions, de l’âge 0 à l'âge 5. Une mission affichée est celle de l'âge du village ou d'un âge passé (`Expeditions.list`), et, pour les deux de la diplomatie de l'archipel (`truce`, la paix ; `allywar`, la guerre), seulement quand la partie en est là (`missionOffered`, voir [diplomatie.md](diplomatie.md)). Réussie, elle peut se refaire (`redoEffects`, voir plus bas).
 
 | Âge | Missions (★ obligatoire, → bâtiment débloqué) |
 |---|---|
 | 0 | `herd` ★ → enclos (`pen`), `berries`, `flint`, `honey` → rucher (`apiary`), `mammoth` ★ |
 | 1 | `seeds` ★, `horses` → écurie (`stable`), `fishing`, `springs` → bains (`baths`), `pugilat` → arène (`arena`), `kraken` ★, `portal` ★ → tour de garde (`watchtower`), `megalodon` |
-| 2 | `mine` ★ → mine, `wolf`, `fair` → cirque, `brewer` → taverne, `dragon` ★, `caravel` ★ → chantier naval, `spice` (exige le chantier naval) |
-| 3 | `envoys`, `truce` → monument de la concorde, `feast` (archipel, voie de la paix), `allywar` (archipel, voie de la guerre, militaire), `railway` ★, `coal`, `motorcar` ★ → usine automobile, `flight` → aérodrome, `oil` ★ → raffinerie, `galleon` (chantier naval) |
+| 2 | `mine` ★ → mine, `wolf`, `fair` → cirque, `brewer` → taverne, `dragon` ★, `caravel` ★ → chantier naval, `spice` (exige le chantier naval), `truce` → monument de la concorde (archipel, voie de la paix), `allywar` (archipel, voie de la guerre, militaire) |
+| 3 | `railway` ★, `coal`, `motorcar` ★ → usine automobile, `flight` → aérodrome, `oil` ★ → raffinerie, `galleon` (chantier naval) |
 | 4 | `summit` ★, `reef`, `stars` → observatoire, `games` (stade, football, basket, tennis, parc aquatique, ski), `trawl` (halle aux poissons) |
 | 5 | `seafarm` (ferme marine), `rocket` (cosmodrome), `moon` (fusée réussie), `colony` (lune réussie, cosmodrome, fusion) |
 
@@ -26,7 +26,7 @@ Une mission = plusieurs **choix** (en général deux, parfois trois, un seul pou
 - `portal` (« Le portail de l'autre rive ») n'est plus obligatoire ni proposée : le grand choix de la fin de l'Antiquité ouvre le portail sans elle (voir [grand-choix.md](grand-choix.md)). `Expeditions.list` ne la montre que si une ancienne partie l'a en route ; réussie, elle ouvre encore le portail (`exp.done`), et `why` refuse le départ sans île.
 - **L'onglet « Voies »** (`openExpeditions('ways')`, `ui/ways.ts`) : les deux voies du grand choix (les Enfers, explorer le monde), une fois le grand choix fait (au bac à sable, tout de suite), une carte par voie dans l'habillage parchemin et or, avec son état (disponible, voie ouverte, pas sur cette carte). Rien ne le signale. Voir [grand-choix.md](grand-choix.md).
 - Obligatoires (`mandatoriesFor(age)`) : toutes celles de l'âge sont à réussir pour l'âge suivant (voir [ages.md](ages.md)). `isLegendary` (mammouth, ou gain d'un trophée de `LEGENDS`) et `isMilitary` (`wolf` ou un choix avec `troop`) servent aux étiquettes et aux sous-onglets de la fenêtre.
-- **Pourparlers** (`Mission.talks`, la paix de l'archipel : `envoys`, `truce`, `feast`) : `chance` vaut 0 (jamais d'échec), aucune option d'imprévu ne blesse, seuls les imprévus qui nomment la mission surviennent (`EventCtx.own`), et `why` refuse de refaire une étape réussie (`missionWhy`). Détails : [diplomatie.md](diplomatie.md).
+- **Pourparlers** (`Mission.talks`, la paix de l'archipel : `truce`, « L'ambassade de la paix ») : `chance` vaut 0 (jamais d'échec), aucune option d'imprévu ne blesse, seuls les imprévus qui nomment la mission surviennent (`EventCtx.own`), et `why` refuse de refaire une étape réussie (`missionWhy`). Détails : [diplomatie.md](diplomatie.md).
 - `colony` a `farewell: true` : tout le village accompagne les colons, ils ne reviennent pas, l'issue est aussitôt un récit ; `VICTORY = 'colony'` ouvre l'écran de fin ([fin-de-partie.md](fin-de-partie.md)).
 
 ### Un choix (`Choice`)
@@ -34,7 +34,7 @@ Champs lus par le jeu : `dest` (lieu), `party` (habitants), `work` (secondes de 
 Les champs `troop`, `mounts`, `fuel` et `ages` existent dans le type mais **aucune mission ne les emploie plus** (voir pièges). `choiceAt(c, age)` applique `ages` (libellés selon l'âge).
 
 ### Effets (`Effect`) et gains
-`herd` (bêtes ramenées), `ore` (minerai du village), `need` (`food`, `water`, `jobs`, `joy` : durable, ou `days` jours), `perk` (savoir-faire durable : champs +30 % pour `seeds`, trophées, forge), `injured`, `unherd`, `diplo` (la diplomatie de l'archipel avance : `post`, `truce`, `feast`, `victory` ; `meet` ne sert plus, voir [diplomatie.md](diplomatie.md)). `applyEffects` les applique. Refaire une mission réussie : `redoEffects` retire les `perk` et les `diplo` et limite les bonus durables à `REDO_DAYS = 4` jours.
+`herd` (bêtes ramenées), `ore` (minerai du village), `need` (`food`, `water`, `jobs`, `joy` : durable, ou `days` jours), `perk` (savoir-faire durable : champs +30 % pour `seeds`, trophées, forge), `injured`, `unherd`, `diplo` (la diplomatie de l'archipel avance : `post`, `truce`, `feast`, `landing` (les troupes à terre : la bataille est prête) ; `meet` et `victory` ne servent plus qu'aux anciennes parties, voir [diplomatie.md](diplomatie.md)). `applyEffects` les applique. Refaire une mission réussie : `redoEffects` retire les `perk` et les `diplo` et limite les bonus durables à `REDO_DAYS = 4` jours.
 `effectSummary` / `effectChips` les affichent (résumé du récit, pastilles de la carte).
 
 ### Risque, équipe, durée

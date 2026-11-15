@@ -20,7 +20,7 @@ Six âges, de 0 à 5. Le village est à un âge (`Sim.age`) ; il passe au suivan
 | 5 | Futuriste | Arcologies, maglev et fusées | 180 |
 
 ### Conditions pour atteindre l'âge `n` (en Facile et Bac à sable)
-Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`, `ratio` = moyenne de `min(1, have/need)`. Dans l'ordre : habitants, bâtiments (`reqKinds`), minerai, briques, or (archipel accepté seulement), expéditions obligatoires de l'âge **actuel**, le grand choix (vers le Médiéval), bâtiments de fin d'âge (`reqLate`), chemin de fer.
+Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`, `ratio` = moyenne de `min(1, have/need)`. Dans l'ordre : habitants, bâtiments (`reqKinds`), minerai, briques, or (archipel accepté seulement), expéditions obligatoires de l'âge **actuel**, le grand choix (vers le Médiéval), le conflit des deux îles (vers l'Industriel, archipel), bâtiments de fin d'âge (`reqLate`), chemin de fer.
 
 | Pour atteindre | Bâtiments (`reqKinds`) | Minerai | Briques | Or (archipel) | Expéditions obligatoires (à réussir dans l'âge d'avant) | Fin d'âge |
 |---|---|---|---|---|---|---|
@@ -37,7 +37,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - Un bâtiment **amélioré** compte pour son genre d'origine (`lineOf`, `UPGRADES` : une gare devenue gare centrale reste une gare ; une maison devenue manoir reste une maison).
 - **Le grand choix** (Médiéval seulement) : la ligne « le grand choix » (`CHOICE_LABEL`), remplie quand le joueur a répondu à la carte (les Enfers, le monde, ou ni l'un ni l'autre), quand une voie est déjà prise ou qu'aucune n'est possible. La carte s'ouvre quand toutes les autres lignes sont remplies ; un clic sur la ligne ou sur le conseil la rouvre. Voir [grand-choix.md](grand-choix.md).
 - L'île du portail, l'invasion et les Enfers sont **facultatifs** et ne conditionnent plus le passage (commit 66acbf4).
-- **L'archipel** : vers le **Moderne**, une partie qui a accepté l'archipel doit avoir réglé le conflit des deux îles (par la paix ou par la guerre) : ligne « le conflit des deux îles, réglé » (`CONFLICT_LABEL`, `conflictItem`), cliquable pour rouvrir la carte, comme le grand choix. Une partie déjà au-delà avec un conflit ouvert est réglée d'office (`settleLate`). Voir [diplomatie.md](diplomatie.md).
+- **L'archipel** : vers l'**Industriel**, une partie qui a accepté l'archipel doit avoir réglé le conflit des deux îles (la paix : l'ambassade ; la guerre : la bataille gagnée) : ligne « le conflit des deux îles, réglé » (`CONFLICT_LABEL`, `conflictItem`), cliquable (carte, ou bataille), comme le grand choix. Une partie déjà à l'Industriel avec un conflit ouvert la retrouve vers le Moderne (la carte s'ouvre tout de suite) ; au Moderne ou au-delà, il est réglé d'office (`settleLate`). Pas de passage d'âge pendant la bataille. Voir [diplomatie.md](diplomatie.md).
 - Un bâtiment bâti avant d'être demandé compte déjà.
 
 ### Variante Normal (`newOnly`)

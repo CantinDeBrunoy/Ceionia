@@ -13580,7 +13580,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'temple': temple(p, Math.max(1, age)); break;
     case 'mill': mill(p, Math.max(2, age)); break;
     case 'landmark': landmark(p, Math.max(2, age), o.v); break;
-    case 'concord': concord(p, Math.max(3, age)); break;
+    case 'concord': concord(p, Math.max(2, age)); break;
     case 'terminal': if (size >= 3) terminalBig(p, Math.max(3, age)); else terminal(p, Math.max(3, age)); break;
     case 'station': station(p, Math.max(3, age)); break;
     case 'lamp': lamp(p, age); break;

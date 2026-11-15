@@ -88,7 +88,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'mistrust', where: ['river'], missions: ['envoys'], water: 'sea', title: 'Un accueil méfiant',
+    id: 'mistrust', where: ['river'], missions: ['truce'], water: 'sea', title: 'Un accueil méfiant',
     text: 'Sur le quai, des gardes en armes. Leur chef demande pourquoi nous venons.',
     options: [
       { label: 'Parler de la paix, simplement', risk: 1, text: 'Nos émissaires ont parlé de paix, simplement, et les gardes ont baissé leurs lances.' },
@@ -97,7 +97,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'grievance', where: ['river'], missions: ['envoys', 'truce'], water: 'sea', title: 'Une vieille querelle',
+    id: 'grievance', where: ['river'], missions: ['truce'], water: 'sea', title: 'Une vieille querelle',
     text: 'Un chef rappelle une vieille querelle : une barque coulée, il y a des années. Il veut des excuses.',
     options: [
       { label: 'Proposer que chacun s’excuse', risk: 1, text: 'Chacun a présenté ses excuses : la vieille querelle est oubliée.' },
@@ -115,7 +115,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'menu', where: ['river'], missions: ['feast'], water: 'sea', title: 'Le menu de la fête',
+    id: 'menu', where: ['river'], missions: ['truce'], water: 'sea', title: 'Le menu de la fête',
     text: 'Les invités montent à bord. Il faut encore décider du plat de la fête.',
     options: [
       { label: 'Un plat de chaque peuple', risk: 1, bonus: [{ t: 'need', need: 'food', n: 2, days: 4 }], text: 'Un plat de chaque peuple : tout le monde a goûté à tout.' },
@@ -124,7 +124,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'music', where: ['river'], missions: ['feast'], water: 'sea', title: 'Trois musiques',
+    id: 'music', where: ['river'], missions: ['truce'], water: 'sea', title: 'Trois musiques',
     text: 'Chaque peuple a amené ses musiciens. Qui jouera ce soir ?',
     options: [
       { label: 'Tous ensemble', risk: 1, bonus: [joy(1, 4)], text: 'Les trois orchestres ont joué ensemble : un drôle de mélange, et tout le monde a dansé.' },

@@ -2,7 +2,7 @@ import type { World } from '../world/world';
 import { Danger, GearId, Stock, emptyStock, GEAR_BY } from './gear';
 import type { KindId } from '../build/catalog';
 import { tr, plural } from '../i18n';
-import { applyDiplo, DiploAct, WAR_SPOILS } from './diplomacy';
+import { applyDiplo, claimVictory, DiploAct } from './diplomacy';
 
 /**
  * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant, deux à la
@@ -602,92 +602,50 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
-  // ---------------- Âge industriel ----------------
-  // la paix de l'archipel (voie choisie à l'âge industriel) : des pourparlers, seulement des choix, sans échec possible
+  // le dénouement de l'archipel (au Médiéval, une fois l'allié choisi et installé chez lui) : la paix, une ambassade sans
+  // échec possible, suivie de la cinématique de la paix (elle garde l'id de l'ancienne trêve, qui ouvrait le monument) ;
+  // la guerre, une expédition militaire qui débarque les troupes pour la bataille
   {
-    id: 'envoys', age: 3, mandatory: false, talks: true, icon: '🕊️', title: 'Les émissaires',
-    intro: 'Pour faire la paix, il faut d’abord parler. Nos émissaires vont porter des paroles de paix chez notre allié, puis chez son rival.',
-    choices: [
-      {
-        label: 'Passer d’abord chez notre allié', text: 'On rassure l’allié, puis on traverse chez le rival.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'porte des paroles de paix d’une île à l’autre', party: 3, work: 30, risk: 0, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'post' }, joy(1, 4)], lose: [],
-        winText: 'Notre allié a donné sa bénédiction, et son rival a écouté. En gage, il ouvre à nos marchands un comptoir sur son île.',
-        loseText: 'Les émissaires sont rentrés sans réponse.',
-      },
-      {
-        label: 'Aller droit chez le rival', text: 'Plus court : on parle tout de suite à celui qui se méfie.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'va droit chez le rival, paroles de paix en main', party: 3, work: 22, risk: 0, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'post' }, jobs(1, 4)], lose: [],
-        winText: 'Surpris de nous voir arriver seuls, les chefs du rival ont écouté jusqu’au bout. En gage, ils ouvrent à nos marchands un comptoir sur leur île.',
-        loseText: 'Les émissaires sont rentrés sans réponse.',
-      },
-    ],
-  },
-  {
-    id: 'truce', age: 3, mandatory: false, talks: true, icon: '📜', title: 'La trêve des deux îles', unlocks: 'concord',
-    requires: { missions: ['envoys'] },
-    intro: 'Les deux peuples veulent bien se parler, mais pas chez l’autre. Notre village propose de réunir leurs chefs et de signer une trêve.',
+    id: 'truce', age: 2, mandatory: false, talks: true, icon: '🕊️', title: 'L’ambassade de la paix', unlocks: 'concord',
+    intro: 'Nos ambassadeurs vont réunir les chefs des deux îles autour d’une même table. S’ils signent, la guerre cesse, et les trois peuples feront la fête.',
     choices: [
       {
         label: 'Réunir les chefs sur une petite île', text: 'Terrain neutre : une tente, une table et trois chaises.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'réunit les chefs des deux îles sous une tente', party: 4, work: 34, risk: 0, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'truce' }, joy(2)], lose: [],
-        winText: 'Sous la tente, les deux chefs ont signé la trêve, et notre village en est le témoin. Les combats cessent en mer. Pour s’en souvenir : un monument de la concorde à bâtir.',
+        dest: 'river', sea: true, scene: 'voyage', doing: 'réunit les chefs des deux îles sous une tente', party: 4, work: 40, risk: 0, carry: 'guests',
+        win: [{ t: 'diplo', act: 'truce' }, { t: 'diplo', act: 'post' }, { t: 'diplo', act: 'feast' }, joy(3), food(3, 6)], lose: [],
+        winText: 'Sous la tente, les deux chefs ont signé la paix, et notre village en est le témoin. En gage, le rival ouvre un comptoir à nos marchands ; les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde à bâtir.',
         loseText: 'Les chefs ne sont pas venus.',
       },
       {
         label: 'Signer à bord de notre navire', text: 'Au milieu du bras de mer, sous notre pavillon.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'accueille les chefs des deux îles à son bord', party: 4, work: 28, risk: 0, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'truce' }, joy(2)], lose: [],
-        winText: 'À notre bord, au milieu du bras de mer, les deux chefs ont signé la trêve. Les combats cessent. Pour s’en souvenir : un monument de la concorde à bâtir.',
+        dest: 'river', sea: true, scene: 'voyage', doing: 'accueille les chefs des deux îles à son bord', party: 4, work: 32, risk: 0, carry: 'guests',
+        win: [{ t: 'diplo', act: 'truce' }, { t: 'diplo', act: 'post' }, { t: 'diplo', act: 'feast' }, joy(4), jobs(1, 6)], lose: [],
+        winText: 'À notre bord, au milieu du bras de mer, les deux chefs ont signé la paix. En gage, le rival ouvre un comptoir à nos marchands ; les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde à bâtir.',
         loseText: 'Les chefs ne sont pas venus.',
       },
     ],
   },
   {
-    id: 'feast', age: 3, mandatory: false, talks: true, icon: '🎉', title: 'La fête des trois peuples',
-    requires: { missions: ['truce'] },
-    intro: 'La paix est signée : il faut la fêter. Un navire va chercher les invités des deux îles pour une grande fête au village.',
-    choices: [
-      {
-        label: 'Un banquet sur la grand-place', text: 'Chaque peuple apporte ses plats, on mange ensemble.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'ramène les invités des deux îles pour le banquet', party: 3, work: 24, risk: 0, carry: 'guests',
-        win: [{ t: 'diplo', act: 'feast' }, joy(3), food(3, 6)], lose: [],
-        winText: 'Dattes des Sablais, brioches de chez nous, raviolis des Jadéens : la grand-place n’a jamais tant ri. Les trois peuples sont amis.',
-        loseText: 'Les invités n’ont pas pu venir.',
-      },
-      {
-        label: 'Des jeux et un feu d’artifice', text: 'Courses, musique, et des fusées de trois couleurs.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'ramène les invités des deux îles pour les jeux', party: 3, work: 24, risk: 0, carry: 'guests',
-        win: [{ t: 'diplo', act: 'feast' }, joy(4), jobs(1, 6)], lose: [],
-        winText: 'Courses de barques, musiques des trois peuples, et le soir des fusées bleues, turquoise et rouges : les trois peuples sont amis.',
-        loseText: 'Les invités n’ont pas pu venir.',
-      },
-    ],
-  },
-  // la guerre de l'archipel (voie choisie à l'âge industriel) : une expédition militaire, en attendant la grande bataille.
-  // Réussie, elle gagne la guerre (butin, tribut) ; ratée, elle se retente
-  {
-    id: 'allywar', age: 3, mandatory: false, icon: '⚔️', title: 'Aux côtés de notre allié',
-    intro: 'La flotte rivale bloque le port de notre allié. Nos soldats embarquent pour briser le blocus et faire plier le rival.',
+    id: 'allywar', age: 2, mandatory: false, icon: '⚔️', title: 'Aux côtés de notre allié',
+    intro: 'Notre allié appelle à l’aide contre son rival. Nos soldats embarquent pour gagner la côte rivale ; une fois à terre, la bataille commence.',
     choices: [
       {
         label: 'Escorter la flotte alliée', text: 'Prudent : nos navires se joignent aux leurs, en bon ordre.',
-        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'escorte la flotte alliée contre le blocus', danger: ['beast', 'water'], party: 5, work: 44, risk: 0.22, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'victory' }, joy(2, 6)], lose: [hurt(1, 3)],
-        winText: 'Nos navires et ceux de notre allié ont brisé le blocus ensemble : le rival demande la paix et paiera un tribut. Le butin est au village.',
-        loseText: 'Une tempête a dispersé les deux flottes avant la bataille ; un soldat blessé. Il faudra retenter.',
+        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'escorte la flotte alliée vers la côte rivale', danger: ['beast', 'water'], party: 5, work: 40, risk: 0.18, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'landing' }, joy(1, 4)], lose: [hurt(1, 3)],
+        winText: 'Nos navires et ceux de notre allié ont forcé le blocus : nos troupes ont pris pied sur la plage rivale. La bataille peut commencer.',
+        loseText: 'Une tempête a dispersé les deux flottes avant d’atteindre la côte ; un soldat blessé. Il faudra retenter.',
       },
       {
-        label: 'Débarquer et prendre leur fort', text: 'Audacieux : un coup de main sur la côte du rival.',
-        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'débarque sur la côte rivale et monte à l’assaut du fort', danger: ['beast', 'water'], party: 6, work: 32, risk: 0.38, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'victory' }, joy(3, 6), { t: 'ore', n: 10 }], lose: [hurt(2, 3), joy(-1, 3)],
-        winText: 'Le fort est tombé à l’aube : le rival se rend, paiera un tribut, et nos soldats rentrent chargés de butin.',
-        loseText: 'Le fort a tenu : nos soldats ont rembarqué, deux blessés. Il faudra retenter.',
+        label: 'Débarquer par surprise, de nuit', text: 'Audacieux : plus vite, mais la côte est gardée.',
+        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'débarque de nuit sur la côte rivale', danger: ['beast', 'water'], party: 6, work: 28, risk: 0.32, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'landing' }, joy(2, 4), { t: 'ore', n: 6 }], lose: [hurt(2, 3), joy(-1, 3)],
+        winText: 'À la faveur de la nuit, nos troupes ont pris pied sur la plage rivale, et pillé un entrepôt au passage. La bataille peut commencer.',
+        loseText: 'Les guetteurs rivaux ont donné l’alarme : nos soldats ont rembarqué, deux blessés. Il faudra retenter.',
       },
     ],
   },
+  // ---------------- Âge industriel ----------------
   {
     id: 'railway', age: 3, mandatory: true, icon: '🚂', title: 'Le tracé du chemin de fer',
     intro: 'Le chemin de fer arrive dans la région. Des géomètres doivent repérer le meilleur tracé jusqu’au village.',
@@ -1128,12 +1086,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
     else if (e.t === 'need') { if (e.days) s.temp.push({ need: e.need, n: e.n, until: s.clock + e.days * dayLen }); else s.bonus[e.need] += e.n; }
     else if (e.t === 'injured') { injured += e.n; days = Math.max(days, e.days); }
     else if (e.t === 'unherd') for (let i = 0; i < e.n; i++) { const j = s.herd.lastIndexOf(e.kind); if (j >= 0) s.herd.splice(j, 1); }
-    else if (e.t === 'diplo') {
-      // la guerre gagnée : le butin d'or du vaincu (le tribut vient ensuite chaque jour, voir `Expeditions.mineStep`)
-      const won = e.act === 'victory' && w.diplo.conflict === 'open';
-      applyDiplo(w.diplo, e.act);
-      if (won && w.diplo.conflict === 'won') w.gold += WAR_SPOILS.loot;
-    }
+    else if (e.t === 'diplo') { if (e.act === 'victory') claimVictory(w); else applyDiplo(w.diplo, e.act); }
   }
   w.version++;
   return { injured, days };
@@ -1151,8 +1104,8 @@ PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place d
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** Ce que la diplomatie gagne, en clair et en pastille */
-const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la trêve des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', victory: 'la guerre gagnée : butin et tribut d’or' };
-const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', victory: '🏆' };
+const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la paix des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', landing: 'nos troupes à terre : la bataille peut commencer', victory: 'la guerre gagnée : butin et tribut d’or' };
+const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', landing: '⚔️', victory: '🏆' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

@@ -4,6 +4,7 @@ import { Hell, HellEvent, DemonKind, DEMONS } from '../sim/hell';
 import { caveLit } from './caveLight';
 import { CombatFx } from './combatFx';
 import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
+import { peopleRole } from './peopleSoldiers';
 import { makeRider, rideStep, armorStep, Rider } from './riders';
 import { makeHoverTank, hoverStep, makeEscort, escortStep, escortFire, Escort } from './futureTroops';
 
@@ -60,6 +61,11 @@ export class BattleLayer {
   mark: { x: number; z: number; kind: string; t: number } | null = null;
   /** âge des soldats du joueur (leur tenue) */
   age = 1;
+  /**
+   * la bataille de l'archipel : les ennemis (camp `hell`, sortes `soldier` et `archer`) sont des soldats de ce peuple, à
+   * l'âge du village, au lieu de démons
+   */
+  people: 'orient' | 'asie' | null = null;
   private uTime = 0;
   private rigs = {} as Record<DemonKind, Rig>;
   /** (le cavalier : `r`, cheval et cavalier de `riders.ts` ; les autres : `s`) */
@@ -211,9 +217,12 @@ export class BattleLayer {
   private drawTroops() {
     const seen = new Set<number>();
     for (const u of this.hell.units.values()) {
-      if (u.side !== 'player') continue;
+      // (les soldats du peuple rival, dans la bataille de l'archipel : ni démons ni troupes à nous)
+      const foe = u.side === 'hell';
+      if (foe && (!this.people || u.kind in DEMONS)) continue;
       seen.add(u.id);
-      const look = troopLook(u.kind, this.age), horse = !!look.mount, age = look.era, key = `${look.role}${look.mount ?? ''}${age}`;
+      const look = foe ? { role: peopleRole(this.people!, u.kind === 'archer') as SoldierRole, era: this.age, mount: undefined, drones: undefined } : troopLook(u.kind, this.age);
+      const horse = !!look.mount, age = look.era, key = `${foe ? this.people : ''}${look.role}${look.mount ?? ''}${age}`;
       let t = this.troops.get(u.id);
       if (t && (t.key !== key || t.kind !== u.kind)) { this.dropTroop(t); t = undefined; }
       if (!t) {
