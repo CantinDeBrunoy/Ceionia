@@ -925,6 +925,23 @@ export class UI {
   }
 
   /** Les flèches du carrousel : grisées au bout de la rangée, cachées quand tout tient */
+  /**
+   * Où montrer un bâtiment à poser (bulles du tutoriel) : l'onglet Bâtir, puis son rayon, puis sa vignette ; une vignette
+   * cachée hors de la rangée qui défile : la flèche de son côté (`hidden` : la flèche à cliquer, sinon null)
+   */
+  buildAnchor(k: KindId): { el: Element | null; hidden: 'next' | 'prev' | null } {
+    const q = (s: string) => this.root.querySelector(s);
+    if (this.tab !== 'build') return { el: q('#modes [data-t="build"]'), hidden: null };
+    if (this.cat !== KINDS[k].cat) return { el: q(`#subcats [data-c="${KINDS[k].cat}"]`), hidden: null };
+    const tile = q(`#items [data-kind="${k}"]`);
+    if (!tile) return { el: null, hidden: null };
+    const r = tile.getBoundingClientRect(), box = $('#items').getBoundingClientRect();
+    // (à moitié visible au bord : il faut défiler aussi)
+    if (r.right > box.right + 2) return { el: q('#itNext'), hidden: 'next' };
+    if (r.left < box.left - 2) return { el: q('#itPrev'), hidden: 'prev' };
+    return { el: tile, hidden: null };
+  }
+
   private refreshArrows() {
     const it = $('#items'), max = it.scrollWidth - it.clientWidth;
     $('#itemsWrap').classList.toggle('fits', max <= 1);
