@@ -5,7 +5,7 @@ import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catal
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
-import { goldNeed, goldSince } from './trade';
+import { goldNeed, goldSince, tradeOpen } from './trade';
 import { archipelagoOn, canExpand } from '../world/expand';
 import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from './crossroads';
 import { CONFLICT_LABEL, conflictItem } from './diplomacy';
@@ -362,7 +362,12 @@ export class Sim {
         return build(miss.kind, n > 1 ? tr('Pour l’âge suivant : il manque {n} × {k}{why}.', { n, k: say(miss.kind), why }) : tr('Pour l’âge suivant : il manque {k}{why}.', { k: say(miss.kind), why }));
       }
       if (miss.label.startsWith('chemin de fer')) return this.railAgeTip(say, build, miss.label === RAIL_FIRST);
-      if (miss.label === GOLD_LABEL) { this.messageGold = true; return tr('Pour l’âge suivant : il faut encore {n} or : vendez du bois, de la pierre ou du minerai au comptoir des voisins (cliquez ici).', { n: miss.need - miss.have }); }
+      if (miss.label === GOLD_LABEL) {
+        // sans comptoir, pas d'or : c'est lui qu'on conseille de bâtir, chez l'allié
+        if (!this.tradeOpen && w.diplo.ally) return build('tradepost', tr('Pour l’âge suivant : il faut {n} or : bâtissez {k} sur l’île de votre allié, on y vend nos matériaux contre de l’or.', { n: miss.need - miss.have, k: say('tradepost') }));
+        this.messageGold = true;
+        return tr('Pour l’âge suivant : il faut encore {n} or : vendez du bois, de la pierre ou du minerai au comptoir des voisins (cliquez ici).', { n: miss.need - miss.have });
+      }
       if (miss.label.startsWith('briques')) return this.counts.brickworks ? tr('Pour l’âge suivant : il faut encore {n} briques (la briqueterie en cuit chaque jour).', { n: miss.need - miss.have }) : about('brickworks', tr('Pour l’âge suivant : il faut {n} briques : {k}.', { n: miss.need, k: say('brickworks') }));
       if (miss) {
         // le minerai vient des mines, creusées dans la montagne (la mine se débloque par une expédition)
@@ -434,8 +439,13 @@ export class Sim {
     return false;
   }
 
+  /** L'échange avec l'allié est-il ouvert ? (un comptoir bâti chez lui, ou une ancienne partie qui n'en a pas encore) */
+  get tradeOpen() { return tradeOpen(this.world, archipelagoOn(this.world), this.counts.tradepost ?? 0); }
+
   update(dt: number, realDt: number) {
     this.recalcTimer -= realDt;
+    // une ancienne partie à l'archipel échangeait sans comptoir : le premier qu'elle bâtit prend le relais
+    if (this.world.trade.legacy && (this.counts.tradepost ?? 0) > 0) this.world.trade.legacy = false;
     if (this.world.version !== this.lastVersion && this.recalcTimer <= 0) {
       this.lastVersion = this.world.version;
       this.recalcTimer = 0.25;

@@ -62,10 +62,10 @@ describe('le monde s’agrandit : une partie de 192 passe sur l’archipel', () 
     expect(e.mainGen).toBe(gen);
     expect(e.isles!.rivals.length).toBe(2);
     for (const q of e.isles!.rivals) expect(e.isWaterCell(Math.round(q.village.x), Math.round(q.village.z))).toBe(false);
-    // on continue de bâtir chez soi, pas chez les voisins
+    // on continue de bâtir chez soi, pas chez les voisins (sans allié choisi : aucune île rivale)
     const g = [...e.buildings.values()].find((b) => b.kind === 'gather')!;
     expect(e.startSpot()).toBeDefined();
-    expect(e.canPlace('house', Math.round(e.isles!.rivals[0].village.x), Math.round(e.isles!.rivals[0].village.z))).toMatch(/Hors de votre île/);
+    expect(e.canPlace('house', Math.round(e.isles!.rivals[0].village.x), Math.round(e.isles!.rivals[0].village.z))).toMatch(/Choisissez d’abord votre allié/);
     expect(e.inMain(g.x, g.z)).toBe(true);
   }, 60000);
 

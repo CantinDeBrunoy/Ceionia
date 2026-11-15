@@ -750,6 +750,8 @@ export class Fauna {
   private visitors: Source[] = [];
   private visitSerial = 0;
   private scoutTimer = 2;
+  /** pas de visiteurs appelés près de la vue (une cinématique : leur recensement fait un à-coup, voir `scout`) */
+  quiet = false;
   private look = new THREE.Vector3();
   /** prédateurs, et chef (rang 0) de chaque groupe : recensés à chaque image plutôt que cherchés parmi toutes les bêtes */
   private hunters: Critter[] = [];
@@ -1208,7 +1210,7 @@ export class Fauna {
    */
   private scout(dt: number, camera: THREE.Camera) {
     this.scoutTimer -= dt;
-    if (this.scoutTimer > 0) return;
+    if (this.scoutTimer > 0 || this.quiet) return;
     this.scoutTimer = 3;
     const w = this.world, cam = camera.position, dir = camera.getWorldDirection(this.look);
     if (dir.y > -0.05) return;

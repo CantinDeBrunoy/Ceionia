@@ -16,7 +16,7 @@ import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expedi
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { kindOffered, CONFLICT_LABEL } from '../sim/diplomacy';
+import { isleName, kindOffered, CONFLICT_LABEL } from '../sim/diplomacy';
 import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
@@ -62,7 +62,7 @@ export interface UIHost {
   /** prendre le commandement de la garnison de l'île du portail (tour de garde, caserne) */
   commandIsle?(): void;
   /**
-   * Les deux voies du grand choix (les Enfers, explorer le monde), pour l'onglet « Voies » des expéditions : où elles en sont,
+   * Les deux voies du grand choix (les Enfers, explorer le monde), pour l'onglet « Grands choix » des expéditions : où elles en sont,
    * et les prendre (la carte de la voie s'ouvre pour confirmer)
    */
   ways?(): { hell: WayState; world: WayState };
@@ -74,6 +74,8 @@ export interface UIHost {
   openDiploChoice?(): void;
   /** la vue va sur l'île du portail (pour y bâtir) */
   goIsle?(): void;
+  /** la vue va sur l'île de l'allié, là où l'on peut bâtir (le comptoir, le port) */
+  goAlly?(): void;
   /** brouillard visible (0 … 1), et le dissiper */
   fogLevel(): number;
   dispelFog(): void;
@@ -292,6 +294,9 @@ const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string;
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
 const reqOf = (label: string) => (label === CHOICE_LABEL ? 'choice' : label === CONFLICT_LABEL ? 'conflict' : label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
+
+/** Le bâtiment est-il proposé dans cette partie ? (la diplomatie ; le comptoir : seulement avec l'archipel) */
+const offered = (w: World, k: KindId) => kindOffered(w, k) && (k !== 'tradepost' || archipelagoOn(w));
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
@@ -867,7 +872,7 @@ export class UI {
       // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue) ; ceux des âges
       // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant. Les vignettes se rangent par groupe de
       // lecture (Nourriture, Matériaux, Santé…), chacun sous son titre
-      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1 && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge) && kindOffered(this.host.world, k)), shut = (k: KindId) => +!!this.lockOf(k);
+      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1 && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge) && offered(this.host.world, k)), shut = (k: KindId) => +!!this.lockOf(k);
       const tile = (k: KindId) => {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0, gv = givesOf(k, a);
         const badge = locked ? `<i class="badge lock">${pic('🔒', 14)}</i>` : n ? `<i class="badge">${n}</i>` : '';
@@ -893,7 +898,7 @@ export class UI {
       const tool = (id: string) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; };
       html = LAND_SUBS.find((l) => l.id === this.land)!.groups.map((g) => `<div class="grp"><div class="gh">${ic(g.icon, 13, 2)}<span>${tr(g.label)}</span></div><div class="gt">${g.tools.map(tool).join('')}</div></div>`).join('');
     }
-    // (les voies du grand choix, les Enfers et l'archipel, ne s'annoncent pas ici : elles sont dans l'onglet « Voies » des
+    // (les voies du grand choix, les Enfers et l'archipel, ne s'annoncent pas ici : elles sont dans l'onglet « Grands choix » des
     // expéditions, que le jeu ne montre pas du doigt)
     // le conflit des deux îles (archipel, âge industriel) : une ligne en tête du rayon Vie
     const dip = build && this.cat === 'life' ? this.host.diploLine?.() : null;
@@ -999,6 +1004,7 @@ export class UI {
       return tr('Débloqué par l’expédition « {title} »', { title: tr(m?.title ?? d.reqMission) });
     }
     if (d.reqKind && !h.sim.built(d.reqKind)) return tr('Il faut d’abord « {name} » au village', { name: h.sim.nameOf(d.reqKind) });
+    if (k === 'tradepost' && !h.world.diplo.ally) return tr('Choisissez d’abord votre allié : le comptoir se bâtit chez lui');
     return null;
   }
 
@@ -1394,9 +1400,9 @@ export class UI {
 
   /** Fenêtre d'un nouvel âge : les bâtiments qui apparaissent, chacun à bâtir d'un clic (et ses améliorations) */
   showNewAge(age: number) {
-    const fresh = KIND_ORDER.filter((k) => KINDS[k].minAge === age && !this.lockOf(k) && kindOffered(this.host.world, k));
+    const fresh = KIND_ORDER.filter((k) => KINDS[k].minAge === age && !this.lockOf(k) && offered(this.host.world, k));
     // ceux qu'une expédition débloquerait : visibles mais grisés, avec le nom de l'expédition
-    const shut = KIND_ORDER.filter((k) => KINDS[k].minAge <= age && KINDS[k].reqMission && !this.host.world.missionDone(KINDS[k].reqMission!) && kindOffered(this.host.world, k)
+    const shut = KIND_ORDER.filter((k) => KINDS[k].minAge <= age && KINDS[k].reqMission && !this.host.world.missionDone(KINDS[k].reqMission!) && offered(this.host.world, k)
       && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge!));
     if (!fresh.length && !shut.length) return;
     const lockedTile = (k: KindId) => {
@@ -1609,6 +1615,7 @@ export class UI {
    */
   private renderTrade() {
     const h = this.host, w = h.world, lot = this.tradeLot, inf = w.unlimited, age = h.sim.age;
+    if (!h.sim.tradeOpen) { this.renderTradeShut(); return; }
     const label: Record<TradeRes, string> = { wood: tr('Bois'), stone: tr('Pierre'), ore: tr('Minerai'), brick: tr('Briques'), fuel: tr('Carburant') };
     // les ressources que le village connaît déjà (comme la barre des stocks : briques à l'âge industriel, carburant au moderne)
     const shown = TRADE_RES.filter((r) => (r !== 'brick' || age >= 3 || w.brick >= 1) && (r !== 'fuel' || age >= 4 || w.fuel >= 1));
@@ -1625,13 +1632,32 @@ export class UI {
       <div class="sub">${tr('comptoir d’échange · or en réserve')}</div>
       <p class="hint">${tr('L’or ne vient que de l’échange avec le peuple allié ; il sert à passer les âges. Chaque vente fait baisser le cours de la ressource (jusqu’à −{max} %) ; il remonte de {up} % par jour.', { max: Math.round(SAT_MAX * 100), up: Math.round(SAT_RECOVER * 100) })}</p>
       <div class="tlot">${tr('Par lot de')} <button data-lot="1" class="${lot === 1 ? 'on' : ''}">1 ${pic('💰', 14)}</button><button data-lot="10" class="${lot === 10 ? 'on' : ''}">10 ${pic('💰', 14)}</button></div>
-      <div class="tradeRows">${rows}</div>`;
+      <div class="tradeRows">${rows}</div>
+      ${w.trade.legacy ? `<p class="hint">${tr('Bâtissez un comptoir sur l’île de votre allié : l’échange passera par lui.')}</p>` : ''}`;
+    const box = $('#needInfo');
+    if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
+  }
+
+  /** Le comptoir n'est pas encore bâti : la fiche de l'or dit où le bâtir (ou de choisir d'abord l'allié) */
+  private renderTradeShut() {
+    const h = this.host, w = h.world, ally = w.diplo.ally, name = h.sim.nameOf('tradepost'), lock = this.lockOf('tradepost');
+    const why = !ally ? tr('Choisissez d’abord votre allié parmi les deux peuples des îles : l’échange se fait chez lui.')
+      : tr('Pas encore de comptoir : bâtissez « {name} » sur {isle}, hors de leur ville. On y vendra nos matériaux contre de l’or.', { name, isle: isleName(ally) });
+    const html = `
+      <h4>${pic('💰', 20)} ${tr('Les voisins')}<em class="warn">${Math.floor(w.gold)}</em></h4>
+      <div class="sub">${tr('comptoir d’échange · or en réserve')}</div>
+      <p class="hint">${tr('L’or ne vient que de l’échange avec le peuple allié ; il sert à passer les âges.')}</p>
+      <p class="hint warn">${why}</p>
+      ${ally ? `<div class="row2"><button data-ally="1">${ic('eye', 15, 2.2)} ${tr('Voir l’île alliée')}</button>${lock ? '' : `<button class="primary" data-kind="tradepost">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}</div>` : ''}`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
 
   /** Un clic au comptoir : changer de lot, vendre ou acheter ; true s'il s'agissait du comptoir */
   private tradeClick(t: HTMLElement) {
+    // le comptoir à bâtir : la vue va sur l'île alliée (et, pour « Bâtir », le comptoir est pris en main par `data-kind`)
+    if (t.closest('[data-ally], [data-kind="tradepost"]')) { this.host.goAlly?.(); if (t.closest('[data-ally]')) { this.host.audio.sfxClick(); return true; } return false; }
+    if (!this.host.sim.tradeOpen) return false;
     const b = t.closest<HTMLButtonElement>('button[data-lot], button[data-sell], button[data-buy]');
     if (!b || b.disabled) return !!b;
     const w = this.host.world, d = b.dataset;
@@ -1869,7 +1895,7 @@ export class UI {
         <span class="grow"></span>
         <button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('ex-gear', 19, 1.8)}${tr('Équipement')}</button>
         ${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('ex-rail', 19, 1.8)}${tr('Chemin de fer')}</button>` : ''}
-        ${waysOn ? `<button data-tab="ways" class="${tab === 'ways' ? 'on' : ''}">${ic('compass', 19, 1.8)}${tr('Voies')}</button>` : ''}
+        ${waysOn ? `<button data-tab="ways" class="${tab === 'ways' ? 'on' : ''}">${ic('compass', 19, 1.8)}${tr('Grands choix')}</button>` : ''}
       </nav>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}

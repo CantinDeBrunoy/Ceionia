@@ -3725,6 +3725,129 @@ function mill(p: Parts, age: number) {
 }
 
 /**
+ * Le comptoir, notre maison de commerce chez le peuple allié (2 × 2, façade +z) : au fond l'entrepôt (colombage et chaume au
+ * Médiéval, brique et ardoise à l'âge industriel, bureau vitré à toit plat ensuite), devant, sous un auvent, la table du
+ * changeur, sa balance et ses piles d'or ; à droite les marchandises (sacs, tonneaux, caisses, puis conteneurs) et le mât à
+ * notre pavillon
+ */
+function tradepost(p: Parts, age: number) {
+  const g = 0.032, old = age <= 2, ind = age === 3;
+  const pave = old ? 0xb8a890 : ind ? 0xa8a39a : 0xc4c6c8;
+  p.box(1.86, 0.02, 1.86, 0, 0.012, 0, dark(pave, 0.84));
+  for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) p.box(0.19, 0.008, 0.19, -0.8 + i * 0.2, g - 0.008, -0.8 + j * 0.2, dark(pave, 0.9 + hash2(i, j, 47) * 0.2));
+
+  // ---- l'entrepôt, au fond
+  const x0 = -0.86, x1 = 0.4, W = x1 - x0, cx = (x0 + x1) / 2, zb = -0.86, zf = -0.2, D = zf - zb, cz = (zb + zf) / 2;
+  if (old) {
+    const wall = C.cream, wh = 0.42;
+    p.box(W, 0.12, D, cx, g, cz, C.darkstone);
+    p.box(W, wh - 0.12, D, cx, g + 0.12, cz, wall);
+    timbers(p, cx, zf, W, g + 0.12, g + wh, 0, 7);
+    roof(p, cx, g + wh, cz, { w: W, d: D, h: 0.32, color: 0x9a6a4a, wall, courses: true });
+    // grande porte à deux battants, poulie de levage sous le pignon, lucarne
+    p.box(0.26, 0.26, 0.02, cx - 0.2, g, zf + 0.01, C.door);
+    p.box(0.006, 0.26, 0.024, cx - 0.2, g, zf + 0.012, C.darkwood);
+    windows(p, [cx + 0.2, cx + 0.38], g + 0.2, zf + 0.012, 0.08, 0.09, C.cream);
+    p.box(0.02, 0.02, 0.16, x1 - 0.1, g + wh + 0.06, zf + 0.06, C.darkwood);
+    p.box(0.004, 0.18, 0.004, x1 - 0.1, g + wh - 0.12, zf + 0.13, 0x5a4636);
+    p.box(0.07, 0.06, 0.07, x1 - 0.1, g + wh - 0.18, zf + 0.13, 0xb48a5e);
+  } else if (ind) {
+    const brick = 0xb4685c, wh = 0.52;
+    p.box(W, wh, D, cx, g, cz, brick);
+    stones(p, cx, zf, W, g, g + wh, 0, dark(brick, 0.86), 0.45, 611);
+    roof(p, cx, g + wh, cz, { w: W, d: D, h: 0.26, color: C.slate, wall: brick, courses: true });
+    p.box(0.3, 0.32, 0.02, cx - 0.22, g, zf + 0.01, 0x3f5a4a);
+    for (let i = 0; i < 5; i++) p.box(0.3, 0.006, 0.024, cx - 0.22, g + 0.04 + i * 0.06, zf + 0.012, dark(0x3f5a4a, 0.8));
+    windows(p, [cx + 0.16, cx + 0.38], g + 0.24, zf + 0.012, 0.08, 0.12, 0xd8d2c4);
+    // enseigne peinte au-dessus de la porte, potence de levage
+    p.box(0.5, 0.07, 0.016, cx - 0.02, g + wh - 0.1, zf + 0.012, 0x2a3a5a);
+    p.box(0.44, 0.02, 0.018, cx - 0.02, g + wh - 0.075, zf + 0.014, C.gold);
+    p.box(0.03, 0.03, 0.2, x1 - 0.12, g + wh + 0.02, zf + 0.08, 0x2a2a2e);
+    p.box(0.004, 0.24, 0.004, x1 - 0.12, g + wh - 0.22, zf + 0.17, 0x2a2a2e);
+    p.box(0.08, 0.07, 0.08, x1 - 0.12, g + wh - 0.29, zf + 0.17, 0xb48a5e);
+  } else {
+    // le bureau de négoce : béton clair, bandeaux vitrés, toit plat à acrotère, enseigne lumineuse
+    const wall = 0xe8e6e0, wh = 0.56;
+    p.box(W, wh, D, cx, g, cz, wall);
+    for (const y of [0.1, 0.32]) p.box(W - 0.06, 0.14, 0.012, cx, g + y, zf + 0.004, C.glass, 0, true);
+    for (let i = 0; i <= 6; i++) p.box(0.016, wh - 0.06, 0.02, x0 + 0.03 + i * ((W - 0.06) / 6), g + 0.03, zf + 0.01, 0x8a9098);
+    p.box(W + 0.04, 0.04, D + 0.04, cx, g + wh, cz, 0xc8c8c4);
+    p.box(W + 0.04, 0.05, 0.02, cx, g + wh + 0.04, zf + 0.02, 0xc8c8c4);
+    p.box(0.56, 0.08, 0.02, cx, g + wh + 0.06, zf + 0.03, 0x1f3a6a);
+    p.box(0.5, 0.04, 0.022, cx, g + wh + 0.08, zf + 0.032, 0xf2c23a, 0, true);
+    for (const [x, z] of [[cx - 0.3, cz - 0.1], [cx + 0.25, cz]]) { p.box(0.14, 0.08, 0.12, x, g + wh + 0.04, z, 0xd8dce2); p.cyl(0.035, 0.035, 0.006, 8, x, g + wh + 0.12, z, 0x3a3f48); }
+  }
+
+  // ---- la table du changeur, sous un auvent rayé
+  const tx = -0.45, tz = 0.2, top = old ? C.wood : ind ? 0x6a4a34 : 0x2e3440;
+  p.box(0.5, 0.12, 0.24, tx, g, tz, top);
+  p.box(0.52, 0.016, 0.26, tx, g + 0.12, tz, old ? dark(C.wood, 0.85) : ind ? 0x3a6a4a : 0x4a5260);
+  // la balance : pied, fléau, deux plateaux
+  p.cyl(0.006, 0.01, 0.12, 6, tx - 0.1, g + 0.136, tz, C.gold);
+  p.box(0.16, 0.008, 0.008, tx - 0.1, g + 0.25, tz, C.gold);
+  for (const s of [-1, 1]) {
+    p.box(0.002, 0.05, 0.002, tx - 0.1 + s * 0.075, g + 0.2, tz, 0x6a5a3a);
+    p.cyl(0.03, 0.022, 0.008, 10, tx - 0.1 + s * 0.075, g + 0.195, tz, C.gold);
+  }
+  // les piles de pièces d'or, une bourse, un registre ouvert
+  for (const [x, z, n] of [[0.04, -0.05, 4], [0.1, 0.02, 6], [0.15, -0.06, 3], [0.06, 0.07, 2]] as [number, number, number][])
+    for (let k = 0; k < n; k++) p.cyl(0.018, 0.018, 0.007, 8, tx + x, g + 0.136 + k * 0.008, tz + z, k % 2 ? 0xf2d27a : C.gold);
+  p.sphere(0.03, tx + 0.18, g + 0.16, tz + 0.07, 0x8a5a3a, 0, 0.8);
+  p.box(0.09, 0.006, 0.07, tx - 0.02, g + 0.136, tz + 0.06, 0xf4ecd8, 0.2);
+  p.box(0.004, 0.008, 0.07, tx - 0.02, g + 0.138, tz + 0.06, 0x8a6a4a, 0.2);
+  // l'auvent : quatre poteaux, toile rayée aux couleurs du comptoir (or et bleu)
+  const A1 = 0x2f5f9a, A2 = 0xf2d27a;
+  for (const sx of [-1, 1]) {
+    p.box(0.02, 0.36, 0.02, tx + sx * 0.3, g, tz - 0.16, C.darkwood);
+    p.box(0.02, 0.28, 0.02, tx + sx * 0.3, g, tz + 0.2, C.darkwood);
+  }
+  const tilt = Math.atan2(0.08, 0.36), len = Math.hypot(0.08, 0.36);
+  for (let i = 0; i < 8; i++) {
+    const x = tx - 0.3 + (i + 0.5) * (0.6 / 8), c = i % 2 ? A2 : A1;
+    p.add(new THREE.BoxGeometry(0.6 / 8, 0.012, len + 0.03), x, g + 0.33, tz + 0.02, c, 0, false, 0, tilt);
+    p.box(0.6 / 8, 0.035, 0.01, x, g + 0.25, tz + 0.21, c);
+  }
+  // un banc pour les clients, une lanterne
+  p.box(0.3, 0.02, 0.07, tx, g + 0.06, tz + 0.36, C.wood);
+  for (const sx of [-1, 1]) p.box(0.02, 0.06, 0.06, tx + sx * 0.12, g, tz + 0.36, C.darkwood);
+  p.cyl(0.004, 0.004, 0.05, 3, tx + 0.28, g + 0.25, tz + 0.2, 0x3a3030);
+  p.box(0.035, 0.045, 0.035, tx + 0.28, g + 0.2, tz + 0.2, 0xffd68a, 0, true);
+
+  // ---- les marchandises, à droite
+  const sack = (x: number, z: number, c = 0xd9c4a0) => { p.sphere(0.06, x, g + 0.05, z, c, 0, 0.8); p.box(0.03, 0.02, 0.03, x, g + 0.09, z, dark(c, 0.8)); };
+  const barrel = (x: number, z: number, c = 0x8a5a3a) => { p.cyl(0.05, 0.05, 0.12, 8, x, g, z, c); for (const y of [0.015, 0.095]) p.cyl(0.054, 0.054, 0.01, 8, x, g + y, z, 0x4a3a2c); };
+  const crate = (x: number, y: number, z: number, ry = 0, c = 0xb48a5e) => { p.box(0.12, 0.1, 0.12, x, g + y, z, c, ry); p.box(0.124, 0.012, 0.124, x, g + y + 0.044, z, dark(c, 0.78), ry); };
+  if (age <= 3) {
+    for (const [x, z] of [[0.25, 0.15], [0.36, 0.2], [0.3, 0.3]]) sack(x, z);
+    barrel(0.6, 0.05); barrel(0.72, 0.1, 0x6a4a34); barrel(0.66, 0.2);
+    crate(0.55, 0, 0.42, 0.2); crate(0.7, 0, 0.45, -0.1); crate(0.62, 0.1, 0.44, 0.05);
+    // amphores et jarres d'huile (le goût de l'allié), rouleaux d'étoffe
+    for (const [x, z, c] of [[0.2, 0.55, 0xc87a4a], [0.3, 0.6, 0xb86a3a], [0.12, 0.62, 0xd88a5a]] as [number, number, number][]) {
+      p.cyl(0.035, 0.025, 0.1, 8, x, g, z, c); p.sphere(0.045, x, g + 0.08, z, c, 0, 0.9); p.cyl(0.014, 0.02, 0.04, 6, x, g + 0.12, z, dark(c, 0.85));
+    }
+    for (let i = 0; i < 3; i++) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.22, 8).rotateZ(Math.PI / 2), 0.62, g + 0.03 + (i === 2 ? 0.05 : 0), 0.66 + (i === 2 ? 0.03 : i * 0.06), [0xc84a3a, 0x3a7aa8, 0xe8b84a][i]);
+    if (ind) { p.box(0.3, 0.012, 0.08, 0.3, g, -0.05, 0x5a4a3a); for (const x of [0.2, 0.4]) p.cyl(0.03, 0.03, 0.012, 8, x, g + 0.012, -0.05, 0x2a2a2e); crate(0.3, 0.02, -0.05, 0); }
+  } else {
+    const cols = [0xd84a3e, 0x3c7fd8, 0xf2c23a, 0x4fa860, 0xe8e4dc];
+    for (let i = 0; i < 2; i++) for (let k = 0; k < 2 - i; k++) p.box(0.36, 0.13, 0.15, 0.55, g + k * 0.132, 0.1 + i * 0.17, cols[(i * 3 + k) % cols.length]);
+    for (let i = 0; i < 2; i++) for (let k = 0; k < 2; k++) p.box(0.12, 0.012, 0.12, 0.3 + i * 0.14, g, 0.5 + k * 0.14, 0x8a6a4a);
+    crate(0.3, 0.012, 0.5, 0, 0x3c7fd8); crate(0.44, 0.012, 0.5, 0, 0xc8ccd2); crate(0.3, 0.012, 0.64, 0, 0xc8ccd2);
+    // le chariot élévateur
+    p.box(0.12, 0.08, 0.16, 0.72, g + 0.02, 0.52, 0xf2b21a);
+    for (const [x, z] of [[0.67, 0.46], [0.77, 0.46], [0.67, 0.58], [0.77, 0.58]]) p.cyl(0.022, 0.022, 0.02, 8, x, g, z, 0x2a2a2e);
+    p.box(0.012, 0.18, 0.012, 0.72, g + 0.02, 0.62, 0x3a3a3e);
+    p.box(0.1, 0.006, 0.07, 0.72, g + 0.05, 0.67, 0x3a3a3e);
+  }
+
+  // ---- le mât et notre pavillon (or sur bleu)
+  const mx = 0.75, mz = -0.55;
+  p.cyl(0.012, 0.016, 0.9, 6, mx, g, mz, old ? C.darkwood : 0xc8ccd2);
+  p.sphere(0.02, mx, g + 0.91, mz, C.gold);
+  p.box(0.004, 0.16, 0.26, mx, g + 0.72, mz + 0.13, A1);
+  p.box(0.005, 0.05, 0.05, mx, g + 0.775, mz + 0.13, A2);
+}
+
+/**
  * Le monument de la concorde (2 × 2, voir la diplomatie de l'archipel) : sur une place ronde, trois piliers, un par peuple,
  * se tiennent sous un même anneau doré. Le nôtre est une colonne de pierre ; celui des Sablais, un fût blanc à bandeau
  * turquoise coiffé d'un bulbe doré ; celui des Jadéens, un pilier laqué de rouge sous deux petits toits verts. Au centre,
@@ -13581,6 +13704,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'mill': mill(p, Math.max(2, age)); break;
     case 'landmark': landmark(p, Math.max(2, age), o.v); break;
     case 'concord': concord(p, Math.max(2, age)); break;
+    case 'tradepost': tradepost(p, Math.max(2, age)); break;
     case 'terminal': if (size >= 3) terminalBig(p, Math.max(3, age)); else terminal(p, Math.max(3, age)); break;
     case 'station': station(p, Math.max(3, age)); break;
     case 'lamp': lamp(p, age); break;

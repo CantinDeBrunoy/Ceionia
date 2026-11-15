@@ -118,8 +118,8 @@ const DIPLO_MISSIONS = new Set<string>([...PEACE_CHAIN, WAR_MISSION]);
 export const ENDGAME_AGE = 2;
 
 /**
- * Le crochet « port et comptoir installés chez l'allié » (session de l'or et du comptoir : `allyPostReady(world)` de
- * `sim/allyLand.ts`). Tant qu'il n'est pas branché, il répond oui : la carte du dénouement vient dès l'allié choisi
+ * Le crochet « port et comptoir installés chez l'allié » : `allyPostReady(world)` de `sim/allyLand.ts`, branché par `Game` au
+ * démarrage (`allyLand.ts` lit ce module : l'importer ici ferait une boucle). Non branché (tests), il répond oui
  */
 let postReady: (w: World) => boolean = () => true;
 export function bindPostReady(f: (w: World) => boolean) { postReady = f; }

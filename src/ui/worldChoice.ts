@@ -19,7 +19,7 @@ export interface WorldChoiceHost {
  * La carte du grand choix, à la fin de l'Antiquité (au passage au Médiéval, ou au chargement d'une partie qui l'a passé sans
  * l'avoir vue) : une seule fois par partie, trois réponses. « Les Enfers » ouvre le portail et lance le volet PvE ;
  * « Explorer le monde » agrandit la carte à l'archipel ; « Ni l'un ni l'autre » garde la partie telle quelle. Rien n'est
- * exclusif : la voie non prise se lance plus tard depuis l'onglet « Voies » des expéditions, qui rouvre cette carte sur une
+ * exclusif : la voie non prise se lance plus tard depuis l'onglet « Grands choix » des expéditions, qui rouvre cette carte sur une
  * seule voie (`show(way)` : la voie et « Pas maintenant »). Même habillage que la carte du portail (`portalChoice.ts`)
  */
 export class WorldChoice {

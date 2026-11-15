@@ -58,6 +58,7 @@ import { AudioEngine, soundSettings } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
+import { allyIsle, allyView, onAllyIsle, allyPostReady } from './sim/allyLand';
 import { AGES, KINDS, Building, sizeOf, type KindId } from './build/catalog';
 import { MISSIONS, VICTORY } from './sim/missions';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
@@ -93,6 +94,7 @@ import { War, clockText } from './sim/war';
 import { INVASION_WAVES } from './sim/hell';
 import { KingdomStage } from './kingdomStage';
 import { TrophyStage } from './trophyStage';
+import { cineCalm } from './trophyCine';
 import { WarTips, WarTipState, type WarTipId } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
@@ -103,7 +105,7 @@ import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
-import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, PEACE_CHAIN, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
+import { bindPostReady, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, PEACE_CHAIN, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
 import { RivalBattle, BattleGoal } from './sim/rivalBattle';
 import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
@@ -113,6 +115,7 @@ import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adapti
 import { weakGpu, probeRenderer } from './render/gpu';
 import { LoadingScreen, painted } from './ui/loading';
 import { VoyageStage } from './voyageStage';
+import { clearFilmMark, readFilmMark } from './ui/voyage';
 import { WarmUp } from './render/warmup';
 import { CompileJob, compilePaced, representatives, firstUseAll } from './render/precompile';
 
@@ -585,6 +588,7 @@ class Game implements UIHost {
     this.voyageStage = new VoyageStage({
       cam: this.cam, world: w, scene: this.scene, root: uiRoot,
       village: () => this.villageCenter(), age: () => this.sim.age, loading: () => !!document.getElementById('loadScreen'),
+      ready: () => !!document.querySelector('#loadScreen.ready'), skipped: () => !!readFilmMark()?.skip,
     });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
@@ -597,7 +601,7 @@ class Game implements UIHost {
     });
     this.trophyStage = new TrophyStage({
       cam: this.cam, scene: this.scene, root: uiRoot, trophies: this.trophies, audio,
-      won: () => trophiesWon(this.world.exp), calm: () => this.trophyCalm(), surface: () => this.mode === 'surface' && !this.isleCmd,
+      won: () => trophiesWon(this.world.exp), calm: (banner) => this.trophyCalm(banner), surface: () => this.mode === 'surface' && !this.isleCmd,
       ground: (x, z) => w.hAt(x, z),
       top: (x, z) => {
         const cx = Math.floor(x), cz = Math.floor(z);
@@ -630,6 +634,8 @@ class Game implements UIHost {
       show();
     };
     // les îles découvertes (fin de la cinématique) : la carte du choix de l'allié, obligatoire
+    // la carte paix ou guerre attend le port et le comptoir chez l'allié (le tutoriel de l'or y mène)
+    bindPostReady(allyPostReady);
     this.onIslesRevealed = () => { if (allyPending(this.world)) this.diploChoice.showAlly(); };
     // la diplomatie de l'archipel : pas de passage d'âge pendant la bataille (le conflit à régler est une condition de l'âge)
     this.sim.beforeAdvance = () => {
@@ -686,6 +692,9 @@ class Game implements UIHost {
       theater: () => { const k = this.command.theater?.kind ?? null; return k === 'rival' ? null : k; }, mode: () => this.mode, atIsle: () => this.lookingAtIsle(),
       selected: () => this.command.cmd.selected.size, lastOrder: () => this.command.cmd.lastOrder,
       commandIsle: () => this.commandIsle(),
+      arch: () => !!allyIsle(this.world), allyIsle: () => (this.world.diplo.ally ? isleName(this.world.diplo.ally) : ''),
+      harbors: () => this.harborsByIsle(), posts: () => this.postsAtAlly(),
+      atAlly: () => this.lookingAtAlly(), goAlly: () => this.goAlly(),
     }));
     // un chapitre fini dit déjà ce que disaient les aides militaires du même moment : elles ne se répètent pas
     this.tutorial.onChapterEnd = (id, done) => { if (done) for (const t of (id === 'pve' ? ['isle', 'orders'] : ['hell']) as WarTipId[]) this.warTips.markSeen(t); };
@@ -1041,6 +1050,35 @@ class Game implements UIHost {
   viewIsle() { this.commandIsle(); }
 
   /** La vue va sur l'île du portail (pour y bâtir ses défenses) */
+  /** La vue va sur l'île de l'allié, là où l'on peut bâtir (loin de leur ville) */
+  goAlly() {
+    if (this.mode !== 'surface') { this.ensureSurface(() => this.goAlly(), true); return; }
+    const v = allyView(this.world);
+    if (!v) return;
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
+  }
+
+  /** La vue regarde-t-elle l'île de l'allié ? */
+  private lookingAtAlly() {
+    const isle = allyIsle(this.world);
+    return this.mode === 'surface' && !!isle && isle.lobes.some((l) => Math.hypot(this.cam.target.x - l.x, this.cam.target.z - l.z) < l.r + 6);
+  }
+
+  /** Ports bâtis sur notre île et chez l'allié */
+  private harborsByIsle() {
+    let home = 0, ally = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'harbor') { if (this.world.inMain(b.x, b.z)) home++; else if (onAllyIsle(this.world, b.x, b.z, sizeOf(b))) ally++; }
+    return { home, ally };
+  }
+
+  /** Comptoirs chez l'allié (il ne se pose que là) */
+  private postsAtAlly() {
+    let n = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'tradepost') n++;
+    return n;
+  }
+
   goIsle() {
     if (this.mode === 'hell') { this.ensureSurface(() => this.goIsle(), true); return; }
     const p = this.world.portal;
@@ -1068,6 +1106,7 @@ class Game implements UIHost {
    */
   private stepDiplo() {
     const w = this.world, d = w.diplo;
+    this.watchAlly();
     if (!archipelagoOn(w)) return;
     const cs = conflictState(w);
     if (cs && cs.kind !== this.naval.state.kind) this.naval.state = cs;
@@ -1079,6 +1118,19 @@ class Game implements UIHost {
     else if (d.battle === 'ready' && battleReady(d, w.exp.clock)) this.startRivalBattle();
     else if (d.battle === 'lost' && battleReady(d, w.exp.clock) && !this.retrySaid) { this.retrySaid = true; this.ui.toast(trx('⚔️ Nos troupes se sont refaites chez notre allié : la bataille peut reprendre. Cliquez ici.'), () => this.startRivalBattle(), 'action'); }
     else if (endgameOpen(w, this.sim.age) && !d.asked && !this.tutorial.active) { d.asked = true; this.diploChoice.showPath(); }
+  }
+
+  /**
+   * L'allié vient d'être choisi (pendant cette session, quelle que soit la carte qui l'a fait choisir) : le chapitre
+   * « L'or des voisins » démarre après la bannière. Une partie chargée avec son allié déjà choisi ne le relance pas
+   */
+  private allySeen: string | null | undefined = undefined;
+  private watchAlly() {
+    const ally = this.world.diplo.ally;
+    if (this.allySeen === undefined) { this.allySeen = ally; return; }
+    if (ally === this.allySeen) return;
+    this.allySeen = ally;
+    if (ally) setTimeout(() => this.tutorial.chapter('arch'), 3200);
   }
 
   // ---------- La paix : la cinématique ----------
@@ -1274,7 +1326,7 @@ class Game implements UIHost {
    */
   private revealReady() { return !this.revealing && (this.voyage || (this.portalCalm > 3 && this.popups.open)); }
 
-  /** Prendre une voie depuis l'onglet « Voies » des expéditions : la carte de la voie s'ouvre pour confirmer */
+  /** Prendre une voie depuis l'onglet « Grands choix » des expéditions : la carte de la voie s'ouvre pour confirmer */
   takeWay(way: Way) {
     const st = this.ways()[way];
     if (st === 'none' || st === 'taken') return;
@@ -1321,19 +1373,21 @@ class Game implements UIHost {
   onIslesRevealed?: () => void;
 
   /**
-   * « Explorer le monde » : la cinématique tient lieu d'écran de chargement (partition dans `voyageCine.ts`, mise en scène dans
-   * `voyageStage.ts`). Acte I sur le monde d'avant : un navire quitte le village et prend le large, la brume se lève et couvre
-   * tout. Derrière la brume, la partie est sauvegardée, agrandie (`expandWorld`) et rechargée ; la même brume couvre le
-   * chargement (`LoadingScreen` en mode traversée, `AUTOSTART` « voyage »), puis l'acte II se joue sur le monde agrandi
+   * « Explorer le monde » : la cinématique tient lieu d'écran de chargement (partition dans `voyageCine.ts`). Le film de la
+   * traversée (`LoadingScreen` en mode traversée, `ui/voyage.ts`) part tout de suite ; une fois qu'il joue, la partie est
+   * sauvegardée, agrandie (`expandWorld`) et rechargée derrière lui. Il reprend après le rechargement au même moment
+   * (`AUTOSTART` « voyage »), couvre la préparation de la partie agrandie, puis le survol en direct des îles se joue
    */
   exploreWorld() {
     if (!this.canExplore() || this.revealing || this.voyageStage.playing) return;
     const w = this.world, app = uiRoot.parentElement!;
     w.crossroads = true;
     this.revealing = true;
-    this.voyageStage.playAct1(async () => {
-      // (la brume couvre l'écran : l'écran d'attente, à l'identique, prend le relais avant le long calcul)
-      new LoadingScreen(app, true);
+    clearFilmMark();
+    const film = new LoadingScreen(app, true).film!;
+    // (le film doit jouer avant le long calcul : au plus 2 s d'attente si la vidéo tarde, puis un peu de film à l'écran)
+    const started = Promise.race([film.started(), new Promise<void>((r) => setTimeout(r, 2000))]);
+    void started.then(() => new Promise<void>((r) => setTimeout(r, 1200))).then(async () => {
       await painted();
       const save = this.buildSave();
       this.running = false;
@@ -1341,20 +1395,21 @@ class Game implements UIHost {
       save.world.exploredAt = this.sim.age;
       if (!saveSlot(save)) { this.ui.toast(trx('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
       sessionStorage.setItem(AUTOSTART, `${w.mapId}|continue|voyage`);
+      film.mark();
       location.reload();
     });
   }
 
-  /** La partie vient d'une traversée (le monde agrandi) : l'acte II part sur la brume, sans attendre (posé par `boot`) */
+  /** La partie vient d'une traversée (le monde agrandi) : le survol part sous le film, sans attendre (posé par `boot`) */
   voyage = false;
 
-  /** L'acte II de la cinématique « Explorer le monde » : les îles découvertes, puis le premier contact */
+  /** Le survol en direct de la cinématique « Explorer le monde » : les îles découvertes, puis le premier contact */
   private revealIsles() {
     if (!this.world.isles) return;
     this.revealing = true;
     const fromMist = this.voyage;
     this.voyage = false;
-    this.voyageStage.playAct2(fromMist, () => { this.revealing = false; this.onIslesRevealed?.(); this.saveNow(); });
+    this.voyageStage.play(fromMist, () => { clearFilmMark(); this.revealing = false; this.onIslesRevealed?.(); this.saveNow(); });
   }
 
   /** Ce que regardent les aides du volet militaire */
@@ -1382,7 +1437,7 @@ class Game implements UIHost {
     this.portalCalm = document.getElementById('loadScreen') ? 0 : this.portalCalm + dt;
     this.popups.step(dt, this.popupBusy());
     // le portail ouvert sans choix (l'expédition d'une ancienne partie, le bac à sable) n'ouvre plus sa carte : affronter les
-    // démons se décide dans le grand choix de la fin de l'Antiquité (ou dans l'onglet « Voies »)
+    // démons se décide dans le grand choix de la fin de l'Antiquité (ou dans l'onglet « Grands choix »)
     this.stepCrossroads();
     const said = new Set<string>();
     for (const n of w.news.splice(0)) {
@@ -1671,11 +1726,17 @@ class Game implements UIHost {
     this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp).filter((id) => !this.trophyStage.hidden(id)));
   }
 
-  /** Le joueur est tranquille, une cinématique peut passer : partie chargée, en surface, ni pose, ni fenêtre, ni bandeau, ni autre cinématique */
-  private trophyCalm() {
-    return !this.warming && this.mode === 'surface' && !this.isleCmd && !this.fading && this.tools.tool === 'none' && !this.railEdit && !this.islePlace && !this.command.active
-      && !this.ui.popupShowing() && !document.querySelector('#warAlert.show') && !this.ui.root.querySelector('.overlay:not(#menu)')
-      && !this.kingStage.playing && !document.body.classList.contains('photo') && !document.hidden;
+  /** Ce que le jeu montre ou fait, pour la cinématique d'un trophée (voir `cineCalm`, trophyCine.ts) */
+  private trophyCalm(banner = true) {
+    return cineCalm({
+      loading: !!this.warming || !!document.getElementById('loadScreen'),
+      away: this.mode !== 'surface' || this.isleCmd || this.fading || this.revealing || this.voyageStage.playing,
+      placing: this.tools.tool !== 'none' || !!this.railEdit || !!this.islePlace || this.command.active,
+      window: !!this.ui.root.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible || !!document.querySelector('#warAlert.show'),
+      other: this.kingStage.playing || document.body.classList.contains('photo') || document.hidden,
+      banner: !!document.querySelector('#banner.show'),
+      notice: this.ui.popupShowing(),
+    }, banner);
   }
 
   /** La grande place du village (le lieu de rencontre de 3 × 3, sans entrée) la plus proche de (x, z), s'il y en a une */
@@ -2345,6 +2406,9 @@ class Game implements UIHost {
     }
     else {
       this.buildings.update(dt, this.sim.age);
+      // (pendant la cinématique « Explorer le monde », pas de bêtes appelées près de la vue : leur recensement coûtait
+      // 200 à 300 ms toutes les 3 s au-dessus de la mer, d'où les à-coups du survol)
+      this.fauna.quiet = this.voyageStage.playing;
       this.fauna.update(gdt, this.elapsed, this.time.hour, this.time.season, this.env.rainK, this.sim.age, this.cam.camera);
       // de temps en temps, une bête sauvage près de la vue crie (bêlement, brame, barrissement…) ; on l'entend de près
       this.callT -= dt;
@@ -2422,7 +2486,7 @@ class Game implements UIHost {
     if (this.uiTimer === 0.25) {
       this.homeBtn.set(this.awayFromHome());
       // la musique de la fin (chute du roi des Enfers, voyage des colons, écrans de victoire), des Enfers, sinon de l'âge
-      audio.music(this.kingStage.playing || uiRoot.querySelector('.overlay.voyage, .overlay.victory') ? 'end' : this.voyageStage.playing ? 'voyage' : this.mode === 'hell' ? 'hell' : null);
+      audio.music(this.kingStage.playing || uiRoot.querySelector('.overlay.voyage, .overlay.victory') ? 'end' : this.voyageStage.playing || document.querySelector('#loadScreen.voyage') ? 'voyage' : this.mode === 'hell' ? 'hell' : null);
     }
     // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }
@@ -2440,6 +2504,8 @@ async function boot() {
   const app = uiRoot.parentElement!;
   // (le monde qui vient de s'agrandir : la traversée de la cinématique tient lieu d'écran de chargement)
   const auto = sessionStorage.getItem(AUTOSTART), voyage = auto?.split('|')[2] === 'voyage';
+  // (une traversée d'avant, restée notée : rien à reprendre hors d'un rechargement de traversée)
+  if (!voyage) clearFilmMark();
   let screen: LoadingScreen | null = new LoadingScreen(app, voyage);
   const models = screen;
   await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * 0.2, `${done}/${total}`));

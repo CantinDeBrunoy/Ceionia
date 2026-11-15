@@ -4,7 +4,7 @@ import { archipelagoOn } from '../world/expand';
  * Le grand choix de la fin de l'Antiquité : une seule carte, trois réponses (les Enfers, explorer le monde, ni l'un ni
  * l'autre). C'est une condition du passage au Médiéval (`CHOICE_LABEL` dans `Sim.ageProgress`) : la carte s'ouvre quand
  * toutes les autres sont remplies, et « Ni l'un ni l'autre » compte comme un choix. Rien n'est exclusif : la voie non prise
- * se lance plus tard depuis l'onglet « Voies » des expéditions, que le jeu ne montre pas du doigt. Règles pures, sans
+ * se lance plus tard depuis l'onglet « Grands choix » des expéditions, que le jeu ne montre pas du doigt. Règles pures, sans
  * interface (voir `main.ts › stepCrossroads`, `ui/worldChoice.ts`)
  */
 
@@ -73,7 +73,7 @@ export function crossroadsDue(w: CrossWorld, age: number, hell: WayState, world:
 export const crossroadsMet = crossroadsSettled;
 
 /**
- * L'onglet « Voies » des expéditions : une fois le grand choix fait (décision de l'auteur : « Après le grand choix » ; au
+ * L'onglet « Grands choix » des expéditions : une fois le grand choix fait (décision de l'auteur : « Après le grand choix » ; au
  * bac à sable, tout de suite), dès qu'une voie existe sur la carte. Le jeu ne mène jamais à l'onglet
  */
 export function waysTabShown(w: Pick<CrossWorld, 'sandbox' | 'crossroads'>, hell: WayState, world: WayState): boolean {

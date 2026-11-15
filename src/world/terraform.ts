@@ -17,8 +17,8 @@ export const CLIFF_STEP = 2;
 
 /** Un sommet du relief qui borde une case bâtie (ou une route, avec roads) : le pinceau n'y touche pas */
 function locked(world: World, vx: number, vz: number, roads = false) {
-  // (version 4 : le relief des autres îles ne se touche pas)
-  if (!world.inMain(Math.min(vx, N - 1), Math.min(vz, N - 1))) return true;
+  // (archipel : le relief des autres îles ne se touche pas ; celui de l'allié, hors de sa ville)
+  if (!world.playable(Math.min(vx, N - 1), Math.min(vz, N - 1))) return true;
   for (let dz = -1; dz <= 0; dz++)
     for (let dx = -1; dx <= 0; dx++) {
       const cx = vx + dx, cz = vz + dz;

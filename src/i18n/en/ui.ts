@@ -186,7 +186,7 @@ registerDict('ui', {
   'de nouvelles terres à découvrir': 'new lands to discover',
   'Rester sur mon île': 'Stay on my island',
   'continuer comme avant': 'carry on as before',
-  // ---- le grand choix de la fin de l'Antiquité, l'onglet « Voies » des expéditions, la traversée
+  // ---- le grand choix de la fin de l'Antiquité, l'onglet « Grands choix » des expéditions, la traversée
   'Un navire prend la mer': 'A ship puts to sea',
   'Cap sur l’inconnu': 'Bound for the unknown',
   'La brume se lève…': 'The mist rises…',
@@ -220,15 +220,15 @@ registerDict('ui', {
   'Ouvrir le portail de l’île au large ?': 'Open the portal on the offshore island?',
   'Des démons rôdent de l’autre côté. Pour les affronter, bâtissez une tour de garde et une caserne sur l’île du portail, puis recrutez une garnison.': 'Demons lurk on the other side. To face them, build a watchtower and a barracks on the portal island, then recruit a garrison.',
   'Ouvrir le portail': 'Open the portal',
-  'Voies': 'Paths',
-  'Deux grandes voies, à prendre quand vous voulez : l’une, l’autre ou les deux.': 'Two great paths, to take whenever you like: one, the other, or both.',
+  'Grands choix': 'Big choices',
+  'Deux grands choix, à faire quand vous voulez : l’un, l’autre ou les deux.': 'Two big choices, to make whenever you like: one, the other, or both.',
   'Derrière l’arche noire de l’île au large, des démons attendent. Tiendrez-vous l’île, puis oserez-vous passer de l’autre côté ?': 'Behind the black arch on the offshore island, demons are waiting. Will you hold the island, then dare to cross to the other side?',
   'Une invasion en trois vagues': 'An invasion in three waves',
   'Les Enfers et leur roi': 'Hell and its king',
   'Au-delà de l’horizon, deux grandes îles et leurs peuples, rivaux depuis toujours. Allez à leur rencontre.': 'Beyond the horizon, two large islands and their peoples, rivals since forever. Go and meet them.',
   'Deux îles et leurs villes': 'Two islands and their towns',
   'Une alliance, de l’or, un conflit': 'An alliance, gold, a conflict',
-  'Voie ouverte': 'Path open',
+  'Choix fait': 'Choice made',
   'Pas sur cette carte': 'Not on this map',
   'Rouvrir le portail': 'Reopen the portal',
   'Le portail est ouvert : les démons vous attendent sur l’île.': 'The portal is open: the demons await you on the island.',
@@ -320,4 +320,11 @@ registerDict('ui', {
   "La fête des trois peuples": "The Feast of the Three Peoples",
   // la voie de la paix
   "🕊️ La voie de la paix : deux pourparlers vous attendent (menu Expéditions).": "🕊️ The path of peace: two rounds of talks await you (Expeditions menu).",
+  // le comptoir à bâtir (fiche de l'or)
+  'Bâtissez un comptoir sur l’île de votre allié : l’échange passera par lui.': 'Build a trading post on your ally’s island: trade will go through it.',
+  'Choisissez d’abord votre allié parmi les deux peuples des îles : l’échange se fait chez lui.': 'First choose your ally between the two island peoples: trade happens at their place.',
+  'Pas encore de comptoir : bâtissez « {name} » sur {isle}, hors de leur ville. On y vendra nos matériaux contre de l’or.': 'No trading post yet: build “{name}” on {isle}, outside their town. Our materials will be sold there for gold.',
+  'L’or ne vient que de l’échange avec le peuple allié ; il sert à passer les âges.': 'Gold only comes from trading with the allied people; it is needed to move through the ages.',
+  'Voir l’île alliée': 'See the allied island',
+  'Choisissez d’abord votre allié : le comptoir se bâtit chez lui': 'Choose your ally first: the trading post is built at their place',
 });

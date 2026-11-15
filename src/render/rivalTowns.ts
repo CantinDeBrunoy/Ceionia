@@ -3,7 +3,7 @@ import type { World } from '../world/world';
 import { N, VEG_FOREST, VEG_ROCKS } from '../world/world';
 import { GeoBatch } from './batch';
 import { mats, mergeLit } from './materials';
-import { townPlans, inPoly, type Lot, type TownPlan } from '../world/rivalTown';
+import { townPlans, townCells, inPoly, type Lot, type TownPlan } from '../world/rivalTown';
 import { townModel, townWall, plinthGeo } from './townModels';
 import { hash2 } from '../core/rng';
 
@@ -78,26 +78,11 @@ export class RivalTowns {
    */
   private markGround() {
     const w = this.world, mask = new Uint8Array(N * N);
-    const mark = (x: number, z: number) => {
-      if (!w.inCells(x, z)) return;
-      const k = w.ci(x, z);
-      mask[k] = 1;
-      if (w.veg[k] === VEG_FOREST || w.veg[k] === VEG_ROCKS) { w.veg[k] = 0; w.markVeg(x, z, x, z); w.vegDirty = true; }
-    };
-    for (const p of this.plans) {
-      const R = Math.ceil(p.r + 8);
-      for (let z = Math.floor(p.z - R); z <= p.z + R; z++)
-        for (let x = Math.floor(p.x - R); x <= p.x + R; x++) if (inPoly(x + 0.5, z + 0.5, p.wall)) mark(x, z);
-      for (const l of p.lots) {
-        const r = Math.hypot(l.w, l.d) / 2 + 0.6;
-        for (let z = Math.floor(l.z - r); z <= l.z + r; z++) for (let x = Math.floor(l.x - r); x <= l.x + r; x++) if (Math.hypot(x + 0.5 - l.x, z + 0.5 - l.z) < r) mark(x, z);
+    for (const p of this.plans)
+      for (const k of townCells(w, p)) {
+        mask[k] = 1;
+        if (w.veg[k] === VEG_FOREST || w.veg[k] === VEG_ROCKS) { const x = k % N, z = Math.floor(k / N); w.veg[k] = 0; w.markVeg(x, z, x, z); w.vegDirty = true; }
       }
-      for (const s of p.streets)
-        for (let i = 0; i + 1 < s.pts.length; i++) {
-          const [a, b] = [s.pts[i], s.pts[i + 1]], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2);
-          for (let j = 0; j <= n; j++) { const x = a[0] + ((b[0] - a[0]) * j) / n, z = a[1] + ((b[1] - a[1]) * j) / n; for (const o of [-0.6, 0, 0.6]) mark(Math.floor(x + o), Math.floor(z + o)); }
-        }
-    }
     w.town = mask;
     // la végétation déjà dessinée se refait sans l'herbe ni les cailloux des villes
     for (const p of this.plans) { const R = Math.ceil(p.r + 16); w.markVeg(Math.floor(p.x - R), Math.floor(p.z - R), Math.ceil(p.x + R), Math.ceil(p.z + R)); }

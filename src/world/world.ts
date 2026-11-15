@@ -8,7 +8,8 @@ import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/diffic
 import { GEN, GEN_FIXED, GEN_VAR, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
 import { archLayout, ARCH_N, type ArchLayout } from './archipelago';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
-import { TradeState, newTradeState, readTradeState } from '../sim/trade';
+import { TradeState, newTradeState, readTradeState, saveTradeState } from '../sim/trade';
+import { allyLand, awayWhy, tradepostWhy } from '../sim/allyLand';
 import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Crossing, crossingMap, nearestOnDeck } from './crossings';
@@ -365,6 +366,17 @@ export class World {
   inMain(x: number, z: number) {
     const f = this.isles?.main;
     return !f || (x >= f.x && z >= f.z && x < f.x + f.n && z < f.z + f.n);
+  }
+  /**
+   * Case où le joueur bâtit, trace et sculpte : son île, et l'île de son allié hors de la ville de décor (voir `allyLand.ts`).
+   * Le générateur, lui, ne regarde que `inMain`
+   */
+  playable(x: number, z: number) {
+    return this.inMain(x, z) || allyLand(this, x, z);
+  }
+  /** Pourquoi on ne bâtit pas sur cette case (null : on y bâtit) */
+  playWhy(x: number, z: number) {
+    return this.inMain(x, z) ? null : awayWhy(this, x, z);
   }
   /**
    * La garde de l'île du portail (sauvegardée) : vagues de démons repoussées, jours tenus avec ses défenses debout ; l'île est
@@ -1114,8 +1126,7 @@ export class World {
 
   /** Peint le biome d'une case (null : la case retrouve celui de son climat) ; true si quelque chose change */
   paintBiome(cx: number, cz: number, b: number | null) {
-    if (!this.inMain(cx, cz)) return false;
-    if (!this.inCells(cx, cz)) return false;
+    if (!this.inCells(cx, cz) || !this.playable(cx, cz)) return false;
     const k = this.ci(cx, cz), v = b === null ? 0 : b + 1;
     if (this.biomePaint[k] === v) return false;
     this.biomePaint[k] = v;
@@ -1274,11 +1285,11 @@ export class World {
         if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return tr('L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'); continue; }
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return tr('Trop proche de l’eau : reculez sur la terre ferme');
       }
-    // le cosmodrome : sur l'île alliée quand l'archipel est accepté (seule pose permise hors de l'île principale)
-    const sp = kind === 'spaceport' ? spaceportWhy(this, x, z, s) : null;
+    // le cosmodrome : sur l'île alliée quand l'archipel est accepté ; le comptoir : seulement sur l'île alliée
+    const sp = kind === 'spaceport' ? spaceportWhy(this, x, z, s) : kind === 'tradepost' ? tradepostWhy(this, x, z, s) : null;
     if (sp) return sp;
-    // version 4 : rien hors de l'île principale (les îles rivales et les petites îles sont aux autres peuples)
-    if (!(kind === 'spaceport' && archipelagoOn(this)) && (!this.inMain(x, z) || !this.inMain(x + s - 1, z + s - 1))) return tr('Hors de votre île : on ne bâtit pas sur les autres îles');
+    // archipel : son île, et celle de l'allié hors de sa ville (les autres îles sont aux autres peuples)
+    for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) { const why = this.playWhy(x + i, z + j); if (why) return why; }
     // l'île du portail : des défenses seulement (et les défenses au village aussi)
     const isle = this.portalRule(kind, x, z, s);
     if (isle) return isle;
@@ -1544,8 +1555,8 @@ export class World {
   }
 
   canRoad(cx: number, cz: number) {
-    // (version 4 : pas de route hors de l'île principale)
-    if (!this.inCells(cx, cz) || !this.inMain(cx, cz)) return false;
+    // (archipel : pas de route hors de son île et de celle de l'allié ; aucun pont ne les relie, les ports suffisent)
+    if (!this.inCells(cx, cz) || !this.playable(cx, cz)) return false;
     const k = this.ci(cx, cz);
     if (this.occ[k] || this.decor[k]) return false;
     // sur l'eau : un pont, sauf au large
@@ -1775,7 +1786,7 @@ export class World {
       fuel: this.fuel,
       brick: this.brick,
       ...(this.gold ? { gold: this.gold } : {}),
-      ...(Object.keys(this.trade.sat).length ? { trade: this.trade } : {}),
+      trade: saveTradeState(this.trade),
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       exp: this.exp,
       ...(saveDiplo(this.diplo) ? { diplo: this.diplo } : {}),
@@ -1908,7 +1919,7 @@ export class World {
     this.fuel = Math.max(0, +d.fuel || 0);
     this.brick = Math.max(0, +d.brick || 0);
     this.gold = Math.max(0, +d.gold || 0);
-    this.trade = readTradeState(d.trade);
+    this.trade = readTradeState(d.trade, archipelagoOn(this));
     // une ancienne sauvegarde n'a pas de gisements : ils se tirent de la graine au chargement (addDefaultDecor)
     this.oil.fill(0);
     for (const k of Array.isArray(d.oil) ? d.oil : []) if (k >= 0 && k < N * N) this.oil[k] = 1;

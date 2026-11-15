@@ -45,7 +45,8 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 ### L'or et le comptoir des voisins (`trade.ts`)
 - L'or n'existe que si l'**archipel est accepté** : `archipelagoOn(world)` (`world/expand.ts` : `world.isles` non nul, le monde agrandi à l'archipel). Sans archipel, ni stock affiché, ni condition d'âge.
 - **Pas de mine d'or** : on n'en obtient qu'en vendant au peuple allié. Aucun `YIELD` n'en donne (`daily().gold` vaut toujours 0).
-- **Comptoir** (fiche « Les voisins ») : un clic sur l'or de la barre des stocks (`#res`) l'ouvre ; le conseil et la ligne « or » du panneau d'âge y mènent aussi. Le bâtiment-comptoir chez les voisins viendra avec leur ville.
+- **Le comptoir, bâtiment** (`tradepost`, voir [batiments-catalogue.md](batiments-catalogue.md)) : il se bâtit sur l'île de l'allié et **ouvre l'échange** : pas de comptoir, pas d'or (`tradeOpen`, `Sim.tradeOpen`). Un clic sur l'or de la barre des stocks (`#res`) ouvre la fiche « Les voisins » s'il existe ; sinon la fiche dit qu'il faut en bâtir un (ou d'abord choisir l'allié), avec « Voir l'île alliée » (la vue y va, `Game.goAlly`) et « Bâtir « Comptoir » ». Le conseil et la ligne « or » du panneau d'âge y mènent aussi ; sans comptoir, le conseil propose de le bâtir.
+- **Anciennes parties** : une partie déjà agrandie à l'archipel avant le comptoir bâti (sauvegarde sans `trade.v`) garde l'échange sans comptoir (`trade.legacy`) tant qu'elle n'en a pas bâti ; le premier comptoir prend le relais (`Sim.update` efface le drapeau). La fiche y ajoute « Bâtissez un comptoir sur l'île de votre allié… ». C'est la solution la plus douce : rien ne lui est retiré, aucun tutoriel ne s'impose au milieu d'une partie, et l'or déjà gagné reste. Le chapitre du tutoriel ne se lance qu'au choix de l'allié (voir [tutoriel.md](tutoriel.md)).
 - Cours de départ (l'auteur équilibrera) :
 
   | Ressource | Vendre : pour 1 or (`SELL`) | Acheter : 1 or donne (`BUY`) |
@@ -72,7 +73,7 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 - `canPay(w, cost)` / `pay(w, cost)` : comparent et retranchent bois, pierre, briques. `tools.ts` paie **après** la pose réussie (`place`, `upgradeSelected`) ; `rampart.ts` pan par pan.
 - UI : `renderResources` (`#res`) affiche stock et taux du jour ; briques dès l'âge 3 (ou dès qu'on en a) ; brut et carburant dès l'âge 4 ou dès qu'il y en a (ou après l'expédition `oil`). `renderRes` donne la fiche d'une ressource (`RES_META`, sources par bâtiment). Le conseil `Sim.computeMessage` / `build()` s'appuie sur `Sim.producing`.
 - Sauvegarde : `World.toJSON` / `fromJSON` (`wood`, `stone`, `ore`, `crude`, `fuel`, `brick`, `gold`, `trade`) ; un champ absent vaut 0, sauf bois et pierre qui valent `START_*` (anciennes parties). `trade` (`TradeState`) : saturation de chaque ressource, relue par `readTradeState`.
-- Comptoir : `renderTrade` (fiche, classe `#needInfo.trade`) et `tradeClick` (`ui.ts`) appellent `sell` / `buy` de `trade.ts`, qui vérifient la réserve avant de rien prélever. En ressources illimitées, l'or s'affiche ∞ et les boutons restent ouverts.
+- Comptoir : `renderTrade` (fiche, classe `#needInfo.trade` ; fermé : `renderTradeShut`) et `tradeClick` (`ui.ts`) appellent `sell` / `buy` de `trade.ts`, qui vérifient la réserve avant de rien prélever ; fermé, aucun bouton d'échange. En ressources illimitées, l'or s'affiche ∞ et les boutons restent ouverts.
 
 ## Liens avec les autres systèmes
 - Rail : bonus de production, raffinerie et fret ([chemin-de-fer.md](chemin-de-fer.md)).

@@ -734,4 +734,18 @@ registerDict('catalog', {
   "Le cosmodrome se bâtit sur l’île de votre allié : choisissez d’abord votre allié.": "The spaceport is built on your ally’s island: first choose your ally.",
   // le monument de la concorde
   "Débloqué par l’expédition « L’ambassade de la paix », sur la voie de la paix (archipel).": "Unlocked by the expedition “The Peace Embassy”, on the path of peace (archipelago).",
+  // le comptoir chez l'allié, et bâtir sur son île
+  'Comptoir': 'Trading post',
+  'Comptoir de commerce': 'Trading house',
+  'Maison de négoce': 'Merchant house',
+  'Bourse d’échanges': 'Exchange',
+  'Notre comptoir chez le peuple allié : un entrepôt, des étals et la balance du changeur. On y vend nos matériaux contre de l’or.': 'Our trading post among the allied people: a warehouse, stalls and the money-changer’s scales. Our materials are sold here for gold.',
+  'Se bâtit sur l’île de votre allié, hors de sa ville. Il ouvre l’échange : un clic sur l’or (barre des stocks) ouvre le comptoir, où l’on vend bois, pierre ou minerai contre l’or qui fait passer les âges.': 'Built on your ally’s island, outside their town. It opens trade: a click on the gold (stock bar) opens the trading post, where wood, stone or ore are sold for the gold that moves you through the ages.',
+  'comptoirs': 'trading posts',
+  'C’est la ville de vos alliés : bâtissez hors de ses murs, de ses champs et de ses rues': 'This is your allies’ town: build outside its walls, fields and streets',
+  'Choisissez d’abord votre allié : vous bâtirez sur son île': 'Choose your ally first: you will build on their island',
+  'Le comptoir se bâtit chez un peuple allié : explorez d’abord le monde': 'The trading post is built among an allied people: explore the world first',
+  'Le comptoir se bâtit chez votre allié : choisissez-le d’abord': 'The trading post is built at your ally’s: choose them first',
+  'Le comptoir se bâtit sur l’île de votre allié ({isle})': 'The trading post is built on your ally’s island ({isle})',
+  'Pour l’âge suivant : il faut {n} or : bâtissez {k} sur l’île de votre allié, on y vend nos matériaux contre de l’or.': 'For the next age: you need {n} gold: build {k} on your ally’s island, where our materials are sold for gold.',
 });

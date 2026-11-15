@@ -1,6 +1,5 @@
 import { tr } from '../i18n';
-import { VOYAGE_PLATE } from './voyage';
-import { VOY_WAIT } from '../voyageCine';
+import { VoyageFilm } from './voyage';
 
 /** les sommets au-dessus du titre (vectoriels, nets à toute taille) : une ombre décalée, puis le crème */
 const PEAK_SHAPES = [
@@ -48,8 +47,9 @@ const TIP_MS = 4500;
  * Écran de chargement : sur le paysage de l'accueil, voilé de clair au centre, l'emblème, le nom du jeu, l'étape en cours,
  * une barre et un conseil qui change. Il couvre la vue pendant le chargement des modèles et la préparation du monde
  * (construction, shaders du jour et de la nuit, premières images), puis s'efface en fondu : la partie tourne déjà dessous.
- * En mode traversée (`voyage`, le monde qui s'agrandit), il n'a ni emblème ni conseil : c'est un plan de la cinématique
- * « Explorer le monde » (la brume et le navire de l'attente, les bandes noires, le bandeau ; l'avancée en mince filet doré)
+ * En mode traversée (`voyage`, le monde qui s'agrandit), il n'a ni emblème ni conseil : c'est le film de la cinématique
+ * « Explorer le monde » (`VoyageFilm`, la brume dessous ; l'avancée en mince filet doré). Prêt avant la fin du film, il
+ * attend qu'il finisse (classe `ready`) avant de s'effacer
  */
 export class LoadingScreen {
   readonly el: HTMLElement;
@@ -58,6 +58,8 @@ export class LoadingScreen {
   /** avancée affichée (la barre ne recule jamais) */
   private k = 0;
   private tipTimer = 0;
+  /** le film de la traversée (mode `voyage`) */
+  readonly film: VoyageFilm | null = null;
 
   constructor(root: HTMLElement, voyage = false) {
     const el = (this.el = document.createElement('div'));
@@ -65,7 +67,7 @@ export class LoadingScreen {
     el.setAttribute('role', 'status');
     if (voyage) {
       el.className = 'voyage';
-      el.innerHTML = `${VOYAGE_PLATE}<div class="kc-bar t"></div><div class="kc-bar b"></div><div class="kc-cap"><b>${tr(VOY_WAIT.text)}</b><small>${tr(VOY_WAIT.sub)}</small></div><div class="ldBar"><i></i></div><p class="ldStep" hidden></p>`;
+      this.film = new VoyageFilm(el);
       this.label = el.querySelector('.ldStep')!;
       this.bar = el.querySelector('.ldBar i')!;
       root.appendChild(el);
@@ -94,6 +96,15 @@ export class LoadingScreen {
   /** La scène est prête : l'écran s'efface en fondu, puis disparaît (`now` : tout de suite, sans fondu) */
   done(now = false) {
     clearInterval(this.tipTimer);
+    if (this.film && !now && !this.el.classList.contains('ready')) {
+      // (la traversée : le film va au bout, ou jusqu'à « Passer », avant que l'écran ne s'efface)
+      this.k = 1;
+      this.bar.style.width = '100%';
+      this.el.classList.add('ready');
+      this.film.whenDone(() => this.done());
+      return;
+    }
+    this.film?.dispose();
     if (now) { this.el.remove(); return; }
     this.k = 1;
     this.bar.style.width = '100%';

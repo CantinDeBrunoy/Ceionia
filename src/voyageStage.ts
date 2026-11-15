@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import type { CameraRig } from './core/camera';
-import { World, N, SEA } from './world/world';
+import { World, SEA } from './world/world';
 import type { People } from './world/archipelago';
 import { townPlans, type TownPlan } from './world/rivalTown';
 import { DEEP, SHALLOW, nearestWater, navalSites, warshipKind, waterPath, resample, type NavalSites } from './sim/navalConflict';
 import { warshipModel } from './render/warships';
 import { vesselModel } from './render/seaTraffic';
 import { mats } from './render/materials';
-import { VOY_ACT1, VOY_ACT2, VOY_WAIT, actTotal, voyCaptionAt, voyShotAt, voyVeilAt, type VoyPlan } from './voyageCine';
+import { VOY_ACT2, actTotal, voyCaptionAt, voyShotAt, voyVeilAt, type VoyShot } from './voyageCine';
 import { tr } from './i18n';
 import { KINGDOM_TEXT } from './ui/kingdom';
 
@@ -20,8 +20,12 @@ export interface VoyageHost {
   root: HTMLElement;
   village(): [number, number] | null;
   age(): number;
-  /** l'écran de chargement est encore là : l'acte II attend, brume tenue */
+  /** l'écran de la traversée (le film, puis sa brume) est encore là : le survol attend dessous, brume tenue */
   loading(): boolean;
+  /** la partie agrandie est prête (le film peut encore jouer) : le survol peut préparer ses plans sous la brume */
+  ready(): boolean;
+  /** le joueur a passé le film : le survol ne se joue pas */
+  skipped(): boolean;
 }
 
 type P = [number, number];
@@ -42,6 +46,14 @@ class Boat {
     this.heading = Math.atan2(x2 - x, z2 - z);
     this.root.scale.setScalar(grow ? 0.001 : size);
     this.root.visible = false;
+  }
+  /** Montré à son départ, à sa taille (pour préparer son rendu sous la brume) ; `on` faux : caché de nouveau */
+  show(on: boolean) {
+    const [x, z] = this.at();
+    this.root.visible = on;
+    this.root.scale.setScalar(this.size);
+    this.root.position.set(x, SEA, z);
+    this.root.rotation.set(0, this.heading, 0);
   }
   /** La place du navire sur son chemin (x, z) */
   at(): P {
@@ -67,42 +79,18 @@ class Boat {
 /** Un chemin droit (échantillonné tous les demi-cases) */
 const line = (a: P, b: P): P[] => resample([a, b], 0.5);
 
-/**
- * Le départ du navire : parmi seize directions autour du village, celle où la côte est la plus proche et d'où la mer reste
- * libre jusqu'au bord de la carte (ni lac ni rivière : un trait droit sur l'eau). Rend la première case d'eau profonde et un
- * point au large, sur ce trait (repli : vers le bord de carte le plus proche)
- */
-export function seaRay(w: Pick<World, 'cellAvg' | 'inCells'>, v: P): [P, P] {
-  let best: [P, P] | null = null, bestD = Infinity;
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a);
-    let start: P | null = null, ok = true, d = 0;
-    for (d = 2; d < N * 1.5; d += 0.5) {
-      const x = v[0] + dx * d, z = v[1] + dz * d;
-      if (!w.inCells(Math.floor(x), Math.floor(z))) break;
-      const h = w.cellAvg(Math.floor(x), Math.floor(z));
-      if (!start) { if (h < DEEP) start = [x, z]; }
-      else if (h > SHALLOW) { ok = false; break; }
-    }
-    if (!start || !ok) continue;
-    const dc = Math.hypot(start[0] - v[0], start[1] - v[1]);
-    if (dc < bestD) { bestD = dc; const far = Math.min(34, d - dc - 3); best = [start, [start[0] + dx * Math.max(4, far), start[1] + dz * Math.max(4, far)]]; }
-  }
-  if (best) return best;
-  const edges = [v[0], N - v[0], v[1], N - v[1]], e = edges.indexOf(Math.min(...edges));
-  const dir: P = e === 0 ? [-1, 0] : e === 1 ? [1, 0] : e === 2 ? [0, -1] : [0, 1];
-  return [[v[0] + dir[0] * edges[e] * 0.7, v[1] + dir[1] * edges[e] * 0.7], [v[0] + dir[0] * (edges[e] - 3), v[1] + dir[1] * (edges[e] - 3)]];
-}
+/** Les plans que le survol prépare sous la brume, une image chacun, avant de se lever (maillages, ombres, impostures) */
+const PRIME: { shot: VoyShot; k: number }[] = [{ shot: 'orient', k: 0.5 }, { shot: 'asie', k: 0.5 }, { shot: 'fleets', k: 0.5 }, { shot: 'horizon', k: 0 }];
 
 /**
- * La mise en scène de la cinématique « Explorer le monde » (partition dans `voyageCine.ts`) : les navires, la caméra plan par
- * plan, l'habillage (bandes noires, brume, fondus, bandeaux, « Passer ») ; la musique, `main.ts` la choisit (`voyage` tant que `playing`). `playAct1` sur le monde d'avant,
- * jusqu'à la brume ; `playAct2` sur le monde agrandi, de la brume au village. `update` à chaque image
+ * La mise en scène du survol en direct de la cinématique « Explorer le monde » (partition dans `voyageCine.ts`, le film dans
+ * `ui/voyage.ts`) : les navires, la caméra plan par plan, l'habillage (bandes noires, brume, fondus, bandeaux, « Passer ») ;
+ * la musique, `main.ts` la choisit (`voyage` tant que `playing`). `play` le lance dès la première image de la partie agrandie :
+ * il attend sous l'écran de la traversée, prépare ses plans une fois la partie prête, puis se lève. `update` à chaque image
  */
 export class VoyageStage {
-  private act: 1 | 2 | 0 = 0;
+  private on = false;
   private t = 0;
-  private plan: readonly VoyPlan[] = VOY_ACT1;
   private fromMist = true;
   private done: (() => void) | null = null;
   private boats: Boat[] = [];
@@ -113,35 +101,27 @@ export class VoyageStage {
   private back: ReturnType<CameraRig['view']> | null = null;
   private sites: NavalSites | null = null;
   private towns: TownPlan[] = [];
-  /** le navire suivi (acte I : celui du village ; acte II : celui qui ouvre l'horizon) */
+  /** le navire de l'horizon */
   private lead: Boat | null = null;
   private clock = 0;
+  /** plans déjà préparés sous la brume (voir `PRIME`) */
+  private primed = 0;
 
   constructor(private host: VoyageHost) {}
 
-  get playing() { return this.act !== 0; }
-
-  /** Acte I : le départ du navire, puis la brume ; `onMist` une fois la brume tombée (ou l'acte passé) */
-  playAct1(onMist: () => void) {
-    if (this.act) return;
-    const h = this.host, w = h.world, v = h.village() ?? [h.cam.view().x, h.cam.view().z];
-    this.begin(1, VOY_ACT1, onMist);
-    // le navire part de la côte du village et file droit vers le large (`seaRay` : la mer libre jusqu'au bord de la carte)
-    const ray = seaRay(w, v), path = line(ray[0], ray[1]);
-    this.lead = this.boat(vesselModel('caravel').geo, path, 1.6, 2.2);
-  }
+  get playing() { return this.on; }
 
   /**
-   * Acte II : la brume se dissipe (`fromMist` ; sinon un fondu au noir l'ouvre), l'horizon recule, les deux îles, les deux
-   * flottes, le retour au village ; `onEnd` à la fin (ou passé). Tenue sur la brume tant que l'écran de chargement est là
+   * Le survol : la brume se dissipe (`fromMist` ; sinon un fondu au noir l'ouvre), l'horizon recule, les deux îles, les deux
+   * flottes, le retour au village ; `onEnd` à la fin (ou passé). Tenu sur la brume tant que l'écran de la traversée est là
    */
-  playAct2(fromMist: boolean, onEnd: () => void) {
-    if (this.act) return;
+  play(fromMist: boolean, onEnd: () => void) {
+    if (this.on) return;
     const h = this.host, w = h.world, lay = w.isles;
     if (!lay) { onEnd(); return; }
     this.back = h.cam.view();
     this.fromMist = fromMist;
-    this.begin(2, VOY_ACT2, onEnd);
+    this.begin(onEnd);
     this.sites = navalSites(w);
     this.towns = townPlans(w);
     // le navire de l'horizon : du bord de l'île principale, cap sur le milieu des deux îles rivales
@@ -156,39 +136,42 @@ export class VoyageStage {
     this.place(0);
   }
 
-  /** Passer : l'acte I file à la brume, l'acte II au village (jamais pendant l'attente du chargement) */
-  skip() {
-    if (this.act === 1) { const cut = VOY_ACT1[0].dur + VOY_ACT1[1].dur * 0.85 - 0.4; if (this.t < cut) this.t = cut; return; }
-    if (this.act === 2 && !this.host.loading()) this.finish();
-  }
+  /** Passer : tout de suite au village (pendant le film, c'est l'écran de la traversée qui reçoit le geste) */
+  skip() { if (this.on && !this.host.loading()) this.finish(); }
 
   /** Une image */
   update(dt: number) {
-    if (!this.act) return;
-    const holding = this.act === 2 && this.host.loading();
-    if (!holding) this.t += dt;
+    if (!this.on) return;
     this.clock += dt;
-    this.paint();
-    if (this.t >= actTotal(this.plan)) { this.finish(); return; }
-    this.place(holding ? 0 : dt);
+    if (this.host.loading()) {
+      // sous la brume : une fois la partie prête, chaque plan est montré une image (les îles et les flottes se préparent
+      // pendant le film, pas en plein survol), puis la vue revient au départ
+      // (les navires des ports, cachés jusqu'à leur départ, sont montrés aussi : leurs modèles partent au GPU d'avance)
+      if (this.host.ready() && this.primed < PRIME.length) {
+        const p = PRIME[this.primed++];
+        for (const b of this.boats) if (b.root.userData.port) b.show(this.primed < PRIME.length);
+        this.place(0, p.shot, p.k);
+      } else this.place(0);
+      this.paint(true);
+      return;
+    }
+    // le film passé : pas de survol
+    if (this.host.skipped()) { this.finish(); return; }
+    this.t += dt;
+    this.paint(false);
+    if (this.t >= actTotal(VOY_ACT2)) { this.finish(); return; }
+    this.place(dt);
   }
 
   // ---------- Les plans ----------
 
-  private place(dt: number) {
-    const h = this.host, cam = h.cam, cur = voyShotAt(this.plan, this.t);
+  /** La caméra et les navires du plan en cours (ou d'un plan imposé, à l'avancée `fk`, pour le préparer sous la brume) */
+  private place(dt: number, force?: VoyShot, fk = 0) {
+    const h = this.host, cam = h.cam, cur = force ? { shot: force, k: fk, local: 0 } : voyShotAt(VOY_ACT2, this.t);
     if (!cur) return;
-    const first = cur.shot !== this.shot;
-    this.shot = cur.shot;
+    const first = !force && cur.shot !== this.shot;
+    if (!force) this.shot = cur.shot;
     const e = ease(cur.k), lead = this.lead;
-    if (cur.shot === 'depart' || cur.shot === 'mist') {
-      // la caméra suit le navire de trois quarts arrière, basse, et s'élève un peu quand la brume monte
-      if (!lead) return;
-      lead.step(dt, this.clock);
-      const [x, z] = lead.at(), hd = lead.heading, mist = cur.shot === 'mist';
-      cam.jump({ x: x + Math.sin(hd) * 3, z: z + Math.cos(hd) * 3, yaw: hd + Math.PI + 0.55 - (mist ? e * 0.2 : 0), pitch: mist ? 0.42 + e * 0.12 : 0.4, dist: mist ? 24 + e * 6 : 16 + e * 8 }, SEA);
-      return;
-    }
     if (cur.shot === 'horizon') {
       // derrière le navire, au ras de l'eau ; puis la vue recule et s'élève, toujours tournée vers l'avant : l'horizon s'ouvre,
       // les deux îles paraissent au loin
@@ -202,7 +185,7 @@ export class VoyageStage {
     if (cur.shot === 'orient' || cur.shot === 'asie') {
       // la ville vue de la mer, en tournant lentement : son édifice religieux au centre, son port qui s'anime
       const plan = this.towns.find((p) => p.people === (cur.shot === 'orient' ? 'orient' : 'asie'));
-      for (const b of this.boats) if ((b.root.userData.people === cur.shot) && b.root.userData.port) b.step(dt, this.clock);
+      if (!force) for (const b of this.boats) if ((b.root.userData.people === cur.shot) && b.root.userData.port) b.step(dt, this.clock);
       if (!plan) return;
       const [tx, tz] = plan.points.temple, [qx, qz] = plan.points.port, yaw0 = Math.atan2(Math.cos(plan.seaAng), Math.sin(plan.seaAng));
       const x = lerp(tx, (tx + qx) / 2, e), z = lerp(tz, (tz + qz) / 2, e);
@@ -212,7 +195,7 @@ export class VoyageStage {
     if (cur.shot === 'fleets') {
       // au ras de l'eau, de côté : les deux flottes s'avancent l'une vers l'autre
       const s = this.sites;
-      for (const b of this.boats) if (b.root.userData.fleet) b.step(dt, this.clock, b.root.userData.face as number);
+      for (const b of this.boats) if (b.root.userData.fleet) b.step(force ? 0 : dt, this.clock, b.root.userData.face as number);
       if (!s) return;
       const [bx, bz] = s.battle, [ox, oz] = s.ports.orient, [ax, az] = s.ports.asie, l = Math.hypot(ax - ox, az - oz) || 1;
       const px = -(az - oz) / l, pz = (ax - ox) / l;
@@ -276,8 +259,8 @@ export class VoyageStage {
 
   // ---------- L'habillage ----------
 
-  private begin(act: 1 | 2, plan: readonly VoyPlan[], done: () => void) {
-    this.act = act; this.plan = plan; this.t = 0; this.done = done; this.shot = null; this.clock = 0;
+  private begin(done: () => void) {
+    this.on = true; this.t = 0; this.done = done; this.shot = null; this.clock = 0; this.primed = 0;
     this.host.scene.add(this.group);
     document.body.classList.add('cinematic');
     const el = (this.el = document.createElement('div'));
@@ -288,45 +271,41 @@ export class VoyageStage {
     el.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.skip(); });
     this.keyHandler = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Space') return;
+      // (pendant le film, l'écran de la traversée a ses propres touches)
+      if (this.host.loading()) return;
       e.preventDefault(); e.stopImmediatePropagation();
       this.skip();
     };
     window.addEventListener('keydown', this.keyHandler, true);
-    this.paint();
+    this.paint(true);
   }
 
-  private paint() {
+  private paint(holding: boolean) {
     const el = this.el;
     if (!el) return;
-    const holding = this.act === 2 && this.host.loading();
-    const veil = holding ? { mist: 1, black: 0 } : voyVeilAt(this.act as 1 | 2, this.t, this.fromMist);
+    const veil = holding ? { mist: 1, black: 0 } : voyVeilAt(this.t, this.fromMist);
     (el.querySelector('.vc-mist') as HTMLElement).style.opacity = String(veil.mist);
     (el.querySelector('.vc-black') as HTMLElement).style.opacity = String(veil.black);
-    const cap = holding ? { ...VOY_WAIT, alpha: 1 } : voyCaptionAt(this.plan, this.t);
+    const cap = holding ? null : voyCaptionAt(VOY_ACT2, this.t);
     const box = el.querySelector('.kc-cap') as HTMLElement;
     const text = cap ? tr(cap.text) : '', sub = cap?.sub ? tr(cap.sub) : '';
     const b = box.querySelector('b')!, s = box.querySelector('small')!;
     if (b.textContent !== text) b.textContent = text;
     if (s.textContent !== sub) s.textContent = sub;
     box.style.opacity = String(cap ? cap.alpha : 0);
-    // (« Passer » : pas pendant l'attente du chargement)
-    (el.querySelector('.kc-skip') as HTMLElement).style.visibility = holding ? 'hidden' : '';
   }
 
-  /** Fin d'un acte : navires, habillage et touches retirés ; l'acte II rend la vue au village (la musique de l'âge revient seule) */
+  /** Fin du survol : navires, habillage et touches retirés, la vue rendue au village (la musique de l'âge revient seule) */
   private finish() {
-    const act = this.act, done = this.done, h = this.host;
-    this.act = 0; this.done = null;
+    const done = this.done, h = this.host;
+    this.on = false; this.done = null;
     for (const b of this.boats) this.group.remove(b.root);
     this.boats = []; this.lead = null;
     h.scene.remove(this.group);
     if (this.keyHandler) { window.removeEventListener('keydown', this.keyHandler, true); this.keyHandler = null; }
-    if (act === 2) {
-      this.el?.remove(); this.el = null;
-      if (!document.getElementById('kingCine')) document.body.classList.remove('cinematic');
-      if (this.back) h.cam.jump(this.back, h.world.hAt(this.back.x, this.back.z));
-    }
-    // (acte I : la brume reste à l'écran jusqu'au rechargement)
+    this.el?.remove(); this.el = null;
+    if (!document.getElementById('kingCine')) document.body.classList.remove('cinematic');
+    if (this.back) h.cam.jump(this.back, h.world.hAt(this.back.x, this.back.z));
     done?.();
   }
 }

@@ -8,8 +8,8 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   | 'wall' | 'gate'
   // le volet maritime : chantier naval, phare, halle aux poissons, ferme marine
   | 'shipyard' | 'lighthouse' | 'fishmarket' | 'offshore'
-  // la diplomatie de l'archipel : le monument de la concorde (la paix des trois peuples)
-  | 'concord';
+  // la diplomatie de l'archipel : le monument de la concorde (la paix des trois peuples) ; le comptoir chez l'allié (l'or)
+  | 'concord' | 'tradepost';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'war';
@@ -475,6 +475,14 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Débloqué par l’expédition « L’ambassade de la paix », sur la voie de la paix (archipel).',
     reqMission: 'truce',
   },
+  // le comptoir : chez l'allié seulement (voir `tradepostWhy`, allyLand.ts) ; il ouvre l'échange contre de l'or (trade.ts)
+  tradepost: {
+    id: 'tradepost', size: 2, minAge: 2, icon: '💰', cat: 'prod',
+    names: ['', '', 'Comptoir', 'Comptoir de commerce', 'Maison de négoce', 'Bourse d’échanges'],
+    desc: 'Notre comptoir chez le peuple allié : un entrepôt, des étals et la balance du changeur. On y vend nos matériaux contre de l’or.',
+    jobs: [0, 0, 3, 4, 5, 6],
+    perk: 'Se bâtit sur l’île de votre allié, hors de sa ville. Il ouvre l’échange : un clic sur l’or (barre des stocks) ouvre le comptoir, où l’on vend bois, pierre ou minerai contre l’or qui fait passer les âges.',
+  },
   // les bâtiments militaires : au village comme sur l'île du portail (où l'on ne bâtit qu'eux, voir `World.portalRule`)
   watchtower: {
     id: 'watchtower', size: 1, minAge: 1, icon: '🏹', cat: 'war',
@@ -512,7 +520,7 @@ export const GARRISONS: KindId[] = ['watchtower', 'barracks'];
 /** Les remparts : un pan de mur se trace en ligne, la porte se pose seule ; tous deux se raccordent à leurs voisins */
 export const isRampart = (k: KindId) => k === 'wall' || k === 'gate';
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -537,7 +545,7 @@ export const KIND_SUB: Record<KindId, string> = {
   house: 'logis', manor: 'logis', arcology: 'logis', well: 'eau', watertower: 'eau', lamp: 'lumiere',
   farm: 'nourriture', vfarm: 'nourriture', pen: 'nourriture', stable: 'nourriture', apiary: 'nourriture', pier: 'nourriture', fishmarket: 'nourriture', offshore: 'nourriture',
   lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
-  workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie', shipyard: 'industrie',
+  workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie', tradepost: 'industrie', shipyard: 'industrie',
   health: 'sante', school: 'savoir', observatory: 'savoir', lab: 'savoir', research: 'savoir',
   police: 'securite', fire: 'securite', senate: 'securite', watchtower: 'defense', barracks: 'defense', wall: 'remparts', gate: 'remparts', lighthouse: 'securite',
   station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
@@ -597,7 +605,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
   watchtower: 'tours de garde', barracks: 'casernes de la garnison', wall: 'remparts', gate: 'portes de la ville',
   shipyard: 'chantiers navals', lighthouse: 'phares', fishmarket: 'halles aux poissons', offshore: 'fermes marines',
-  concord: 'monuments de la concorde',
+  concord: 'monuments de la concorde', tradepost: 'comptoirs',
 };
 
 /**

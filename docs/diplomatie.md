@@ -15,10 +15,10 @@ Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îl
 ### Le choix de l'allié
 - **À la fin de la cinématique** (`Game.onIslesRevealed`), la carte s'ouvre aussitôt (`DiploChoice.showAlly`) si aucun allié n'est choisi (`allyPending`). Sinon, au calme (`stepDiplo` : aucune fenêtre ni carte, ni fondu ni cinématique, `popups` ouverts), tant que l'allié manque (partie rechargée, ancienne partie).
 - Les deux peuples côte à côte, blason (`crest`), île, mœurs. **Pas de croix**. `chooseAlly` : une seule fois ; les deux peuples deviennent « rencontrés » (`met`). Bannière « Une alliance ! ».
-- **Crochet** : `Game.onAllyChosen?.(peuple)` juste après (tutoriel de l'archipel, construction chez l'allié) ; l'allié se lit aussi dans `world.diplo.ally`.
+- **Ensuite** : le chapitre « L'or des voisins » du tutoriel démarre 3,2 s après le choix (`Game.watchAlly`, qui guette le changement de `world.diplo.ally` dans `stepDiplo`, quelle que soit la carte qui l'a fait choisir) : un port chez soi, un port et un comptoir chez l'allié. Crochet aussi disponible : `Game.onAllyChosen?.(peuple)`. La carte du dénouement attend la fin du tutoriel (`!tutorial.active`) et l'installation chez l'allié.
 
 ### Le dénouement (Médiéval)
-- `endgameOpen(w, âge)` : un allié, le conflit `open`, **au Médiéval** (`ENDGAME_AGE` = 2), et le port et le comptoir installés chez l'allié (`allyPostReady(world)` de la session de l'or, branchée par `bindPostReady` ; tant qu'elle n'est pas branchée, le crochet répond oui). `endgameWhy` dit ce qui manque (le port et le comptoir, l'allié, l'âge).
+- `endgameOpen(w, âge)` : un allié, le conflit `open`, **au Médiéval** (`ENDGAME_AGE` = 2), et le port et le comptoir installés chez l'allié (`allyPostReady(world)` de `sim/allyLand.ts`, branchée par `Game` au démarrage avec `bindPostReady` ; non branchée, dans les tests, elle répond oui). `endgameWhy` dit ce qui manque (le port et le comptoir, l'allié, l'âge).
 - La **carte du dénouement** (`showPath`) s'ouvre d'elle-même une fois (`diplo.asked`, hors tutoriel), puis d'un clic sur la condition du panneau des âges, sur le conseil du moment, ou sur la ligne « ⚖️ Le conflit des deux îles » en tête du rayon Vie (`diploLine`). Pas de croix ; deux choix (`choosePath`), qu'on peut changer tant que la bataille n'est pas engagée (`battle` à `none`).
 - **Négocier la paix** (`peace`) : **deux pourparlers** (`PEACE_CHAIN`, âge 2 ; décision de l'auteur : « on en fait que 2 »). Ce sont des **pourparlers** (`Mission.talks`) : `risk: 0`, `lose: []`, `chance` vaut 0, aucune option d'imprévu ne blesse, seuls leurs imprévus surviennent.
   - `envoys` « Les émissaires » (imprévus `mistrust`, `grievance`) : le **comptoir chez l'île rivale** s'ouvre (`diplo.post`, `rivalPost(w)`) ; le conflit dure encore.
@@ -45,7 +45,7 @@ Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îl
 `conflictState(w)` : `{ kind: 'war' }` tant qu'il est `open` (escarmouches), `peace` ou `treaty` (commerce), `{ kind: 'won', winner: allié }` (patrouilles), null sans archipel. `stepDiplo` le donne à `NavalConflict.state` quand il change.
 
 ### Le cosmodrome
-`spaceportWhy` (dans `World.canPlace`) : sans archipel, l'île principale ; avec, l'île alliée seulement (les quatre coins, `onRival`). Seule pose permise hors de l'île principale. Voir [fin-de-partie.md](fin-de-partie.md).
+`spaceportWhy` (dans `World.canPlace`) : sans archipel, l'île principale ; avec, l'île alliée seulement (les quatre coins, `onRival`). Voir [fin-de-partie.md](fin-de-partie.md) et la construction chez l'allié (`World.playable`, `sim/allyLand.ts`).
 
 ## Fonctionnement dans le code
 - `World.diplo` (`DiploState`) : `met`, `ally`, `path` (`peace`, `war` ou null), `conflict` (`open`, `peace`, `won`, `treaty`), `asked`, `post`, `feast`, `battle` (`none`, `ready`, `lost`), `retry` (heure `exp.clock` du nouvel essai), `cine`. Sauvegardé sous `world.diplo` seulement s'il a bougé (`saveDiplo`) ; relu par `readDiplo` (valeurs inconnues ignorées ; ancienne voie `neutral` → à rechoisir, carte rouverte ; `warned` oublié).
@@ -60,17 +60,18 @@ Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îl
 - [portail-ile.md](portail-ile.md), [armee-combat.md](armee-combat.md) : le moteur `Hell`, la barre de commandement (`CommandUI`), `BattleLayer`.
 - [iles.md](iles.md) : `TownPlan.points` et les remparts de la ville rivale.
 - [expeditions.md](expeditions.md), [ages.md](ages.md), [fin-de-partie.md](fin-de-partie.md).
-- Autres chantiers : l'or et la construction chez l'allié (`allyPostReady` à brancher par `bindPostReady`, lisent `onAllyChosen` / `diplo.ally`, `rivalPost`, `tributePerDay`, `WAR_SPOILS`) ; le conflit naval (`conflictState`).
+- Autres chantiers : l'or et la construction chez l'allié (`allyPostReady` branchée par `bindPostReady` ; `watchAlly` et `diplo.ally` ; `rivalPost`, `tributePerDay`, `WAR_SPOILS`) ; le conflit naval (`conflictState`).
 
 ## Pièges et invariants
-- **Le crochet `bindPostReady`** n'est pas encore branché (la fonction d'or-comptoir est sur une autre branche) : la carte du dénouement vient dès l'allié choisi. À la fusion : `bindPostReady(allyPostReady)` au démarrage de `Game`.
+- **L'installation chez l'allié** : `allyPostReady(world)` (`sim/allyLand.ts`), vrai quand l'allié est choisi et qu'un port (`harbor`) sur son île et un comptoir (`tradepost`) sont bâtis. Fonction pure, lue pour ouvrir la carte de la paix ou de la guerre ; le chapitre « L'or des voisins » (voir [tutoriel.md](tutoriel.md)) finit par l'explication de l'or et n'ouvre rien derrière.
+- **Construire chez l'allié** (`sim/allyLand.ts`, `World.playable`) : une fois l'allié choisi, on bâtit, trace, sculpte et plante aussi sur son île, hors de sa ville de décor (`townCells` : remparts, lots, champs, port, rues). L'île rivale et les petites îles restent interdites. **Le lien entre les deux îles : les ports suffisent**, sans route continue ni pont : chaque île a son propre réseau de routes, les ressources et les besoins sont communs (ils n'ont pas de portée), les habitants ne traversent pas la mer. Les bâtiments de l'île alliée sont donc isolés du village : comme le cosmodrome, les équipes des expéditions spatiales n'y ont pas de chemin (`OUT_MAX`), et rien n'y circule depuis le village.
 - **La ville rivale n'est que du décor** : ses maisons ne bloquent pas le passage au combat (seuls les remparts). Les bâtiments ne changent pas d'état pendant la bataille (les états `ruin` / `repair` de `townRuins.ts` attendent l'après-guerre).
 - La barre `rival` est une branche à part de `CommandUI.render` (ni garnison, ni base, ni portail) ; `escapeAction` n'y quitte rien.
-- **Construire hors de l'île principale** : seul le cosmodrome, chez l'allié ; sans routes chez lui, les équipes spatiales n'ont pas de chemin jusqu'à lui.
-- Les imprévus de la diplomatie n'ont pas de mise en scène (`stageEvent`).
 - La cinématique de la paix est une suite de mouvements de caméra et de bannières (`setTimeout`), pas la mise en scène des cinématiques du grand choix (`voyageStage.ts`) : à reprendre avec elle si l'on veut des navires qui se saluent.
+- Les imprévus de la diplomatie n'ont pas de mise en scène (`stageEvent`) : la décision s'affiche, la scène ne joue rien de propre. Leurs textes ne décrivent que ce qui se passe à bord ou sur le quai.
+- Les noms « Sablais » et « Jadéens » sont posés ici ; la session des villes des peuples doit les reprendre (ou les changer ici, dans `peopleName` et dans les textes des missions).
 
 ## Pour modifier
 - **Changer la chaîne de pourparlers** : les missions (`talks: true`, âge 2, `requires.missions` en chaîne) et leurs ids dans `PEACE_CHAIN` ; répartir les effets `post`, `truce`, `feast` (`truce` règle le conflit et lance la cinématique).
 - **Équilibrer la bataille** : `ARMY`, `GUARDS`, `GUARD_K`, `TAKE_R` (`rivalBattle.ts`) ; `tests/batailleArchipel.test.ts` (l'armée sans ordre doit gagner, avec des pertes).
-- **Brancher le port et le comptoir** : `bindPostReady`. **Changer la condition** : `conflictItem`, `CONFLICT_LABEL`, `settleLate`.
+- **Changer l'installation demandée** : `allyPostReady` (`allyLand.ts`). **Changer la condition** : `conflictItem`, `CONFLICT_LABEL`, `settleLate`.
