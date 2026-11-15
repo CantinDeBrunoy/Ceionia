@@ -105,7 +105,8 @@ import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
-import { bindPostReady, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, PEACE_CHAIN, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
+import type { ConflictWay } from './ui/ways';
+import { bindPostReady, pathDue, CONFLICT_LABEL, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, PEACE_CHAIN, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
 import { RivalBattle, BattleGoal } from './sim/rivalBattle';
 import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
@@ -1118,7 +1119,7 @@ class Game implements UIHost {
     else if (d.cine) this.playPeace();
     else if (d.battle === 'ready' && battleReady(d, w.exp.clock)) this.startRivalBattle();
     else if (d.battle === 'lost' && battleReady(d, w.exp.clock) && !this.retrySaid) { this.retrySaid = true; this.ui.toast(trx('⚔️ Nos troupes se sont refaites chez notre allié : la bataille peut reprendre. Cliquez ici.'), () => this.startRivalBattle(), 'action'); }
-    else if (endgameOpen(w, this.sim.age) && !d.asked && !this.tutorial.active) { d.asked = true; this.diploChoice.showPath(); }
+    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone())) { d.asked = true; this.popups.taken(); this.diploChoice.showPath(); }
   }
 
   /**
@@ -1132,6 +1133,29 @@ class Game implements UIHost {
     if (ally === this.allySeen) return;
     this.allySeen = ally;
     if (ally) setTimeout(() => this.tutorial.chapter('arch'), 3200);
+  }
+
+  /** Les conditions du passage à l'âge suivant sont toutes remplies, sauf peut-être le conflit des deux îles */
+  private othersDone() {
+    const ap = this.sim.ageProgress();
+    return !!ap && ap.items.some((i) => i.label === CONFLICT_LABEL) && ap.items.every((i) => i.label === CONFLICT_LABEL || i.have >= i.need);
+  }
+
+  /**
+   * La carte du conflit dans l'onglet « Grands choix » (archipel et allié) : à régler (bouton qui ouvre la carte paix ou
+   * guerre, ou mène à la bataille), en attente (ce qui manque), ou réglé (comment)
+   */
+  conflictWay(): ConflictWay | null {
+    const w = this.world, d = w.diplo;
+    if (!archipelagoOn(w) || !d.ally) return null;
+    if (d.conflict !== 'open') {
+      const how = d.conflict === 'peace' ? trx('La paix est signée entre les deux îles.') : d.conflict === 'won' ? trx('La guerre est gagnée : le rival paie son tribut.') : trx('Les deux îles ont fait la paix entre elles.');
+      return { ally: d.ally, badge: 'taken', note: how };
+    }
+    if (d.path === 'war' && d.battle !== 'none') return { ally: d.ally, badge: 'free', button: trx('À la bataille') };
+    const why = endgameWhy(w, this.sim.age);
+    if (why) return { ally: d.ally, badge: 'wait', note: why };
+    return { ally: d.ally, badge: 'free', button: d.path ? trx('Changer de voie') : trx('Choisir la paix ou la guerre') };
   }
 
   // ---------- La paix : la cinématique ----------

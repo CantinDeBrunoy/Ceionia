@@ -25,7 +25,7 @@ import { choiceStyles, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } fro
 import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
 import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/crossroads';
-import { waysHtml } from './ways';
+import { waysHtml, type ConflictWay } from './ways';
 import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -66,6 +66,8 @@ export interface UIHost {
    * et les prendre (la carte de la voie s'ouvre pour confirmer)
    */
   ways?(): { hell: WayState; world: WayState };
+  /** la carte du conflit des deux îles dans l'onglet « Grands choix » (null : pas d'archipel ou pas d'allié) */
+  conflictWay?(): ConflictWay | null;
   takeWay?(way: Way): void;
   /** rouvrir la carte du grand choix (condition du passage au Médiéval) */
   openCrossroads?(): void;
@@ -1922,7 +1924,7 @@ export class UI {
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
       ${railOn ? `<section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>` : ''}
-      ${waysOn ? `<section data-sec="ways" ${tab === 'ways' ? '' : 'hidden'}>${waysHtml(ways)}</section>` : ''}`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
+      ${waysOn ? `<section data-sec="ways" ${tab === 'ways' ? '' : 'hidden'}>${waysHtml(ways, h.conflictWay?.() ?? null)}</section>` : ''}`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
     $('.expModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, age))}.webp)`);
 
     // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section
@@ -1978,6 +1980,14 @@ export class UI {
       h.audio.sfxClick();
       close();
       h.takeWay?.(b.dataset.way as Way);
+    });
+    // le conflit des deux îles : la fenêtre se ferme, la carte paix ou guerre s'ouvre (ou la bataille)
+    ov.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-conflict]');
+      if (!b) return;
+      h.audio.sfxClick();
+      close();
+      h.openDiploChoice?.();
     });
     // « Envoyer une équipe » : la petite fenêtre de départ s'ouvre par-dessus
     ov.addEventListener('click', (e) => {

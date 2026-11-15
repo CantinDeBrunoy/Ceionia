@@ -27,7 +27,10 @@ export interface DiploState {
   /** la voie du dénouement (null : pas encore choisie) */
   path: Path | null;
   conflict: Conflict;
-  /** la carte du dénouement s'est ouverte d'elle-même (une seule fois ; on la rouvre ensuite depuis le panneau des âges) */
+  /**
+   * la carte du dénouement s'est ouverte d'elle-même (une seule fois, quand le reste du passage à l'Industriel est rempli ;
+   * « Plus tard » la referme, on la rouvre depuis le panneau des âges ou l'onglet « Grands choix »)
+   */
   asked: boolean;
   /** paix : le comptoir chez l'île rivale est ouvert */
   post: boolean;
@@ -194,6 +197,16 @@ export function chooseAlly(d: DiploState, p: People) {
 export function endgameOpen(w: World, age: number) {
   if (!archipelagoOn(w) || !w.diplo.ally || w.diplo.conflict !== 'open') return false;
   return age === ENDGAME_AGE && postReady(w);
+}
+
+/**
+ * La carte paix ou guerre s'ouvre-t-elle d'elle-même ? Le dénouement ouvert (allié installé chez lui, Médiéval), jamais
+ * encore montrée seule (`asked` : « Plus tard » ne la fait pas revenir en boucle), et toutes les autres conditions du passage
+ * à l'Industriel remplies (`othersDone` : le conflit est la dernière qui manque, comme le grand choix pour le Médiéval).
+ * Ensuite on la rouvre depuis la condition du panneau des âges, le conseil, ou l'onglet « Grands choix »
+ */
+export function pathDue(w: World, age: number, othersDone: boolean) {
+  return othersDone && !w.diplo.asked && endgameOpen(w, age);
 }
 
 /** Pourquoi la carte du dénouement ne s'ouvre pas encore (null : elle peut) */

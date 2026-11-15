@@ -10,8 +10,9 @@ import { DiploState, Path, isleName, peopleName, rivalOf } from '../sim/diplomac
  *   île et ses mœurs ; le choix est obligatoire et définitif (la carte n'a pas de croix) ;
  * - **le dénouement**, au Médiéval (une fois l'allié installé chez lui) : négocier la paix (une ambassade, puis la
  *   cinématique de la paix) ou aider notre allié (une expédition militaire, puis la bataille). Il faut régler le conflit pour
- *   passer à l'Industriel. Elle s'ouvre d'elle-même une fois, puis depuis la condition du panneau des âges (ou la ligne en
- *   tête du rayon Vie) ; on peut changer de voie tant que la bataille n'est pas engagée
+ *   passer à l'Industriel. Elle s'ouvre d'elle-même une fois, quand le reste du passage est rempli ; « Plus tard » la referme
+ *   (on reste au Médiéval). On la rouvre depuis la condition du panneau des âges, le conseil, l'onglet « Grands choix » ou la
+ *   ligne en tête du rayon Vie ; on peut changer de voie tant que la bataille n'est pas engagée
  */
 export class DiploChoice {
   private el: HTMLElement;
@@ -62,8 +63,9 @@ export class DiploChoice {
       <div class="pcBtns dcCol">
         ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('une ambassade, sans risque : un comptoir, un monument, une fête'), d.path === 'peace')}
         ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('une expédition militaire, puis la bataille : butin et tribut d’or'), d.path === 'war')}
+        ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('rester au Médiéval et continuer à jouer'))}
       </div>
-      <small class="pcNote">${tr('Il faut régler ce conflit pour passer à l’âge suivant. Vous pourrez changer de voie tant que la bataille n’est pas engagée.')}</small>`;
+      <small class="pcNote">${tr('Il faut régler ce conflit pour passer à l’âge suivant. Pour y revenir : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
   }
 
   hide() { this.el.style.display = 'none'; }
