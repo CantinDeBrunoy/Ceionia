@@ -170,6 +170,9 @@ export class AudioEngine {
       if (this.ctx?.state === 'running' && !this.track?.el.paused) for (const k of kinds) target.removeEventListener(k, wake, true);
     };
     for (const k of kinds) target.addEventListener(k, wake, true);
+    // un essai tout de suite : un navigateur qui autorise la lecture automatique (site déjà écouté souvent, son autorisé
+    // pour le site) lance la musique dès l'accueil ; sinon le contexte reste suspendu et le premier geste le réveille
+    wake();
   }
 
   /** À appeler depuis un geste utilisateur */
