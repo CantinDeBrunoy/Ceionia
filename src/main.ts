@@ -54,7 +54,7 @@ import { Glow } from './render/glow';
 import { loadModels } from './render/assets';
 import { Thumbs } from './render/thumbs';
 import { ToolController, ToolId } from './build/tools';
-import { AudioEngine, soundSettings } from './audio/audio';
+import { AudioEngine, soundSettings, VOL_V } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
@@ -779,7 +779,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();

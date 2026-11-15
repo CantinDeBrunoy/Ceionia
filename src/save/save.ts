@@ -7,8 +7,10 @@ export interface Settings {
   speed: number;
   musicVol: number;
   sfxVol: number;
-  /** volume des ambiances (nature et bruitages de proximité) ; absent des anciennes sauvegardes : 0,7 */
+  /** volume des ambiances (nature et bruitages de proximité) ; absent : 0,5 */
   ambVol?: number;
+  /** échelle des volumes (`VOL_V` de `audio.ts`) ; absente : ancienne échelle, plus forte, dont les volumes sont oubliés */
+  volV?: number;
   /** musique activée ; lue seulement si `musicChosen` (les anciennes sauvegardes notaient `false` sans choix du joueur) */
   music?: boolean;
   /** le joueur a lui-même allumé ou coupé la musique ; absent = musique allumée */

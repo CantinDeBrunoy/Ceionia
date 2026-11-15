@@ -11,7 +11,7 @@ describe('musique allumée par défaut', () => {
 
   it('sans réglage, ou avec une ancienne sauvegarde (music: false sans choix), la musique joue', () => {
     expect(soundSettings({}).muteMusic).toBe(false);
-    expect(soundSettings({ music: false, musicVol: 0.4 })).toMatchObject({ muteMusic: false, musicChosen: false, musicVol: 0.4 });
+    expect(soundSettings({ music: false, musicVol: 0.4, volV: 2 })).toMatchObject({ muteMusic: false, musicChosen: false, musicVol: 0.4 });
   });
 
   it('la musique coupée par le joueur reste coupée ; rallumée, elle joue', () => {
@@ -37,5 +37,11 @@ describe('musique enregistrée', () => {
   it('un morceau n’appartient qu’à une liste', () => {
     const all = Object.values(MUSIC).flat();
     expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('volumes : l’ancienne échelle, trop forte, est oubliée ; la nouvelle se relit', () => {
+    expect(soundSettings({ musicVol: 0.2, sfxVol: 0.1, ambVol: 0.1 })).toMatchObject({ musicVol: 0.5, sfxVol: 0.5, ambVol: 0.5 });
+    expect(soundSettings({ musicVol: 0.3, sfxVol: 0.8, ambVol: 0.6, volV: 2 })).toMatchObject({ musicVol: 0.3, sfxVol: 0.8, ambVol: 0.6 });
+    expect(soundSettings({})).toMatchObject({ musicVol: 0.5, sfxVol: 0.5, ambVol: 0.5 });
   });
 });

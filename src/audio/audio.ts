@@ -82,15 +82,25 @@ const MUSIC_FADE = 4;
  */
 const TRACK_GAIN = 0.55;
 
+/**
+ * Niveau réel de chaque bus pour une réglette à fond (1). Le 15 nov. 2026, l'auteur trouvait tout trop fort et jouait avec
+ * la musique à 0,2 et les sons et ambiances à 0,1 sur l'ancienne échelle : ces niveaux sont devenus ceux des réglettes à
+ * mi-course (0,5), le défaut ; à fond, on entend deux fois plus fort la musique, cinq fois plus les sons
+ */
+export const VOL_SCALE = { music: 0.4, sfx: 0.2, amb: 0.2 };
+/** version de l'échelle des volumes : des volumes enregistrés sur l'ancienne échelle (sans `volV`) sont oubliés */
+export const VOL_V = 2;
+
 /** Réglages du son enregistrés (`Settings`), tels que les lit le moteur */
-export interface SoundSettings { musicVol?: number; sfxVol?: number; ambVol?: number; music?: boolean; sfx?: boolean; musicChosen?: boolean; sfxChosen?: boolean }
+export interface SoundSettings { musicVol?: number; sfxVol?: number; ambVol?: number; volV?: number; music?: boolean; sfx?: boolean; musicChosen?: boolean; sfxChosen?: boolean }
 /**
  * Les réglages enregistrés, en valeurs du moteur. Musique et sons sont allumés sauf si le joueur les a lui-même coupés :
  * `music` et `sfx` ne comptent qu'avec `musicChosen` / `sfxChosen` (les anciennes sauvegardes notaient `false` sans choix)
  */
 export function soundSettings(s: SoundSettings) {
   return {
-    musicVol: s.musicVol ?? 0.5, sfxVol: s.sfxVol ?? 0.7, ambVol: s.ambVol ?? 0.7,
+    // (l'ancienne échelle, deux fois et demie à cinq fois plus forte, est oubliée : on repart du défaut)
+    ...(s.volV === VOL_V ? { musicVol: s.musicVol ?? 0.5, sfxVol: s.sfxVol ?? 0.5, ambVol: s.ambVol ?? 0.5 } : { musicVol: 0.5, sfxVol: 0.5, ambVol: 0.5 }),
     muteMusic: s.musicChosen === true && s.music !== true, musicChosen: s.musicChosen === true,
     muteSfx: s.sfxChosen === true && s.sfx !== true, sfxChosen: s.sfxChosen === true,
   };
@@ -113,9 +123,9 @@ export function spotPan(p: number | undefined): number {
 export class AudioEngine {
   ctx: AudioContext | null = null;
   musicVol = 0.5;
-  sfxVol = 0.7;
+  sfxVol = 0.5;
   /** volume des ambiances : nature (eau, pluie, oiseaux…) et bruitages de proximité (forge, bêtes, foule…) */
-  ambVol = 0.7;
+  ambVol = 0.5;
   /** musique, sons et ambiances allumés par défaut ; tout démarre au premier geste du joueur (`start`) */
   muteMusic = false;
   muteSfx = false;
@@ -234,9 +244,9 @@ export class AudioEngine {
 
   applyVolumes() {
     if (!this.ctx) return;
-    this.musicG.gain.setTargetAtTime(this.muteMusic ? 0 : this.musicVol * 0.55, this.ctx.currentTime, 0.1);
-    this.sfxG.gain.setTargetAtTime(this.muteSfx ? 0 : this.sfxVol, this.ctx.currentTime, 0.1);
-    this.ambG.gain.setTargetAtTime(this.muteSfx ? 0 : this.ambVol, this.ctx.currentTime, 0.1);
+    this.musicG.gain.setTargetAtTime(this.muteMusic ? 0 : this.musicVol * 0.55 * VOL_SCALE.music, this.ctx.currentTime, 0.1);
+    this.sfxG.gain.setTargetAtTime(this.muteSfx ? 0 : this.sfxVol * VOL_SCALE.sfx, this.ctx.currentTime, 0.1);
+    this.ambG.gain.setTargetAtTime(this.muteSfx ? 0 : this.ambVol * VOL_SCALE.amb, this.ctx.currentTime, 0.1);
     this.syncMusic();
   }
 
