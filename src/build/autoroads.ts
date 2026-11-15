@@ -66,8 +66,10 @@ export function autoRoad(w: World, b: Building): number {
   }
   if (!starts.length) return 0;
   let added = 0;
-  // vers le réseau, sinon vers la porte du bâtiment voisin le plus proche (rien pour le tout premier)
-  const hasRoads = w.road.some((v) => v === 1), near = hasRoads ? null : nearDoor(w, b);
+  // vers le réseau de son île, sinon vers la porte du bâtiment voisin le plus proche (rien pour le tout premier) : sur l'île
+  // de l'allié, le réseau du village (de l'autre côté de la mer) ne compte pas, le premier bâtiment y attend le suivant
+  const same = sameLand(w, b);
+  const hasRoads = w.road.some((v, k) => v === 1 && same(k)), near = hasRoads ? null : nearDoor(w, b, same);
   if (near && !near.any) return 0;
   const goal = near ? near.goal : (k: number) => w.road[k] === 1;
   // une porte ailleurs que sur la façade se paie, davantage si la façade regarde une route toute proche
@@ -108,12 +110,18 @@ function doors(w: World, b: Building, side: number) {
  * But « devant la porte d'un autre bâtiment » (hors lampadaires), pour les tout premiers chemins : orienté de lui-même, ce
  * voisin l'ouvre sur n'importe quel côté, et `welcome` (la case d'arrivée) tourne sa façade vers le chemin
  */
-function nearDoor(w: World, self: Building) {
+/** Les cases de la même île que le bâtiment : l'île principale, ou celle de l'allié (`World.inMain`) */
+function sameLand(w: World, b: Building) {
+  const home = w.inMain(b.x, b.z);
+  return (k: number) => w.inMain(k % N, Math.floor(k / N)) === home;
+}
+
+function nearDoor(w: World, self: Building, same: (k: number) => boolean = () => true) {
   const at = new Map<number, [Building, number]>();
   // la place du village, sans porte, s'aborde de n'importe quelle case qui la borde (sa façade ne se tourne pas pour autant)
   const plazas: number[] = [];
   for (const o of w.buildings.values()) {
-    if (o.id === self.id || o.kind === 'lamp') continue;
+    if (o.id === self.id || o.kind === 'lamp' || !same(w.ci(o.x, o.z))) continue;
     if (!hasDoor(o.kind)) { plazas.push(...ringCells(w, o)); continue; }
     const own = doorSide(o.kind, o.rot);
     // (une case devant deux portes : celle qui s'y ouvre déjà l'emporte)

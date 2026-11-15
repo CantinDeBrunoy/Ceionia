@@ -44,19 +44,22 @@ export const CHAPTER_TEXT = {
   arch: {
     title: 'L’or des voisins',
     goAlly: 'Aller sur l’île alliée',
+    /** la vignette du bâtiment est plus loin dans la rangée : la flèche la fait venir */
+    arrow: 'Cliquez sur la flèche › pour faire venir {name}, puis sur sa vignette.',
+    arrowBack: 'Cliquez sur la flèche ‹ pour faire revenir {name}, puis sur sa vignette.',
     home: {
-      title: 'Un port chez vous',
-      text: 'Le commerce passe par la mer : bâtissez {harbor} sur la côte de votre île.',
-      tasks: ['{harbor} sur votre île'],
+      title: 'Relier les deux îles',
+      text: 'Pour commercer avec vos alliés, reliez vos îles : un port chez vous, puis un port chez eux.',
+      tasks: ['{harbor} sur votre île', '{harbor} sur l’île alliée'],
     },
     allyHarbor: {
       title: 'Un port chez l’allié',
-      text: 'Bâtissez aussi {harbor} sur la côte de {isle}, hors de leur ville : les navires iront d’un port à l’autre.',
+      text: 'Maintenant {harbor} sur la côte de {isle}, hors de leur ville : les navires relieront les deux ports.',
       tasks: ['{harbor} sur l’île alliée'],
     },
     post: {
       title: 'Le comptoir',
-      text: 'Bâtissez {post} sur {isle} : c’est là qu’on échange avec vos alliés.',
+      text: 'Pour finir, {post} sur {isle}, près du port : c’est là qu’on échangera avec vos alliés.',
       tasks: ['{post} sur l’île alliée'],
     },
     gold: {
@@ -155,7 +158,10 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
   const kname = (k: 'harbor' | 'tradepost') => tr('« {name} »', { name: KINDS[k].names[Math.max(h.age(), KINDS[k].minAge)] });
   const arch = (s: string) => fmt(s, { harbor: kname('harbor'), post: kname('tradepost'), isle: h.allyIsle(), a: AGES[3].reqGold ?? 0, b: AGES[4].reqGold ?? 0, c: AGES[5].reqGold ?? 0 });
   /** l'onglet Bâtir, le rayon Production, puis la vignette du bâtiment */
-  const tile = (k: 'harbor' | 'tradepost') => (ui.tab !== 'build' ? q('#modes [data-t="build"]') : ui.cat !== 'prod' ? q('#subcats [data-c="prod"]') : q(`#items [data-kind="${k}"]`));
+  /** l'onglet Bâtir, le rayon Production, puis la vignette du bâtiment ; cachée dans la rangée qui défile : la flèche */
+  const tile = (k: 'harbor' | 'tradepost') => ui.buildAnchor(k).el;
+  /** la ligne qui dit de cliquer sur la flèche, tant que la vignette est cachée */
+  const arrow = (k: 'harbor' | 'tradepost') => { const hid = ui.buildAnchor(k).hidden; return hid ? fmt(hid === 'next' ? A.arrow : A.arrowBack, { name: kname(k) }) : ''; };
   const goAlly = () => (!h.atAlly() ? { label: A.goAlly, run: () => h.goAlly() } : null);
 
   const pve: Step[] = [
@@ -199,20 +205,24 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
   const archSteps: Step[] = [
     step('archHome', A.home, {
       text: () => arch(A.home.text), tasks: () => A.home.tasks.map(arch),
-      check: () => [h.harbors().home > 0],
+      // (les deux ports dès la première étape, pour qu'on voie le but ; la sienne passe avec le premier)
+      check: () => [h.harbors().home > 0, h.harbors().ally > 0], need: 1,
       anchor: () => (h.harbors().home ? null : tile('harbor')),
+      note: () => (h.harbors().home ? '' : arrow('harbor')),
     }),
     step('archAllyHarbor', A.allyHarbor, {
       begin: () => { if (!h.atAlly()) h.goAlly(); },
       text: () => arch(A.allyHarbor.text), tasks: () => A.allyHarbor.tasks.map(arch),
       check: () => [h.harbors().ally > 0],
       anchor: () => (h.atAlly() && !h.harbors().ally ? tile('harbor') : null),
+      note: () => (h.atAlly() && !h.harbors().ally ? arrow('harbor') : ''),
       act: goAlly,
     }),
     step('archPost', A.post, {
       text: () => arch(A.post.text), tasks: () => A.post.tasks.map(arch),
       check: () => [h.posts() > 0],
       anchor: () => (h.atAlly() && !h.posts() ? tile('tradepost') : null),
+      note: () => (h.atAlly() && !h.posts() ? arrow('tradepost') : ''),
       act: goAlly,
     }),
     step('archGold', A.gold, {

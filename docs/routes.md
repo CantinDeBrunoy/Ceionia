@@ -18,7 +18,7 @@ Une route est une case de `World.road` (0 ou 1). Le joueur en trace de deux faç
 - Le chemin contourne bâtiments, pentes et champs ; il ne franchit l'eau que si l'on ne peut pas faire autrement.
 - Un clic de départ sur une route existante est permis ; la nouvelle route la croise ou la rejoint.
 
-**Routes automatiques** (réglage `autoRoads`, vrai par défaut, dans les réglages ; `Game.setAutoRoads`) : à la pose d'un bâtiment, `autoRoad` trace un seul chemin de sa porte jusqu'au réseau (ou, sans réseau encore, jusqu'à la porte du bâtiment le plus proche : le tout premier bâtiment n'a rien à relier).
+**Routes automatiques** (réglage `autoRoads`, vrai par défaut, dans les réglages ; `Game.setAutoRoads`) : à la pose d'un bâtiment, `autoRoad` trace un seul chemin de sa porte jusqu'au réseau (ou, sans réseau encore, jusqu'à la porte du bâtiment le plus proche : le tout premier bâtiment n'a rien à relier). Le réseau et les portes sont ceux de **son île** (`sameLand` : l'île principale, ou celle de l'allié, voir [diplomatie.md](diplomatie.md)) : sur l'île de l'allié, le réseau du village, de l'autre côté de la mer, ne compte pas ; le premier bâtiment y attend le suivant (le comptoir posé près du port s'y relie).
 - Rien si la porte donne déjà sur une route, rien pour `lamp`, `gather`, `wall`, `gate` (`hasDoor`).
 - Longueur maxi : `MAX_LINK = 14` cases ; `MAX_SHORE = 30` pour le ponton et le port (accès par l'arrière, jamais sur l'eau) ; `MAX_JOIN = 18` pour relier un hameau.
 - **Hameau** : un réseau qui dessert exactement `HAMLET = 3` bâtiments est relié une fois au réseau voisin le plus proche (`joinHamlet`).

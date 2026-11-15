@@ -8,6 +8,8 @@ import { KINDS, KIND_ORDER, KIND_LABEL, AGES } from '../src/build/catalog';
 import { KIND_ICON } from '../src/ui/icons';
 import { getModel } from '../src/render/models';
 import { onRival, isleOf } from '../src/sim/diplomacy';
+import { autoRoad } from '../src/build/autoroads';
+import { facingRoadRot } from '../src/build/placement';
 import { allyIsle, allyLand, allyPostReady, allyView, inAllyTown, onAllyIsle } from '../src/sim/allyLand';
 import { readTradeState, saveTradeState, tradeOpen, TRADE_V } from '../src/sim/trade';
 
@@ -134,6 +136,33 @@ describe('l’installation chez l’allié (pour la diplomatie)', () => {
     for (const b of [...w.buildings.values()]) if (b.kind === 'harbor' && onAllyIsle(w, b.x, b.z, 3)) w.removeBuilding(b.id);
     expect(allyPostReady(w)).toBe(false);
     cached = null;
+  });
+});
+
+describe('routes automatiques chez l’allié', () => {
+  it('le comptoir posé près du port de l’île alliée s’y relie, même avec des routes au village', () => {
+    const w = archipel();
+    w.diplo.ally = 'orient';
+    // le village a déjà son réseau, de l'autre côté de la mer
+    const [sx, sz] = w.startSpot();
+    for (let i = 2; i < 8; i++) if (w.canRoad(sx + i, sz + 4)) w.setRoad(sx + i, sz + 4, true);
+    expect(w.road.some((v, k) => v === 1 && w.inMain(k % N, Math.floor(k / N)))).toBe(true);
+    const [hx, hz] = spotOnAlly(w, 'harbor')!;
+    const port = w.place('harbor', hx, hz, facingRoadRot(w, 'harbor', hx, hz, 0), true, 2, false)!;
+    autoRoad(w, port);
+    // le comptoir, à quelques cases du port
+    let post = null as ReturnType<World['place']> | null;
+    for (let r = 4; r < 14 && !post; r++) for (let dz = -r; dz <= r && !post; dz++) for (let dx = -r; dx <= r && !post; dx++)
+      if (Math.max(Math.abs(dx), Math.abs(dz)) === r && w.canPlace('tradepost', hx + 1 + dx, hz + 1 + dz) === null) post = w.place('tradepost', hx + 1 + dx, hz + 1 + dz, facingRoadRot(w, 'tradepost', hx + 1 + dx, hz + 1 + dz, 0), true, 2, false);
+    expect(post).toBeTruthy();
+    const laid = autoRoad(w, post!);
+    expect(laid).toBeGreaterThan(0);
+    // les routes posées sont toutes sur l'île de l'allié
+    let ally = 0;
+    for (let k = 0; k < w.road.length; k++) if (w.road[k] && allyLand(w, k % N, Math.floor(k / N))) ally++;
+    expect(ally).toBeGreaterThanOrEqual(laid);
+    for (const b of [post!, port]) w.removeBuilding(b.id);
+    w.road.fill(0);
   });
 });
 

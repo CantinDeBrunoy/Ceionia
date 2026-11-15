@@ -58,9 +58,10 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   3. `hellAttack` : un ordre d'un clic droit sur la cible (la bulle se tient à l'écart).
   4. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.
 - **Chapitre « L'or des voisins »** (`arch`, 4 étapes), lancé 3,2 s après le choix de l'allié, le temps de la bannière « Une alliance ! » : `Game.watchAlly` (`main.ts`, à chaque pas de `stepDiplo`) voit `world.diplo.ally` changer pendant la session, quelle que soit la carte qui l'a fait choisir ; une partie chargée avec son allié déjà choisi ne le relance pas :
-  1. `archHome` « Un port chez vous » : un port (`harbor`) sur l'île principale. Déjà bâti : l'étape passe.
+  1. `archHome` « Relier les deux îles » : le but d'emblée (« reliez vos îles : un port chez vous, puis un port chez eux »), avec deux tâches, le port de l'île principale et celui de l'île alliée ; l'étape passe avec le premier (`need: 1`). Déjà bâti : elle passe.
   2. `archAllyHarbor` « Un port chez l'allié » : la vue va sur l'île de l'allié (`Game.goAlly`, le lobe le plus loin de la ville) ; un port sur sa côte, hors de sa ville. Ailleurs, la bulle propose « Aller sur l'île alliée ».
-  3. `archPost` « Le comptoir » : un comptoir (`tradepost`) sur l'île de l'allié.
+  3. `archPost` « Le comptoir » : un comptoir (`tradepost`) sur l'île de l'allié, près du port (les routes automatiques les relient).
+  Aux étapes 1 à 3, la bulle montre l'onglet Bâtir, le rayon Production, puis la vignette ; une vignette cachée hors de la rangée qui défile (le port, le comptoir, au bout du rayon) : la flèche › (ou ‹), et une ligne dit « Cliquez sur la flèche › pour faire venir « Port », puis sur sa vignette. ». Le surlignage passe à la vignette dès qu'elle est visible. C'est `UI.buildAnchor(genre)` (`ui.ts`), qui sert à tout tutoriel qui fait poser un bâtiment.
   4. `archGold` « L'or » (à lire) : l'or fait passer les âges (20, 50, 100 : lus dans `AGES[n].reqGold`), et un clic sur l'or ouvre le comptoir pour vendre bois, pierre ou minerai. La bulle montre l'or de la barre des stocks.
   Il s'achève si l'archipel ou l'allié manque (`live`), se cache hors de la surface (`away`).
 - **Quand les chapitres se lancent** : une seule fois chacun, même le tutoriel fini, même s'il est en cours (la suite
