@@ -29,15 +29,35 @@ export const GOLD_OFFER_AGE = 2;
 /** Premier âge (à atteindre) dont l'or est demandé, selon l'âge du village quand l'archipel a été accepté */
 export const firstGoldAge = (since: number) => (since <= GOLD_OFFER_AGE ? GOLD_OFFER_AGE + 1 : since + 2);
 
-/** État du comptoir, sauvegardé : saturation de chaque ressource (0 … `SAT_MAX`) */
-export interface TradeState { sat: Partial<Record<TradeRes, number>> }
+/**
+ * État du comptoir, sauvegardé : saturation de chaque ressource (0 … `SAT_MAX`) ; `legacy` : une partie à l'archipel d'avant
+ * le comptoir bâti, qui échange sans lui tant qu'elle n'en a pas (voir `tradeOpen`)
+ */
+export interface TradeState { sat: Partial<Record<TradeRes, number>>; legacy?: boolean }
 export const newTradeState = (): TradeState => ({ sat: {} });
+/** Version de l'état écrite dans la sauvegarde : 2 depuis le comptoir bâti (une sauvegarde sans elle est plus ancienne) */
+export const TRADE_V = 2;
 
-/** Relit l'état d'une sauvegarde (absent dans une ancienne partie : rien de saturé) */
-export function readTradeState(d: unknown): TradeState {
-  const t = newTradeState(), o = (d ?? {}) as { sat?: Record<string, unknown> };
+/**
+ * Relit l'état d'une sauvegarde (absent dans une ancienne partie : rien de saturé). `arch` : la partie a l'archipel ; écrite
+ * avant le comptoir bâti (sans `v`), elle garde l'échange sans comptoir (`legacy`), jusqu'à son premier comptoir
+ */
+export function readTradeState(d: unknown, arch = false): TradeState {
+  const t = newTradeState(), o = (d ?? {}) as { sat?: Record<string, unknown>; v?: unknown; legacy?: unknown };
   for (const r of TRADE_RES) { const v = Number(o.sat?.[r]); if (v > 0) t.sat[r] = Math.min(SAT_MAX, v); }
+  if (arch && (o.legacy === true || !(Number(o.v) >= TRADE_V))) t.legacy = true;
   return t;
+}
+
+/** Ce qu'on écrit dans la sauvegarde (toujours, pour sa version) */
+export const saveTradeState = (t: TradeState) => ({ v: TRADE_V, sat: t.sat, ...(t.legacy ? { legacy: true } : {}) });
+
+/**
+ * L'échange est-il ouvert ? Avec l'archipel, il faut un comptoir bâti chez l'allié (`posts` : combien la partie en a) ; une
+ * ancienne partie (`legacy`) échange sans lui tant qu'elle n'en a pas bâti
+ */
+export function tradeOpen(w: { trade: TradeState }, arch: boolean, posts: number) {
+  return arch && (posts > 0 || !!w.trade.legacy);
 }
 
 /**

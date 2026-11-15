@@ -86,6 +86,33 @@ export function townPlans(w: World): TownPlan[] {
   return w.isles ? w.isles.rivals.map((q) => townPlan(w, q)) : [];
 }
 
+/** Les cases d'une ville (indices `w.ci`), mises en cache avec son plan */
+const cells = new WeakMap<TownPlan, Set<number>>();
+/**
+ * Les cases que prend une ville : l'intérieur des remparts, chaque lot (champs et port compris) et les rues, à une demi-case
+ * près. Le sol de la ville (`RivalTowns.markGround`) et la zone où le joueur ne bâtit pas chez son allié (`allyLand`) les lisent
+ */
+export function townCells(w: World, p: TownPlan): Set<number> {
+  let set = cells.get(p);
+  if (set) return set;
+  set = new Set();
+  const out = set, mark = (x: number, z: number) => { if (w.inCells(x, z)) out.add(w.ci(x, z)); };
+  const R = Math.ceil(p.r + 8);
+  for (let z = Math.floor(p.z - R); z <= p.z + R; z++)
+    for (let x = Math.floor(p.x - R); x <= p.x + R; x++) if (inPoly(x + 0.5, z + 0.5, p.wall)) mark(x, z);
+  for (const l of p.lots) {
+    const r = Math.hypot(l.w, l.d) / 2 + 0.6;
+    for (let z = Math.floor(l.z - r); z <= l.z + r; z++) for (let x = Math.floor(l.x - r); x <= l.x + r; x++) if (Math.hypot(x + 0.5 - l.x, z + 0.5 - l.z) < r) mark(x, z);
+  }
+  for (const s of p.streets)
+    for (let i = 0; i + 1 < s.pts.length; i++) {
+      const [a, b] = [s.pts[i], s.pts[i + 1]], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2);
+      for (let j = 0; j <= n; j++) { const x = a[0] + ((b[0] - a[0]) * j) / n, z = a[1] + ((b[1] - a[1]) * j) / n; for (const o of [-0.6, 0, 0.6]) mark(Math.floor(x + o), Math.floor(z + o)); }
+    }
+  cells.set(p, set);
+  return set;
+}
+
 /** Distance du point (x, z) au segment a-b */
 export function segDist(x: number, z: number, a: [number, number], b: [number, number]) {
   const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz;

@@ -58,6 +58,7 @@ import { AudioEngine, soundSettings } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
+import { allyIsle, allyView, onAllyIsle } from './sim/allyLand';
 import { AGES, KINDS, Building, sizeOf, type KindId } from './build/catalog';
 import { MISSIONS, VICTORY } from './sim/missions';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
@@ -104,7 +105,7 @@ import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
-import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, endgameOpen, peopleName, settleAtAge, startAllyBattle } from './sim/diplomacy';
+import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, endgameOpen, isleName, peopleName, settleAtAge, startAllyBattle } from './sim/diplomacy';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
@@ -679,6 +680,9 @@ class Game implements UIHost {
       theater: () => this.command.theater?.kind ?? null, mode: () => this.mode, atIsle: () => this.lookingAtIsle(),
       selected: () => this.command.cmd.selected.size, lastOrder: () => this.command.cmd.lastOrder,
       commandIsle: () => this.commandIsle(),
+      arch: () => !!allyIsle(this.world), allyIsle: () => (this.world.diplo.ally ? isleName(this.world.diplo.ally) : ''),
+      harbors: () => this.harborsByIsle(), posts: () => this.postsAtAlly(),
+      atAlly: () => this.lookingAtAlly(), goAlly: () => this.goAlly(),
     }));
     // un chapitre fini dit déjà ce que disaient les aides militaires du même moment : elles ne se répètent pas
     this.tutorial.onChapterEnd = (id, done) => { if (done) for (const t of (id === 'pve' ? ['isle', 'orders'] : ['hell']) as WarTipId[]) this.warTips.markSeen(t); };
@@ -1034,6 +1038,35 @@ class Game implements UIHost {
   viewIsle() { this.commandIsle(); }
 
   /** La vue va sur l'île du portail (pour y bâtir ses défenses) */
+  /** La vue va sur l'île de l'allié, là où l'on peut bâtir (loin de leur ville) */
+  goAlly() {
+    if (this.mode !== 'surface') { this.ensureSurface(() => this.goAlly(), true); return; }
+    const v = allyView(this.world);
+    if (!v) return;
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
+  }
+
+  /** La vue regarde-t-elle l'île de l'allié ? */
+  private lookingAtAlly() {
+    const isle = allyIsle(this.world);
+    return this.mode === 'surface' && !!isle && isle.lobes.some((l) => Math.hypot(this.cam.target.x - l.x, this.cam.target.z - l.z) < l.r + 6);
+  }
+
+  /** Ports bâtis sur notre île et chez l'allié */
+  private harborsByIsle() {
+    let home = 0, ally = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'harbor') { if (this.world.inMain(b.x, b.z)) home++; else if (onAllyIsle(this.world, b.x, b.z, sizeOf(b))) ally++; }
+    return { home, ally };
+  }
+
+  /** Comptoirs chez l'allié (il ne se pose que là) */
+  private postsAtAlly() {
+    let n = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'tradepost') n++;
+    return n;
+  }
+
   goIsle() {
     if (this.mode === 'hell') { this.ensureSurface(() => this.goIsle(), true); return; }
     const p = this.world.portal;
@@ -1061,12 +1094,26 @@ class Game implements UIHost {
    */
   private stepDiplo() {
     const w = this.world, d = w.diplo;
+    this.watchAlly();
     if (!archipelagoOn(w)) return;
     if (settleAtAge(d, this.sim.age, true)) this.treatyBanner();
     const calm = this.portalCalm > 3 && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading && !this.portalChoice.visible && !this.diploChoice.visible && !this.tutorial.active;
     if (!calm) return;
     if (allyPending(w)) this.diploChoice.showAlly();
     else if (endgameOpen(w, this.sim.age) && !d.asked) { d.asked = true; this.diploChoice.showPath(); }
+  }
+
+  /**
+   * L'allié vient d'être choisi (pendant cette session, quelle que soit la carte qui l'a fait choisir) : le chapitre
+   * « L'or des voisins » démarre après la bannière. Une partie chargée avec son allié déjà choisi ne le relance pas
+   */
+  private allySeen: string | null | undefined = undefined;
+  private watchAlly() {
+    const ally = this.world.diplo.ally;
+    if (this.allySeen === undefined) { this.allySeen = ally; return; }
+    if (ally === this.allySeen) return;
+    this.allySeen = ally;
+    if (ally) setTimeout(() => this.tutorial.chapter('arch'), 3200);
   }
 
   /** Le traité des deux îles : la bannière, une seule fois (au passage au Moderne) */

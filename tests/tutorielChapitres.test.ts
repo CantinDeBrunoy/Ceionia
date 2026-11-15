@@ -72,9 +72,24 @@ describe('tutoriel : les chapitres', () => {
     expect(chapterDue({ on: false, step: 5 }, 'pve')).toBe(false);
   });
 
+  it('l’or des voisins se lance même le tutoriel passé (un mécanisme neuf), pas s’il est désactivé à l’accueil', () => {
+    expect(chapterDue({ on: false, step: 3, end: 'skip' }, 'arch')).toBe(true);
+    expect(chapterDue({ on: false, step: 0, end: 'skip', off: true }, 'arch')).toBe(false);
+    expect(chapterDue({ on: false, step: 0, end: 'done', seen: ['arch'] }, 'arch')).toBe(false);
+    expect(chapterDue(null, 'arch')).toBe(true);
+  });
+
+  it('l’or des voisins : un port chez soi, un port et le comptoir chez l’allié, puis à quoi sert l’or', () => {
+    const A = CHAPTER_TEXT.arch;
+    expect(A.home.text).toMatch(/\{harbor\}/);
+    expect(A.allyHarbor.text).toMatch(/\{isle\}/);
+    expect(A.post.text).toMatch(/\{post\}/);
+    expect(A.gold.text).toMatch(/\{a\}.*\{b\}.*\{c\}/);
+  });
+
   it('chaque étape tient en une phrase courte', () => {
     const all = chapterTexts();
-    expect(all.length).toBe(8);
+    expect(all.length).toBe(12);
     for (const st of all) {
       expect(st.text.length, st.title).toBeLessThan(120);
       expect(st.text.replace(/«[^»]*»/g, '').slice(0, -1).includes('. '), st.title).toBe(false);
@@ -119,6 +134,7 @@ describe('tutoriel : les nouveaux textes ont leur anglais', () => {
       ...chapterTexts().flatMap((s) => [s.title, s.text, ...s.tasks]),
       CHAPTER_TEXT.pve.title, CHAPTER_TEXT.pve.goIsle, CHAPTER_TEXT.pve.command, CHAPTER_TEXT.hell.title,
       CHAPTER_TEXT.pve.defenses.village, CHAPTER_TEXT.pve.orders.wait, CHAPTER_TEXT.hell.pick.none,
+      CHAPTER_TEXT.arch.title, CHAPTER_TEXT.arch.goAlly, CHAPTER_TEXT.arch.gold.how,
       TUTO_TEXT.steps.resources.title, TUTO_TEXT.steps.resources.text, TUTO_TEXT.skipChapter,
     ];
     expect(fr.filter((s) => !en.has(s))).toEqual([]);

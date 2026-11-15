@@ -212,7 +212,7 @@ describe('diplomatie : le monument de la concorde et le cosmodrome', () => {
     expect(spaceportWhy(w, 5, 5, 4)).toMatch(/allié/);
   });
 
-  it('sur l’archipel, le cosmodrome est la seule pose permise sur l’île alliée', () => {
+  it('sur l’archipel, le cosmodrome se pose chez l’allié, comme le reste, hors de sa ville', () => {
     setMapSize(384);
     const w = new World();
     w.seed = 11;
@@ -225,7 +225,12 @@ describe('diplomatie : le monument de la concorde et le cosmodrome', () => {
       if (w.canPlace('spaceport', x, z) === null) at = [x, z];
     }
     expect(at).not.toBeNull();
-    expect(w.canPlace('house', at![0], at![1])).toMatch(/Hors de votre île/);
+    // une maison aussi, depuis la construction chez l'allié ; pas dans sa ville
+    expect(w.canPlace('house', at![0], at![1])).toBeNull();
+    expect(w.canPlace('house', Math.floor(isle.village.x), Math.floor(isle.village.z))).toMatch(/ville de vos alliés/);
+    // l'autre île reste interdite
+    const other = isleOf(w, 'orient')!.village;
+    expect(w.canPlace('house', Math.floor(other.x), Math.floor(other.z))).toMatch(/Hors de votre île/);
     setMapSize(192);
   });
 });

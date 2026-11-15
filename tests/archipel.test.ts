@@ -134,9 +134,9 @@ describe('archipel (version 4, carte de 384)', () => {
     expect(same / (N * N)).toBeGreaterThan(0.995);
   });
 
-  it('on ne bâtit, ne trace et ne sculpte que sur l’île principale', () => {
+  it('sans allié, on ne bâtit, ne trace et ne sculpte que sur l’île principale', () => {
     const w = archipel(4242), v = w.isles!.rivals[0].village, x = Math.round(v.x), z = Math.round(v.z);
-    expect(w.canPlace('house', x, z)).toMatch(/Hors de votre île/);
+    expect(w.canPlace('house', x, z)).toMatch(/Choisissez d’abord votre allié/);
     expect(w.canRoad(x, z)).toBe(false);
     expect(w.paintBiome(x, z, 0)).toBe(false);
     const before = Float32Array.from(w.heights);
