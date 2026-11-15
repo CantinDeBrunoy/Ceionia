@@ -88,7 +88,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'mistrust', where: ['river'], missions: ['truce'], water: 'sea', title: 'Un accueil méfiant',
+    id: 'mistrust', where: ['river'], missions: ['envoys'], water: 'sea', title: 'Un accueil méfiant',
     text: 'Sur le quai, des gardes en armes. Leur chef demande pourquoi nous venons.',
     options: [
       { label: 'Parler de la paix, simplement', risk: 1, text: 'Nos émissaires ont parlé de paix, simplement, et les gardes ont baissé leurs lances.' },
@@ -97,7 +97,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'grievance', where: ['river'], missions: ['truce'], water: 'sea', title: 'Une vieille querelle',
+    id: 'grievance', where: ['river'], missions: ['envoys', 'truce'], water: 'sea', title: 'Une vieille querelle',
     text: 'Un chef rappelle une vieille querelle : une barque coulée, il y a des années. Il veut des excuses.',
     options: [
       { label: 'Proposer que chacun s’excuse', risk: 1, text: 'Chacun a présenté ses excuses : la vieille querelle est oubliée.' },

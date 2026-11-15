@@ -5,7 +5,7 @@
 > Voir aussi : [iles.md](iles.md) (les îles et les villes de décor), [grand-choix.md](grand-choix.md) (« Explorer le monde » et la cinématique), [portail-ile.md](portail-ile.md) et [armee-combat.md](armee-combat.md) (le moteur de combat), [expeditions.md](expeditions.md), [ages.md](ages.md), [fin-de-partie.md](fin-de-partie.md), [sauvegarde.md](sauvegarde.md), [traduction.md](traduction.md).
 
 ## En bref
-Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îles rivales apparaissent, celle des **Sablais** (style oriental, `orient`) et celle des **Jadéens** (style asiatique, `asie`), en guerre l'une contre l'autre. **À la fin de la cinématique**, une carte fait choisir **l'allié** (obligatoire, définitif). **Au Médiéval**, une fois un port et un comptoir installés chez l'allié, une carte propose de régler le conflit : **la paix** (une ambassade sans échec possible, puis une **cinématique de la paix**) ou **la guerre** (une expédition militaire qui débarque nos troupes, puis une **bataille jouée** sur l'île rivale). **Le conflit réglé est une condition du passage à l'Industriel.** Décisions de l'auteur (15 nov. 2026). Rien de ceci n'existe sans l'archipel. Le cosmodrome se pose chez l'allié.
+Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îles rivales apparaissent, celle des **Sablais** (style oriental, `orient`) et celle des **Jadéens** (style asiatique, `asie`), en guerre l'une contre l'autre. **À la fin de la cinématique**, une carte fait choisir **l'allié** (obligatoire, définitif). **Au Médiéval**, une fois un port et un comptoir installés chez l'allié, une carte propose de régler le conflit : **la paix** (deux pourparlers sans échec possible, les émissaires puis l'ambassade, puis une **cinématique de la paix**) ou **la guerre** (une expédition militaire qui débarque nos troupes, puis une **bataille jouée** sur l'île rivale). **Le conflit réglé est une condition du passage à l'Industriel.** Décisions de l'auteur (15 nov. 2026). Rien de ceci n'existe sans l'archipel. Le cosmodrome se pose chez l'allié.
 
 ## Règles du jeu
 
@@ -18,9 +18,11 @@ Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îl
 - **Crochet** : `Game.onAllyChosen?.(peuple)` juste après (tutoriel de l'archipel, construction chez l'allié) ; l'allié se lit aussi dans `world.diplo.ally`.
 
 ### Le dénouement (Médiéval)
-- `endgameOpen(w, âge)` : un allié, le conflit `open`, et **au Médiéval** (`ENDGAME_AGE` = 2) le port et le comptoir installés chez l'allié (`allyPostReady(world)` de la session de l'or, branchée par `bindPostReady` ; tant qu'elle n'est pas branchée, le crochet répond oui). Une partie **déjà à l'Industriel** avec un conflit ouvert l'a aussi, tout de suite. `endgameWhy` dit ce qui manque (le port et le comptoir, l'allié…).
+- `endgameOpen(w, âge)` : un allié, le conflit `open`, **au Médiéval** (`ENDGAME_AGE` = 2), et le port et le comptoir installés chez l'allié (`allyPostReady(world)` de la session de l'or, branchée par `bindPostReady` ; tant qu'elle n'est pas branchée, le crochet répond oui). `endgameWhy` dit ce qui manque (le port et le comptoir, l'allié, l'âge).
 - La **carte du dénouement** (`showPath`) s'ouvre d'elle-même une fois (`diplo.asked`, hors tutoriel), puis d'un clic sur la condition du panneau des âges, sur le conseil du moment, ou sur la ligne « ⚖️ Le conflit des deux îles » en tête du rayon Vie (`diploLine`). Pas de croix ; deux choix (`choosePath`), qu'on peut changer tant que la bataille n'est pas engagée (`battle` à `none`).
-- **Négocier la paix** (`peace`) : l'expédition `truce` « L'ambassade de la paix » (`PEACE_MISSION`, âge 2, seule de `PEACE_CHAIN` ; elle garde l'id de l'ancienne trêve, pour que les anciennes parties gardent le monument). C'est un **pourparler** (`Mission.talks`) : `risk: 0`, `lose: []`, `chance` vaut 0, aucune option d'imprévu ne blesse, seuls ses imprévus (`mistrust`, `grievance`, `seat`, `menu`, `music`) surviennent. Réussie : le conflit passe à `peace` (**réglé**), le **comptoir chez l'île rivale** s'ouvre (`diplo.post`, `rivalPost(w)`), la **fête** (`diplo.feast`), le **monument de la concorde** se débloque (`concord`, `reqMission: 'truce'`), et la **cinématique de la paix** est à jouer (`diplo.cine`).
+- **Négocier la paix** (`peace`) : **deux pourparlers** (`PEACE_CHAIN`, âge 2 ; décision de l'auteur : « on en fait que 2 »). Ce sont des **pourparlers** (`Mission.talks`) : `risk: 0`, `lose: []`, `chance` vaut 0, aucune option d'imprévu ne blesse, seuls leurs imprévus surviennent.
+  - `envoys` « Les émissaires » (imprévus `mistrust`, `grievance`) : le **comptoir chez l'île rivale** s'ouvre (`diplo.post`, `rivalPost(w)`) ; le conflit dure encore.
+  - `truce` « L'ambassade de la paix » (`PEACE_MISSION`, `requires.missions: ['envoys']` ; imprévus `grievance`, `seat`, `menu`, `music`) : le conflit passe à `peace` (**réglé**), la **fête** (`diplo.feast`), le **monument de la concorde** se débloque (`concord`, `reqMission: 'truce'`), et la **cinématique de la paix** est à jouer (`diplo.cine`).
 - **La cinématique de la paix** (`Game.playPeace`, une fois, au calme) : la vue s'élève au-dessus du bras de mer (« La paix des deux îles · Les deux chefs ont signé, les flottes se saluent »), passe sur l'île rivale (son comptoir), sur l'île alliée, revient au village où la fête des trois peuples éclate (deux fêtes : feux d'artifice) et où le monument attend (« Un monument de la concorde à bâtir »). Environ 19 s. `cine` retombe dès qu'elle commence.
 - **Aider notre allié** (`war`) : l'expédition militaire `allywar` « Aux côtés de notre allié » (`WAR_MISSION`, âge 2, avec troupe, onglet Militaires) : escorter la flotte alliée (risque 0,18) ou débarquer de nuit (0,32). Elle **peut échouer** et se **retente**. Réussie (effet `landing`) : les troupes sont à terre, `diplo.battle` = `ready`, et **la bataille commence** (au calme, `stepDiplo` → `startRivalBattle`).
 
@@ -35,9 +37,9 @@ Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îl
 - **Pas de passage d'âge pendant la bataille** (`ageGate(Game.allyBattle)` dans `sim.beforeAdvance`). Rien n'est sauvegardé pendant : une partie rechargée recommence la bataille (`battle` reste `ready`).
 
 ### La condition de l'Industriel
-- `conflictItem(w, next)` : avec l'archipel, le passage vers l'Industriel (âge 3) demande « le conflit des deux îles, réglé » (`CONFLICT_LABEL`, 0/1). Une partie déjà à l'Industriel avec un conflit ouvert la retrouve vers le Moderne (la carte s'ouvre tout de suite). `Sim.ageProgress` l'ajoute avant la fin d'âge ; tant qu'elle manque, `Sim.ready` est faux.
+- `conflictItem(w, next)` : avec l'archipel, le passage vers l'Industriel (âge 3) demande « le conflit des deux îles, réglé » (`CONFLICT_LABEL`, 0/1). `Sim.ageProgress` l'ajoute avant la fin d'âge ; tant qu'elle manque, `Sim.ready` est faux.
 - Un clic sur la ligne (`reqOf` → `conflict`) ou sur le conseil (« Pour l'âge suivant : réglez le conflit des deux îles, par la paix ou par la guerre (cliquez ici) », `Sim.messageConflict`) passe par `Game.openDiploChoice` : la carte de l'allié s'il manque ; la bataille si elle est prête (ou le délai qui reste) ; sinon la carte du dénouement, ou ce qui l'empêche (`endgameWhy`).
-- **Une partie déjà au Moderne ou au-delà avec un conflit ouvert** n'est jamais bloquée : `settleLate` le règle d'office (`treaty`), bannière « Le traité des deux îles ».
+- **Une partie déjà au-delà du Médiéval avec un conflit ouvert** (ancienne partie, archipel accepté tard) : le conflit est réputé réglé (`settleLate` : `treaty`, sans carte ni bannière). Décision de l'auteur : « on s'en fiche des anciens joueurs, le jeu est en bêta » ; seule compte la sauvegarde qui se relit.
 
 ### Le conflit en décor
 `conflictState(w)` : `{ kind: 'war' }` tant qu'il est `open` (escarmouches), `peace` ou `treaty` (commerce), `{ kind: 'won', winner: allié }` (patrouilles), null sans archipel. `stepDiplo` le donne à `NavalConflict.state` quand il change.
@@ -47,7 +49,7 @@ Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îl
 
 ## Fonctionnement dans le code
 - `World.diplo` (`DiploState`) : `met`, `ally`, `path` (`peace`, `war` ou null), `conflict` (`open`, `peace`, `won`, `treaty`), `asked`, `post`, `feast`, `battle` (`none`, `ready`, `lost`), `retry` (heure `exp.clock` du nouvel essai), `cine`. Sauvegardé sous `world.diplo` seulement s'il a bougé (`saveDiplo`) ; relu par `readDiplo` (valeurs inconnues ignorées ; ancienne voie `neutral` → à rechoisir, carte rouverte ; `warned` oublié).
-- Anciennes parties : `contact`, `envoys`, `feast` n'existent plus (`readExpState` oublie ces ids) ; `truce` garde son id (le monument reste ouvert). Les effets `meet` et `victory` restent lus.
+- Anciennes parties : `contact` et `feast` n'existent plus (`readExpState` oublie ces ids) ; `envoys` et `truce` gardent leur id. Les effets `meet` et `victory` restent lus.
 - Les effets `diplo` passent par `applyEffects` → `applyDiplo` (`victory` → `claimVictory`). `redoEffects` les retire.
 - `Expeditions.list` filtre par `missionOffered` ; `why` refuse par `missionWhy`.
 - Le monument de la concorde (âge 2) n'apparaît que si `kindOffered` (archipel et voie de la paix, ou ambassade réussie).
@@ -69,6 +71,6 @@ Quand le joueur choisit « Explorer le monde », la carte s'agrandit et deux îl
 - La cinématique de la paix est une suite de mouvements de caméra et de bannières (`setTimeout`), pas la mise en scène des cinématiques du grand choix (`voyageStage.ts`) : à reprendre avec elle si l'on veut des navires qui se saluent.
 
 ## Pour modifier
-- **Revenir à une chaîne de pourparlers** : ajouter les missions (`talks: true`, âge 2) et leurs ids à `PEACE_CHAIN` ; répartir les effets `post`, `truce`, `feast`.
+- **Changer la chaîne de pourparlers** : les missions (`talks: true`, âge 2, `requires.missions` en chaîne) et leurs ids dans `PEACE_CHAIN` ; répartir les effets `post`, `truce`, `feast` (`truce` règle le conflit et lance la cinématique).
 - **Équilibrer la bataille** : `ARMY`, `GUARDS`, `GUARD_K`, `TAKE_R` (`rivalBattle.ts`) ; `tests/batailleArchipel.test.ts` (l'armée sans ordre doit gagner, avec des pertes).
 - **Brancher le port et le comptoir** : `bindPostReady`. **Changer la condition** : `conflictItem`, `CONFLICT_LABEL`, `settleLate`.

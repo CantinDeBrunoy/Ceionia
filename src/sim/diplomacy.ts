@@ -104,12 +104,12 @@ export function onRival(isle: RivalIsle, x: number, z: number) {
 // ---------------- Les étapes ----------------
 
 /**
- * Les missions de la diplomatie (voir `MISSIONS`) : l'ambassade de la paix (une seule expédition, suivie de la cinématique de
- * la paix ; elle garde l'id `truce` de l'ancienne trêve, pour que les anciennes parties gardent ce qu'elle a ouvert), et
- * l'expédition militaire de la guerre, qui débarque les troupes pour la bataille. Le premier contact (`contact`) et les
- * anciens pourparlers (`envoys`, `feast`) n'existent plus. Pour revenir à une chaîne, ajouter ses ids à `PEACE_CHAIN`
+ * Les missions de la diplomatie (voir `MISSIONS`) : la paix en deux pourparlers (décision de l'auteur : « on en fait que
+ * 2 »), les émissaires (`envoys` : le comptoir chez le rival) puis l'ambassade de la paix (`truce` : la paix signée, la fête,
+ * le monument, puis la cinématique de la paix) ; et l'expédition militaire de la guerre, qui débarque les troupes pour la
+ * bataille. Le premier contact (`contact`) et l'ancienne fête (`feast`) n'existent plus
  */
-export const PEACE_CHAIN = ['truce'] as const;
+export const PEACE_CHAIN = ['envoys', 'truce'] as const;
 export const PEACE_MISSION = 'truce';
 export const WAR_MISSION = 'allywar';
 const DIPLO_MISSIONS = new Set<string>([...PEACE_CHAIN, WAR_MISSION]);
@@ -188,13 +188,12 @@ export function chooseAlly(d: DiploState, p: People) {
 }
 
 /**
- * Le dénouement est ouvert : un allié, le conflit en cours, et au Médiéval, le port et le comptoir installés chez l'allié
- * (`bindPostReady`). Une partie déjà à l'Industriel (passée avant cette règle) l'a aussi, tout de suite ; au-delà, le conflit
- * est réglé d'office (`settleLate`)
+ * Le dénouement est ouvert : un allié, le conflit en cours, au Médiéval, et le port et le comptoir installés chez l'allié
+ * (`bindPostReady`). Au-delà du Médiéval, le conflit est réglé d'office (`settleLate`)
  */
 export function endgameOpen(w: World, age: number) {
   if (!archipelagoOn(w) || !w.diplo.ally || w.diplo.conflict !== 'open') return false;
-  return (age === ENDGAME_AGE && postReady(w)) || age === ENDGAME_AGE + 1;
+  return age === ENDGAME_AGE && postReady(w);
 }
 
 /** Pourquoi la carte du dénouement ne s'ouvre pas encore (null : elle peut) */
@@ -202,7 +201,7 @@ export function endgameWhy(w: World, age: number): string | null {
   if (!archipelagoOn(w)) return null;
   if (!w.diplo.ally) return tr('Il faut d’abord choisir votre allié.');
   if (w.diplo.conflict !== 'open') return tr('Le conflit des deux îles est déjà réglé.');
-  if (age < ENDGAME_AGE) return tr('Le conflit des deux îles se règle au Médiéval.');
+  if (age !== ENDGAME_AGE) return tr('Le conflit des deux îles se règle au Médiéval.');
   if (age === ENDGAME_AGE && !postReady(w)) return tr('Installez d’abord un port et un comptoir sur l’île de votre allié.');
   return null;
 }
@@ -222,24 +221,22 @@ export function warEngaged(d: DiploState) { return d.path === 'war' && d.conflic
 
 /**
  * La condition du passage à l'Industriel, dans le panneau des âges (`Sim.ageProgress`) : le conflit des deux îles réglé, par
- * la paix (l'ambassade) ou par la guerre (la bataille gagnée). Seulement avec l'archipel. Une partie déjà à l'Industriel
- * avec un conflit ouvert la retrouve vers le Moderne (la carte s'ouvre tout de suite). Son libellé la fait reconnaître par
- * le panneau (`reqOf` → `conflict` : un clic rouvre la carte) et par le conseil (`Sim.messageConflict`)
+ * la paix (l'ambassade) ou par la guerre (la bataille gagnée). Seulement avec l'archipel. Son libellé la fait reconnaître
+ * par le panneau (`reqOf` → `conflict` : un clic rouvre la carte) et par le conseil (`Sim.messageConflict`)
  */
 export const CONFLICT_LABEL = 'le conflit des deux îles, réglé';
 export function conflictItem(w: Pick<World, 'isles' | 'diplo'>, next: number): { have: number; need: number } | null {
   if (!archipelagoOn(w)) return null;
-  const open = w.diplo.conflict === 'open';
-  if (next === ENDGAME_AGE + 1 || (next === ENDGAME_AGE + 2 && open)) return { have: open ? 0 : 1, need: 1 };
-  return null;
+  return next === ENDGAME_AGE + 1 ? { have: w.diplo.conflict === 'open' ? 0 : 1, need: 1 } : null;
 }
 
 /**
- * Une partie déjà au Moderne ou au-delà avec un conflit ouvert (une ancienne partie, ou un archipel accepté tard) n'est jamais
- * bloquée : le conflit est réglé d'office, par un traité entre les deux îles. Renvoie vrai s'il vient de l'être
+ * Une partie déjà au-delà du Médiéval avec un conflit ouvert (une ancienne partie, ou un archipel accepté tard) : le conflit
+ * est réputé réglé, par un traité entre les deux îles, sans rien de plus (décision de l'auteur : le jeu est en bêta).
+ * Renvoie vrai s'il vient de l'être
  */
 export function settleLate(d: DiploState, age: number, on: boolean) {
-  if (!on || age < ENDGAME_AGE + 2 || d.conflict !== 'open') return false;
+  if (!on || age <= ENDGAME_AGE || d.conflict !== 'open') return false;
   d.conflict = 'treaty';
   d.battle = 'none';
   return true;

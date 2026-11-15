@@ -476,8 +476,6 @@ registerDict('missions', {
   // le dénouement de l'archipel au Médiéval : l'ambassade de la paix, l'expédition de la guerre
   "L’ambassade de la paix": "The Peace Embassy",
   "Nos ambassadeurs vont réunir les chefs des deux îles autour d’une même table. S’ils signent, la guerre cesse, et les trois peuples feront la fête.": "Our ambassadors will bring the chiefs of the two islands around one table. If they sign, the war ends, and the three peoples will celebrate.",
-  "Sous la tente, les deux chefs ont signé la paix, et notre village en est le témoin. En gage, le rival ouvre un comptoir à nos marchands ; les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde à bâtir.": "Under the tent, the two chiefs signed the peace, with our village as witness. As a pledge, the rival opens a trading post to our merchants; guests from both islands come to celebrate the peace with us. To remember it: a Concord Monument to build.",
-  "À notre bord, au milieu du bras de mer, les deux chefs ont signé la paix. En gage, le rival ouvre un comptoir à nos marchands ; les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde à bâtir.": "Aboard our ship, in the middle of the strait, the two chiefs signed the peace. As a pledge, the rival opens a trading post to our merchants; guests from both islands come to celebrate the peace with us. To remember it: a Concord Monument to build.",
   "Les chefs ne sont pas venus.": "The chiefs did not come.",
   "Notre allié appelle à l’aide contre son rival. Nos soldats embarquent pour gagner la côte rivale ; une fois à terre, la bataille commence.": "Our ally calls for help against its rival. Our soldiers embark for the rival coast; once ashore, the battle begins.",
   "escorte la flotte alliée vers la côte rivale": "escorts the allied fleet to the rival coast",
@@ -490,4 +488,18 @@ registerDict('missions', {
   "Les guetteurs rivaux ont donné l’alarme : nos soldats ont rembarqué, deux blessés. Il faudra retenter.": "The rival lookouts raised the alarm: our soldiers re-embarked, two hurt. We will have to try again.",
   "la paix des deux îles : les combats cessent": "peace between the two islands: the fighting stops",
   "nos troupes à terre : la bataille peut commencer": "our troops ashore: the battle can begin",
+  // la paix de l'archipel en deux pourparlers : les émissaires, l'ambassade
+  "Les émissaires": "The Envoys",
+  "Pour faire la paix, il faut d’abord parler. Nos émissaires vont porter des paroles de paix chez notre allié, puis chez son rival.": "To make peace, first we must talk. Our envoys will carry words of peace to our ally, then to its rival.",
+  "Passer d’abord chez notre allié": "Visit Our Ally First",
+  "On rassure l’allié, puis on traverse chez le rival.": "We reassure our ally, then cross over to the rival.",
+  "porte des paroles de paix d’une île à l’autre": "carries words of peace from one island to the other",
+  "Notre allié a donné sa bénédiction, et son rival a écouté. En gage, il ouvre à nos marchands un comptoir sur son île. Reste à réunir les deux chefs.": "Our ally gave its blessing, and its rival listened. As a pledge, it opens a trading post on its island to our merchants. Now the two chiefs must be brought together.",
+  "Les émissaires sont rentrés sans réponse.": "The envoys came back without an answer.",
+  "Aller droit chez le rival": "Go Straight to the Rival",
+  "Plus court : on parle tout de suite à celui qui se méfie.": "Quicker: we talk right away to the one who mistrusts us.",
+  "va droit chez le rival, paroles de paix en main": "goes straight to the rival, words of peace in hand",
+  "Surpris de nous voir arriver seuls, les chefs du rival ont écouté jusqu’au bout. En gage, ils ouvrent à nos marchands un comptoir sur leur île. Reste à réunir les deux chefs.": "Surprised to see us come alone, the rival’s chiefs listened to the end. As a pledge, they open a trading post on their island to our merchants. Now the two chiefs must be brought together.",
+  "Sous la tente, les deux chefs ont signé la paix, et notre village en est le témoin. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde à bâtir.": "Under the tent, the two chiefs signed the peace, with our village as witness. Guests from both islands come to celebrate the peace with us. To remember it: a Concord Monument to build.",
+  "À notre bord, au milieu du bras de mer, les deux chefs ont signé la paix. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde à bâtir.": "Aboard our ship, in the middle of the strait, the two chiefs signed the peace. Guests from both islands come to celebrate the peace with us. To remember it: a Concord Monument to build.",
 });

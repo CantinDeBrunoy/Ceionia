@@ -273,7 +273,6 @@ registerDict('ui', {
   "Aider notre allié": "Help Our Ally",
   "Une alliance !": "An Alliance!",
   "{people} sont nos alliés": "{people} are our allies",
-  "Le traité des deux îles": "The Treaty of the Two Islands",
   "la paix": "peace",
   "la guerre": "war",
   "⚖️ Le conflit des deux îles : {path}": "⚖️ The conflict of the two islands: {path}",
@@ -282,7 +281,6 @@ registerDict('ui', {
   "Choisir…": "Choose…",
   // la diplomatie de l'archipel : le conflit à régler pour le Moderne
   "Il faut d’abord choisir d’aider notre allié.": "First you must choose to help our ally.",
-  "Les deux îles ont fait la paix entre elles": "The two islands made peace between themselves",
   "⚔️ La guerre aux côtés de notre allié : l’expédition « Aux côtés de notre allié » vous attend.": "⚔️ War at our ally’s side: the expedition “At Our Ally’s Side” awaits you.",
   "le conflit des deux îles, réglé": "the conflict of the two islands, settled",
   "Pour l’âge suivant : réglez le conflit des deux îles, par la paix ou par la guerre (cliquez ici).": "For the next age: settle the conflict of the two islands, by peace or by war (click here).",
@@ -318,7 +316,8 @@ registerDict('ui', {
   "les remparts": "the ramparts",
   "{goal} : pris !": "{goal}: taken!",
   "⚔️ Nos troupes se sont refaites chez notre allié : la bataille peut reprendre. Cliquez ici.": "⚔️ Our troops have regrouped at our ally’s: the battle can resume. Click here.",
-  "🕊️ La voie de la paix : l’expédition « L’ambassade de la paix » vous attend.": "🕊️ The path of peace: the expedition “The Peace Embassy” awaits you.",
   "À la bataille": "To battle",
   "La fête des trois peuples": "The Feast of the Three Peoples",
+  // la voie de la paix
+  "🕊️ La voie de la paix : deux pourparlers vous attendent (menu Expéditions).": "🕊️ The path of peace: two rounds of talks await you (Expeditions menu).",
 });

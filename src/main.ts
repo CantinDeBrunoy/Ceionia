@@ -103,7 +103,7 @@ import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
-import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
+import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, PEACE_CHAIN, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
 import { RivalBattle, BattleGoal } from './sim/rivalBattle';
 import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
@@ -1071,7 +1071,8 @@ class Game implements UIHost {
     if (!archipelagoOn(w)) return;
     const cs = conflictState(w);
     if (cs && cs.kind !== this.naval.state.kind) this.naval.state = cs;
-    if (settleLate(d, this.sim.age, true)) { this.ui.banner(trx('Le traité des deux îles'), trx('Les deux îles ont fait la paix entre elles')); this.saveNow(); }
+    // (une partie déjà au-delà du Médiéval : le conflit est réputé réglé, sans rien de plus)
+    settleLate(d, this.sim.age, true);
     if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine) return;
     if (allyPending(w)) this.diploChoice.showAlly();
     else if (d.cine) this.playPeace();
@@ -1202,7 +1203,7 @@ class Game implements UIHost {
   /** La voie du dénouement : la paix ouvre l'ambassade (puis la cinématique), la guerre l'expédition militaire (puis la bataille) */
   private choosePath(p: 'peace' | 'war') {
     if (!choosePath(this.world.diplo, p)) return;
-    if (p === 'peace') this.ui.toast(trx('🕊️ La voie de la paix : l’expédition « L’ambassade de la paix » vous attend.'), () => this.ui.gotoMission(PEACE_MISSION));
+    if (p === 'peace') { const next = PEACE_CHAIN.find((id) => !this.world.exp.done.includes(id)) ?? PEACE_MISSION; this.ui.toast(trx('🕊️ La voie de la paix : deux pourparlers vous attendent (menu Expéditions).'), () => this.ui.gotoMission(next)); }
     else this.ui.toast(trx('⚔️ La guerre aux côtés de notre allié : l’expédition « Aux côtés de notre allié » vous attend.'), () => this.ui.gotoMission(WAR_MISSION));
     this.ui.update(); this.saveNow();
   }
