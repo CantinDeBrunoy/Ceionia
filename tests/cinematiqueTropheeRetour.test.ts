@@ -6,7 +6,7 @@ import { MISSIONS } from '../src/sim/missions';
 import { Expeditions } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { trophiesWon } from '../src/render/trophies';
-import { TrophyCineQueue, cineCalm, CineScene, HOLD_MAX, TROPHY_CINE_DUR } from '../src/trophyCine';
+import { TrophyCineQueue, cineCalm, CineScene, HOLD_MAX, TROPHY_CINE_DUR, trophyOfMission } from '../src/trophyCine';
 
 /**
  * De bout en bout : une vraie chasse au mammouth part, réussit et revient ; le retour est branché comme dans `main.ts`
@@ -44,8 +44,10 @@ const calm: CineScene = { loading: false, away: false, placing: false, window: f
  * Joue la chasse au mammouth, puis quelques secondes ; `scene(t)` dit ce que montre le jeu à chaque instant (t : s
  * depuis le retour). Rend le journal : « récit », « cinématique », « fin »
  */
-function hunt(scene: (t: number) => Partial<CineScene>, after = 15) {
+function hunt(scene: (t: number) => Partial<CineScene>, after = 15, already = false) {
   const v = village(), m = MISSIONS.find((x) => x.id === 'mammoth')!;
+  // une partie qui a déjà son trophée du mammouth : la chasse se refait
+  if (already) v.w.exp.done.push('mammoth');
   const q = new TrophyCineQueue(trophiesWon(v.w.exp));
   const log: string[] = [];
   let back = -1, t = 0;
@@ -54,7 +56,7 @@ function hunt(scene: (t: number) => Partial<CineScene>, after = 15) {
   v.ex.onReport = (r) => {
     back = t;
     const show = () => log.push('récit');
-    if (r.ok && q.detect(trophiesWon(v.w.exp), show, cineCalm(now(), false))) return;
+    if (r.ok && q.detect(trophiesWon(v.w.exp), show, cineCalm(now(), false), r.redo ? trophyOfMission(r.m) : null)) return;
     show();
   };
   const a = v.ex.start(m, 1, 0);
@@ -77,6 +79,14 @@ function hunt(scene: (t: number) => Partial<CineScene>, after = 15) {
 }
 
 describe('cinématique du trophée au retour d’une expédition légendaire', () => {
+  it('le trophée de chaque chasse légendaire', () => {
+    expect(['mammoth', 'kraken', 'megalodon', 'dragon', 'games', 'wolf'].map((id) => trophyOfMission(MISSIONS.find((m) => m.id === id)!))).toEqual(['mammoth', 'kraken', 'megalodon', 'dragon', null, null]);
+  });
+
+  it('une chasse au mammouth refaite (le trophée déjà sur la place, une partie ancienne) : la cinématique se joue aussi, puis le récit', () => {
+    expect(hunt(() => ({}), 15, true)).toEqual(['cinématique', 'fin', 'récit']);
+  }, 60000);
+
   it('la chasse au mammouth réussie : la cinématique se joue, puis le récit', () => {
     expect(hunt(() => ({}))).toEqual(['cinématique', 'fin', 'récit']);
   }, 60000);

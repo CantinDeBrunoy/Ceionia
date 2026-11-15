@@ -80,11 +80,11 @@ export class TrophyStage {
   hidden(id: string) { return this.q.hidden(id); }
 
   /**
-   * Une expédition réussie revient : si elle rapporte un trophée et que le joueur est tranquille, la cinématique part et
-   * `after` (le récit) attend sa fin ; rend vrai dans ce cas. Sinon le trophée attend son tour, et c'est à l'appelant de
+   * Une expédition réussie revient : si elle rapporte un trophée (ou en refait la chasse : `replay`, le trophée déjà sur la
+   * place) et que le joueur est tranquille, la cinématique part et `after` (le récit) attend sa fin ; rend vrai dans ce cas. Sinon le trophée attend son tour, et c'est à l'appelant de
    * montrer le récit tout de suite
    */
-  report(after: () => void) { return this.q.detect(this.host.won(), after, this.host.calm(false) && !this.cur); }
+  report(after: () => void, replay: string | null = null) { return this.q.detect(this.host.won(), after, this.host.calm(false) && !this.cur, replay); }
 
   /** Un tour (temps réel, s) */
   update(dt: number) {
