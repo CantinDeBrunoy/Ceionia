@@ -62,7 +62,7 @@ export interface UIHost {
   /** prendre le commandement de la garnison de l'île du portail (tour de garde, caserne) */
   commandIsle?(): void;
   /**
-   * Les deux voies du grand choix (les Enfers, explorer le monde), pour l'onglet « Voies » des expéditions : où elles en sont,
+   * Les deux voies du grand choix (les Enfers, explorer le monde), pour l'onglet « Grands choix » des expéditions : où elles en sont,
    * et les prendre (la carte de la voie s'ouvre pour confirmer)
    */
   ways?(): { hell: WayState; world: WayState };
@@ -891,7 +891,7 @@ export class UI {
       const tool = (id: string) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; };
       html = LAND_SUBS.find((l) => l.id === this.land)!.groups.map((g) => `<div class="grp"><div class="gh">${ic(g.icon, 13, 2)}<span>${tr(g.label)}</span></div><div class="gt">${g.tools.map(tool).join('')}</div></div>`).join('');
     }
-    // (les voies du grand choix, les Enfers et l'archipel, ne s'annoncent pas ici : elles sont dans l'onglet « Voies » des
+    // (les voies du grand choix, les Enfers et l'archipel, ne s'annoncent pas ici : elles sont dans l'onglet « Grands choix » des
     // expéditions, que le jeu ne montre pas du doigt)
     // le conflit des deux îles (archipel, âge industriel) : une ligne en tête du rayon Vie
     const dip = build && this.cat === 'life' ? this.host.diploLine?.() : null;
@@ -1869,7 +1869,7 @@ export class UI {
         <span class="grow"></span>
         <button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('ex-gear', 19, 1.8)}${tr('Équipement')}</button>
         ${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('ex-rail', 19, 1.8)}${tr('Chemin de fer')}</button>` : ''}
-        ${waysOn ? `<button data-tab="ways" class="${tab === 'ways' ? 'on' : ''}">${ic('compass', 19, 1.8)}${tr('Voies')}</button>` : ''}
+        ${waysOn ? `<button data-tab="ways" class="${tab === 'ways' ? 'on' : ''}">${ic('compass', 19, 1.8)}${tr('Grands choix')}</button>` : ''}
       </nav>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}

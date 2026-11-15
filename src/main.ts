@@ -1129,7 +1129,7 @@ class Game implements UIHost {
    */
   private revealReady() { return !this.revealing && (this.voyage || (this.portalCalm > 3 && this.popups.open)); }
 
-  /** Prendre une voie depuis l'onglet « Voies » des expéditions : la carte de la voie s'ouvre pour confirmer */
+  /** Prendre une voie depuis l'onglet « Grands choix » des expéditions : la carte de la voie s'ouvre pour confirmer */
   takeWay(way: Way) {
     const st = this.ways()[way];
     if (st === 'none' || st === 'taken') return;
@@ -1240,7 +1240,7 @@ class Game implements UIHost {
     this.portalCalm = document.getElementById('loadScreen') ? 0 : this.portalCalm + dt;
     this.popups.step(dt, this.popupBusy());
     // le portail ouvert sans choix (l'expédition d'une ancienne partie, le bac à sable) n'ouvre plus sa carte : affronter les
-    // démons se décide dans le grand choix de la fin de l'Antiquité (ou dans l'onglet « Voies »)
+    // démons se décide dans le grand choix de la fin de l'Antiquité (ou dans l'onglet « Grands choix »)
     this.stepCrossroads();
     const said = new Set<string>();
     for (const n of w.news.splice(0)) {

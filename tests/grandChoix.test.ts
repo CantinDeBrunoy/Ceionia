@@ -69,7 +69,7 @@ describe('le grand choix : les règles', () => {
     expect(crossroadsSettled(w, 'open', 'open')).toBe(false);
   });
 
-  it('l’onglet « Voies » : une fois le grand choix fait (au bac à sable, tout de suite), s’il reste une voie sur la carte', () => {
+  it('l’onglet « Grands choix » : une fois le grand choix fait (au bac à sable, tout de suite), s’il reste une voie sur la carte', () => {
     expect(waysTabShown({ sandbox: false, crossroads: false }, 'open', 'open')).toBe(false);
     expect(waysTabShown({ sandbox: false, crossroads: true }, 'open', 'open')).toBe(true);
     expect(waysTabShown({ sandbox: true, crossroads: false }, 'open', 'open')).toBe(true);
@@ -324,7 +324,7 @@ describe('le grand choix : une condition du passage au Médiéval', () => {
 
 });
 
-describe('l’onglet « Voies » des expéditions', () => {
+describe('l’onglet « Grands choix » des expéditions', () => {
   it('une carte par voie : image, phrase d’envie, état ; un bouton seulement si elle est disponible', () => {
     const open = waysHtml({ hell: 'open', world: 'open' });
     expect(open).toContain('data-way="hell"');
@@ -335,7 +335,7 @@ describe('l’onglet « Voies » des expéditions', () => {
     expect(open.match(/st-free/g)).toHaveLength(2);
     const taken = waysHtml({ hell: 'taken', world: 'open' });
     expect(taken).not.toContain('data-way="hell"');
-    expect(taken).toContain('Voie ouverte');
+    expect(taken).toContain('Choix fait');
     expect(taken).toContain('data-way="world"');
     expect(waysHtml({ hell: 'taken', world: 'taken' })).not.toContain('data-way=');
     // le portail refermé se rouvre ; une voie impossible sur la carte est grisée, sans bouton
