@@ -2668,6 +2668,54 @@ function well(p: Parts, age: number) {
   }
 }
 
+/**
+ * Toit de la forge médiévale : ardoises posées en rangs, débord sur les pignons et leurs planches de rive, bouts des
+ * chevrons sous l'égout, faîtage de tuiles faîtières en selle ; la grande cheminée de pierre (bandeaux, souche plus étroite
+ * noircie de suie, solin au passage du toit, chapeau de pierre sur quatre piles) qui fume
+ */
+function forgeRoof(p: Parts) {
+  const x = 0.08, y = 0.36, z = -0.12, w = 0.56, d = 0.42, h = 0.28, ov = 0.09, len = w + 0.16, slate = 0x7f8798;
+  roof(p, x, y, z, { w, d, h, color: slate, wall: C.stone, ov, len, courses: true });
+  const hd = d / 2, a = Math.atan2(h, hd), sl = Math.hypot(hd, h) + ov;
+  // planches de rive le long des pignons, sous le bord des ardoises
+  for (const sg of [1, -1]) for (const e of [-1, 1]) {
+    const g = new THREE.BoxGeometry(0.014, 0.03, sl).rotateX(sg * a);
+    p.add(g, x + e * (len / 2 - 0.004), y + h / 2 - (Math.sin(a) * ov) / 2 - 0.014, z + sg * (hd / 2 + (Math.cos(a) * ov) / 2), C.darkwood);
+  }
+  // bouts des chevrons qui dépassent sous l'égout, devant et derrière
+  for (const sg of [1, -1]) for (let k = 0; k < 7; k++) {
+    const cx = x - w / 2 + 0.03 + (k * (w - 0.06)) / 6;
+    p.add(new THREE.BoxGeometry(0.018, 0.022, 0.08).rotateX(sg * a), cx, y - 0.02, z + sg * (hd + 0.02), dark(C.darkwood, 0.9));
+  }
+  // faîtage : tuiles faîtières en selle, l'une après l'autre, plus sombres
+  for (let k = 0; k < 9; k++) p.add(new THREE.BoxGeometry(len / 9 - 0.004, 0.034, 0.034).rotateX(Math.PI / 4), x - len / 2 + (k + 0.5) * (len / 9), y + h + 0.038, z, dark(slate, 0.72 + (k % 2) * 0.06));
+  // la cheminée : fût de pierre et ses bandeaux, solin, souche plus étroite noircie, chapeau sur quatre piles
+  const cx = 0.28, cz = -0.2, stone = C.darkstone;
+  p.box(0.14, 0.62, 0.14, cx, 0.04, cz, stone);
+  for (const yy of [0.2, 0.42]) p.box(0.15, 0.022, 0.15, cx, yy, cz, dark(stone, 0.85));
+  p.box(0.17, 0.02, 0.17, cx, 0.52, cz, 0x5a5a60);
+  p.box(0.15, 0.03, 0.15, cx, 0.66, cz, 0x8a857c);
+  p.box(0.12, 0.12, 0.12, cx, 0.69, cz, dark(stone, 0.9));
+  p.box(0.122, 0.04, 0.122, cx, 0.77, cz, 0x3a3634);
+  for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.022, 0.05, 0.022, cx + u * 0.045, 0.81, cz + v * 0.045, stone);
+  p.box(0.16, 0.02, 0.16, cx, 0.86, cz, 0x8a857c);
+  p.pyramid(0.15, 0.05, 0.15, cx, 0.88, cz, dark(slate, 0.8));
+  smoke(cx, 0.84, cz, 2);
+}
+
+/**
+ * Appentis de la forge : quatre planches de teintes inégales, disjointes, sur deux chevrons et une sablière, la planche de
+ * rive devant, deux pierres qui lestent les planches contre le vent
+ */
+function forgeLeanTo(p: Parts) {
+  const cx = -0.21, cz = 0.24, tilt = 0.22, y = 0.32;
+  for (const x of [-0.38, -0.04]) p.add(new THREE.BoxGeometry(0.022, 0.03, 0.34), x, y - 0.03, cz, C.darkwood, 0, false, 0, tilt);
+  p.box(0.42, 0.03, 0.03, cx, y - 0.04, 0.36, C.darkwood);
+  for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.078, 0.016, 0.32), cx - 0.16 + k * 0.08, y, cz, [C.wood, 0xa07a5a, 0xb89070, 0x9a7458, 0xa8805e][k], 0, false, (k % 2 ? 1 : -1) * 0.02, tilt);
+  p.add(new THREE.BoxGeometry(0.42, 0.04, 0.012), cx, y - 0.04, cz + 0.16, dark(C.wood, 0.75), 0, false, 0, tilt);
+  for (const [dx, dz] of [[-0.1, 0.02], [0.09, -0.06]]) p.sphere(0.022, cx + dx, y + 0.02 - dz * Math.sin(tilt), cz + dz, C.darkstone, 0, 0.6);
+}
+
 function workshop(p: Parts, age: number, o: ModelOpts) {
   if (age === 0 && hasModel('p_roof')) {
     // atelier du tailleur de pierre : appentis de bois, établi dessous, meule, blocs à tailler, rondins, éclats au sol (pas de
@@ -2810,9 +2858,7 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
   } else if (age === 2) {
     // forge : maison de pierre au toit d'ardoise et grande cheminée, appentis où rougeoie le foyer, enclume et tonneau devant
     p.box(0.58, 0.04, 0.44, 0.08, 0, -0.12, C.darkstone); p.box(0.56, 0.32, 0.42, 0.08, 0.04, -0.12, C.stone);
-    roof(p, 0.08, 0.36, -0.12, { w: 0.56, d: 0.42, h: 0.28, color: C.slate, wall: C.stone, ov: 0.07 });
-    p.box(0.13, 0.66, 0.13, 0.28, 0.04, -0.2, C.darkstone); p.box(0.15, 0.04, 0.15, 0.28, 0.7, -0.2, 0x7d7870);
-    smoke(0.28, 0.76, -0.2, 1);
+    forgeRoof(p);
     p.box(0.12, 0.2, 0.02, 0.16, 0.04, 0.1, C.door); p.box(0.09, 0.08, 0.02, -0.06, 0.16, 0.1, C.win, 0, true);
     dressBack(p, 2, 0.08, -0.12, 0.56, 0.42, 0.04, 0.36, 64, 1, 0.54);
     // l'appareil de pierre, les chaînages d'angle, les volets, l'enseigne au fer à cheval
@@ -2824,7 +2870,7 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     p.add(new THREE.TorusGeometry(0.022, 0.006, 4, 10, Math.PI * 1.4), 0.33, 0.235, 0.17, 0x55595f, 0, false, Math.PI * 0.8);
     // appentis de planches sur deux poteaux
     for (const x of [-0.38, -0.04]) p.box(0.03, 0.3, 0.03, x, 0, 0.36, C.darkwood);
-    p.add(new THREE.BoxGeometry(0.4, 0.02, 0.3), -0.21, 0.32, 0.24, C.wood, 0, false, 0, 0.22);
+    forgeLeanTo(p);
     // foyer maçonné, braises, hotte
     p.box(0.2, 0.12, 0.14, -0.22, 0, 0.17, C.darkstone); p.box(0.14, 0.02, 0.09, -0.22, 0.12, 0.17, C.flame, 0, true);
     p.pyramid(0.17, 0.13, 0.13, -0.22, 0.18, 0.15, 0x6f6a64);
