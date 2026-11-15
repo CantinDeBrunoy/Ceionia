@@ -1,6 +1,7 @@
 import type { World } from '../world/world';
 import type { RivalIsle } from '../world/archipelago';
 import { tr } from '../i18n';
+import { KINDS } from '../build/catalog';
 import { archipelagoOn, isleOf, isleName, onRival } from './diplomacy';
 import { townCells, townPlan } from '../world/rivalTown';
 
@@ -52,6 +53,20 @@ export function allyView(w: Pick<World, 'isles' | 'diplo'>): { x: number; z: num
 export function onAllyIsle(w: Pick<World, 'isles' | 'diplo'>, x: number, z: number, s = 1) {
   const isle = allyIsle(w);
   return !!isle && onRival(isle, x + 0.5, z + 0.5) && onRival(isle, x + s - 0.5, z + s - 0.5);
+}
+
+/**
+ * L'installation chez l'allié est-elle faite ? Un allié choisi, un port sur son île et un comptoir (il ne se pose que là).
+ * Lue par la diplomatie : la carte de la paix ou de la guerre s'ouvre ensuite
+ */
+export function allyPostReady(w: Pick<World, 'isles' | 'diplo' | 'buildings'>): boolean {
+  if (!allyIsle(w)) return false;
+  let harbor = false, post = false;
+  for (const b of w.buildings.values()) {
+    if (b.kind === 'tradepost') post = true;
+    else if (b.kind === 'harbor' && onAllyIsle(w, b.x, b.z, KINDS.harbor.size)) harbor = true;
+  }
+  return harbor && post;
 }
 
 /** Pourquoi le comptoir ne se pose pas ici (null : il se pose) : seulement sur l'île de l'allié */

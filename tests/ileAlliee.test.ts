@@ -8,7 +8,7 @@ import { KINDS, KIND_ORDER, KIND_LABEL, AGES } from '../src/build/catalog';
 import { KIND_ICON } from '../src/ui/icons';
 import { getModel } from '../src/render/models';
 import { onRival, isleOf } from '../src/sim/diplomacy';
-import { allyIsle, allyLand, allyView, inAllyTown, onAllyIsle } from '../src/sim/allyLand';
+import { allyIsle, allyLand, allyPostReady, allyView, inAllyTown, onAllyIsle } from '../src/sim/allyLand';
 import { readTradeState, saveTradeState, tradeOpen, TRADE_V } from '../src/sim/trade';
 
 let cached: World | null = null;
@@ -107,6 +107,33 @@ describe('le comptoir', () => {
     expect(main).toMatch(/île de votre allié/);
     const s = spotOnAlly(w, 'tradepost');
     expect(s).not.toBeNull();
+  });
+});
+
+describe('l’installation chez l’allié (pour la diplomatie)', () => {
+  it('allyPostReady : un allié, un port sur son île et un comptoir', () => {
+    setMapSize(ARCH_N);
+    const w = new World();
+    w.seed = 11;
+    newWorld(w, CONTINENT, 11, GEN_ARCH);
+    expect(allyPostReady(w)).toBe(false);
+    w.diplo.met = ['orient', 'asie']; w.diplo.ally = 'orient';
+    expect(allyPostReady(w)).toBe(false);
+    // un port chez soi ne compte pas
+    const f = w.isles!.main;
+    let home: [number, number] | null = null;
+    for (let z = f.z; z < f.z + f.n && !home; z++) for (let x = f.x; x < f.x + f.n && !home; x++) if (w.canPlace('harbor', x, z) === null) home = [x, z];
+    w.place('harbor', home![0], home![1], 0, true, 2, false);
+    const h = spotOnAlly(w, 'harbor')!;
+    w.place('harbor', h[0], h[1], 0, true, 2, false);
+    expect(allyPostReady(w)).toBe(false);
+    const p = spotOnAlly(w, 'tradepost')!;
+    w.place('tradepost', p[0], p[1], 0, true, 2, false);
+    expect(allyPostReady(w)).toBe(true);
+    // sans le port de l'île alliée : plus prêt
+    for (const b of [...w.buildings.values()]) if (b.kind === 'harbor' && onAllyIsle(w, b.x, b.z, 3)) w.removeBuilding(b.id);
+    expect(allyPostReady(w)).toBe(false);
+    cached = null;
   });
 });
 
