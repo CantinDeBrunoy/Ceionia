@@ -24,7 +24,7 @@ export const TUTO_TEXT = {
   skipped: 'Tutoriel mis de côté : reprenez-le quand vous voulez dans Paramètres › Divers.',
   finished: 'Tutoriel terminé ! Il reste dans Paramètres › Divers, si vous voulez le refaire.',
   menu: {
-    title: 'Une bulle vous guide pas à pas dans la partie : caméra, construction, besoins, âges, expéditions et incidents.',
+    title: 'Une bulle vous guide pas à pas dans la partie : caméra, construction, besoins, âges et expéditions.',
   },
   settings: {
     title: 'Tutoriel',
@@ -34,7 +34,7 @@ export const TUTO_TEXT = {
     restart: 'Recommencer',
     hintOn: (i: number, n: number, title: string) => tr('Une bulle vous guide pas à pas. Étape {i} sur {n} : « {title} ».', { i, n, title }),
     hintOff: (i: number, n: number, title: string) => tr('Mis de côté à l’étape {i} sur {n} (« {title} ») : le réactiver le reprend là, « Recommencer » repart du début.', { i, n, title }),
-    hintNew: 'Une bulle vous guide pas à pas : caméra, construction, besoins, âges, expéditions et incidents.',
+    hintNew: 'Une bulle vous guide pas à pas : caméra, construction, besoins, âges et expéditions.',
     hintChap: (title: string, i: number, n: number) => tr('Chapitre « {title} » : étape {i} sur {n}.', { title, i, n }),
   },
   steps: {
@@ -115,14 +115,10 @@ export const TUTO_TEXT = {
       wait: 'L’équipement sort bientôt de fabrication : attendez-le pour partir mieux protégé.',
       tasks: ['Ouvrir les expéditions', 'Lancer une expédition'],
     },
-    incidents: {
-      title: 'Les incidents',
-      text: 'Incendies et cambriolages s’affichent à gauche : {eye} suit l’intervention.',
-      none: 'Aucun incident pour l’instant : sa carte apparaîtra à gauche.',
-      tasks: ['Suivre un incident avec {eye}'],
-    },
   },
   kindTask: (name: string) => tr('Poser : {name}', { name }),
+  /** la vignette désignée est hors de la rangée visible du menu : la flèche d'abord */
+  scroll: (arrow: string, name: string) => tr('Cliquez sur la flèche {arrow} pour faire paraître « {name} », puis sur le bâtiment.', { arrow, name }),
   locked: 'Le tutoriel vous le fera bâtir un peu plus tard.',
   ok: 'OK',
 };
@@ -280,6 +276,15 @@ export function tutoGear(age: number, has: (k: string) => boolean): GearId | nul
   return null;
 }
 
+/**
+ * Un état arrêté sur une étape retirée depuis : les incidents, la dernière étape (`id`, ou le numéro 13 d'un ancien état)
+ * valent un tutoriel fini ; le reste ne change pas
+ */
+export function retired(s: TutoState | null): TutoState | null {
+  if (!s?.on || (s.id ?? LEGACY[s.step]) !== 'incidents') return s;
+  return { ...s, on: false, step: 0, id: undefined, end: 'done' };
+}
+
 function readState(): TutoState | null {
   try { return parseState(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch { return null; }
 }
@@ -366,7 +371,7 @@ export class Tutorial {
   private body: HTMLElement;
   private arrow: HTMLElement;
   private ring: HTMLElement;
-  /** clics repérés pendant l'étape : l'œil d'un incident ('inc'), un bouton à `data-a` (son action) */
+  /** clics repérés pendant l'étape : un bouton à `data-a` (son action) */
   private clicks = new Set<string>();
   /** l'outil Route a été pris pendant cette étape */
   private roadTool = false;
@@ -496,11 +501,6 @@ export class Tutorial {
           return m.querySelector('button.choice:not([disabled]), button[data-send]:not([disabled])') ? T.expeditions.choose : T.expeditions.none;
         },
       },
-      {
-        id: 'incidents', anchor: () => q('#expList .expCard.incident .cam'),
-        check: () => [this.clicks.has('inc')],
-        note: () => (q('#expList .expCard.incident') ? '' : T.incidents.none),
-      },
     ];
 
     this.ring = document.createElement('div');
@@ -524,10 +524,9 @@ export class Tutorial {
       else if (b.classList.contains('tSkip')) this.skip();
       else if (b.classList.contains('tAct')) { this.cur.act?.()?.run(); this.key = ''; }
     });
-    // l'œil d'une carte d'incident, un bouton de la barre des troupes (capturés avant que la carte ne soit redessinée)
+    // un bouton de la barre des troupes (capturé avant que la carte ne soit redessinée)
     ui.root.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
-      if (t.closest('.expCard.incident .cam')) this.clicks.add('inc');
       const a = t.closest<HTMLElement>('[data-a]')?.dataset.a;
       if (a) this.clicks.add(a);
     }, true);
@@ -541,7 +540,7 @@ export class Tutorial {
 
     // bac à sable : jamais de tutoriel, et le choix du joueur pour les autres parties n'est pas touché
     if (off) return;
-    const saved = readState(), st = saved ?? { on: true, step: 0 };
+    const saved = retired(readState()), st = saved ?? { on: true, step: 0 };
     this.menuOff = !!saved?.off;
     // une nouvelle partie relance le tutoriel depuis le début, sauf s'il a été désactivé à l'accueil : l'avoir fini ou passé
     // dans une autre partie ne compte pas (sinon un joueur qui revient ne le revoyait jamais, l'interrupteur étant rangé
@@ -722,6 +721,22 @@ export class Tutorial {
     this.place();
   }
 
+  /**
+   * L'élément montré. Une vignette du menu cachée hors de la rangée visible (le carrousel défile) : la flèche qui la fait
+   * paraître, et la phrase qui le dit (`scroll`) ; vaut pour toutes les étapes, chapitres compris
+   */
+  private target(): { a: Element | null; scroll: string } {
+    const a = this.cur.anchor(), items = a?.closest('#items');
+    if (!a || !items || !(a as HTMLElement).dataset.kind) return { a, scroll: '' };
+    const box = items.getBoundingClientRect(), r = a.getBoundingClientRect();
+    const side = r.right > box.right + 2 ? 'itNext' : r.left < box.left - 2 ? 'itPrev' : null;
+    const arrow = side ? this.ui.root.querySelector<HTMLButtonElement>(`#${side}`) : null;
+    if (!arrow || arrow.disabled) return { a, scroll: '' };
+    const k = (a as HTMLElement).dataset.kind as KindId, d = KINDS[k];
+    const name = d ? d.names[Math.max(this.host.sim.age, d.minAge)] : k;
+    return { a: arrow, scroll: TUTO_TEXT.scroll(side === 'itNext' ? '›' : '‹', name) };
+  }
+
   /** l'élément montré : un bouton prend une teinte dorée (l'anneau doré, lui, l'entoure d'un halo qui respire lentement) */
   private lit: Element | null = null;
   private light(a: Element | null) {
@@ -746,7 +761,7 @@ export class Tutorial {
   private render(s: Step, all: boolean) {
     const T = TUTO_TEXT, st = s.t ?? T.steps[s.id as StepId], chap = this.ch ? this.chapters[this.ch]! : null;
     const n = chap ? chap.steps.length : this.steps.length, at = chap ? this.ci : this.i, last = at === n - 1;
-    const tasks = s.tasks?.() ?? st.tasks, note = s.note?.() ?? '', more = s.more?.() ?? '', act = s.act?.() ?? null;
+    const tasks = s.tasks?.() ?? st.tasks, note = this.target().scroll || (s.note?.() ?? ''), more = s.more?.() ?? '', act = s.act?.() ?? null;
     const key = `${this.ch}|${at}|${this.ticks.join()}|${all}|${note}|${more}|${act?.label}|${tasks.join()}`;
     if (key === this.key) return;
     this.key = key;
@@ -770,7 +785,7 @@ export class Tutorial {
    */
   private place() {
     const box = this.box, ring = this.ring, W = innerWidth, H = innerHeight, m = 8, gap = 16;
-    const s = this.cur, a = s.anchor(), r = a?.getBoundingClientRect();
+    const s = this.cur, a = this.target().a, r = a?.getBoundingClientRect();
     const seen = !!r && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < H && r.right > 0 && r.left < W;
     // (une fiche que le joueur vient d'ouvrir place la bulle sans être entourée)
     const bare = seen && !!s.bare?.(a!);

@@ -19,7 +19,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   que si l'état disait « en cours » : un joueur qui l'avait fini ou passé une fois ne le revoyait plus, l'interrupteur étant
   rangé dans les options de l'accueil. La ligne « Tutoriel » de Paramètres › Divers (`settingsHtml`) le reprend en cours de partie.
 - **Nouvelle partie** : la suite principale repart de la première étape et le temps est en pause jusqu'au feu de camp.
-- **La suite principale** (15 étapes, dans `Tutorial` › constructeur) :
+- **La suite principale** (14 étapes, dans `Tutorial` › constructeur) :
   1. `welcome` « Bienvenue ! » (à lire)
   2. `camera` « Regardez autour de vous » : souris, et clavier (voir plus bas)
   3. `fire`, 4. `habitat`, 5. `food`, 6. `wood`, 7. `stone` : poser feu de camp, maison et puits, séchoir, bûcheron, pierrier
@@ -34,9 +34,9 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   14. `expeditions` : ouvrir les expéditions (la fenêtre restée sur l'onglet Équipement : l'onglet des missions) et lancer
       une mission ; pas de suivi à l'œil, l'étape passe dès le départ. Pièce encore en fabrication, fenêtre de départ
       ouverte : une ligne invite à l'attendre.
-  15. `incidents`
 - **Reprise** : une partie s'enregistre avec l'identifiant de l'étape (`id`). Arrêtée sur `gear`, elle reprend sur `gear`
   puis `expeditions` ; arrêtée sur `expeditions` (avant que l'équipement passe devant), elle reprend sur `expeditions`.
+  Arrêtée sur `incidents`, l'ancienne 15e étape (retirée), le tutoriel compte pour fini (`retired`).
 - **Verrous de construction** (`GATE`) : pendant les étapes 1 à 7, on ne bâtit que ce que le tutoriel a déjà fait poser
   (`welcome`, `camera`, `fire` : la place ; puis maison et puits ; puis séchoir ; bûcheron ; pierrier). Le reste dit « Le
   tutoriel vous le fera bâtir un peu plus tard. ». Le verrou saute dès que le village compte un bâtiment hors de `GUIDED`,
@@ -83,10 +83,14 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   principale viennent de `TUTO_TEXT.steps[id]` ; ceux d'un chapitre, de `Step.t` (`CHAPTER_TEXT`).
 - **Placement** (`Tutorial.place`) : dessous si l'élément est en haut de l'écran, dessus s'il est en bas, sinon sur un côté ;
   sous toutes les rangées du HUD (`#hud` ; il en a deux ou plus sur un écran moyen ou étroit), au-dessus du dock ; le côté qui cache le moins les fiches ouvertes ; la pointe vise le milieu.
+- **Vignette hors de la rangée** (`Tutorial.target`, pour toutes les étapes, chapitres compris) : une ancre `#items [data-kind]`
+  cachée hors de la partie visible du carrousel est remplacée par la flèche qui la fait paraître (`#itNext` ou `#itPrev`,
+  si elle n'est pas grisée), et la note de la bulle dit « Cliquez sur la flèche › pour faire paraître « … », puis sur le
+  bâtiment. » (`TUTO_TEXT.scroll`, avant la note de l'étape). Une fois la vignette visible, elle redevient l'élément montré.
 - **Surbrillance** : `#tutoRing`, un élément à part, entoure l'élément montré : bordure dorée, lueur qui respire en 3,2 s.
   L'élément lui-même prend la classe `.tHi` : sur un bouton, un liseré doré intérieur ; rien d'autre (ni `transform`, ni
   couleur de fond, ni animation).
-- **Clics repérés** : un écouteur en capture sur `ui.root` note l'œil des cartes d'incident (`inc`) et l'action de tout bouton
+- **Clics repérés** : un écouteur en capture sur `ui.root` note l'action de tout bouton
   à `data-a` (`goal` pour l'objectif de la frise) ; `Tutorial.clicked(a)`. La liste se vide à chaque étape.
 - **Les drapeaux** : `on` (la bulle est active), `guiding` (la suite principale est en cours, même interrompue),
   `active` (la bulle guide vraiment : un chapitre qui attend ailleurs ne compte pas), `chapterOn`.

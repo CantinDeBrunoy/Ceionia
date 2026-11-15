@@ -1,12 +1,12 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { TUTO_TEXT, parseState, setAside, chapterDue, stepIndex, viewKeys, startsOn, type TutoState } from '../src/ui/tutorial';
+import { TUTO_TEXT, parseState, setAside, chapterDue, stepIndex, viewKeys, startsOn, retired, type TutoState } from '../src/ui/tutorial';
 import { CHAPTER_TEXT, chapterTexts } from '../src/ui/tutorialChapters';
 import { i18nEntries, setLang } from '../src/i18n';
 import '../src/i18n/en';
 
 /** les étapes de la suite principale, dans l'ordre du jeu (voir `Tutorial`) */
-const IDS = ['welcome', 'camera', 'fire', 'habitat', 'food', 'wood', 'stone', 'resources', 'road', 'needs', 'time', 'ages', 'gear', 'expeditions', 'incidents'];
+const IDS = ['welcome', 'camera', 'fire', 'habitat', 'food', 'wood', 'stone', 'resources', 'road', 'needs', 'time', 'ages', 'gear', 'expeditions'];
 
 describe('tutoriel : l’état enregistré', () => {
   it('lit les anciens états (on, step) et les nouveaux, refuse le reste', () => {
@@ -34,10 +34,21 @@ describe('tutoriel : l’état enregistré', () => {
     expect(setAside(null)).toBe(false);
   });
 
+  it('arrêté sur l’étape des incidents, retirée : le tutoriel est fini', () => {
+    expect(retired({ on: true, step: 14, id: 'incidents', seen: ['pve'] })).toEqual({ on: false, step: 0, id: undefined, end: 'done', seen: ['pve'] });
+    // un ancien état sans identifiant : la 14e étape d'alors
+    expect(retired({ on: true, step: 13 })).toMatchObject({ on: false, end: 'done' });
+    // ailleurs, rien ne change
+    const s: TutoState = { on: true, step: 13, id: 'expeditions' };
+    expect(retired(s)).toBe(s);
+    expect(retired({ on: false, step: 0, id: 'incidents', end: 'skip' })).toMatchObject({ end: 'skip' });
+    expect(retired(null)).toBeNull();
+  });
+
   it('reprend à la bonne étape malgré l’étape « Les ressources » ajoutée', () => {
     // un ancien état à « Les routes » (8e étape d'alors) reprend aux routes, pas aux ressources
     expect(IDS[stepIndex({ on: true, step: 7 }, IDS)]).toBe('road');
-    expect(IDS[stepIndex({ on: true, step: 13 }, IDS)]).toBe('incidents');
+    expect(IDS[stepIndex({ on: true, step: 12 }, IDS)]).toBe('gear');
     expect(IDS[stepIndex({ on: true, step: 6 }, IDS)]).toBe('stone');
     // un nouvel état garde l'identifiant de l'étape
     expect(IDS[stepIndex({ on: true, step: 99, id: 'resources' }, IDS)]).toBe('resources');

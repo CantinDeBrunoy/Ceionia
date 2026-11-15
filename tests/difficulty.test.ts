@@ -40,12 +40,20 @@ describe('prix des bâtiments selon la difficulté', () => {
     expect(costOf('airport', 0, 'easy')).toEqual(costOf('airport', 4, 'easy'));
   });
 
-  it('en Normal, chaque bâtiment se paie en bois et en pierre, à chaque âge', () => {
+  it('en Normal, chaque bâtiment se paie en bois et en pierre, à chaque âge, sauf la matière qu’il produit', () => {
     for (const k of ALL) for (let a = 0; a < 5; a++) {
       const c = costOf(k, a, 'normal');
       expect(c, `${k} à l’âge ${a}`).not.toBeNull();
-      expect(c!.wood).toBeGreaterThan(0);
-      expect(c!.stone).toBeGreaterThan(0);
+      if (k === 'lumber') expect(c!.wood).toBe(0); else expect(c!.wood).toBeGreaterThan(0);
+      if (k === 'quarry') expect(c!.stone).toBe(0); else expect(c!.stone).toBeGreaterThan(0);
+    }
+  });
+
+  it('jamais bloqué : un producteur ne demande pas sa propre matière, quels que soient la difficulté, l’âge et le nombre', () => {
+    for (const d of ['easy', 'normal'] as const) for (let a = 0; a < 6; a++) for (const n of [0, 1, 5]) {
+      expect(costOf('lumber', a, d, n)?.wood ?? 0).toBe(0);
+      expect(costOf('quarry', a, d, n)?.stone ?? 0).toBe(0);
+      expect(costOf('brickworks', a, d, n)?.brick ?? 0).toBe(0);
     }
   });
 
