@@ -231,10 +231,28 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 .expModal .mbody > .unlock, .expModal .mbody > .req { margin-top: 8px; font-size: 12px; padding: 4px 8px; }
 .expModal .mbody > .sendBtn { grid-column: 2; grid-row: 10; align-self: center; margin-top: 10px; min-height: 40px; padding: 0 16px; gap: 7px; font-size: 14px; border-radius: 999px; }
 .expModal .mbody > :nth-last-child(2) { margin-bottom: 0; }
-.expModal .mission.small { min-height: 0; }
-.expModal .mission.small .mart { flex-basis: 76px; min-height: 76px; height: 76px; }
-.expModal .mission.small:has(.mart.dio) { padding-left: 96px; }
-.expModal .mission.small .mart.dio { left: -60px; width: 140px; height: 140px; }
+/* Les expéditions réussies : un intertitre, puis une grille de cartes compactes à hauteur fixe sous les expéditions disponibles
+   (« ✓ réussie », vignette, titre, âge, « Refaire »). Rien n'en déborde : ni îlot en surplomb, ni texte, ni pastilles */
+.expModal .doneBox { grid-column: 1 / -1; }
+.expModal .doneBox[hidden] { display: none; }
+.expModal .doneHead { margin: 4px 0 10px 4px; font: 700 15px/1.2 'Fraunces', serif; color: var(--ink); }
+.expModal .doneHead small { font: 600 12px/1 inherit; color: var(--ink2); }
+.expModal .doneGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.expModal .doneGrid .mission.small { display: flex; flex-direction: row; align-items: center; gap: 10px; height: 84px; min-height: 84px; padding: 8px 10px; overflow: hidden; border-radius: 16px; opacity: 1; }
+.expModal .doneGrid .cthumb { position: relative; flex: 0 0 64px; height: 64px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: rgba(255, 240, 210, 0.7); }
+.expModal .doneGrid .cthumb img { width: 100%; height: 100%; object-fit: contain; }
+.expModal .doneGrid .cthumb img.cover { object-fit: cover; }
+.expModal .doneGrid .cbody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.expModal .doneGrid .cstate { align-self: flex-start; white-space: nowrap; padding: 1px 7px; border-radius: 999px; background: #e3f4e6; color: #2f7a3e; font: 700 10.5px/1.5 inherit; }
+.expModal .doneGrid h4 { margin: 0; font: 700 14.5px/1.2 'Fraunces', serif; text-transform: none; letter-spacing: 0; color: var(--hInk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.expModal .doneGrid .cbody small { color: var(--ink2); font-size: 12px; }
+.expModal .doneGrid .sendBtn.redo, .expModal .doneGrid .bgo { flex: 0 0 auto; width: auto; margin: 0; min-height: 34px; padding: 0 12px; gap: 5px; font-size: 13px; border-radius: 999px; }
+.expModal .doneGrid .bgo { padding: 0 9px; }
+/* au téléphone : le titre tient sur deux lignes */
+@media (max-width: 600px) {
+  .expModal .doneGrid .mission.small { height: auto; min-height: 84px; }
+  .expModal .doneGrid h4 { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}
 @media (max-width: 1180px) { .expModal .missions { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 860px) {
   .expModal .missions { padding: 24px 6px 12px 66px; gap: 30px; }

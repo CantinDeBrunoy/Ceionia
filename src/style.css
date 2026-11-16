@@ -1932,19 +1932,6 @@ body.cinematic #bannerWrap { display: none !important; }
 .expModal .mbody > :nth-last-child(2) { margin-bottom: auto; }
 .expModal button.sendBtn:hover:not(:disabled) { background: linear-gradient(180deg, #3f7ef0, #1f58cf); }
 .expModal .mission.done button.sendBtn { background: #fff; color: #1f4fb8; border: 1.5px solid #2b6cf0; box-shadow: none; }
-/* petit format des missions réussies : une vignette carrée, le titre, les pastilles et « Refaire » (ni texte, ni gains, ni
-   étiquettes ; « A débloqué » seulement s'il reste à bâtir) */
-.expModal .mission.small { align-self: start; align-items: center; gap: 12px; padding: 8px; border-radius: 18px; }
-.mission.small .mart { flex: 0 0 92px; height: 92px; min-height: 0; border-radius: 12px; }
-.mission.small .mart > b img.pic { width: 52px; height: 52px; }
-.mission.small .mstate { top: 4px; left: 4px; padding: 1px 6px; font-size: 10.5px; }
-.mission.small .mtags, .mission.small .mtext, .mission.small .mgains, .mission.small .unlock:not(.ready) { display: none; }
-.expModal .mission.small .mhead h4 { font-size: 15px; }
-.expModal .mission.small .mhead > .mbadge { flex-basis: 26px; width: 26px; height: 26px; }
-.expModal .mission.small .mhead > .mbadge img.pic { width: 22px; height: 22px; }
-.expModal .mission.small .mpills { margin-top: 4px; }
-.expModal .mission.small .unlock, .expModal .mission.small .req { margin-top: 6px; }
-.expModal .mission.small .mbody > .sendBtn { margin-top: 8px; min-height: 34px; border-radius: 10px; font-size: 13px; }
 .expModal button.sendBtn:disabled { background: rgba(15, 27, 45, 0.12); color: var(--ink2); box-shadow: none; }
 @media (max-width: 720px) {
   .overlay > .modal.expModal { padding: 0 14px 16px; border-radius: 22px; }

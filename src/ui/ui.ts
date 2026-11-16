@@ -1959,8 +1959,17 @@ export class UI {
       const tags = `${m.mandatory ? `<span class="mtag must">${pic('★', 14)} ${tr('Obligatoire')}</span>` : ''}${leg ? `<span class="mtag leg">${pic('✨', 14)} ${tr('Légendaire')}</span>` : ''}${mil ? `<span class="mtag mil">${pic('⚔️', 14)} ${tr('Militaire')}</span>` : ''}`;
       const label = tr(run ? 'Équipe en route…' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe');
       const art = missionArt(m);
-      // une mission réussie (rangée à la fin) passe en petit format : vignette, titre, pastilles et « Refaire »
-      return `<div class="mission ${done ? 'done' : ''}${redo && !run ? ' small' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
+      // une mission réussie passe en carte compacte, dans la grille du bas : « ✓ réussie », vignette, titre, âge et « Refaire »,
+      // à hauteur fixe (les grandes cartes réduites débordaient de leur rangée et se chevauchaient : retour de l'auteur, nov. 2026)
+      if (redo && !run) {
+        const thumb = MISSION_DIO.has(m.id) ? `<img src="./expeditions/dio-${m.id}.webp" alt="" loading="lazy" decoding="async">` : art.src ? `<img class="cover" src="${art.src}" alt="" loading="lazy" decoding="async">` : pic(m.icon, 44);
+        const build = m.unlocks && this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}" title="${tr('Bâtir')} : ${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}" aria-label="${tr('Bâtir')}">${ic('hammer', 15, 2)}</button>` : '';
+        return `<div class="mission done small ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
+          <div class="cthumb ${art.dest}">${thumb}</div>
+          <div class="cbody"><span class="cstate">✓ ${tr('réussie')}</span><h4 title="${m.title}">${m.title}</h4><small>${AGES[m.age].name}</small></div>
+          ${build}<button class="sendBtn redo" data-send="${m.id}" title="${tr('Refaire l’expédition')}">${ic('restart', 15, 2)} ${tr('Refaire')}</button></div>`;
+      }
+      return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
         <div class="mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" loading="lazy" decoding="async">` : art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${pic(m.icon, 96)}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
         <div class="mbody">
           <div class="mhead"><b class="mbadge">${pic(m.icon, 30)}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div></div>
@@ -1973,7 +1982,10 @@ export class UI {
         </div></div>`;
     };
     const sorted = ex.list(age).sort((a, b) => rank(a) - rank(b));
-    const cards = sorted.map(card).join('');
+    // les expéditions disponibles, puis la grille des réussies (cartes compactes) sous un intertitre
+    const compact = (m: Mission) => ex.done(m) && !m.repeat && !ex.running(m), doneList = sorted.filter(compact);
+    const cards = sorted.filter((m) => !compact(m)).map(card).join('')
+      + (doneList.length ? `<div class="doneBox"><h5 class="doneHead">✓ ${tr('Réussies')} <small>(${doneList.length})</small></h5><div class="doneGrid">${doneList.map(card).join('')}</div></div>` : '');
     const nMil = sorted.filter(isMilitary).length, nLeg = sorted.filter(isLegendary).length;
     // l'en-tête : la rose des vents, le titre et une phrase ; puis une seule barre : les filtres des missions (toutes,
     // militaires, légendaires), et à droite l'équipement et le chemin de fer
@@ -2011,6 +2023,9 @@ export class UI {
         el.hidden = f === 'mil' ? el.dataset.mil !== '1' : f === 'leg' ? el.dataset.leg !== '1' : false;
         if (!el.hidden) shown++;
       });
+      // l'intertitre et la grille des réussies disparaissent quand le filtre n'en garde aucune
+      const box = ov.querySelector<HTMLElement>('.doneBox');
+      if (box) { const n = box.querySelectorAll('.mission:not([hidden])').length; box.hidden = !n; const c = box.querySelector('.doneHead small'); if (c) c.textContent = `(${n})`; }
       const em = ov.querySelector<HTMLElement>('.emptyMsg');
       if (em) {
         em.hidden = shown > 0;
