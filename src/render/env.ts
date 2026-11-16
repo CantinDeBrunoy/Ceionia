@@ -46,6 +46,16 @@ export class Environment {
   wantKind: WeatherKind = 'clear';
   /** null = automatique */
   manualWeather: WeatherKind | null = null;
+  /**
+   * Effets de la météo affichés (réglages) : coupé, l'effet ne se dessine plus (traits de pluie, flocons, ciel gris, brouillard
+   * rapproché), mais le temps qu'il fait continue (`weatherKind`, `rainK` : champs, habitants à l'abri, sons, orages)
+   */
+  show = { rain: true, snow: true, fog: true };
+  /** part visible de la pluie, de la neige, du brouillard et du ciel couvert (0 … 1), après les réglages : pour le décor */
+  shownRain = 0;
+  shownSnow = 0;
+  shownFog = 0;
+  shownOvercast = 0;
   private weatherTimer = 30;
   private rnd = mulberry32(Date.now() & 0xffff);
   private time = 0;
@@ -197,10 +207,12 @@ export class Environment {
     } else if (this.weatherKind !== 'clear') this.weatherK = Math.min(1, this.weatherK + dt * 0.35);
     else this.weatherK = 0;
     const wk = this.weatherK;
-    const rainK = this.weatherKind === 'rain' ? wk : 0;
-    const snowK = this.weatherKind === 'snow' ? wk : 0;
-    const fogK = this.weatherKind === 'fog' ? wk : 0;
+    // ce qui se voit : un effet coupé dans les réglages ne grise plus le ciel ni ne rapproche le brouillard
+    const rainK = this.weatherKind === 'rain' && this.show.rain ? wk : 0;
+    const snowK = this.weatherKind === 'snow' && this.show.snow ? wk : 0;
+    const fogK = this.weatherKind === 'fog' && this.show.fog ? wk : 0;
     const overcast = clamp(rainK * 0.8 + snowK * 0.6 + fogK * 0.5, 0, 1);
+    this.shownRain = rainK; this.shownSnow = snowK; this.shownFog = fogK; this.shownOvercast = overcast;
 
     // ---- soleil / lune
     const ang = ((time.hour - 6) / 24) * Math.PI * 2;
@@ -271,7 +283,7 @@ export class Environment {
     // de loin, la pluie et la neige (un volume carré autour du point visé) ne se dessinent plus : on y verrait le carré
     const near = camDist < 95, far = clamp((camDist - 60) / 35, 0, 1);
     // l'hiver, par temps clair, quelques flocons flottent quand même dans l'air
-    const flurry = this.weatherKind === 'snow' ? 0 : s.fx.flurries * Math.min(1, s.snow * 2) * 0.6 * (1 - wk);
+    const flurry = this.weatherKind === 'snow' || !this.show.snow ? 0 : s.fx.flurries * Math.min(1, s.snow * 2) * 0.6 * (1 - wk);
     const flakes = Math.max(snowK, flurry);
     this.rain.visible = rainK > 0.01 && near;
     this.snowPts.visible = flakes > 0.01 && near;

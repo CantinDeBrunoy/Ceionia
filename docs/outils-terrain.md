@@ -104,8 +104,9 @@ Suréchantillonnage `VR = 2`, trois passes de flou binomial ; le flou s'estompe 
 - `carveRavines` : chaque sous-sommet au cœur d'un ravin descend selon `riftInner` (sa distance à la plus proche case qui
   n'est pas un ravin, jusqu'à 3) : paroi sur 0,6 case, fond de 2,4 à 3,8 (bruit doux). `ravine[i]` (0 … 1) sert aux teintes
   (paroi, fond sombre), à l'eau (pas de mer au fond : `seaAt`, shader) et aux lacs et torrents (un ravin est un exutoire).
-- Décor (`riftGeo`, `vegetation.ts`) : lueur violette le long de l'axe (cases aussi loin des bords que leurs voisines),
-  éboulis, blocs sur le rebord, filons dans les parois, spores.
+- Décor (`riftGeo`, `vegetation.ts`) : éboulis, blocs sur le rebord, filons dans les parois, spores qui montent de l'axe (cases
+  aussi loin des bords que leurs voisines). Il y avait aussi un trait de lueur violette sur l'axe, posé sur le relief : au bout
+  du ravin il remontait la paroi et s'y voyait comme un trait violet. Retiré (nov. 2026).
 - Entrées : `entranceAt` rend la case de ravin visée ; `outpostEntrance` (lieu des expéditions vers une grotte : une vraie
   grotte d'abord, une faille avec 10 de pénalité) ; `riftEntrances` (un par ravin, son milieu) pour le moteur souterrain
   (`underground.ts`) ; `bearDens` met une tanière au bout de chaque ravin.

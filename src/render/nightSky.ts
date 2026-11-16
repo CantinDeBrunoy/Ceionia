@@ -231,7 +231,7 @@ void main() {
       const a = this.rnd() * Math.PI * 2;
       dirOf(a, 0.45 + this.rnd() * 0.4, this.radiant);
     }
-    const overcast = env.weatherKind === 'clear' ? 0 : env.weatherK;
+    const overcast = env.shownOvercast;
     const clear = 1 - smoothstep(0.15, 0.7, overcast);
     const deep = smoothstep(0.6, 0.95, env.night);
     if (deep > 0.5 && clear > 0.6 && this.told !== n) {

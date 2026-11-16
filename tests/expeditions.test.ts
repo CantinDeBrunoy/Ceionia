@@ -321,20 +321,23 @@ describe('la chasse au mammouth', () => {
       const v = village(0), ex = new Expeditions(v.w, v.agents, () => 100, () => 0.99);
       ex.pop = () => 60;
       const a = ex.start(m, ci)!, group = new THREE.Group(), scene = new ExpeditionScene(v.w, v.agents, group, a, null);
-      type Mam = { b: { x: number; z: number; obj: THREE.Object3D }; size: number; lie: number; sink: number; legs: THREE.Object3D[] };
+      type Mam = { b: { x: number; z: number; obj: THREE.Object3D }; size: number; lie: number; sink: number; actor: { root: THREE.Object3D } };
+      // les os des pattes (épaules et hanches) de la bête articulée
+      const legs = (x: Mam) => ['fL1', 'fR1', 'hL1', 'hR1'].map((n) => x.actor.root.getObjectByName(n)).filter(Boolean) as THREE.Object3D[];
       const s = scene as unknown as { mammoths: Mam[]; mam: { old: Mam; trap: [number, number] } };
-      // la harde : le vieux mâle, une femelle, son petit, chacun sur ses quatre pattes, avec sa trompe
+      // la harde : le vieux mâle, une femelle, son petit, chacun sur ses quatre pattes (une bête articulée)
       expect(s.mammoths[0].size).toBeGreaterThan(s.mammoths[1].size);
       expect(s.mammoths[2].size).toBeLessThan(s.mammoths[1].size * 0.6);
-      for (const x of s.mammoths) { expect(x.legs.length).toBe(4); expect(group.children).toContain(x.b.obj); }
+      for (const x of s.mammoths) { expect(legs(x).length).toBe(4); expect(group.children).toContain(x.b.obj); }
       const old = s.mam.old, d0 = Math.hypot(old.b.x - s.mam.trap[0], old.b.z - s.mam.trap[1]);
       let strides = 0;
+      const leg = legs(old)[0], q = new THREE.Quaternion();
       for (let i = 0; i < 40000 && !(a.phase === 'back' && a.t > 8); i++) {
         v.agents.update(0.05, 10, 0, false, 40, 0); ex.update(0.05);
         if (a.wait) ex.decide(a, 0);
-        const legs = old.legs[0].rotation.x;
+        q.copy(leg.quaternion);
         scene.update(0.05, a);
-        if (Math.abs(old.legs[0].rotation.x - legs) > 0.01) strides++;
+        if (leg.quaternion.angleTo(q) > 0.01) strides++;
       }
       expect(a.ok).toBe(true);
       // il a marché (ses pattes ont battu) vers le piège

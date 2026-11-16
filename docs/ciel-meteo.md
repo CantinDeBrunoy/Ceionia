@@ -1,7 +1,7 @@
 # Ciel et météo
 
 > Fichiers : `src/core/time.ts` (`GameTime` : heure, jours, saisons, vitesse, pause), `src/render/env.ts` (`Environment` : soleil, lune, couleurs du ciel, étoiles, nuages, brouillard, météo, pluie, neige qui tombe), `src/render/season.ts` (palette des saisons, tenue de la neige), `src/render/snow.ts` (neige posée sur les matériaux), `src/render/atmosphere.ts` (`Atmosphere` : brume, brume des montagnes, arc-en-ciel, orages), `src/render/nightSky.ts` (`NightSky` : aurores boréales, étoiles filantes), `src/core/skyNights.ts` (programme des nuits, logique pure), `src/render/glow.ts` (halo de nuit), `src/render/life.ts` (lucioles, nuée du crépuscule), `src/main.ts` (`Game.frame`, `refreshSeason`, `renderer_render`, `dispelFog`, `skyShow`), `src/ui/ui.ts` (réglages : météo, durée du jour, saison).
-> Tests : `tests/cielNocturne.test.ts`, `tests/saisons.test.ts`, `tests/neigeRoutes.test.ts`, `tests/rendu.test.ts` (« ciel » : arc-en-ciel).
+> Tests : `tests/meteoEffets.test.ts` (effets affichés), `tests/cielNocturne.test.ts`, `tests/saisons.test.ts`, `tests/neigeRoutes.test.ts`, `tests/rendu.test.ts` (« ciel » : arc-en-ciel).
 > Voir aussi : [architecture.md](architecture.md), [vegetation-biomes.md](vegetation-biomes.md), [rendu-modeles.md](rendu-modeles.md), [interface.md](interface.md), [incidents.md](incidents.md), [routes.md](routes.md)
 
 ## En bref
@@ -36,6 +36,11 @@ Le temps du jeu (`GameTime`) fait tourner les heures et les saisons. `Environmen
 - Tirage toutes les 35 à 90 s de jeu (`weatherTimer`), table `autoWeather` par saison (clair / pluie ou neige / brouillard) : printemps 63 / 35 / 1,8 %, été 85 / 14 / 0,9 %, automne 67 / 30 / 3 %, hiver 49 / 50 (neige) / 1,2 %. La pluie tourne à la neige si la neige au sol dépasse 0,5.
 - Changement : l'intensité `weatherK` redescend (0,5 par seconde réelle) avant que le type change, puis remonte (0,35/s).
 - Réglages : Auto, Clair, Pluie, Neige, Brume (`env.setWeather` ; `manualWeather` reste tant qu'on ne repasse pas en Auto).
+- **Effets affichés** (réglages › Temps et météo : Pluie, Neige, Brouillard, chacun allumé ou éteint ; `env.show`, retenu dans les réglages `hideRain`, `hideSnow`, `hideFog`, absents = tout affiché). Un effet éteint ne se dessine plus, mais le temps qu'il fait continue : `weatherKind`, `weatherK` et `rainK` ne changent pas.
+  - Pluie éteinte : plus de traits, le ciel ne grisit plus, le brouillard ne se rapproche plus, plus d'arc-en-ciel après l'averse. Restent : l'humidité des champs (`sim.rain = env.rainK` : rendement, sécheresse), les habitants qui rentrent, le vent, les sons, la faune, les orages (éclairs et foudre qui met le feu : ce sont des incendies, voir [incidents.md](incidents.md)).
+  - Neige éteinte : plus de flocons qui tombent, ni ceux qui flottent l'hiver par temps clair. La neige posée (sol, toits, routes) reste : elle suit la saison, pas la météo ([saisons.md](saisons.md)). La simulation ne lit pas la neige.
+  - Brouillard éteint : la vue porte comme par temps clair, plus de brume au ras du sol (`MIST`), le bouton « dissiper » ne s'affiche plus (`fogLevel` = 0). La brume des montagnes reste (décor des massifs). La simulation ne lit pas le brouillard.
+  - Le décor lit ce qui se voit : `env.shownRain`, `shownSnow`, `shownFog`, `shownOvercast` (ciel couvert visible), calculés dans `Environment.update` ; `Atmosphere` (brume, arc-en-ciel, couleur de la brume des montagnes) et `NightSky` (aurores et étoiles filantes sous un ciel dégagé) s'y fient. La simulation, les sons et les habitants gardent `rainK`, `weatherKind`.
 - Pluie : 1 500 traits, neige : 1 300 flocons, dans un volume de 50 × 24 × 50 autour du point visé ; plus dessinés quand la caméra est à plus de 95.
 - Brouillard (`THREE.Fog`) : 85 → 220 par temps clair, 40 → 120 sous la pluie ou la neige, 8 → 70 dans le brouillard ; il recule quand on dézoome.
 - La pluie remplit l'humidité des champs (`Sim.moisture`, rendement, sécheresse) ; elle règle aussi le vent, les sons, la faune.
@@ -86,6 +91,7 @@ Le temps du jeu (`GameTime`) fait tourner les heures et les saisons. `Environmen
 - Interface : icône de météo du HUD (`WEATHER_ICON`), réglages, notifications ([interface.md](interface.md)).
 
 ## Pièges et invariants
+- Effets affichés : ne jamais faire dépendre la simulation de `shownRain` ou `shownOvercast` (un joueur qui coupe la pluie ne doit pas assécher ses champs) ; à l'inverse, un nouveau rendu de la météo lit les `shown*`, pas `rainK`. Test : `tests/meteoEffets.test.ts`.
 - Jamais de puissance d'un nombre négatif ni de NaN dans un shader additif : un seul point non fini gagnait toute l'image par le halo. `Glow` filtre ces points, mais il faut les éviter à la source (`x * x` plutôt que `pow(x, 2.0)`).
 - Rien ne doit se compiler en cours de partie : les maillages de `NightSky` restent visibles dès le départ et ne dessinent rien (`setDrawRange(0, 0)`) quand le ciel est vide. Un objet qui n'apparaît que plus tard (`visible = false`) se compile à sa première apparition (c'est le cas de l'arc-en-ciel).
 - Deux horloges : `Atmosphere` et les transitions de météo en temps réel, `NightSky`, le minuteur de météo et la simulation en temps de jeu. Ce qui doit se figer en pause passe par `gdt`.

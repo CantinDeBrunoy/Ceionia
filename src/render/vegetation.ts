@@ -313,7 +313,6 @@ export class VegView {
   /** buttes des grottes et failles, en coordonnées monde (elles épousent le relief) : refaites quand elles changent */
   private caves: THREE.Mesh;
   private fissures: THREE.Mesh;
-  private fissureGlow: THREE.Mesh;
   private spores: THREE.InstancedMesh;
   private sporePhase: THREE.InstancedBufferAttribute;
   // sous-bois et détails des prairies
@@ -512,9 +511,7 @@ export class VegView {
     // la faille est un sillon sombre posé à fleur de sol : légèrement tirée vers la caméra pour ne pas scintiller
     this.fissures = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
     this.fissures.receiveShadow = true;
-    this.fissureGlow = new THREE.Mesh(new THREE.BufferGeometry(), crackGlowMaterial(this.uTime));
-    this.fissureGlow.renderOrder = 2;
-    for (const m of [this.caves, this.fissures, this.fissureGlow]) { m.frustumCulled = false; this.group.add(m); }
+    for (const m of [this.caves, this.fissures]) { m.frustumCulled = false; this.group.add(m); }
     const sporeG = new THREE.IcosahedronGeometry(0.03, 0);
     this.sporePhase = new THREE.InstancedBufferAttribute(new Float32Array(MAX_SPECIAL * SPORES_PER_FISSURE), 1);
     sporeG.setAttribute('aPhase', this.sporePhase);
@@ -1434,7 +1431,7 @@ export class VegView {
   private rebuildSpecial() {
     const w = this.world, d = this.dummy, col = this.col, s = this.season;
     let nWr = 0, nL = 0, nSm = 0, nSp = 0;
-    const caveGeos: THREE.BufferGeometry[] = [], crackGeos: THREE.BufferGeometry[] = [], glowGeos: THREE.BufferGeometry[] = [], lavaGeos: THREE.BufferGeometry[] = [];
+    const caveGeos: THREE.BufferGeometry[] = [], crackGeos: THREE.BufferGeometry[] = [], lavaGeos: THREE.BufferGeometry[] = [];
     const at = (x: number, z: number) => w.hAt(x, z);
     this.volcanoes = [];
     for (let k = 0; k < N * N; k++) {
@@ -1468,15 +1465,14 @@ export class VegView {
         }
       }
     }
-    // les ravins creusés au pinceau : lueur au fond, le long de leur axe, éboulis, blocs sur les rebords, filons dans les parois
+    // les ravins creusés au pinceau : spores le long de leur axe, éboulis, blocs sur les rebords, filons dans les parois
     if (w.rift.includes(1)) {
       const g = riftGeo(w, at, (k) => CAVE_ROCK[w.biome[k]], (x, z, phase, sc) => {
         if (nSp >= MAX_SPECIAL * SPORES_PER_FISSURE) return;
         this.sporePhase.setX(nSp, phase);
         this.spores.setMatrixAt(nSp++, this.at(x, at(x, z), z, 0, sc));
       });
-      crackGeos.push(g.body);
-      glowGeos.push(g.glow);
+      crackGeos.push(g);
     }
     const set = (m: THREE.InstancedMesh, n: number) => {
       m.count = n;
@@ -1491,7 +1487,7 @@ export class VegView {
       m.geometry = list.length ? mergeGeometries(list, false)! : new THREE.BufferGeometry();
       m.visible = list.length > 0;
     };
-    swap(this.caves, caveGeos); swap(this.fissures, crackGeos); swap(this.fissureGlow, glowGeos); swap(this.lava, lavaGeos);
+    swap(this.caves, caveGeos); swap(this.fissures, crackGeos); swap(this.lava, lavaGeos);
   }
 }
 
@@ -1734,12 +1730,13 @@ function caveMoundGeo(f: { x: number; y: number; z: number; yaw: number }, at: (
 }
 
 /**
- * Décor des ravins creusés au pinceau (World creuse le relief, voir `World.rift`) : une lueur violette court au fond, le long
- * de l'axe de chaque ravin (les cases les plus éloignées de ses bords) ; éboulis au fond, blocs sur les rebords, filons de
- * minerai dans les parois ; `spore` pose les spores lumineuses qui montent du fond
+ * Décor des ravins creusés au pinceau (World creuse le relief, voir `World.rift`) : éboulis au fond, blocs sur les rebords,
+ * filons de minerai dans les parois ; `spore` pose les spores lumineuses qui montent du fond, le long de l'axe de chaque ravin
+ * (les cases les plus éloignées de ses bords). Plus de trait de lueur violette sur l'axe : posé sur le relief, il remontait
+ * les parois au bout du ravin et s'y voyait comme un trait violet
  */
 function riftGeo(w: World, at: (x: number, z: number) => number, rockOf: (k: number) => THREE.Color, spore: (x: number, z: number, phase: number, sc: number) => void) {
-  const tmp = new THREE.Color(), GLOW = new THREE.Color(0.5, 0.26, 1).multiplyScalar(0.7), DARK = new THREE.Color(0, 0, 0);
+  const tmp = new THREE.Color();
   const inner = new Map<number, number>(), rift = w.rift;
   const innerAt = (k: number) => { let v = inner.get(k); if (v === undefined) { v = w.riftInner((k % N) + 0.5, Math.floor(k / N) + 0.5); inner.set(k, v); } return v; };
   const isRift = (x: number, z: number) => w.inCells(x, z) && rift[z * N + x] === 1;
@@ -1749,18 +1746,6 @@ function riftGeo(w: World, at: (x: number, z: number) => number, rockOf: (k: num
     const v = innerAt(z * N + x);
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if ((dx || dz) && isRift(x + dx, z + dz) && innerAt((z + dz) * N + x + dx) > v + 1e-3) return false;
     return true;
-  };
-  const gpos: number[] = [], gcol: number[] = [];
-  const pushV = (x: number, z: number, c: THREE.Color) => { gpos.push(x, at(x, z) + 0.03, z); gcol.push(c.r, c.g, c.b); };
-  /** un trait de lueur d'un centre de case à l'autre : cœur violet, bords noirs (fondus, en mode additif) */
-  const stroke = (ax: number, az: number, bx: number, bz: number) => {
-    const l = Math.hypot(bx - ax, bz - az) || 1, nx = (-(bz - az) / l) * 0.2, nz = ((bx - ax) / l) * 0.2;
-    const row = (x: number, z: number) => [[x + nx, z + nz, DARK], [x, z, GLOW], [x - nx, z - nz, DARK]] as [number, number, THREE.Color][];
-    const A = row(ax, az), B = row(bx, bz);
-    for (let j = 0; j < 2; j++) {
-      const a0 = A[j], a1 = A[j + 1], b0 = B[j], b1 = B[j + 1];
-      for (const v of [a0, b0, a1, a1, b0, b1]) pushV(v[0], v[1], v[2]);
-    }
   };
   const parts: THREE.BufferGeometry[] = [];
   const add = (g: THREE.BufferGeometry, x: number, y: number, z: number, col: THREE.Color) => {
@@ -1774,14 +1759,7 @@ function riftGeo(w: World, at: (x: number, z: number) => number, rockOf: (k: num
   for (let k = 0; k < N * N; k++) {
     if (!rift[k]) continue;
     const cx = k % N, cz = Math.floor(k / N), px = cx + 0.5, pz = cz + 0.5, h = (s: number) => hash2(cx, cz, 570 + s), rock = rockOf(k);
-    if (axis(cx, cz)) {
-      // traits vers les voisines de l'axe (en biais seulement si aucune voisine droite ne fait le lien)
-      let linked = false;
-      for (const [dx, dz] of [[1, 0], [0, 1]]) if (axis(cx + dx, cz + dz)) { stroke(px, pz, px + dx, pz + dz); linked = true; }
-      for (const [dx, dz] of [[1, 1], [-1, 1]]) if (axis(cx + dx, cz + dz) && !axis(cx + dx, cz) && !axis(cx, cz + dz)) { stroke(px, pz, px + dx, pz + dz); linked = true; }
-      if (!linked && !axis(cx - 1, cz) && !axis(cx, cz - 1) && !axis(cx - 1, cz - 1) && !axis(cx + 1, cz - 1)) stroke(px - 0.3, pz, px + 0.3, pz);
-      if (h(1) < 0.35) spore(px + (h(2) - 0.5) * 0.6, pz + (h(3) - 0.5) * 0.6, h(4), 0.7 + h(5) * 0.6);
-    }
+    if (axis(cx, cz) && h(1) < 0.35) spore(px + (h(2) - 0.5) * 0.6, pz + (h(3) - 0.5) * 0.6, h(4), 0.7 + h(5) * 0.6);
     // éboulis au fond
     if (h(6) < 0.5) {
       const r = 0.05 + h(7) * 0.08, x = px + (h(8) - 0.5) * 0.5, z = pz + (h(9) - 0.5) * 0.5;
@@ -1805,26 +1783,11 @@ function riftGeo(w: World, at: (x: number, z: number) => number, rockOf: (k: num
       }
     }
   }
-  const glow = new THREE.BufferGeometry();
-  glow.setAttribute('position', new THREE.Float32BufferAttribute(gpos, 3));
-  glow.setAttribute('color', new THREE.Float32BufferAttribute(gcol, 3));
-  return { body: parts.length ? mergeGeometries(parts, false)! : new THREE.BufferGeometry(), glow };
+  return parts.length ? mergeGeometries(parts, false)! : new THREE.BufferGeometry();
 }
 
 /** Minerais visibles dans les parois des ravins */
 const RAVINE_ORES = [0x2c2c30, 0x2c2c30, 0xd8b28c, 0xd8b28c, 0xf5cf45, 0x5ef0e4].map((c) => new THREE.Color(c));
-
-/** Lueur du fond des failles : additive, elle pulse doucement */
-function crackGlowMaterial(uTime: { value: number }) {
-  const m = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 });
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTime = uTime;
-    sh.fragmentShader = 'uniform float uTime;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-  diffuseColor.rgb *= 0.7 + 0.3 * sin(uTime * 1.6);`);
-  };
-  m.customProgramCacheKey = () => 'crackglow';
-  return m;
-}
 
 /** Spores des failles : chaque grain monte en ondulant et s'éteint, en boucle (phase par instance) */
 function sporeMaterial(uTime: { value: number }) {

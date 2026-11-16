@@ -99,6 +99,9 @@ export interface UIHost {
   /** comment le joueur déplace la vue (souris ou clavier, et la disposition du clavier) ; voir `core/controls.ts` */
   controls: Controls;
   setControls(c: Controls): void;
+  /** effets de la météo affichés (pluie, neige, brouillard), et les couper ou les rendre */
+  readonly weatherFx: { rain: boolean; snow: boolean; fog: boolean };
+  setWeatherFx(k: 'rain' | 'snow' | 'fog', on: boolean): void;
   /** expéditions, et celle que la caméra suit (son numéro) */
   expeditions: Expeditions;
   /** chemin de fer de gare en gare, et la caméra qui suit le train */
@@ -333,6 +336,8 @@ const givesOf = (k: KindId, a: number): string[] => {
 const MAIN: (typeof GIVES)[number]['k'][] = ['housing', 'food', 'water', 'health', 'joy', 'jobs'];
 
 const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: 'rain', snow: 'snow', fog: 'fog' };
+/** Effets de la météo qu'on peut éteindre dans les réglages : clé, icône, nom */
+const WEATHER_FX: ['rain' | 'snow' | 'fog', string, () => string][] = [['rain', 'rain', () => tr('Pluie')], ['snow', 'snow', () => tr('Neige')], ['fog', 'fog', () => tr('Brouillard')]];
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
@@ -2541,6 +2546,9 @@ export class UI {
         <div class="row"><label>${tr('Heure')}</label><input id="sHour" type="range" min="0" max="23.9" step="0.1" value="${t.hour.toFixed(1)}"><span id="vHour">${Math.floor(t.hour)}h</span></div>
         <h4>${tr('Météo')}</h4>
         <div class="row">${[['auto', '', tr('Auto')], ['clear', 'sun', tr('Clair')], ['rain', 'rain', tr('Pluie')], ['snow', 'snow', tr('Neige')], ['fog', 'fog', tr('Brume')]].map(([k, i, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${i ? ic(i, 16) + ' ' : ''}${l}</button>`).join('')}</div>
+        <h4>${tr('Effets affichés')}</h4>
+        <div class="row">${WEATHER_FX.map(([k, i, l]) => `<button data-fx="${k}" aria-pressed="${h.weatherFx[k]}" class="${h.weatherFx[k] ? 'active' : ''}">${ic(i, 16)} ${l()}</button>`).join('')}</div>
+        <p class="hint">${tr('Un effet éteint ne se voit plus, mais le temps qu’il fait continue : la pluie arrose toujours les champs, la neige suit l’hiver.')}</p>
       </section>
       <section data-sec="look" hidden>${head('look')}
         <h4>${tr('Graphismes')}</h4>
@@ -2633,6 +2641,13 @@ export class UI {
       h.env.setWeather(k === 'auto' ? null : (k as WeatherKind));
       if (k === 'auto') h.env.wantKind = 'clear';
       ov.querySelectorAll('[data-w]').forEach((x) => x.classList.toggle('active', x === b));
+    }));
+    ov.querySelectorAll<HTMLButtonElement>('[data-fx]').forEach((b) => (b.onclick = () => {
+      const k = b.dataset.fx as 'rain' | 'snow' | 'fog', on = !h.weatherFx[k];
+      h.setWeatherFx(k, on);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+      a.sfxClick();
     }));
     ov.querySelectorAll<HTMLButtonElement>('[data-q]').forEach((b) => (b.onclick = () => {
       h.setQuality(b.dataset.q as Quality);
