@@ -181,8 +181,9 @@ export class AudioEngine {
     };
     for (const k of kinds) target.addEventListener(k, wake, true);
     // un essai tout de suite : un navigateur qui autorise la lecture automatique (site déjà écouté souvent, son autorisé
-    // pour le site) lance la musique dès l'accueil ; sinon le contexte reste suspendu et le premier geste le réveille
-    wake();
+    // pour le site) lance la musique dès l'accueil ; sinon le contexte reste suspendu et le premier geste le réveille.
+    // Pas en développement : une page d'essai rechargée d'elle-même (Vite) jouerait la musique sans que personne l'ait voulu
+    if (!import.meta.env.DEV) wake();
   }
 
   /** À appeler depuis un geste utilisateur */
