@@ -27,14 +27,15 @@ npm run deploy
 | Action | Souris / clavier | Tactile |
 |---|---|---|
 | Utiliser l'outil | clic gauche (glisser pour sculpter, tracer une route…) | un doigt |
-| Tourner la caméra | clic droit + glisser, ou A / E (Q / E en QWERTY) | deux doigts (rotation) |
-| Déplacer la caméra | clic milieu ou Maj + clic droit, ou ZQSD / flèches (WASD en QWERTY) | deux doigts (glisser) |
+| Choix des contrôles | au premier lancement : à la souris ou au clavier (ZQSD en AZERTY, WASD en QWERTY) ; puis Paramètres › Partie | — |
+| Tourner la caméra | clic droit + glisser, ou A / E (Q / E en QWERTY) si le clavier est choisi | deux doigts (rotation) |
+| Déplacer la caméra | clic milieu ou Maj + clic droit, ou flèches ; au clavier : ZQSD (WASD en QWERTY) ; à la souris : la souris au bord de l'écran, ou glisser le terrain avec l'outil « Voir » | deux doigts (glisser) |
 | Zoom | molette, vers le point visé par la souris, ou + / − du pavé numérique (on peut s'approcher tout près des habitants) | pincement |
 | Revenir au village | V ou Origine, ou le bouton ◎ de la barre (une seconde fois : vue d'ensemble) ; la vue cesse alors de suivre une équipe, un train ou une intervention | bouton ◎ |
 | Relief | 1 monter, 2 baisser, 3 aplanir, 4 falaise, 5 creuser (eau), 0 montagne ; volcan (un clic) depuis l'onglet. Le cercle du pinceau rougit quand il touche un bâtiment : il ne modifie alors rien ; les routes gardent leur niveau, et le volcan ne se pose qu'à l'écart du village | onglet Relief |
-| Nature | 6 forêt, 7 champ, 9 gomme ; biome, rochers, grotte et faille (un clic) depuis l'onglet | onglet Nature |
+| Nature | 6 forêt, 7 champ, 9 gomme ; biome, rochers et faille depuis l'onglet ; grotte en deux clics (sa place, puis le côté de son ouverture) | onglet Nature |
 | Monde souterrain | clic sur une grotte ou une faille (outil « Voir »), ou U / bouton ⛏️ ; sous terre : T torches, U remonter | toucher l'entrée, boutons de la barre |
-| Bâtir | B bâtiment, R route (outil Route en main : R passe du tracé en ligne au tracé libre ; Échap oublie le point A d'une route libre), X démolir, M déplacer ; bâtiment en main : R (ou T) le tourne | onglet Bâtir (le bâtiment est posé au relâchement du doigt) |
+| Bâtir | un bâtiment à porte se pose en deux clics : l'endroit, puis le côté de l'entrée (marquée en or) ; Ctrl+F ou / cherche un bâtiment par son nom ; B bâtiment, R route (outil Route en main : R passe du tracé en ligne au tracé libre ; Échap oublie le point A d'une route libre), X démolir, M déplacer ; bâtiment en main : R (ou T) le tourne | onglet Bâtir (le bâtiment est posé au relâchement du doigt) |
 | Fiche d'un bâtiment | outil « Voir » : clic sur le bâtiment (son emprise s'éclaire) ; Déplacer, Tourner (R), Démolir ; clic à côté ou Échap pour fermer | toucher le bâtiment |
 | Taille du pinceau | [ et ] (^ et $ en AZERTY) | curseur « Taille » |
 | Annuler / rétablir | Ctrl+Z / Ctrl+Y | boutons ↩️ ↪️ |

@@ -87,3 +87,19 @@ export function footprintOrigin(kind: KindId, px: number, pz: number) {
   if (s === 4) return { x: Math.round(px) - 2, z: Math.round(pz) - 2 };
   return { x: Math.round(px) - 1, z: Math.round(pz) - 1 };
 }
+
+/**
+ * Bâtiments qu'on tourne soi-même à la pose, en deux clics (l'endroit, puis le côté de l'entrée) : tous ceux qui ont une porte,
+ * sauf le ponton et le port, que l'eau oriente d'elle-même
+ */
+export const orientable = (kind: KindId) => hasDoor(kind) && kind !== 'pier' && kind !== 'harbor';
+
+/**
+ * Côté (indice de FRONT) vers lequel pointe le curseur depuis le centre (cx, cz) d'une emprise de `s` cases, ou -1 tant qu'il
+ * reste près du centre (le bâtiment garde alors l'orientation proposée, vers la route)
+ */
+export function sideToward(cx: number, cz: number, s: number, x: number, z: number): number {
+  const dx = x - cx, dz = z - cz;
+  if (Math.hypot(dx, dz) < Math.max(0.7, s * 0.45)) return -1;
+  return Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 1 : 3) : (dz > 0 ? 0 : 2);
+}

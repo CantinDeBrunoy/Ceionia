@@ -1,7 +1,7 @@
 import './style.css';
 import './hudTheme.css';
 import './i18n/en';
-import { onLangChange, tr as trx, nplural } from './i18n';
+import { onLangChange, tr as trx, nplural, getLang } from './i18n';
 import * as THREE from 'three';
 import { World, N, VEG_VOLCANO, VEG_FOREST, setMapSize } from './world/world';
 import { buildingSpots, pickVoices } from './audio/spots';
@@ -55,7 +55,8 @@ import { loadModels } from './render/assets';
 import { Thumbs } from './render/thumbs';
 import { ToolController, ToolId } from './build/tools';
 import { AudioEngine, soundSettings, VOL_V } from './audio/audio';
-import { UI, showMenu, UIHost } from './ui/ui';
+import { UI, showMenu, UIHost, chooseControls } from './ui/ui';
+import { Controls, loadControls, saveControls, guessLayout } from './core/controls';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
 import { allyIsle, allyView, onAllyIsle, allyPostReady } from './sim/allyLand';
@@ -190,6 +191,8 @@ class Game implements UIHost {
   /** routes automatiques jusqu'aux nouveaux bâtiments */
   autoRoads = true;
   hideUpBadges = false;
+  /** comment le joueur déplace la vue : retenu pour ce navigateur ; avant le premier choix, le clavier (comme avant) */
+  controls: Controls = loadControls() ?? { mode: 'keys', layout: guessLayout(getLang()) };
   fires: Fires;
   traffic: Traffic;
   helis: Helis;
@@ -678,6 +681,7 @@ class Game implements UIHost {
     if (!w.buildings.size && this.cam.homeAt) this.cam.jump({ x: this.cam.homeAt[0], z: this.cam.homeAt[1], dist: 34 }, w.surfaceAt(this.cam.homeAt[0], this.cam.homeAt[1]));
     window.addEventListener('resize', () => this.onResize());
     this.bindKeys();
+    this.applyControls();
     audio.unlockOn(window);
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveNow(); audio.pause(document.hidden); });
     window.addEventListener('pagehide', () => this.saveNow());
@@ -1616,6 +1620,29 @@ class Game implements UIHost {
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
+  /** Contrôles de la vue : retenus pour ce navigateur et appliqués à la caméra */
+  setControls(c: Controls) { this.controls = c; saveControls(c); this.applyControls(); }
+  private applyControls() {
+    const mouse = this.controls.mode === 'mouse';
+    this.cam.letterKeys = !mouse;
+    this.cam.edgeScroll = mouse;
+    // à la souris, un glissé du clic gauche déplace la vue quand l'outil Voir est en main (un clic sans bouger choisit toujours)
+    this.cam.dragPan = mouse ? () => this.cam.handler === this.tools && this.tools.tool === 'none' && !this.railEdit && !this.tools.picking : null;
+  }
+  /**
+   * Premier lancement : avant tout, le joueur choisit comment déplacer la vue (souris ou clavier ZQSD / WASD). Le jeu
+   * attend en pause ; la disposition du clavier est proposée d'après le navigateur, sinon la langue
+   */
+  async askControls() {
+    if (loadControls()) return;
+    const kb = (navigator as Navigator & { keyboard?: { getLayoutMap?(): Promise<Map<string, string>> } }).keyboard;
+    const map = await kb?.getLayoutMap?.().catch(() => null);
+    const was = this.time.paused;
+    this.time.paused = true;
+    const c = await chooseControls(this.ui.root, { mode: this.controls.mode, layout: guessLayout(getLang(), map) }, true);
+    this.time.paused = was;
+    this.setControls(c);
+  }
   /** Brouillard visible : la météo « brume » et la nappe au ras du sol (0 … 1) */
   fogLevel() { return Math.max(this.env.weatherKind === 'fog' ? this.env.weatherK : 0, this.atmosphere.mist); }
   /** Dissipe le brouillard et la brume ; ils ne reviennent pas avant un bon moment */
@@ -2131,7 +2158,7 @@ class Game implements UIHost {
         if (k === 'escape' && this.ui.closeTop()) return;
         // une défense de l'île en main : Échap la lâche (sans quitter l'île), R la tourne
         if (this.islePlace && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          if (k === 'escape') { this.tools.escape(); this.endIslePlace(); return; }
+          if (k === 'escape') { const fixed = this.tools.placeStage === 2; this.tools.escape(); if (!fixed) this.endIslePlace(); return; }
           if (k === 'r') { this.tools.rotate(); return; }
         }
         if (this.command.key(e)) return;
@@ -2567,6 +2594,8 @@ async function boot() {
     game.voyage = voyage && game.world.reveal;
     await game.prepare(ld);
     ld.done();
+    // premier lancement : le choix des contrôles de la vue, avant tout
+    void game.askControls();
   };
   let menu: HTMLElement | null = null;
   if (devN) { void start(CONTINENT, 'new', Number(dev?.get('seed')) || undefined); return; }

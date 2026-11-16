@@ -1,4 +1,4 @@
-import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang } from '../i18n';
+import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang, bothOf, bothLangs } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
@@ -10,6 +10,8 @@ import { Environment, WeatherKind } from '../render/env';
 import type { GfxParams } from '../render/adaptive';
 import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
+import { type Controls, type CamControl, type KbLayout, layoutKeys } from '../core/controls';
+import { matches } from './search';
 import { loadSlot, SaveData, savedAgo, Quality } from '../save/save';
 import { MAPS, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
@@ -94,6 +96,9 @@ export interface UIHost {
   /** flèches d'amélioration au-dessus des bâtiments, masquées ou non */
   hideUpBadges: boolean;
   setHideUpBadges(on: boolean): void;
+  /** comment le joueur déplace la vue (souris ou clavier, et la disposition du clavier) ; voir `core/controls.ts` */
+  controls: Controls;
+  setControls(c: Controls): void;
   /** expéditions, et celle que la caméra suit (son numéro) */
   expeditions: Expeditions;
   /** chemin de fer de gare en gare, et la caméra qui suit le train */
@@ -593,7 +598,7 @@ export class UI {
             </div>
           </div>
           <div id="dockMain" class="panel">
-            <div id="dockTop"><div id="subcats"></div><button id="bMore" type="button" aria-expanded="false" title="${tr('Outils, vue et carte')}" aria-label="${tr('Outils, vue et carte')}">⋯</button></div>
+            <div id="dockTop"><div id="subcats"></div><label id="dockSearch" title="${tr('Chercher un bâtiment ou un outil par son nom (Ctrl+F)')}">${ic('search', 15, 2.2)}<input id="itSearch" type="search" autocomplete="off" spellcheck="false" placeholder="${tr('Rechercher…')}" aria-label="${tr('Rechercher un bâtiment')}"><button id="itClear" type="button" tabindex="-1" aria-label="${tr('Effacer la recherche')}">${ic('close', 12, 2.4)}</button></label><button id="bMore" type="button" aria-expanded="false" title="${tr('Outils, vue et carte')}" aria-label="${tr('Outils, vue et carte')}">⋯</button></div>
             <div id="itemsWrap">
               <button class="scr" id="itPrev" type="button" title="${tr('Précédents')}" aria-label="${tr('Précédents')}">‹</button>
               <div id="items"></div>
@@ -625,7 +630,7 @@ export class UI {
       const b = (e.target as HTMLElement).closest('button');
       if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
     });
-    window.addEventListener('pointermove', (e) => { this.cursorXY = [e.clientX, e.clientY]; }, { passive: true });
+    window.addEventListener('pointermove', (e) => { this.cursorXY = [e.clientX, e.clientY]; if (this.hintTxt) this.renderCursorHint(); }, { passive: true });
     // la carte d'explication suit la mise en page de la barre du bas (après le reflux)
     window.addEventListener('resize', () => requestAnimationFrame(() => this.placeCards()));
     root.addEventListener('wheel', (e) => {
@@ -753,6 +758,31 @@ export class UI {
       this.host.tools.setRoadMode(b.dataset.m as RoadMode);
       this.host.audio.sfxClick();
     };
+    // la recherche : chaque lettre tapée filtre les vignettes de tous les rayons ; Échap (ou la croix) efface, Entrée prend le
+    // premier résultat qui se pose
+    const find = $<HTMLInputElement>('#itSearch'), box = $('#dockSearch');
+    find.oninput = () => {
+      this.query = find.value;
+      box.classList.toggle('on', !!find.value.trim());
+      // (le Paysage n'a pas tous les bâtiments : la recherche se fait depuis Bâtir)
+      if (this.tab !== 'build') { this.tab = 'build'; this.renderDock(); } else this.renderItems();
+    };
+    find.onkeydown = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); this.clearSearch(); find.blur(); this.renderItems(); }
+      else if (e.key === 'Enter') { e.preventDefault(); this.root.querySelector<HTMLButtonElement>('#items button.tile:not(.locked)')?.click(); find.blur(); }
+    };
+    $('#itClear').onclick = () => { this.clearSearch(); this.renderItems(); find.focus(); };
+    // Ctrl+F (ou /) : le champ de recherche du menu, à la place de celle du navigateur
+    window.addEventListener('keydown', (e) => {
+      const t = e.target as HTMLElement;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || this.root.querySelector('.overlay')) return;
+      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') || (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey)) {
+        if (document.body.classList.contains('photo')) return;
+        e.preventDefault();
+        if (document.body.classList.contains('dockMin')) this.setDockMin(false);
+        find.focus(); find.select();
+      }
+    });
     // le carrousel des vignettes : les flèches font défiler d'une largeur visible, et se grisent au bout
     const items = $('#items'), slide = (d: number) => { items.scrollBy({ left: d * items.clientWidth * 0.8, behavior: 'smooth' }); this.host.audio.sfxClick(); };
     $('#itPrev').onclick = () => slide(-1);
@@ -852,6 +882,7 @@ export class UI {
       // l'onglet déjà ouvert : un clic replie la barre (ou la rouvre), pour laisser la place à la carte
       if (b.dataset.t === this.tab) { this.setDockMin(!document.body.classList.contains('dockMin')); this.host.audio.sfxClick(); return; }
       this.setDockMin(false);
+      this.clearSearch();
       this.tab = b.dataset.t!;
       // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
       if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
@@ -895,20 +926,25 @@ export class UI {
   private press: { sel: string; x: number; y: number } | null = null;
   private thumbsLate = false;
   private tilesNow() {
+    // une recherche en cours : les vignettes de tous les rayons qui répondent
+    if (this.query.trim()) return `q${this.query}|${this.tab}|${+isStart(this.host.world)}|${KIND_ORDER.map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join()}`;
     return this.tab === 'build' ? (this.cat === 'life' ? this.host.diploLine?.()?.text ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
   }
 
   /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
   renderItems(keep = false) {
     this.tilesKey = this.tilesNow();
-    const age = this.host.sim.age, build = this.tab === 'build';
+    const age = this.host.sim.age, build = this.tab === 'build', query = this.query.trim();
     const sub = $('#subcats');
+    // (pendant une recherche, aucun rayon n'est ouvert : les résultats viennent de tous)
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${hudPic(CAT_PIC[c.id], 22)}</b><span class="cl">${c.label}</span></button>`).join('')
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat && !query ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${hudPic(CAT_PIC[c.id], 22)}</b><span class="cl">${c.label}</span></button>`).join('')
       : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 20)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
+    sub.classList.toggle('searching', !!query);
     // un sous-menu du Paysage : l'outil en main d'un autre sous-menu est lâché (sinon refreshTools ramènerait le sien)
     sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = () => {
       this.land = b.dataset.l as LandSub;
+      this.clearSearch();
       const lt = landOfTool(this.host.tools.tool);
       if (lt && lt !== this.land) this.host.tools.setTool('none');
       this.renderItems(); this.host.audio.sfxClick();
@@ -917,17 +953,17 @@ export class UI {
       const why = b.dataset.c !== KINDS.gather.cat ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
       this.cat = b.dataset.c as BuildCat;
+      this.clearSearch();
       // le bâtiment en main est d'un autre rayon : on le lâche, sinon refreshTools ramènerait son rayon
       const tl = this.host.tools;
       if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) tl.setTool('none');
       this.renderItems(); this.host.audio.sfxClick();
     }));
     let html: string;
-    if (build) {
-      // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue) ; ceux des âges
-      // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant. Les vignettes se rangent par groupe de
-      // lecture (Nourriture, Matériaux, Santé…), chacun sous son titre
-      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1 && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge) && offered(this.host.world, k)), shut = (k: KindId) => +!!this.lockOf(k);
+    // ce qu'on montre : les bâtiments de l'âge courant et de l'âge suivant (pas ceux des âges lointains), proposés au village
+    const shown = (k: KindId) => KINDS[k].minAge <= age + 1 && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge) && offered(this.host.world, k);
+    const shut = (k: KindId) => +!!this.lockOf(k);
+    {
       const tile = (k: KindId) => {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0, gv = givesOf(k, a);
         const badge = locked ? `<i class="badge lock">${pic('🔒', 14)}</i>` : n ? `<i class="badge">${n}</i>` : '';
@@ -942,21 +978,26 @@ export class UI {
         const face = TOOL_THUMB[id] ? `<b class="th"><img src="${TOOL_THUMB[id]}" alt="" draggable="false"></b>` : `<b>${ic(i.icon, 28, 1.6)}</b>`;
         return `<button class="tile${TOOL_THUMB[id] ? ' thumb' : ''}" data-tool="${id}" title="${i.label}${colon()}${sub}" aria-label="${i.label}${colon()}${sub}">${face}<span class="lbl">${i.label}</span><small class="gv">${sub}</small>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`;
       };
+      // les outils du Paysage, par groupe de lecture (Sculpter, Eau, Sommets ; Végétation, Sol, Décor, Effacer)
+      const tool = (id: string) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; };
+      if (query) html = this.searchHtml(query, shown, shut, tile, toolTile, tool);
+      else if (build) {
+      // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue) ; ceux des âges
+      // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant. Les vignettes se rangent par groupe de
+      // lecture (Nourriture, Matériaux, Santé…), chacun sous son titre
+      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && shown(k));
       html = BUILD_SUBS[this.cat].map((sub) => {
         const tiles = kinds.filter((k) => KIND_SUB[k] === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
         // les champs nourrissent (groupe Nourriture), masqués tant que le village est vide : on ne pose d'abord que le feu de camp
         if (this.cat === 'prod' && sub.id === 'nourriture' && !isStart(this.host.world)) tiles.push(toolTile('field', tr('Nourriture')));
         return tiles.length ? `<div class="grp" data-sub="${sub.id}"><div class="gh">${ic(SUB_ICON[sub.id] ?? 'leaf', 13, 2)}<span>${sub.label}</span></div><div class="gt">${tiles.join('')}</div></div>` : '';
       }).join('') || `<span class="mhint">${tr('Rien à bâtir dans ce rayon avant l’âge {age}.', { age: AGES[Math.min(age + 2, AGES.length - 1)].name })}</span>`;
-    } else {
-      // les outils du sous-menu, par groupe de lecture (Sculpter, Eau, Sommets ; Végétation, Sol, Décor, Effacer)
-      const tool = (id: string) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; };
-      html = LAND_SUBS.find((l) => l.id === this.land)!.groups.map((g) => `<div class="grp"><div class="gh">${ic(g.icon, 13, 2)}<span>${tr(g.label)}</span></div><div class="gt">${g.tools.map(tool).join('')}</div></div>`).join('');
+      } else html = LAND_SUBS.find((l) => l.id === this.land)!.groups.map((g) => `<div class="grp"><div class="gh">${ic(g.icon, 13, 2)}<span>${tr(g.label)}</span></div><div class="gt">${g.tools.map(tool).join('')}</div></div>`).join('');
     }
     // (les voies du grand choix, les Enfers et l'archipel, ne s'annoncent pas ici : elles sont dans l'onglet « Grands choix » des
     // expéditions, que le jeu ne montre pas du doigt)
     // le conflit des deux îles (archipel, âge industriel) : une ligne en tête du rayon Vie
-    const dip = build && this.cat === 'life' ? this.host.diploLine?.() : null;
+    const dip = build && this.cat === 'life' && !query ? this.host.diploLine?.() : null;
     if (dip) html = `<div class="grp pvehead diplohead"><span>${dip.text}</span><button data-diplo="1">${dip.button}</button></div>${html}`;
     const items = $('#items'), left = items.scrollLeft;
     items.innerHTML = html;
@@ -977,6 +1018,35 @@ export class UI {
     });
     this.refreshTools();
     requestAnimationFrame(() => this.refreshArrows());
+  }
+
+  /** Ce que le joueur cherche dans le menu (champ de recherche de la barre) ; vide : le rayon ouvert */
+  private query = '';
+  private clearSearch() {
+    this.query = '';
+    const f = this.root.querySelector<HTMLInputElement>('#itSearch');
+    if (f) f.value = '';
+    this.root.querySelector('#dockSearch')?.classList.remove('on');
+  }
+
+  /**
+   * Les vignettes qui répondent à la recherche, sans accents, en français comme en anglais (voir `search.ts`) : les bâtiments
+   * de tous les rayons, rangés sous le nom de leur rayon (le nom à tous les âges compte : « hutte » trouve la maison), puis le
+   * champ et les outils du Paysage
+   */
+  private searchHtml(query: string, shown: (k: KindId) => boolean, shut: (k: KindId) => number, tile: (k: KindId) => string, toolTile: (id: string, sub: string) => string, tool: (id: string) => string) {
+    const subOf = (k: KindId) => BUILD_SUBS[KINDS[k].cat].find((x) => x.id === KIND_SUB[k]);
+    const hit = (k: KindId) => { const sb = subOf(k), c = BUILD_CATS.find((x) => x.id === KINDS[k].cat)!; return matches(query, [...bothOf(KINDS[k], 'names'), ...(sb ? bothOf(sb, 'label') : []), ...bothOf(c, 'label')]); };
+    const groups = BUILD_CATS.map((c) => {
+      const tiles = KIND_ORDER.filter((k) => KINDS[k].cat === c.id && shown(k) && hit(k)).sort((p, q) => shut(p) - shut(q)).map(tile);
+      // le champ se range avec la nourriture (pas tant que le village est vide)
+      if (c.id === 'prod' && !isStart(this.host.world) && matches(query, [...bothLangs(TOOL_INFO.field.label), ...bothLangs('Nourriture')])) tiles.push(toolTile('field', tr('Nourriture')));
+      return tiles.length ? `<div class="grp"><div class="gh">${hudPic(CAT_PIC[c.id], 13)}<span>${c.label}</span></div><div class="gt">${tiles.join('')}</div></div>` : '';
+    });
+    // les outils du Paysage (sculpter, planter, grotte…), seulement une fois le village commencé
+    const land = isStart(this.host.world) ? [] : LAND_SUBS.flatMap((l) => l.groups.flatMap((g) => g.tools.filter((id) => matches(query, [...bothLangs(TOOL_INFO[id].label), ...bothLangs(g.label), ...bothLangs(l.label)]))));
+    if (land.length) groups.push(`<div class="grp"><div class="gh">${ic('peaks', 13, 2)}<span>${tr('Paysage')}</span></div><div class="gt">${land.map(tool).join('')}</div></div>`);
+    return groups.join('') || `<span class="mhint">${tr('Rien ne répond à « {q} ». Essayez un autre nom, en français ou en anglais.', { q: attr(query) })}</span>`;
   }
 
   /** Les flèches du carrousel : grisées au bout de la rangée, cachées quand tout tient */
@@ -1108,11 +1178,13 @@ export class UI {
 
   /** la raison du refus montrée par la fiche (elle se redessine quand le curseur passe sur un endroit refusé pour une autre raison) */
   private infoWhy: string | null = null;
+  private infoStage = 0;
 
   /** Fiche de l'outil ou du bâtiment survolé, sinon du bâtiment qu'on s'apprête à poser */
   private renderInfo() {
     const tl = this.host.tools, box = $('#info');
     this.infoWhy = tl.placeWhy;
+    this.infoStage = tl.placeStage;
     const held = tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null;
     const k = this.hover ? this.hover.kind ?? null : held, tool = this.hover?.tool;
     box.classList.toggle('show', !!(k || tool));
@@ -1141,7 +1213,7 @@ export class UI {
     box.innerHTML = `<div class="ihead">${this.cardThumb(k, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub">${d.size} × ${d.size} · ${AGES[a].name}</small><small class="xcount">${count}</small></div></div>
       <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${k === 'wall' && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) })}${rich ? '' : tr(' — vous avez {have}', { have: haveLabel(w, cost) })}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : `${tr(hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap : lâcher')}</p>` : ''}`;
+      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap : lâcher')}</p>` : ''}`;
   }
 
   /**
@@ -1390,7 +1462,9 @@ export class UI {
   private cursorXY: [number, number] | null = null;
   private hintTxt = '';
   private renderCursorHint() {
-    const el = $('#cursorHint'), st = this.host.tools.freeStage, txt = st === 1 ? tr('Cliquez le point A') : st === 2 ? tr('Cliquez le point B') : '';
+    // (un bâtiment ou une grotte dont l'endroit est fixé : le second clic donne le côté de l'entrée)
+    const tl = this.host.tools, ps = tl.placeStage, st = ps === 2 ? 2 : tl.freeStage, el = $('#cursorHint');
+    const txt = ps === 2 ? tr(tl.tool === 'cave' ? 'Cliquez du côté de l’ouverture' : 'Cliquez du côté de l’entrée') : st === 1 ? tr('Cliquez le point A') : st === 2 ? tr('Cliquez le point B') : '';
     if (txt !== this.hintTxt) { this.hintTxt = txt; el.textContent = txt; el.classList.toggle('show', !!txt); el.classList.toggle('b', st === 2); }
     if (txt && this.cursorXY) el.style.transform = `translate(${this.cursorXY[0] + 18}px, ${this.cursorXY[1] + 20}px)`;
   }
@@ -1512,7 +1586,7 @@ export class UI {
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
     else if (!this.press && this.tilesNow() !== this.tilesKey) this.renderItems(true);
     this.markFirst();
-    if (this.host.tools.placeWhy !== this.infoWhy) this.renderInfo();
+    if (this.host.tools.placeWhy !== this.infoWhy || this.host.tools.placeStage !== this.infoStage) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
     // le logo de la carte du village change avec l'âge (picto et teinte du fond)
     const logo = $('#vLogo');
@@ -1983,6 +2057,7 @@ export class UI {
         <button data-tab="missions" data-f="all" class="${tab === 'missions' ? 'on' : ''}">${ic('ex-all', 19, 1.8)}${tr('Toutes')} <small>(${sorted.length})</small></button>
         <button data-f="mil">${ic('ex-mil', 19, 1.8)}${tr('Militaires')} <small>(${nMil})</small></button>
         <button data-f="leg">${ic('ex-leg', 19, 1.8)}${tr('Légendaires')} <small>(${nLeg})</small></button>
+        <label class="expFind" ${tab === 'missions' ? '' : 'hidden'}>${ic('search', 15, 2.2)}<input type="search" autocomplete="off" spellcheck="false" placeholder="${tr('Rechercher…')}" aria-label="${tr('Rechercher une expédition')}"></label>
         <span class="grow"></span>
         <button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('ex-gear', 19, 1.8)}${tr('Équipement')}</button>
         ${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('ex-rail', 19, 1.8)}${tr('Chemin de fer')}</button>` : ''}
@@ -2000,24 +2075,37 @@ export class UI {
     $('.expModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, age))}.webp)`);
 
     // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section
-    ov.querySelectorAll<HTMLButtonElement>('.expNav button').forEach((b) => (b.onclick = () => {
-      ov.querySelectorAll<HTMLButtonElement>('.expNav button').forEach((x) => x.classList.toggle('on', x === b));
-      const sec = b.dataset.tab ?? 'missions';
-      ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((x) => (x.hidden = x.dataset.sec !== sec));
-      const f = b.dataset.f;
-      if (!f) return;
+    // le filtre en cours et la recherche (le titre de la mission, en français comme en anglais, sans accents)
+    let f = 'all';
+    const find = $<HTMLInputElement>('.expFind input', ov);
+    const filter = () => {
+      const q = find.value.trim();
       let shown = 0;
       ov.querySelectorAll<HTMLElement>('.mission').forEach((el) => {
-        el.hidden = f === 'mil' ? el.dataset.mil !== '1' : f === 'leg' ? el.dataset.leg !== '1' : false;
+        const m = MISSIONS.find((x) => x.id === el.dataset.id);
+        el.hidden = (f === 'mil' ? el.dataset.mil !== '1' : f === 'leg' ? el.dataset.leg !== '1' : false) || (!!q && !!m && !matches(q, [...bothOf(m, 'title'), ...bothOf(AGES[m.age], 'name')]));
         if (!el.hidden) shown++;
       });
       const em = ov.querySelector<HTMLElement>('.emptyMsg');
       if (em) {
         em.hidden = shown > 0;
-        em.textContent = f === 'mil' ? tr('Aucune expédition militaire à cet âge. Les expéditions armées (le loup des bois…) apparaissent au fil des âges : revenez après avoir progressé.')
+        em.textContent = q ? tr('Aucune expédition ne répond à « {q} ».', { q })
+          : f === 'mil' ? tr('Aucune expédition militaire à cet âge. Les expéditions armées (le loup des bois…) apparaissent au fil des âges : revenez après avoir progressé.')
           : f === 'leg' ? tr('Aucune expédition légendaire à cet âge. Les grands exploits (mammouth, kraken, mégalodon, dragon, JO…) arrivent à des âges précis.')
           : tr('Aucune expédition disponible pour le moment.');
       }
+    };
+    find.oninput = filter;
+    find.onkeydown = (e) => { if (e.key === 'Escape' && find.value) { e.preventDefault(); e.stopPropagation(); find.value = ''; filter(); } };
+    ov.querySelectorAll<HTMLButtonElement>('.expNav button').forEach((b) => (b.onclick = () => {
+      ov.querySelectorAll<HTMLButtonElement>('.expNav button').forEach((x) => x.classList.toggle('on', x === b));
+      const sec = b.dataset.tab ?? 'missions';
+      ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((x) => (x.hidden = x.dataset.sec !== sec));
+      // (la recherche ne vaut que pour les missions)
+      ($('.expFind', ov) as HTMLElement).hidden = sec !== 'missions';
+      if (!b.dataset.f) return;
+      f = b.dataset.f;
+      filter();
     }));
     // l'arsenal se redessine quand la réserve ou la file changent ; la barre de fabrication avance en continu
     let key = '';
@@ -2449,6 +2537,10 @@ export class UI {
         <div class="row"><label title="${tr('Nature, ateliers, bêtes et foule près de la caméra')}">${tr('Ambiances')}</label><input id="sAmb" type="range" min="0" max="1" step="0.05" value="${a.ambVol}"><button tabindex="-1" aria-hidden="true" style="visibility:hidden">${ic('volume', 18)}</button></div>
       </section>
       <section data-sec="game" hidden>${head('game')}
+        <h4>${tr('Contrôles')}</h4>
+        <div class="row"><label>${tr('Déplacer la vue')}</label><button data-ctl="mouse">${tr('À la souris')}</button><button data-ctl="keys">${tr('Au clavier')}</button></div>
+        <div class="row"><label>${tr('Clavier')}</label><button data-lay="azerty">AZERTY</button><button data-lay="qwerty">QWERTY</button></div>
+        <p class="hint" id="ctlHint"></p>
         <h4>${tr('Règles')}</h4>
         <div class="row"><label>${DIFF_TEXT.setting}</label><span class="diffTag ${h.world.difficulty}">${ic(DIFF_TEXT.icon[h.world.difficulty], 16, 2)}${DIFF_TEXT.name[h.world.difficulty]}</span></div>
         <ul class="hint dpoints">${DIFF_TEXT.points[h.world.difficulty].map((x) => `<li>${x}</li>`).join('')}</ul>
@@ -2558,6 +2650,16 @@ export class UI {
       q('#gBadges').textContent = tr(h.hideUpBadges ? 'Masquées' : 'Affichées');
       q('#gBadges').classList.toggle('active', !h.hideUpBadges);
     };
+    // les contrôles de la vue (le même choix qu'au premier lancement)
+    const ctl = () => {
+      const c = h.controls;
+      ov.querySelectorAll<HTMLButtonElement>('[data-ctl]').forEach((b) => b.classList.toggle('active', b.dataset.ctl === c.mode));
+      ov.querySelectorAll<HTMLButtonElement>('[data-lay]').forEach((b) => b.classList.toggle('active', b.dataset.lay === c.layout));
+      q('#ctlHint').textContent = controlText(c.mode, c.layout);
+    };
+    ov.querySelectorAll<HTMLButtonElement>('[data-ctl]').forEach((b) => (b.onclick = () => { h.setControls({ ...h.controls, mode: b.dataset.ctl as CamControl }); h.audio.sfxClick(); ctl(); }));
+    ov.querySelectorAll<HTMLButtonElement>('[data-lay]').forEach((b) => (b.onclick = () => { h.setControls({ ...h.controls, layout: b.dataset.lay as KbLayout }); h.audio.sfxClick(); ctl(); }));
+    ctl();
     q('#gRoads').onclick = () => {
       h.setAutoRoads(!h.autoRoads);
       q('#gRoads').textContent = tr(h.autoRoads ? 'Activées' : 'Désactivées');
@@ -2788,6 +2890,48 @@ function menuConfirm(root: HTMLElement, message: string, ok: string): Promise<bo
     ov.style.zIndex = '40';
     $('.popMsg', ov).textContent = tr(message);
     ov.querySelectorAll<HTMLButtonElement>('[data-r]').forEach((b) => (b.onclick = () => { r = b.dataset.r === '1'; close(); }));
+  });
+}
+
+/** La souris dessinée de la fenêtre des contrôles (le bouton gauche en or) */
+const MOUSE_SVG = '<svg viewBox="0 0 48 64" width="44" height="58" aria-hidden="true"><rect x="6" y="4" width="36" height="56" rx="18" fill="#fffaf0" stroke="#7a5a32" stroke-width="3"/><path d="M24 4v20M6 24h36" stroke="#7a5a32" stroke-width="3"/><path d="M8.5 22V22a15.5 15.5 0 0 1 14-17v17z" fill="#e9b949"/><path d="M30 34l8 0M34 30l4 4-4 4" stroke="#7a5a32" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+/** Les touches de la vue, en croix comme sur le clavier (la ligne du haut : tourner, avancer, tourner) */
+const keyCaps = (l: KbLayout) => { const k = layoutKeys(l); return `<span class="kcaps"><span><kbd class="t">${k.turn[0]}</kbd><kbd>${k.move[0]}</kbd><kbd class="t">${k.turn[1]}</kbd></span><span><kbd>${k.move[1]}</kbd><kbd>${k.move[2]}</kbd><kbd>${k.move[3]}</kbd></span></span>`; };
+/** La phrase de chaque façon de déplacer la vue (fenêtre du premier lancement, paramètres) */
+export const controlText = (m: CamControl, l: KbLayout) => {
+  const k = layoutKeys(l);
+  return m === 'mouse'
+    ? tr('Approchez la souris du bord de l’écran pour faire défiler la vue ; avec l’outil Voir, faites glisser le terrain.')
+    : tr('{move} déplacent la vue, {turn} la tournent.', { move: k.move.join(''), turn: k.turn.join(' / ') });
+};
+
+/**
+ * Comment déplacer la vue : à la souris ou au clavier (ZQSD en AZERTY, WASD en QWERTY). Au premier lancement (`first`), le
+ * bouton dit « Jouer » ; fermer la fenêtre garde le choix en cours
+ */
+export function chooseControls(root: HTMLElement, cur: Controls, first = false): Promise<Controls> {
+  return new Promise((resolve) => {
+    const c: Controls = { ...cur };
+    const { ov, close } = menuPop(root, 'ctlPick', 'options', tr('Déplacer la vue'), `
+      <div class="ctlCards">
+        <button type="button" class="ctlCard" data-m="mouse"><span class="ctlArt">${MOUSE_SVG}</span><b>${tr('À la souris')}</b><span class="ctlTxt"></span></button>
+        <button type="button" class="ctlCard" data-m="keys"><span class="ctlArt"></span><b>${tr('Au clavier')}</b><span class="ctlTxt"></span></button>
+      </div>
+      <div class="ctlLay"><span>${tr('Votre clavier')}</span><button type="button" data-l="azerty">AZERTY</button><button type="button" data-l="qwerty">QWERTY</button></div>
+      <p class="hint">${tr('Dans les deux cas : la molette zoome, le clic droit glissé tourne la vue, les flèches la déplacent. Vous pourrez changer d’avis dans Paramètres › Partie.')}</p>
+      <div class="popFoot"><button type="button" data-ok data-r="1">${ic('play', 15, 2)}${tr(first ? 'Jouer' : 'Valider')}</button></div>`,
+    () => resolve(c), first ? tr('Choisissez comment vous déplacez la vue.') : '');
+    ov.style.zIndex = '40';
+    const draw = () => {
+      ov.querySelectorAll<HTMLButtonElement>('[data-m]').forEach((b) => { b.classList.toggle('on', b.dataset.m === c.mode); b.setAttribute('aria-pressed', String(b.dataset.m === c.mode)); $('.ctlTxt', b).textContent = controlText(b.dataset.m as CamControl, c.layout); });
+      ov.querySelectorAll<HTMLButtonElement>('[data-l]').forEach((b) => { b.classList.toggle('on', b.dataset.l === c.layout); b.setAttribute('aria-pressed', String(b.dataset.l === c.layout)); });
+      $('[data-m="keys"] .ctlArt', ov).innerHTML = keyCaps(c.layout);
+      ($('.ctlLay', ov) as HTMLElement).classList.toggle('dim', c.mode !== 'keys');
+    };
+    ov.querySelectorAll<HTMLButtonElement>('[data-m]').forEach((b) => { b.onclick = () => { c.mode = b.dataset.m as CamControl; draw(); }; b.ondblclick = () => close(); });
+    ov.querySelectorAll<HTMLButtonElement>('[data-l]').forEach((b) => (b.onclick = () => { c.layout = b.dataset.l as KbLayout; c.mode = 'keys'; draw(); }));
+    $('[data-ok]', ov).onclick = () => close();
+    draw();
   });
 }
 

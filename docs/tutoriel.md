@@ -41,9 +41,10 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   (`welcome`, `camera`, `fire` : la place ; puis maison et puits ; puis séchoir ; bûcheron ; pierrier). Le reste dit « Le
   tutoriel vous le fera bâtir un peu plus tard. ». Le verrou saute dès que le village compte un bâtiment hors de `GUIDED`,
   et quand le tutoriel est fini ou mis de côté. Pas de verrou pendant un chapitre.
-- **Clavier de la caméra** : le jeu lit les touches physiques (`camera.ts` : W A S D, Q E). La bulle affiche les lettres de
-  la disposition du joueur (`navigator.keyboard.getLayoutMap`, Chrome et Edge) ; sans elle, celles de la langue : Z Q S D et
-  A / E en français, W A S D et Q / E en anglais (`viewKeys`). Au doigt, la phrase tactile seule.
+- **Clavier de la caméra** : le jeu lit les touches physiques (`camera.ts` : W A S D, Q E). La bulle suit les contrôles choisis
+  au premier lancement (`host.controls`, voir [interface.md](interface.md)) : au clavier, les lettres de la disposition choisie
+  (`layoutKeys` : Z Q S D et A / E en AZERTY, W A S D et Q / E en QWERTY) ; à la souris, la phrase du bord de l'écran et du
+  glissé (`camera.mouse`). `viewKeys` (lettres lues de `getLayoutMap`) reste pour les tests. Au doigt, la phrase tactile seule.
 - **Fin** : « Terminer » à la dernière étape. Le temps encore en pause repart à vitesse ×1. Le tutoriel reste dans les réglages (« Recommencer »).
 - **Chapitre « Affronter les démons »** (`pve`, 4 étapes), lancé par le bouton « Affronter les démons » de la carte du
   portail. La vue va alors au commandement de l'île, menu ouvert sur « Bâtir » :

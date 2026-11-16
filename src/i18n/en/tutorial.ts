@@ -66,6 +66,7 @@ registerDict('tutorial', {
   'Passer ce chapitre': 'Skip this chapter',
   'Chapitre « {title} » : étape {i} sur {n}.': 'Chapter “{title}”: step {i} of {n}.',
   'Au clavier : {move} déplacent la vue, {turn} la tournent.': 'Keyboard: {move} move the view, {turn} turn it.',
+  'À la souris : approchez-la du bord de l’écran, ou faites glisser le terrain, pour déplacer la vue.': 'With the mouse: move it to the edge of the screen, or drag the ground, to move the view.',
   'Les ressources': 'Resources',
   'Vos réserves s’affichent ici : bois et pierre paient les grands bâtiments, le minerai le passage des âges.': 'Your stocks show here: wood and stone pay for the big buildings, ore for moving up an age.',
 

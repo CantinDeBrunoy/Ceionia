@@ -1,7 +1,8 @@
 import { KINDS, KindId } from '../build/catalog';
 import { ic } from './icons';
-import { tr, localize, colon, getLang } from '../i18n';
+import { tr, localize, colon } from '../i18n';
 import type { UI, UIHost } from './ui';
+import { layoutKeys } from '../core/controls';
 import { GEAR, GearId, dangersOf, gearCurrent } from '../sim/gear';
 import { MISSIONS } from '../sim/missions';
 
@@ -49,6 +50,8 @@ export const TUTO_TEXT = {
       touch: 'Glissez à deux doigts pour bouger, zoomer et tourner la vue.',
       /** les touches de la vue, dans la disposition du clavier du joueur (voir `viewKeys`) */
       keys: (move: string, turn: string) => tr('Au clavier : {move} déplacent la vue, {turn} la tournent.', { move, turn }),
+      /** les contrôles à la souris (choisis au premier lancement) */
+      mouse: 'À la souris : approchez-la du bord de l’écran, ou faites glisser le terrain, pour déplacer la vue.',
       tasks: ['Bouger la vue'],
       paused: 'Le jeu est en pause pour l’instant.',
     },
@@ -379,8 +382,6 @@ export class Tutorial {
   private base: { view?: { x: number; z: number; yaw: number; dist: number }; kinds?: Record<string, number>; roads?: number; paused?: boolean; speed?: number } = {};
   /** choix d'expédition déjà amenés sous les yeux */
   private shown = new WeakSet<Element>();
-  /** les touches de la vue (la disposition du clavier, lue dès que le navigateur la donne) */
-  private keys = viewKeys(null, getLang());
 
   /** `fresh` : nouvelle partie (le tutoriel, s'il est activé, reprend au début) */
   constructor(private ui: UI, private host: UIHost, fresh: boolean, private off = false) {
@@ -409,8 +410,9 @@ export class Tutorial {
         id: 'camera', anchor: () => null, read: true,
         begin: () => (this.base.view = h.cam.view()),
         text: () => (coarse() ? T.camera.touch : T.camera.text),
-        // le clavier : les lettres de la disposition du joueur (ZQSD en AZERTY, WASD en QWERTY)
-        more: () => (coarse() ? '' : T.camera.keys(kbd(this.keys.move), kbd(this.keys.turn, ' / '))),
+        // les contrôles choisis au premier lancement : la souris, ou les lettres de la disposition du joueur (ZQSD en AZERTY,
+        // WASD en QWERTY)
+        more: () => { if (coarse()) return ''; if (h.controls.mode === 'mouse') return T.camera.mouse; const k = layoutKeys(h.controls.layout); return T.camera.keys(kbd(k.move), kbd(k.turn, ' / ')); },
         note: () => (h.time.paused ? T.camera.paused : ''),
         // un seul geste suffit : un enfant zoome tout de suite, mais tourner la vue au clic droit ne se devine pas
         check: () => {
@@ -533,9 +535,6 @@ export class Tutorial {
     // une liste qui défile (la fenêtre des expéditions) : la bulle suit l'élément montré
     ui.root.addEventListener('scroll', () => { if (this.on) this.place(); }, true);
     window.addEventListener('resize', () => { if (this.on) this.place(); });
-    // les lettres des touches selon la disposition du clavier (Chrome, Edge) ; sinon, celles de la langue
-    const kb = (navigator as Navigator & { keyboard?: { getLayoutMap?(): Promise<Map<string, string>> } }).keyboard;
-    kb?.getLayoutMap?.().then((m) => { this.keys = viewKeys(m, getLang()); this.key = ''; }).catch(() => { /* disposition inconnue */ });
     ui.tutorial = this;
 
     // bac à sable : jamais de tutoriel, et le choix du joueur pour les autres parties n'est pas touché

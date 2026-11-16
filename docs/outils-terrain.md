@@ -17,7 +17,8 @@
 ## En bref
 Le mode **Paysage** de la barre du bas, en deux sous-menus. **Relief** : monter, baisser, aplanir, falaise, eau, montagne, volcan. **Nature** : forêt,
 biome, rochers, grotte, faille, gomme (le champ se prend dans Bâtir › Production › Nourriture, ou touche 7). Chaque
-outil est un pinceau rond (taille `[` et `]`, gardée par outil), sauf la grotte et le volcan, posés d'un clic. Le relief de
+outil est un pinceau rond (taille `[` et `]`, gardée par outil), sauf le volcan, posé d'un clic, et la grotte, posée en deux
+clics (sa case, puis le côté de son ouverture). Le relief de
 jeu est une grille de sommets (`heights`, une case = 1) ; le relief affiché (`vis`) en est un suréchantillonnage lissé. Tout
 est annulable (Ctrl+Z, 60 coups).
 
@@ -46,7 +47,11 @@ est annulable (Ctrl+Z, 60 coups).
   `vegFits` (forêt : pente ≤ 1,4 et pas au-dessus de `TREE_LINE = 5.8` ; champ : pente ≤ 0,6 ; rochers : pente ≤ 1).
 - Une plantation ne recouvre jamais un décor unique (grotte, épave, cratère de volcan) : `setVeg` refuse.
 - Biome : peint `biomePaint` (tempéré, taïga, désert, tropical, marais, ou « Climat » pour rendre la case à son climat).
-- Grotte : un clic, sur la terre ferme (hauteur ≥ 0,3, pente ≤ 2,2), emprise libre (`decorFits`, rayon `CAVE_R`).
+- Grotte : deux clics (`ToolController.applyVeg`, `anchor`). Le premier fixe sa case, sur la terre ferme (hauteur ≥ 0,3, pente
+  ≤ 2,2), emprise libre (`decorFits`, rayon `CAVE_R`) ; le cercle y reste et une flèche montre où s'ouvrira l'entrée. Le second
+  donne le cap de l'ouverture, vers la souris (`World.caveYaw`, au centième de radian) ; un second clic sur la case même la laisse
+  s'ouvrir vers le bas de la pente, comme les grottes de la carte (`caveFrame`). Échap libère la case. Si, ainsi tournée, la
+  butte touche quelque chose, la pose est refusée et le cap d'avant revient.
 - Faille : un **pinceau qui creuse**. On glisse : les cases dont le centre est à moins de `max(0,75, rayon / 2)` du tracé
   deviennent un ravin (`digRiftAlong`). Refusée sur un bâtiment, une route, un lac, un torrent, la mer ou la plage (hauteur <
   0,15), une grotte ou un autre décor unique, et au bord de la carte.

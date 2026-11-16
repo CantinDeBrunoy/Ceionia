@@ -117,6 +117,7 @@ export function localize<T extends object>(o: T, fields: readonly (keyof T | num
   for (const f of fields) {
     const raw = (o as Record<PropertyKey, unknown>)[f as PropertyKey];
     if (typeof raw !== 'string' && !Array.isArray(raw)) continue;
+    { let m = RAW.get(o); if (!m) RAW.set(o, (m = new Map())); m.set(f as PropertyKey, raw as string | string[]); }
     let cache: { v: number; val: unknown } | null = null;
     Object.defineProperty(o, f as PropertyKey, {
       enumerable: true, configurable: true,
@@ -129,6 +130,22 @@ export function localize<T extends object>(o: T, fields: readonly (keyof T | num
     });
   }
   return o;
+}
+
+/** les textes français d'origine des champs localisés (la recherche cherche dans les deux langues) */
+const RAW = new WeakMap<object, Map<PropertyKey, string | string[]>>();
+/**
+ * Un texte dans les deux langues, sans doublon : le champ `f` d'un objet localisé (son français d'origine et sa traduction),
+ * ou un texte français passé à `tr`. Sert à la recherche, qui trouve un nom tapé en français comme en anglais
+ */
+export function bothLangs(fr: string): string[] {
+  const en = EN.get(fr);
+  return en && en !== fr ? [fr, en] : [fr];
+}
+export function bothOf(o: object, f: PropertyKey): string[] {
+  const raw = RAW.get(o)?.get(f) ?? (o as Record<PropertyKey, unknown>)[f];
+  const list = typeof raw === 'string' ? [raw] : Array.isArray(raw) ? (raw as string[]) : [];
+  return [...new Set(list.filter(Boolean).flatMap(bothLangs))];
 }
 
 // ---------------- Clés stables (rares) ----------------
