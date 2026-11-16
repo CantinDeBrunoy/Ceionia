@@ -99,7 +99,7 @@ Les images de `public/menu/` sont des illustrations fournies par l'auteur (pas g
 - Une fenêtre de **récit** (`showReport`) n'est pas fermée par un clic à côté ni, sous terre, par `Échap` : on la lit puis on clique Fermer.
 - La classification d'un message sans niveau se fait **par expressions régulières sur le texte** (`DANGER`, `INFO` dans `notifs.ts`, avec des mots français et anglais) : un message important dont le texte ressemble à `INFO` (« sauvegard… ») ne serait qu'une ligne de cloche. Passer le niveau explicitement (`toast(m, act, 'danger')`).
 - Textes oubliés à traduire : voir les listes de `tests/i18nOublis.test.ts`. Le texte de `ui.banner('Monde souterrain', …)` n'est pas passé par `tr`.
-- Les deux clés `ceionia.aides` (conseil du moment et bulles du volet militaire) n'ont pas le même défaut quand elle est absente : voir [sauvegarde.md](sauvegarde.md).
+- La clé `ceionia.aides` (conseil du moment et bulles du volet militaire) se lit par `helpOn` (`warTips.ts`), un seul défaut : absente, aides éteintes. Voir [sauvegarde.md](sauvegarde.md).
 - Après un `refreshTools`, l'onglet et le rayon suivent l'outil en main (`tabOfTool`) : changer d'outil par programme change l'onglet affiché.
 
 ## Pour modifier

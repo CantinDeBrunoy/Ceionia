@@ -111,7 +111,7 @@ import { bindPostReady, pathDue, CONFLICT_LABEL, ageGate, allyPending, archipela
 import { RivalBattle, BattleGoal } from './sim/rivalBattle';
 import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
-import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
+import { SaveData, Settings, Quality, saveSlot, loadSlot, openSlot, setAside, exportAside, clockOf, readClock, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
@@ -398,7 +398,9 @@ class Game implements UIHost {
    */
   constructor(mapId: number, mode: 'continue' | 'new', seed?: number, difficulty: Difficulty = DEFAULT_DIFFICULTY, startAge = 0) {
     const w = this.world;
-    const save = mode === 'continue' ? loadSlot(mapId) : null;
+    // une sauvegarde illisible est mise de côté (la partie neuve ne l'écrase pas) ; le joueur est prévenu au lancement
+    const slot = openSlot(mapId), save = mode === 'continue' ? slot.save : null;
+    this.loadError = slot.error;
     const settings = { ...loadSettings(), ...(save?.settings ?? {}) } as Partial<Settings>;
     this.sim = new Sim(w);
     this.under = new Underground(w);
@@ -408,10 +410,12 @@ class Game implements UIHost {
         w.mapId = save.map; w.seed = save.seed;
         w.fromJSON(save.world);
         this.sim.age = save.age; this.sim.pop = save.pop;
-        this.time.seasonT = save.seasonT; this.time.hour = save.hour;
+        readClock(this.time, save);
         addDefaultDecor(w, save.seed);
       } catch (e) {
         console.warn(e);
+        setAside(mapId);
+        this.loadError = (e as Error)?.message || trx('Fichier de sauvegarde invalide');
         newWorld(w, mapId, mapDef(mapId)!.defaultSeed);
       }
     } else {
@@ -788,9 +792,25 @@ class Game implements UIHost {
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
-    return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, seasonT: this.time.seasonT, hour: this.time.hour, settings: this.settings(), savedAt: Date.now() };
+    return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, ...clockOf(this.time), settings: this.settings(), savedAt: Date.now() };
   }
-  saveNow() { if (this.running) saveSlot(this.buildSave()); }
+  /** La sauvegarde du lancement était illisible (la raison) : mise de côté, une partie neuve commence ; dit une fois au joueur */
+  private loadError: string | null = null;
+  /** La dernière écriture a été refusée par le navigateur : on ne le redit qu'après une écriture réussie */
+  private saveFailed = false;
+  saveNow() {
+    if (!this.running) return;
+    const ok = saveSlot(this.buildSave());
+    if (!ok && !this.saveFailed) this.ui.toast(trx('⚠️ Sauvegarde impossible : le navigateur refuse d’écrire (stockage plein ou bloqué). Exportez votre partie (Paramètres › Partie) pour ne rien perdre.'), undefined, 'danger');
+    this.saveFailed = !ok;
+  }
+  /** Prévient le joueur que sa sauvegarde n'a pas pu être lue (une fois, au lancement) ; un clic la télécharge telle quelle */
+  warnLoadError() {
+    const why = this.loadError;
+    if (!why) return;
+    this.loadError = null;
+    this.ui.toast(trx('⚠️ Votre sauvegarde n’a pas pu être lue ({why}) : une nouvelle partie commence. L’ancienne est gardée de côté ; cliquez ici pour la télécharger.', { why }), () => exportAside(this.world.mapId), 'danger');
+  }
   exportSave() { exportSave(this.buildSave()); }
   async importFile(f: File) {
     try {
@@ -2646,6 +2666,7 @@ async function boot() {
     game.voyage = voyage && game.world.reveal;
     await game.prepare(ld);
     ld.done();
+    game.warnLoadError();
     // premier lancement : le choix des contrôles de la vue, avant tout
     void game.askControls();
   };

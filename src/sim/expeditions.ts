@@ -459,7 +459,7 @@ export class Expeditions {
     if (c.fuel && !this.world.unlimited) this.world.fuel = Math.max(0, this.world.fuel - c.fuel);
     // l'équipe emporte le meilleur équipement en réserve contre les dangers du voyage
     const { take, k } = loadout(c, this.world.exp.gear);
-    for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
+    for (const [g, n] of Object.entries(take) as [GearId, number][]) { this.world.exp.gear[g] -= n; this.world.exp.away[g] += n; }
     const a: ActiveExpedition = {
       id: this.nextId++, m, c, phase: m.farewell ? 'gather' : 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
       wait: null, waitT: 0, hold: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], bonus: [], hurt: 0,
@@ -777,7 +777,7 @@ export class Expeditions {
     // l'équipement revient en réserve ; un échec en coûte parfois une pièce
     const gear = this.world.exp.gear, carried = (Object.keys(a.gear) as GearId[]).filter((g) => (a.gear[g] ?? 0) > 0);
     let lost = '';
-    for (const g of carried) gear[g] += a.gear[g]!;
+    for (const g of carried) { gear[g] += a.gear[g]!; this.world.exp.away[g] = Math.max(0, this.world.exp.away[g] - a.gear[g]!); }
     if (!a.ok && carried.length && this.rnd() < 0.5) {
       const g = carried[Math.floor(this.rnd() * carried.length)];
       gear[g]--;

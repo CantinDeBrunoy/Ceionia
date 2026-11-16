@@ -69,9 +69,11 @@ export function nextWarTip(s: WarTipState, seen: ReadonlySet<string>, quiet = fa
 }
 
 const SEEN_KEY = 'ceionia.aidesMilitaires';
-/** Les aides se montrent tant que le joueur ne les a pas masquées (même clé que le bouton des conseils) */
+/** La clé des aides, partagée par le bouton des conseils (`ui.ts`) et ces bulles : '1' allumées, '0' ou absente éteintes */
 export const HELP_KEY = 'ceionia.aides';
-export function helpAllowed() { try { return localStorage.getItem(HELP_KEY) !== '0'; } catch { return true; } }
+/** Les aides sont-elles allumées ? Un seul défaut partout : éteintes tant que le joueur ne les a pas allumées */
+export function helpOn() { try { return localStorage.getItem(HELP_KEY) === '1'; } catch { return false; } }
+export function setHelpOn(on: boolean) { try { localStorage.setItem(HELP_KEY, on ? '1' : '0'); } catch { /* sans stockage */ } }
 
 export interface WarTipHost {
   root: HTMLElement;
@@ -117,7 +119,7 @@ export class WarTips {
 
   /** Appelée quatre fois par seconde */
   update(dt: number) {
-    const busy = this.host.busy(), allowed = helpAllowed();
+    const busy = this.host.busy(), allowed = helpOn();
     if (this.shown) {
       // une bulle dont le moment est passé (le joueur l'a fait) s'en va d'elle-même
       if (!allowed || !stillDue(this.shown, this.host.state())) { this.close(); return; }

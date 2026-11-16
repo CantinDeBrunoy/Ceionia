@@ -45,11 +45,17 @@ export interface SaveData {
   pop: number;
   seasonT: number;
   hour: number;
+  /** jours écoulés (écran de victoire) ; absent dans les anciennes sauvegardes : 0 */
+  days?: number;
+  /** la partie était en pause ; absent : en marche */
+  paused?: boolean;
   settings: Settings;
   savedAt: number;
 }
 
 const KEY = (map: number) => `village-lowpoly:v1:slot:${map}`;
+/** une sauvegarde illisible, mise de côté au lancement d'une partie (la nouvelle ne l'écrase pas) */
+const ASIDE_KEY = (map: number) => `village-lowpoly:v1:aside:${map}`;
 const SETTINGS_KEY = 'village-lowpoly:v1:settings';
 
 export function saveSlot(d: SaveData): boolean {
@@ -57,11 +63,57 @@ export function saveSlot(d: SaveData): boolean {
 }
 
 export function loadSlot(map: number): SaveData | null {
+  return readSlot(map).save;
+}
+
+/** Lit l'emplacement sans rien changer : la sauvegarde, ou la raison pour laquelle elle est illisible (`error`) ; rien : deux null */
+export function readSlot(map: number): { save: SaveData | null; error: string | null } {
+  let s: string | null;
+  try { s = localStorage.getItem(KEY(map)); } catch { return { save: null, error: null }; }
+  if (!s) return { save: null, error: null };
+  try { return { save: validate(JSON.parse(s)), error: null }; }
+  catch (e) { return { save: null, error: e instanceof SyntaxError ? tr('Fichier de sauvegarde invalide') : (e as Error).message || tr('Fichier de sauvegarde invalide') }; }
+}
+
+/**
+ * Lit l'emplacement au lancement d'une partie : une sauvegarde illisible est mise de côté (`asideSlot`), pour que la partie
+ * neuve qui la remplace ne l'écrase pas ; `error` dit pourquoi, à montrer au joueur
+ */
+export function openSlot(map: number): { save: SaveData | null; error: string | null } {
+  const r = readSlot(map);
+  if (r.error) setAside(map);
+  return r;
+}
+
+/**
+ * Met de côté le contenu de l'emplacement (une seule copie : la plus récente) ; déplacé plutôt que copié, pour ne pas doubler
+ * la place prise dans le stockage. false si le navigateur refuse (l'emplacement reste alors tel quel)
+ */
+export function setAside(map: number): boolean {
   try {
     const s = localStorage.getItem(KEY(map));
-    if (!s) return null;
-    return validate(JSON.parse(s));
-  } catch { return null; }
+    if (!s) return false;
+    localStorage.removeItem(KEY(map));
+    try { localStorage.setItem(ASIDE_KEY(map), s); return true; }
+    catch { localStorage.setItem(KEY(map), s); return false; }
+  } catch { return false; }
+}
+
+/** La sauvegarde mise de côté (le texte brut), ou null */
+export function asideSlot(map: number): string | null {
+  try { return localStorage.getItem(ASIDE_KEY(map)); } catch { return null; }
+}
+
+/** Ce que la sauvegarde garde de l'horloge : date, heure, jours écoulés, pause */
+export function clockOf(t: { seasonT: number; hour: number; days: number; paused: boolean }) {
+  return { seasonT: t.seasonT, hour: t.hour, days: t.days, paused: t.paused };
+}
+
+/** Relit l'horloge d'une sauvegarde (les anciennes n'ont ni jours ni pause : jour 0, en marche) */
+export function readClock(t: { seasonT: number; hour: number; days: number; paused: boolean }, d: Partial<Pick<SaveData, 'seasonT' | 'hour' | 'days' | 'paused'>>) {
+  t.seasonT = d.seasonT!; t.hour = d.hour!;
+  t.days = Number.isFinite(d.days) ? Math.max(0, Math.floor(d.days!)) : 0;
+  t.paused = d.paused === true;
 }
 
 export function deleteSlot(map: number) {
@@ -79,10 +131,22 @@ export function validate(d: any): SaveData {
 }
 
 export function exportSave(d: SaveData) {
-  const blob = new Blob([JSON.stringify(d)], { type: 'application/json' });
+  download(JSON.stringify(d), `ceionia-carte${d.map + 1}-${new Date().toISOString().slice(0, 10)}.json`);
+}
+
+/** Télécharge la sauvegarde mise de côté, telle quelle (pour la réparer ou l'envoyer) ; false s'il n'y en a pas */
+export function exportAside(map: number): boolean {
+  const s = asideSlot(map);
+  if (!s) return false;
+  download(s, `ceionia-carte${map + 1}-illisible-${new Date().toISOString().slice(0, 10)}.json`);
+  return true;
+}
+
+function download(text: string, name: string) {
+  const blob = new Blob([text], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `ceionia-carte${d.map + 1}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);

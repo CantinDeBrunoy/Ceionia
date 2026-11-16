@@ -155,6 +155,8 @@ export class IsleBattle {
   /** la vague en cours sur l'île, et depuis quand elle dure (secondes de jeu) */
   raid: RaidWave | null = null;
   raidT = 0;
+  /** empreinte des bâtiments de l'île à la dernière synchronisation (`syncDefenses`) */
+  private isleSig = 0;
   /** la contamination de l'île (bonus des démons près du portail, soins dans la zone purifiée) ; null : sans effet */
   blight: Blight | null = null;
 
@@ -179,9 +181,12 @@ export class IsleBattle {
   /** Accorde les défenses au combat avec celles bâties sur l'île (posées, rasées au bulldozer, montées d'âge) */
   syncDefenses(age: number) {
     const w = this.world, seen = new Set<number>();
-    let changed = false;
+    let changed = false, sig = 0;
     for (const b of w.buildings.values()) {
-      if ((b.kind !== 'watchtower' && b.kind !== 'barracks') || !w.onPortalIsland(b.x, b.z)) continue;
+      if (!w.onPortalIsland(b.x, b.z)) continue;
+      // (tout bâtiment de l'île compte dans l'empreinte : un rempart ou une porte posés, déplacés ou rasés seuls changent aussi les emprises)
+      sig = (Math.imul(sig, 31) + b.id * 7 + b.x * 7919 + b.z * 104729) | 0;
+      if (b.kind !== 'watchtower' && b.kind !== 'barracks') continue;
       seen.add(b.id);
       if (this.defs.has(b.id)) continue;
       const s = sizeOf(b), x = b.x + s / 2 - this.map.ox, z = b.z + s / 2 - this.map.oz, k = defenseK(age);
@@ -189,7 +194,8 @@ export class IsleBattle {
       changed = true;
     }
     for (const [id, hb] of this.defs) if (!seen.has(id)) { this.sim.buildings.delete(hb.id); this.defs.delete(id); changed = true; }
-    if (changed) this.reblock();
+    if (changed || sig !== this.isleSig) this.reblock();
+    this.isleSig = sig;
     this.sim.rally = this.rallyPoint();
   }
 

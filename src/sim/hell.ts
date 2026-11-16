@@ -1004,6 +1004,7 @@ export class Hell {
     return {
       time: this.time, wave: this.wave, nextRaid: this.nextRaid, victory: this.victory, conquered: [...this.conquered],
       raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, heldSince: this.heldSince, reinforced: this.reinforced.map((p) => Math.round(p)),
+      lossStreak: this.lossStreak, planned: this.planned ? [...this.planned] : null,
       buildings: [...this.buildings.values()].filter((b) => b.side === 'hell').map((b) => [b.id, Math.max(0, Math.round(b.hp))]),
       units: this.alive().filter((u) => players || u.side !== 'player').map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
     };
@@ -1016,6 +1017,10 @@ export class Hell {
     if (Array.isArray(s.reinforced)) s.reinforced.forEach((p, i) => { if (i < HELL_ZONE_N && Number.isFinite(p)) h.reinforced[i] = p; });
     h.time = s.time; h.wave = s.wave; h.nextRaid = s.nextRaid; h.victory = s.victory;
     h.raidsRepelled = s.raidsRepelled ?? 0; h.raidsLost = s.raidsLost ?? 0; h.heldSince = s.heldSince ?? -1;
+    // (les anciennes sauvegardes oubliaient la vague annoncée et la série de défaites : rien de prévu, aucune défaite)
+    h.lossStreak = Number.isFinite(s.lossStreak) ? Math.max(0, Math.floor(s.lossStreak!)) : 0;
+    const plan = Array.isArray(s.planned) ? s.planned.filter((k) => k in DEMONS) : [];
+    h.planned = plan.length ? plan : null;
     s.conquered.forEach((c, i) => (h.conquered[i] = c));
     for (const [id, hp] of s.buildings) { const b = h.buildings.get(id); if (b) { b.hp = hp; if (hp <= 0) { b.down = true; map.unblock(b.site); } } }
     h.units.clear();
@@ -1033,6 +1038,10 @@ export class Hell {
 export interface HellSave {
   time: number; wave: number; nextRaid: number; victory: boolean; conquered: boolean[];
   raidsRepelled?: number; raidsLost?: number; heldSince?: number;
+  /** défaites d'affilée (les vagues suivantes s'adoucissent) ; absent : 0 */
+  lossStreak?: number;
+  /** la vague annoncée, démon par démon ; absent ou null : aucune */
+  planned?: DemonKind[] | null;
   /** puissance du joueur au dernier renfort de chaque zone */
   reinforced?: number[];
   buildings: [number, number][];

@@ -12,7 +12,8 @@ import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
 import { type Controls, type CamControl, type KbLayout, layoutKeys } from '../core/controls';
 import { matches } from './search';
-import { loadSlot, SaveData, savedAgo, Quality } from '../save/save';
+import { readSlot, SaveData, savedAgo, Quality } from '../save/save';
+import { helpOn, setHelpOn } from './warTips';
 import { MAPS, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
@@ -721,7 +722,7 @@ export class UI {
     window.setInterval(() => this.tickNotifs(), 250);
     window.addEventListener('pointerdown', (e) => { if (!$('#notifPanel').hidden && !(e.target as HTMLElement).closest('#notifPanel, #bBell')) this.toggleNotifPanel(false); }, true);
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
-    $('#helpBtn').onclick = () => { this.help = !this.help; try { localStorage.setItem('ceionia.aides', this.help ? '1' : '0'); } catch { /* sans stockage */ } this.host.audio.sfxClick(); this.renderMessage(); };
+    $('#helpBtn').onclick = () => { this.help = !this.help; setHelpOn(this.help); this.host.audio.sfxClick(); this.renderMessage(); };
     $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageChoice) { this.host.audio.sfxClick(); this.host.openCrossroads?.(); } else if (this.host.sim.messageConflict) { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info(tr('Le brouillard se lève.')); };
@@ -1354,9 +1355,9 @@ export class UI {
    * va bien ; un bouton « Bâtir » quand il nomme un bâtiment, et la pastille s'anime un instant à chaque nouveau conseil
    */
   /** Les conseils se cachent à partir de l’Antiquité ; un bouton les remet (choix gardé d’une partie à l’autre) */
-  private help = (() => { try { return localStorage.getItem('ceionia.aides') === '1'; } catch { return false; } })();
+  private help = helpOn();
   /** Affiche ou masque les aides (conseils, et bulles du volet militaire tant qu'elles ne sont pas masquées : voir `warTips.ts`) */
-  setHelp(on: boolean) { this.help = on; try { localStorage.setItem('ceionia.aides', on ? '1' : '0'); } catch { /* sans stockage */ } this.renderMessage(); }
+  setHelp(on: boolean) { this.help = on; setHelpOn(on); this.renderMessage(); }
 
   private renderMessage() {
     const { sim } = this.host, el = $('#msg'), k = sim.messageKind;
@@ -2813,14 +2814,17 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
     ov.querySelectorAll<HTMLElement>('.mMode').forEach((b) => { b.classList.toggle('sel', b.dataset.d === d); b.setAttribute('aria-checked', `${b.dataset.d === d}`); });
   };
   const draw = () => {
-    save = loadSlot(map);
+    const slot = readSlot(map);
+    save = slot.save;
     seed = newSeed();
     resume.hidden = !save;
     ov.classList.toggle('hasSave', !!save);
     // le mode choisi d'avance : celui de la sauvegarde, sinon le mode conseillé
     const d = save ? readDifficulty(save.world.difficulty, save.world.diffV) : DEFAULT_DIFFICULTY;
     select(d);
-    status.hidden = !save;
+    // une sauvegarde illisible : on le dit (elle sera gardée de côté au lancement, pas écrasée)
+    status.hidden = !save && !slot.error;
+    if (slot.error) { status.textContent = tr('⚠️ Votre sauvegarde n’a pas pu être lue ({why}). Elle sera gardée de côté : une nouvelle partie ne l’écrasera pas.', { why: slot.error }); return; }
     if (!save) return;
     // sous les boutons, le résumé de la partie : mode, âge, habitants, « il y a… »
     const when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
