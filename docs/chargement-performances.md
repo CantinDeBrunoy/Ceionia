@@ -1,6 +1,6 @@
 # Chargement et performances
 
-> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/style.css` (`#loadScreen`), `src/ui/preload.ts` (`preloadPics`, `whenIdle`), `src/ui/minimap.ts` (`shownW`)
+> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir, `ageToPrep` et `prepAge`), `src/render/agePrep.ts` (`AgePrep`, l'âge suivant préparé au repos), `src/render/thumbs.ts` (`prepare`), `src/render/buildings.ts` (`prepareAge`), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/style.css` (`#loadScreen`), `src/ui/preload.ts` (`preloadPics`, `whenIdle`), `src/ui/minimap.ts` (`shownW`)
 > Tests : `tests/chargement.test.ts`, `tests/qualite.test.ts`
 > Voir aussi : [architecture.md](architecture.md), [rendu-modeles.md](rendu-modeles.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [traduction.md](traduction.md)
 
@@ -101,7 +101,7 @@ Ce qui a été corrigé quand même, parce que la mesure le montrait :
 - **La sauvegarde automatique** (toutes les 15 s, synchrone : 7 à 9 ms sur ce village, davantage sur un grand) attend le prochain moment de repos (`whenIdle`) au lieu de s'ajouter à l'image en cours.
 
 Restent, vus pendant ces mesures, sans rapport direct avec les fenêtres :
-- **Le passage d'âge** : 5 à 7 images de 50 à 100 ms dans les 0,4 s qui suivent (bâtiments refaits au nouvel âge, routes, recensement de la faune). La bannière et la fenêtre du nouvel âge arrivent juste après : c'est l'à-coup le plus probable « au moment d'une fenêtre ».
+- **Le passage d'âge** : traité à part, voir ci-dessous.
 - **Un shader compilé en pleine partie** : une fois, 65 ms (`getProgramInfoLog`) au départ de la première expédition d'une session ; pas reproduit dans une partie rechargée.
 - Le flou d'arrière-plan des fenêtres (`backdrop-filter`) ne change rien ici à la durée des images (17 ms, flou ou non) ; à revoir sur une machine où le halo est actif.
 
@@ -110,6 +110,37 @@ Restent, vus pendant ces mesures, sans rapport direct avec les fenêtres :
 - Ouvrir une fenêtre directement : `__game.ui.showNewAge(…)`, `showReport({ ok, m, redo, summary, notes, text, c })`, `openExpeditions()`, `openSettings()`, `__game.worldChoice.show()`, `__game.diploChoice.showAlly()` / `showPath()`, `__game.portalChoice.show()`.
 - Pour le premier affichage : `Network.clearBrowserCache`, puis recharger la partie.
 - Chrome sans limite d'images (`--disable-gpu-vsync --disable-frame-rate-limit`) sature la machine : à éviter.
+
+## Le passage d'âge
+Mesure du 16 nov. 2026 : Chrome sans fenêtre, RTX 3060, Direct3D 11, 1 600 × 900, build de production, profil neuf, qualité « Auto » (sans halo sur cette machine). Village de test (`tools/bench/page.js` › `setup`) : 120 bâtiments et 240 habitants à l'Antiquité, sauvegardé puis rechargé ; passage à l'âge médiéval par le même chemin que `Sim.advance` (`age`, `ageBase`, `onAgeUp`). On compte les images entre deux `requestAnimationFrame` dans les 1,5 s qui suivent le passage, puis autour de la fenêtre du nouvel âge (3,3 à 4,6 s). Machine partagée avec d'autres travaux (au repos aussi, des images de 33 à 50 ms) : six essais de chaque version, en alternant (pour « après », les trois derniers avec la coupe des pas de la faune), médianes et étendues. Base au repos : 17 ms.
+
+| Moment | Image la plus longue (ms), avant → après | Images > 33 ms, avant → après | Images > 50 ms, avant → après |
+| --- | --- | --- | --- |
+| 1,5 s après le passage | 75 → 50 (de 50 à 650 → de 34 à 67) | 6 → 2,5 (de 2 à 8 → de 1 à 13) | 1,5 → 0 (de 0 à 4 → de 0 à 1) |
+| Fenêtre du nouvel âge (3,3 à 4,6 s) | 67 → 83 (de 33 à 83 → de 67 à 100) | 1 → 1 | 1 → 1 |
+
+Aucun programme (shader) neuf au passage (223 avant et après) : rien à compiler d'avance. Ce qui coûtait, mesuré image par image (temps de `Game.frame`, avant) :
+- **Les vignettes de la barre de construction** au nouvel âge (`Thumbs.pump`, une par image) : 6 à 14 ms chacune, dont la lecture des pixels (`readRenderTargetPixels`, qui attend la carte graphique : bien plus quand elle est chargée) et l'encodage PNG.
+- **Le premier modèle de chaque sorte au nouvel âge** (`BuildingView.refresh` › `getModel`, à l'évolution du bâtiment, un toutes les 0,06 s) : 15 à 20 ms ; les suivants de la même sorte, 5 à 6 ms.
+- **Le recensement de la faune** (`Fauna.refreshGen`, relancé par le changement d'âge) : des pas de 15 à 22 ms au lieu des 4 ms voulus (`seaRoom` deux fois de suite, les zones de vie d'un bloc).
+- **Les routes** refaites au style du nouvel âge (`Roads.step`) : 8 à 12 ms par image pendant une dizaine d'images, déjà étalé.
+- Le tout tombait sur les mêmes images : 35 à 52 ms de script par image pendant 0,6 s.
+
+Ce qui est fait :
+- **L'âge suivant se prépare au repos** (`AgePrep`, `agePrep.ts`). Dès que les conditions du passage sont réunies (`Sim.ready`, revu toutes les 0,5 s par `Game.ageToPrep`, en surface, hors bac à sable et hors chargement), `Game.prepAge` rend les vignettes de l'âge suivant (`Thumbs.prepare` : celles qui changent et celles qui apparaissent, les sortes jusqu'à l'âge suivant + 1) puis bâtit les modèles qu'auront les bâtiments (`BuildingView.prepareAge`, gardés par le cache de `getModel`). Un pas au moins par moment de repos (`requestIdleCallback`, au plus tard après `WAIT_MS` = 1,5 s), d'autres tant qu'il reste `SLACK_MS` = 6 ms. La clé (âge visé, nombre de bâtiments, `nextId`) relance la préparation quand le village change ; ce qui est déjà fait est sauté vite. Sur le village de test : 170 pas, 5 à 23 s selon la charge de la machine.
+- **La faune coupe ses pas longs** : un pas par `seaRoom`, et les zones de vie en trois pas.
+- Au passage, il ne reste que les routes, le recensement de la faune et l'échange des modèles déjà prêts : des images de 22 à 37 ms de script.
+
+Ce qui reste :
+- **La fenêtre du nouvel âge** (`showNewAge`, 3,6 s après) : une image de 67 à 83 ms à sa première ouverture, dont 15 à 20 ms de script ; le reste se passe hors du script (peinture, composition). Une deuxième ouverture ne coûte rien. Ouvrir une autre fenêtre avant ne l'évite pas. Non résolu.
+- Un passage d'âge juste après la réunion des conditions (avant la fin de la préparation) fait le reste comme avant.
+- Au bac à sable (`setAge`), rien n'est préparé : l'âge s'y change à volonté.
+
+### Mesurer le passage d'âge
+- Même méthode que pour les fenêtres (Chrome sans fenêtre, protocole DevTools, `--mute-audio` et `AudioContext` remplacé avant tout script par `Page.addScriptToEvaluateOnNewDocument`). Partie lancée par `sessionStorage['village-lowpoly:autostart'] = '3|new|normal'`, village bâti par `__bench.setup({ buildings: 120, pop: 240, age: 1 })` (`tools/bench/page.js` évalué dans la page), `saveNow`, puis rechargement avec `'3|continue'`.
+- Pour que la préparation se fasse (le village de test ne remplit pas les conditions) : `Object.defineProperty(__game.sim, 'ready', { get: () => true, configurable: true })`, attendre `__game.agePrep.idle`, puis `delete __game.sim.ready` avant le passage.
+- Le passage : `g.sim.age = 2; g.world.ageBase = { ...g.sim.counts }; g.sim.onAgeUp(2)`.
+- Le détail par image : envelopper `g.frame` et les méthodes des vues (`thumbs.pump`, `buildings.refresh`, `roads.step`, `fauna.update`…) d'un chronomètre. Le profileur (`Profiler.start`) fige lui-même une image de 300 à 400 ms à son départ : le lancer quelques secondes avant.
 
 ## Pièges et invariants
 - Créer maillages et matériaux au démarrage, cachés au besoin (`visible = false`, `count = 0`), plutôt qu'à leur première apparition : tout ce qui est dans la scène se compile au chargement, même caché.
@@ -125,6 +156,7 @@ Restent, vus pendant ces mesures, sans rapport direct avec les fenêtres :
 - Un maillage créé « au premier besoin » (silhouettes, effets, bêtes d'une sorte encore jamais vue) échappe à toute la préparation. Le créer d'avance, vide ou caché, comme `bakeSilhouettes`.
 - Ne pas lire une taille (`offsetParent`, `clientWidth`, `getBoundingClientRect`) dans un rappel d'image : dès que le DOM a changé, la lecture force le style et la mise en page en plein script. Garder la taille d'un `ResizeObserver`, ou lire toutes les tailles avant d'écrire.
 - L'écran de chargement vit dans `#app`. Le placer dans `#ui` le ferait disparaître à la construction de l'interface.
+- Ce qui change d'aspect au passage d'âge et coûte à bâtir (vignettes, modèles) se prépare d'avance dans `Game.prepAge`. Un nouveau coût du passage d'âge (une texture, une géométrie par âge) y a sa place, en pas courts (un `yield` après chaque morceau de quelques ms).
 
 ## Comment mesurer les à-coups
 - Le panneau du navigateur de l'application, masqué, ne donne aucune image (`requestAnimationFrame` à l'arrêt) : inutilisable pour mesurer. Méthode utilisée : Chrome sans fenêtre, piloté par le protocole DevTools (petit script Node hors du dépôt, `WebSocket` intégré).

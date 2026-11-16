@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MISSIONS, choiceAt } from '../src/sim/missions';
+import { MISSIONS } from '../src/sim/missions';
 import { choiceStyles, riskDots, injuredOf, gainsOf, cardPhrase } from '../src/sim/choiceStyle';
 
 const mk = (risk: number, win: any[] = [], lose: any[] = []) => ({ risk, win, lose });
@@ -39,10 +39,10 @@ describe('style des choix (prudent, audacieux)', () => {
     expect(injuredOf(mk(0, [], [{ t: 'injured', n: 2, days: 3 }, { t: 'unherd', kind: 'sheep', n: 1 }]))).toBe(2);
   });
 
-  it('toutes les missions, à tous les âges : jamais d’étiquette fausse', () => {
+  it('toutes les missions : jamais d’étiquette fausse', () => {
     let seen = 0;
-    for (const m of MISSIONS) for (const age of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
-      const cs = m.choices.map((c) => choiceAt(c, age)), st = choiceStyles(cs);
+    for (const m of MISSIONS) {
+      const cs = m.choices, st = choiceStyles(cs);
       expect(st.length).toBe(cs.length);
       if (cs.length < 2) { expect(st[0]).toEqual({ style: null, effect: null }); continue; }
       const risks = cs.map((c) => c.risk), lo = Math.min(...risks), hi = Math.max(...risks);

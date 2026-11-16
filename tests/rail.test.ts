@@ -120,7 +120,7 @@ describe('la gare centrale', () => {
     const w = continent();
     const agents = new Agents(w);
     const ex = new Expeditions(w, agents, () => 100, () => 0.5);
-    const rail = new Railway(w, agents, ex, () => 100, () => 0.3);
+    const rail = new Railway(w, agents, () => 0.3);
     // une gare centrale, et des petites gares autour d'elle, là où une voie passe
     let term: Building | null = null;
     for (let z = 40; z < N - 40 && !term; z += 3) for (let x = 40; x < N - 40 && !term; x += 3) {
@@ -158,7 +158,7 @@ describe('la gare centrale', () => {
     const w = continent();
     const agents = new Agents(w);
     const ex = new Expeditions(w, agents, () => 100, () => 0.5);
-    const rail = new Railway(w, agents, ex, () => 100, () => 0.3);
+    const rail = new Railway(w, agents, () => 0.3);
     const [x, z] = spot(w, 'brickworks', 40, 40);
     w.place('brickworks', x, z, 0, true, 3, false);
     const a = w.place('station', ...spot(w, 'station', x + 3, z), 0, true, 3, false);

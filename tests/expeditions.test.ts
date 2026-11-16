@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { World, N, MOUNTAIN_H, BIOME_DESERT, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { mulberry32 } from '../src/core/rng';
-import { MISSIONS, Mission, choiceAt, readExpState, RECENT_EVENTS, effectSummary, Effect } from '../src/sim/missions';
+import { MISSIONS, Mission, readExpState, RECENT_EVENTS, effectSummary, Effect } from '../src/sim/missions';
 import { EVENTS, EVENT_BY, eventsFor, pickEvent, EventCtx } from '../src/sim/events';
 import { Expeditions, Report, ActiveExpedition, nextEventAt } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
@@ -174,13 +174,6 @@ describe('comptes rendus des expéditions', () => {
     expect(v.w.outpostEntrance(Math.floor(x), Math.floor(z), 1)).toBeGreaterThanOrEqual(0);
   });
 
-  it('les conditions nomment les bâtiments comme à l’âge du village (un haras à l’âge industriel)', () => {
-    // un choix qui emmène trois chevaux, sans chevaux : au haras, pas « à l'écurie »
-    const m = mission('herd'), c = { ...m.choices[0], mounts: 3 };
-    expect(village(3).ex.why(m, c)).toBe('Il faut 3 chevaux au haras (0 pour l’instant).');
-    expect(village(2).ex.why(m, c)).toBe('Il faut 3 chevaux à l’écurie (0 pour l’instant).');
-  });
-
   it('le monde souterrain est retiré : ni repérage, ni expédition armée dans les profondeurs, ni avant-poste', () => {
     expect(MISSIONS.find((m) => m.id === 'scout' || m.id === 'deep')).toBeUndefined();
     expect('outpost' in KINDS).toBe(false);
@@ -191,10 +184,11 @@ describe('comptes rendus des expéditions', () => {
     expect(s.done).toEqual(['herd']);
     expect(s.perks).toEqual(['seeds']);
     expect('camp' in s).toBe(false);
+    expect('wins' in s).toBe(false);
     // une équipe ne descend jamais sous terre
     const v = village(2), a = v.ex.start(mission('mine'), 1, 2)!;
     expect(a.entry).toBe(-1);
-    expect(a.ambush).toEqual([]);
+    expect('ambush' in a).toBe(false);
   });
 
   it('le filon de la montagne rapporte de quoi passer à l’âge industriel, quel que soit le choix', () => {

@@ -1,6 +1,6 @@
 # Traduction (français / anglais)
 
-> Fichiers : `src/i18n/index.ts` (`tr`, `localize`, `plural`, langue, dictionnaires), `src/i18n/data.ts` (localise le catalogue, les âges, les saisons, les missions), `src/i18n/format.ts` (`fmtNum`), `src/i18n/en/*.ts` (les dictionnaires anglais, un par zone), `src/i18n/README.md` (convention détaillée)
+> Fichiers : `src/i18n/index.ts` (`tr`, `localize`, `plural`, langue, dictionnaires), `src/i18n/data.ts` (localise le catalogue, les âges, les saisons, les missions), `src/i18n/en/*.ts` (les dictionnaires anglais, un par zone), `src/i18n/README.md` (convention détaillée)
 > Tests : `tests/i18n.test.ts`, `tests/i18nOublis.test.ts`, `tests/i18nMissions.test.ts`, `tests/i18nEquipement.test.ts`
 > Voir aussi : [interface.md](interface.md), [architecture.md](architecture.md), [sauvegarde.md](sauvegarde.md), et `src/i18n/README.md` (la référence : lire d'abord ce fichier-ci, puis celui-là pour le détail)
 
@@ -27,8 +27,6 @@ Côté joueur : un sélecteur FR / EN à l'écran d'accueil et dans Réglages �
 | `localize(objet, champs)` | remplace des champs de texte (chaîne ou tableau de chaînes, ou des indices) par des accesseurs qui rendent la langue courante, avec cache invalidé à chaque changement de langue ou de dictionnaire |
 | `registerKeys` / `t(clé)` | clés stables `{ fr, en }`, rares (un seul usage : `kingdom.skip` dans `ui/kingdom.ts`) |
 | `i18nMissing()`, `i18nDuplicates()`, `i18nDicts()`, `i18nEntries()` | contrôle ; `i18nMissing`, `setLang`, `getLang`, `i18nDuplicates` sont aussi sur `window` |
-
-`fmtNum` (`format.ts`, séparateurs des nombres en anglais) existe mais n'est utilisé nulle part.
 
 ### Données localisées
 `localize` est appelé **à la fin du fichier qui définit les données** : `src/i18n/data.ts` pour `KINDS` (`names`, `desc`, `perk`), `AGES` (`name`, `tagline`), `SEASONS`, `BUILD_CATS`, `BUILD_SUBS`, `MISSIONS` (titre, intro, et pour chaque choix libellé, texte, ce que fait l'équipe, récits de réussite et d'échec, y compris ceux qui changent avec l'âge) ; et dans `sim/army.ts`, `sim/events.ts`, `sim/gear.ts`, `sim/hell.ts`, `sim/hellBase.ts`, `world/hell.ts`, `world/mapgen.ts`, `ui/kingdom.ts`, `ui/tutorial.ts`, `ui/warTips.ts`. Tout code qui lit `KINDS.house.names[age]` reçoit donc la bonne langue sans rien changer. `DIFF_TEXT` (`sim/difficulty.ts`) se traduit à la lecture.
@@ -68,10 +66,9 @@ Un pluriel : `nplural(n, 'habitant', 'habitants')` avec `'habitant': 'inhabitant
 ## Pièges et invariants
 - **Premier argument de `tr` = un littéral**, à l'identique du dictionnaire, apostrophes comprises : `’` (typographique) et `'` sont deux clés différentes. Jamais de `${…}` dans `tr` : un `{placeholder}` et `params`.
 - **Pas de `tr()` sur une valeur évaluée une seule fois à l'import** (la langue n'est pas encore connue, ou changera) : on traduit à l'affichage (`tr(KINDS[k].names[age])`) ou on `localize`.
-- **`main.ts` importe `tr` sous le nom `trx`** (des variables locales s'appellent `tr`) : l'expression régulière du test de couverture (`tr(` ou `trf(`) **ne voit pas** ces textes ; les ajouter au dictionnaire à la main. Même précaution dans tout fichier qui renomme `tr` ou a une variable `tr` (elle masque la fonction : la renommer).
+- Le test de couverture ne voit que `tr('littéral'` (ou `trf(`). `main.ts` importe désormais `tr` sous son nom (ses variables de trains s'appellent `train`) ; `ui/voyageArt.ts` l'importe encore sous le nom `trx`, avec des ternaires en premier argument : ses textes échappent au test, les ajouter au dictionnaire à la main. Un fichier qui a une variable `tr` masque la fonction : la renommer. Un choix entre deux textes s'écrit `a ? tr('…') : tr('…')`, jamais `tr(a ? '…' : '…')`.
 - Les entrées doivent être dans le dictionnaire **exactement** comme dans le code ; une faute de frappe donne un texte français en anglais, sans erreur. Vérifier en jeu avec `setLang('en')` puis `i18nMissing()` dans la console (liste des textes passés à `tr` sans traduction depuis le lancement).
 - Un `{nom}` doit exister des deux côtés ; un pluriel s'écrit avec `plural` / `nplural`, pas avec un `s` collé.
-- La liste « zones prévues, vides ou presque » de `src/i18n/README.md` est dépassée : toutes les zones listées ci-dessus sont remplies.
 - Les noms propres, nombres et unités sans mot ne se traduisent pas.
 - `localize` pose des accesseurs : une copie de l'objet (`{ ...KINDS.house }`, `structuredClone`) fige la langue du moment.
 

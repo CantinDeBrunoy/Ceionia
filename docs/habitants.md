@@ -57,7 +57,6 @@ La population (`Sim.pop`, un nombre) n'est pas simulée une à une. `Agents` mon
 - `assignJobs` est rappelée à chaque arrivée d'un nouvel habitant (`a.job === undefined`) : garder `undefined` (pas `null`) pour « pas encore réparti ».
 - Un bras des champs qui part en expédition perd sa parcelle et son rôle (`recruit`) ; au retour, simple passant.
 - Les trottoirs ne changent pas la logique de chemin : décalage visuel seulement. `findPath` rend le trajet brut (8 voisins, utilisé tel quel par les expéditions pour juger un détour et par le défilé des colons) ; seul `startPath` le lisse. Après le lissage, `path` peut contenir des cases absentes du trajet brut (vérifiées par `clearLine`) : l'obstacle posé en route se teste toujours sur la case suivante de `path`. Les sentinelles ignorent les tours dans leurs déplacements (`next` filtre `isTower`).
-- `Sentinels.get role()` renvoie l'âge brut, pas un rôle : inutilisée (à vérifier avant de la supprimer).
 - Performance : ne pas multiplier les `Agents` en dehors de `MAX_AGENTS` ; le Dijkstra est cher sur une grande carte, d'où `pathBudget`. Recherche en 8 voisins et lissage : 1,08 fois le temps de l'ancienne recherche en 4 voisins (300 trajets mesurés côte à côte, carte de 192) ; le lissage seul, 0,1 ms par trajet.
 
 ## Pour modifier

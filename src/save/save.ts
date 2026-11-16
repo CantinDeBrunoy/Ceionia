@@ -82,7 +82,8 @@ export function exportSave(d: SaveData) {
   const blob = new Blob([JSON.stringify(d)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `ceionia-carte${d.map + 1}-${new Date().toISOString().slice(0, 10)}.json`;
+  // (une seule carte, le continent : son numéro interne, 3, n'a rien à faire dans le nom du fichier)
+  a.download = `ceionia-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);

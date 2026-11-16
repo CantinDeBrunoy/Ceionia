@@ -69,7 +69,6 @@ Le joueur prend un bâtiment dans le menu Bâtir (outil `build`) ; un fantôme s
 ## Pièges et invariants
 - **Les briques ne sont pas dans l'instantané** : `snapshot`/`restore` gardent bois et pierre, pas `w.brick`. Annuler la pose d'une gare, d'une usine automobile ou d'une raffinerie (prix en briques) ne rend pas les briques ; idem pour une amélioration payée en briques. Bug probable, à corriger dans `World.snapshot`.
 - Même cause : l'instantané ne contient pas les lignes de chemin de fer, ni l'état des habitants ; annuler après avoir tracé une ligne peut laisser une ligne dont un arrêt n'existe plus (`restore` rétablit les bâtiments, pas `lines`). À vérifier.
-- `ToolController.confirmed`, `doomed` et `showSpots` sont du code mort (plus de confirmation de démolition, plus de points verts) ; ne pas les croire actifs.
 - « Occupé » juste après une pose : tant que le curseur reste sur la case du bâtiment qu'on vient de poser, le refus « Emplacement occupé » est masqué (`placedAt`).
 - Un geste ne doit pousser qu'un instantané : toujours `mark()` avant de modifier, jamais après (`upgradeSelected` remet `pre` à la main parce que `beginStroke` y est appelé avant la tentative).
 - Un déplacement retire le bâtiment du monde avant de le reposer : pendant ce temps, les besoins (logement, vivres…) sont recalculés sans lui.

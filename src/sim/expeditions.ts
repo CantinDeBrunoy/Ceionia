@@ -1,7 +1,7 @@
+import { Underground, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from '../world/world';
 import { Agents, Kit } from './agents';
-import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
-import { Underground, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
+import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, RECENT_EVENTS } from './missions';
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
@@ -14,7 +14,7 @@ import { securityK } from './security';
 import { FORGE_PERK, FORGE_RISK, FORGE_CRAFT } from './kingdom';
 import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
-import { tr, plural, isEnglish } from '../i18n';
+import { tr, plural } from '../i18n';
 
 /**
  * Étapes d'une expédition : aller, travail sur place, retour, fête (ou mine déconfite) au village ; « gather » (le rassemblement
@@ -68,8 +68,7 @@ export interface ActiveExpedition {
   targets: number[];
   entry: number;
   front: number;
-  /** embuscades sur son chemin, longueur de son parcours (haltes comprises) et sa force au combat */
-  ambush: Ambush[];
+  /** longueur de son parcours (haltes comprises) et sa force au combat */
   routeLen: number;
   might: number;
   /** chevaux de l'écurie partis avec l'équipe */
@@ -80,8 +79,6 @@ export interface ActiveExpedition {
   air?: AirTrip | null;
   /** aucun imprévu ne convenait à l'arrivée : le premier survient pendant le travail */
   arriveMiss?: boolean;
-  /** un éclaireur parti devant (« Envoyer un éclaireur devant ») : depuis combien de temps, sur combien ; la troupe l'attend */
-  scout?: { t: number; dur: number } | null;
   /**
    * la chasse au monstre (mégalodon, kraken, dragon) : l'issue du combat, tirée un peu avant la fin du travail (à `FATE_AT`) pour
    * que le monstre meure (ou s'échappe) sous les yeux de l'équipe, avant qu'elle ne reparte ; elle devient `ok` à la fin
@@ -218,17 +215,6 @@ export function nextEventAt(a: Pick<ActiveExpedition, 'seen' | 'arriveMiss'>): n
   return i <= 0 ? 0.3 : i === 1 ? 0.55 : 0.75;
 }
 
-/** L'équipe est sous terre (troupe armée ou éclaireurs dans les galeries) : c'est dans le monde souterrain qu'on la suit */
-export const isBelow = (a: Pick<ActiveExpedition, 'entry' | 'phase'>) => a.entry >= 0 && a.phase === 'work';
-
-/** Créatures qui tendent des embuscades aux troupes armées */
-export type FoeKind = 'zombie' | 'skeleton' | 'spider' | 'golem' | 'worm';
-/**
- * Embuscade dans les galeries sauvages : la case où elle surgit, les créatures et leur nombre, le moment (temps de parcours
- * de la troupe) ; l'issue est tirée quand elle survient, ses blessés comptés à la fin du combat
- */
-export interface Ambush { cell: number; kind: FoeKind; n: number; t0: number; state: 'wait' | 'fight' | 'done'; result: 'clean' | 'hurt' | 'rout' | null }
-
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
 const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'les terres au-delà des collines', spaceport: 'le cosmodrome' };
@@ -262,7 +248,9 @@ export const partyLimit = (pop: number) => Math.min(MAX_TEAMS, 1 + Math.floor(po
  * plus il peut envoyer d'équipes à la fois ; une école les rend plus sûres, un lieu de soins guérit plus vite les blessés.
  * L'équipe emporte l'équipement du village contre les dangers du voyage, et sur place un imprévu demande une décision
  */
-/** Qui attaque, selon la zone : morts-vivants dans la roche et la glace, squelettes du cristal et du magma, araignées des grottes luxuriantes */
+/** Créatures des galeries (le monde souterrain, gardé pour sa vue : voir `foesOf`) */
+export type FoeKind = 'zombie' | 'skeleton' | 'spider' | 'golem' | 'worm';
+/** Qui rôde, selon la zone : morts-vivants dans la roche et la glace, squelettes du cristal et du magma, araignées des grottes luxuriantes */
 const FOES: Record<number, FoeKind[]> = {
   [UZ_STONE]: ['zombie', 'zombie', 'skeleton'], [UZ_CRYSTAL]: ['skeleton', 'spider'], [UZ_ICE]: ['skeleton', 'zombie'],
   [UZ_LUSH]: ['spider'], [UZ_MAGMA]: ['skeleton', 'zombie'],
@@ -272,10 +260,7 @@ const FOES: Record<number, FoeKind[]> = {
  * magma), vers des profondeurs dès l'âge industriel (roche, magma, grotte luxuriante, glace)
  */
 const LATE_FOES: [FoeKind, number, number[]][] = [['golem', 2, [UZ_STONE, UZ_CRYSTAL, UZ_MAGMA]], ['worm', 3, [UZ_STONE, UZ_MAGMA, UZ_LUSH, UZ_ICE]]];
-const FOE_MIGHT: Record<FoeKind, number> = { zombie: 0.8, skeleton: 1, spider: 1.15, golem: 1.6, worm: 1.8 };
-/** (à passer par `tr` pour l'afficher) */
-export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 'squelettes', spider: 'araignées géantes', golem: 'gardiens de pierre', worm: 'vers des profondeurs' };
-/** Créatures d'une embuscade dans cette zone, à l'âge donné */
+/** Créatures de cette zone, à l'âge donné */
 export function foesOf(zone: number, age: number): FoeKind[] {
   const base = FOES[zone] ?? FOES[UZ_STONE];
   return [...base, ...LATE_FOES.filter(([, from, zones]) => age >= from && zones.includes(zone)).map(([k]) => k)];
@@ -339,19 +324,18 @@ export class Expeditions {
    * (`rides`) : les chevaux qui manquent sont prêtés, sans en retirer de l'écurie (avant, les marcheurs traînaient derrière
    * les cavaliers, qu'on croyait bloqués à les attendre)
    */
-  mountsFor(c: Choice) { return c.mounts ?? (c.troop ? 0 : Math.min(c.party, this.horsesHome())); }
+  mountsFor(c: Choice) { return c.troop ? 0 : Math.min(c.party, this.horsesHome()); }
 
   /** âge du village, donné par le jeu (sinon celui de ses bâtiments, qui passent d'âge avec lui) */
   age: () => number = () => { let a = 0; for (const b of this.world.buildings.values()) a = Math.max(a, b.age); return a; };
   /** Nom d'un bâtiment tel qu'on le bâtit à l'âge du village (« haras » plutôt qu'« écurie » à l'âge industriel), en minuscules */
   private nameOf(k: KindId) { const d = KINDS[k]; return (d.names[Math.max(this.age(), d.minAge)] || d.names.find((n) => n)!).toLowerCase(); }
   /** « à l'écurie », « au haras », « au centre équestre » */
-  private at(k: KindId) { const n = this.nameOf(k); return isEnglish() ? `at the ${n}` : /^[aeiouyéèê]/.test(n) ? `à l’${n}` : `au ${n}`; }
 
   /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux, carburant), et son risque avec cet équipement */
   preview(c: Choice) {
     const l = loadout(c, this.world.exp.gear), n = this.mountsFor(c) ? this.need(c) : 0;
-    return { take: l.take, label: [packLabel(l.take), n ? `${n} ${plural(n, 'cheval', 'chevaux')}` : '', c.fuel ? tr('{n} carburant', { n: c.fuel }) : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
+    return { take: l.take, label: [packLabel(l.take), n ? `${n} ${plural(n, 'cheval', 'chevaux')}` : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
   }
 
   /** Risque d'une équipe en route : celui du choix, équipement et décisions compris */
@@ -388,12 +372,6 @@ export class Expeditions {
     if (diplo) return diplo;
     const miss = this.missing(m);
     if (miss.length) return tr('Il faut d’abord {list}.', { list: miss.join(', ') });
-    if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return tr('Il faut {m} chevaux {at} ({n} pour l’instant).', { m: c.mounts, at: this.at('stable'), n }); }
-    // les blindés roulent au carburant : la raffinerie le tire du pétrole brut des puits
-    if (c.fuel && !this.world.unlimited && this.world.fuel < c.fuel) {
-      const n = Math.floor(this.world.fuel);
-      return tr('Il faut {fuel} carburant pour les véhicules ({n} pour l’instant) : {how}.', { fuel: c.fuel, n, how: tr(this.has('refinery') ? 'la raffinerie en tire du pétrole brut des puits' : 'forez des puits de pétrole sur un gisement et bâtissez une raffinerie') });
-    }
     const max = this.slots();
     if (this.active.length >= max) {
       return max < MAX_TEAMS
@@ -414,7 +392,7 @@ export class Expeditions {
   lastFail: string | null = null;
 
   start(m: Mission, ci: number, age = m.age): ActiveExpedition | null {
-    const c = m.choices[ci] ? choiceAt(m.choices[ci], age) : undefined;
+    const c = m.choices[ci];
     if (!c || this.why(m, c)) return null;
     const base = this.base()!;
     // chaque équipe va où la mène sa mission
@@ -446,17 +424,14 @@ export class Expeditions {
       if (!dest) kind = FALLBACK[kind];
     }
     if (!dest || !kind) return null;
-    // une fois la course automobile gagnée ET l'usine automobile bâtie, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval ;
-    // à l'époque moderne, la troupe qui brûle du carburant roule : des blindés pour la charge, des véhicules pour les autres
-    const armored = !!c.fuel && c.troop === 'cavalry';
-    const motor = (age >= 3 && this.world.exp.done.includes('motorcar') && this.has('carworks') && !c.troop && !c.mounts) || (!!c.fuel && !armored);
+    // une fois la course automobile gagnée ET l'usine automobile bâtie, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval
+    const motor = age >= 3 && this.world.exp.done.includes('motorcar') && this.has('carworks') && !c.troop;
     // la montagne et le bout du monde se gagnent en l'air quand le village a de quoi s'envoler : pas de chevaux, pas de voiture
-    const air = c.troop || c.mounts || sea || m.farewell || c.fuel || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest);
+    const air = c.troop || sea || m.farewell || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest);
     const mounts = motor || air ? 0 : this.mountsFor(c);
     const party = this.agents.recruit(this.need(c));
     if (!party) { this.lastFail = tr('Pas assez d’habitants prêts à partir à cet instant : réessayez dans un moment.'); return null; }
     this.world.exp.riding += mounts;
-    if (c.fuel && !this.world.unlimited) this.world.fuel = Math.max(0, this.world.fuel - c.fuel);
     // l'équipe emporte le meilleur équipement en réserve contre les dangers du voyage
     const { take, k } = loadout(c, this.world.exp.gear);
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
@@ -467,7 +442,7 @@ export class Expeditions {
       extra: c.dest === 'spaceport' && spaceRail(this.world) ? -c.work * SPACE_RAIL_WORK : 0,
       // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
       site: c.dest === 'cave' ? 'cave' : kind, age, sea: sea && kind === 'river',
-      targets: [], entry: -1, front: -1, redo: this.done(m), mounts, ambush: [], routeLen: 0, might: 0, air,
+      targets: [], entry: -1, front: -1, redo: this.done(m), mounts, routeLen: 0, might: 0, air,
     };
     // la galère du portail traverse à l'allure d'une galère : loin de l'île, le travail s'allonge d'autant (sinon elle
     // filait d'une rive à l'autre en quelques secondes, et l'on croyait l'équipe téléportée)
@@ -482,11 +457,9 @@ export class Expeditions {
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       else if (kits.length - 1 - i < (take.lamp ?? 0)) kt.lamp = true;
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
-      // la charge de cavalerie part en cavaliers de l'époque (en chars à l'époque moderne) ; les autres équipes à cheval
-      // restent des habitants en selle
+      // (une troupe armée part à pied : `mountsFor` ne lui donne pas de chevaux)
       if (motor && !air) { kt.car = true; if (age >= 5) kt.hover = true; }
-      else if (armored) { kt.rider = true; kt.tank = true; }
-      else if (mounts > 0) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
+      else if (mounts > 0) kt.horse = true;
     });
     party.forEach((id, i) => this.agents.equip(id, kits[i]));
     // force au combat : chacun compte, davantage en armure, armé, à cheval (en char, plus encore) ou la torche au poing (les
@@ -521,14 +494,11 @@ export class Expeditions {
       // une attente choisie : le travail est suspendu, l'équipe reste là à attendre (elle ne fait pas l'action d'une autre option)
       if (a.hold > 0) {
         a.hold = Math.max(0, a.hold - dt);
-        // l'éclaireur parti devant revient quand l'attente finit
-        if (a.scout) { a.scout.t = Math.min(a.scout.dur, a.scout.t + dt); if (!a.hold) a.scout = null; }
         if (!a.hold && a.phase === 'work') ag.partyAct(a.party, 'work');
         continue;
       }
       // avec une écurie, les équipes vont à cheval : le travail sur place avance plus vite
       a.t += dt * (a.phase === 'work' && this.has('stable') ? 1.25 : 1);
-      if (a.phase === 'work' && a.ambush.length) this.ambushStep(a);
       // (une équipe d'une ancienne sauvegarde, encore rassemblée au village, part à son tour)
       // les adieux durent un peu, le temps que le village acclame les colons
       if (a.phase === 'gather' && ((ag.partyDone(a.party) && a.t > (a.m.farewell ? 20 : 0)) || a.t > 40)) {
@@ -564,32 +534,6 @@ export class Expeditions {
         a.phase = 'home'; a.t = 0;
         ag.partyAct(a.party, a.ok ? 'cheer' : 'stroll');
       } else if (a.phase === 'home' && a.t > 4) this.finish(a);
-    }
-  }
-
-  /** La troupe arrive sur une embuscade : les créatures chargent, le combat se joue ; à la fin, ses blessés et le récit */
-  private ambushStep(a: ActiveExpedition) {
-    const s = Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) * a.routeLen;
-    for (const m of a.ambush) {
-      const name = tr(FOE_NAME[m.kind]);
-      if (m.state === 'wait' && s >= m.t0) {
-        m.state = 'fight';
-        // l'issue : la force de la troupe contre le nombre et la férocité des créatures (plus grandes dans le magma)
-        const threat = m.n * FOE_MIGHT[m.kind] * (this.under?.zone[m.cell] === UZ_MAGMA ? 1.25 : 1) * 0.9;
-        const win = a.might / (a.might + threat), r = this.rnd();
-        m.result = r < win ? 'clean' : r < win + (1 - win) * 0.65 ? 'hurt' : 'rout';
-        this.onNews?.(tr('⚔️ « {title} » : {n} {name} surgissent des galeries et chargent la troupe !', { title: a.m.title, n: m.n, name }));
-      } else if (m.state === 'fight' && s >= m.t0 + FIGHT_HALT) {
-        m.state = 'done';
-        const text = m.result === 'clean' ? tr('la troupe a taillé en pièces les {n} {name} qui l\'attendaient dans le noir', { n: m.n, name })
-          : m.result === 'hurt' ? tr('{n} {name} repoussés, mais un soldat est blessé', { n: m.n, name })
-          : tr('les {name} étaient trop nombreux : la troupe a dû reculer, deux blessés', { name });
-        if (m.result !== 'rout') this.world.exp.wins++;
-        if (m.result === 'hurt') { a.hurt += 1; a.riskK *= 1.06; }
-        if (m.result === 'rout') { a.hurt += 2; a.riskK *= 1.2; }
-        a.notes.push(tr('Embuscade dans les galeries : {text}.', { text }));
-        this.onNews?.(tr('⚔️ « {title} » : {text}.', { title: a.m.title, text }));
-      }
     }
   }
 
@@ -750,11 +694,9 @@ export class Expeditions {
     // sinon la troupe, sous terre, était ramenée en arrière sur son chemin
     const before = Math.max(1, a.c.work + a.extra);
     // choisir d'attendre : le temps d'attente est du temps réel de jeu pendant lequel rien n'avance (on ne l'ajoute pas au travail)
-    // envoyer un éclaireur devant : la troupe l'attend sur place le temps qu'il aille reconnaître le chemin et revienne
-    const waits = (!!o.wait || !!o.scout) && a.phase === 'work';
+    const waits = !!o.wait && a.phase === 'work';
     a.extra += waits ? Math.min(0, o.work ?? 0) : o.work ?? 0;
     if (waits) a.hold = waitTime(o);
-    a.scout = waits && o.scout ? { t: 0, dur: a.hold } : null;
     if (a.phase === 'work') a.t *= Math.max(1, a.c.work + a.extra) / before;
     if (o.bonus) a.bonus.push(...o.bonus);
     // (des pourparlers ne blessent personne)
@@ -931,12 +873,6 @@ export class Expeditions {
     if (!s.craft.length) this.onNews?.(tr('L’équipement commandé est prêt pour les prochaines expéditions.'));
   }
 
-  /** La troupe en plein combat contre une embuscade : ce qu'en dit sa carte (ou null) */
-  fighting(a: ActiveExpedition) {
-    const m = a.ambush.find((x) => x.state === 'fight');
-    return m ? tr('⚔️ Attaquée par {n} {name} !', { n: m.n, name: tr(FOE_NAME[m.kind]) }) : null;
-  }
-
   /** Avancement d'une expédition (0 … 1) */
   progress(a: ActiveExpedition) {
     const k = Math.min(1, a.t / (a.phase === 'work' ? Math.max(1, a.c.work + a.extra) : a.phase === 'home' ? 4 : 60));
@@ -948,7 +884,7 @@ export class Expeditions {
     return {
       gather: tr('Rassemblement au village…'),
       out: tr(a.air ? (a.air.kind === 'heli' ? 'En hélicoptère vers {dest}…' : 'En montgolfière vers {dest}…') : 'En route vers {dest}…', { dest: destName(a.c) }),
-      work: a.wait ? tr('Décision à prendre : {title}', { title: tr(a.wait.title).toLowerCase() }) : this.fighting(a) ?? tr('Sur place, l’équipe {doing}…', { doing: a.c.doing ?? a.c.label.toLowerCase() }),
+      work: a.wait ? tr('Décision à prendre : {title}', { title: tr(a.wait.title).toLowerCase() }) : tr('Sur place, l’équipe {doing}…', { doing: a.c.doing ?? a.c.label.toLowerCase() }),
       back: tr(a.air ? (a.air.kind === 'heli' ? 'Retour au village en hélicoptère…' : 'Retour au village en montgolfière…') : 'Retour au village…'),
       home: tr(a.ok ? 'De retour : le village fait la fête !' : 'De retour, bredouilles.'),
     }[a.phase];

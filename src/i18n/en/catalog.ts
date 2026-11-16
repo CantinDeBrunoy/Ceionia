@@ -634,8 +634,6 @@ registerDict('catalog', {
   '{n} place libre : le village va grandir.': '{n} free space: the village will grow.',
   'Trop près des bâtiments : un volcan se pose à l’écart du village, ou réduisez la taille du pinceau (il fait la largeur du volcan).': 'Too close to buildings: a volcano goes away from the village, or reduce the brush size (it sets the volcano’s width).',
   'Trop près des bâtiments : un volcan se pose à l’écart du village.': 'Too close to buildings: a volcano goes away from the village.',
-  'Démolir « {name} » ? Recliquez « Démolir » pour confirmer (Ctrl+Z l’annulerait).': 'Demolish “{name}”? Click “Demolish” again to confirm (Ctrl+Z would undo it).',
-  'Démolir « {name} » ? Cliquez de nouveau dessus pour confirmer (Ctrl+Z l’annulerait).': 'Demolish “{name}”? Click it again to confirm (Ctrl+Z would undo it).',
   'habitant': 'inhabitant',
   'habitants': 'inhabitants',
   'ligne': 'line',

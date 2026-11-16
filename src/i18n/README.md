@@ -48,9 +48,10 @@ import { registerDict } from '../index';
 registerDict('zone', { 'texte français': 'English text' });
 ```
 
-Zones prévues (déjà créées, vides ou presque) : `ui`, `menu`, `catalog`, `missions`, `events`, `gear`, `war`, `tutorial`,
-`misc`, `expeditions`, `army`. Chaque agent ne modifie que son fichier : `src/i18n/en/index.ts` les importe tous et n'a pas à changer
-(si vous créez un nouveau fichier de zone, ajoutez-y une ligne d'import). Une même clé ne doit pas figurer dans deux dictionnaires avec
+Les zones, toutes remplies : `ui` (interface du jeu), `menu` (accueil, chargement, difficulté), `catalog` (bâtiments),
+`missions`, `events` (imprévus), `expeditions`, `gear` (équipement et messages divers), `war`, `army`, `tutorial`, `misc`.
+`src/i18n/en/index.ts` les importe toutes (un nouveau fichier de zone y ajoute sa ligne d'import). Le détail de chaque zone :
+`docs/traduction.md`. Une même clé ne doit pas figurer dans deux dictionnaires avec
 deux traductions différentes (le test le signale).
 
 ## Vérifier la couverture

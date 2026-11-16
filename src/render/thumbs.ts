@@ -55,6 +55,20 @@ export class Thumbs {
     return this.want(`${kind}|${age}`, first);
   }
 
+  /**
+   * Rend tout de suite la vignette d'un bâtiment à cet âge si elle manque (préparation de l'âge suivant, au repos : voir
+   * `AgePrep`) ; vrai si une vignette a été rendue. Au passage d'âge, la barre de construction la trouve prête
+   */
+  prepare(kind: KindId, age: number): boolean {
+    const key = `${kind}|${age}`;
+    // (déjà demandée par l'interface : elle passera par la file, qui prévient la barre quand elle est prête)
+    if (this.cache.has(key) || this.queue.includes(key) || this.soon.includes(key)) return false;
+    let url = '';
+    try { url = this.draw(kind, age); } catch { /* modèle introuvable : l'icône au trait reste */ }
+    this.cache.set(key, url);
+    return true;
+  }
+
   /** Déclare une source de modèles d'ailleurs (`load` : le module chargé à part, appelé à la première demande) */
   addSource(space: string, load: () => Promise<ThumbMaker>) {
     this.sources.set(space, { load, make: null, loading: false });

@@ -50,7 +50,7 @@ Constructeur (`main.ts`), dans l'ordre :
 | hell | `hellMode.scene` | `command` (théâtre des Enfers) | zoom 2,4 à 34, `minPitch` 0,28, limites `bounds` = carte des Enfers (`W` × `L`) |
 | under | `underView.scene` | `underInput` | zoom 2,4 à 24, `minPitch` 0,95 |
 
-Le mode **souterrain** n'est plus accessible au joueur (retiré du jeu) ; le moteur reste pour les Enfers et `__game.enterUnder(case)`. La descente automatique quand une troupe suivie est sous terre (`isBelow`, dans `frame`) ne devrait plus se produire (à vérifier).
+Le mode **souterrain** n'est plus accessible au joueur (retiré du jeu) ; le moteur reste pour les Enfers et `__game.enterUnder(case)`. Aucune troupe ne descend plus sous terre : la descente automatique avec une troupe suivie (`isBelow`, `autoUnder`) a été retirée (16 nov. 2026).
 
 Transitions :
 - `enterHell()` : refuse si `war.hellWhy()` ; `loadThrough` (l'écran de chargement du jeu, `LoadingScreen`, avec « Passage du portail… » et la barre qui avance ; charge `hellMode.ts` à la volée, mémorise `surfaceView` et `surfaceZoom`, passe `mode='hell'`, classes `under hell` sur `body`, `cam.jump`, `command.setTheater`).
@@ -86,7 +86,7 @@ Orbitale : `target` (point visé), `yaw`, `pitch`, `dist`. Chaque valeur a un **
 - Clavier (touches **physiques** `e.code`, donc ZQSD en AZERTY et WASD en QWERTY) : flèches ou WASD = déplacer ; Q/E = tourner (1,4 rad/s) ; Page haut/bas = incliner ; `+` / `−` = zoomer. Ignoré avec Ctrl, Méta ou Alt, et dans un champ de saisie.
 - **Contrôles choisis par le joueur** (`core/controls.ts`, au premier lancement puis dans Paramètres › Partie ; `Game.applyControls`) : au clavier (`letterKeys`), les lettres WASD et Q / E comptent ; à la souris, elles ne bougent plus la vue (`letterKeys = false`), mais la souris à moins de `EDGE_PX` = 14 px du bord du canevas, sans bouton appuyé et la page ayant le focus, la fait défiler à la vitesse du clavier (`edgeScroll`, `edgeAt` : seulement quand le pointeur est sur le canevas, pas sur l'interface), et un glissé du clic gauche de plus de 7 px la déplace quand `dragPan` le permet (au village, l'outil Voir en main, hors tracé de voie ferrée : l'outil reçoit alors `cancel`, un clic sans bouger choisit toujours un bâtiment). Flèches, molette et clic droit marchent dans les deux cas. Avant tout choix : le clavier, comme avant.
 - Tactile : un doigt = outil ; deux doigts = pincer (zoom), tourner, déplacer (`startGesture`, mode `gesture` annule l'outil en cours).
-- Méthodes utiles : `goTo(x, z, dist)` (glisse, lâche le suivi), `follow(x, z, dist?, lift?)` (suit un point), `glide`, `jump(vue, y)` (saute sans glissement), `reset()` (vue d'ensemble : `homeDist()`, tient compte du ratio d'écran), `view()`, `tiltTo`, `panBy`, `bounds`.
+- Méthodes utiles : `goTo(x, z, dist)` (glisse, lâche le suivi), `follow(x, z, dist?, lift?)` (suit un point), `glide`, `jump(vue, y)` (saute sans glissement), `reset()` (vue d'ensemble : `homeDist()`, tient compte du ratio d'écran), `view()`, `tiltTo`, `bounds`.
 - Distances : `maxDistFor() = 150·(N/48)·0,8` (480 pour N = 192), `homeFor() = 62·(min(N, 192)/48)·0,8` (198 : le recul de départ ne grandit pas au-delà de la carte de 192, la vue sur le village reste la même). Champ de vision 38°, plans 0,5 (rapproché de près) à 1 800. La caméra ne passe pas sous le sol (`groundY + 1,5`) ; relevée ainsi, elle garde son angle (une vue rasante reste parallèle au sol). `lookUp` (voir le ciel) s'arrête à 0,25.
 - Filet de sécurité : si `goal` ou la position devient non finie (NaN), la vue revient à la dernière vue valable (`sane`).
 - **Une seule chose suivie à la fois** : équipe d'expédition (`following`), train (`trainCam`), incident (`incidentCam`). Chaque `follow…` lâche les autres ; faire glisser la vue (`onPan`) lâche tout. `goHome()` ramène sur le cœur du village (médiane des bâtiments, `villageCenter`), une seconde fois sur la vue d'ensemble.
@@ -133,7 +133,6 @@ L'objet `Game` entier, pour préparer une situation à la main : `__game.world`,
 
 ## Pièges et invariants
 - **`N` est une variable de module** (`world/world.ts`) fixée par `setMapSize` : elle doit l'être avant tout `new World()`, vue ou caméra. Ne rien construire de dépendant de `N` à l'import.
-- **`tr` est importé sous le nom `trx`** dans `main.ts` (des variables locales s'appellent `tr`). Le test de couverture des traductions ne voit donc pas les textes de `main.ts` (voir [traduction.md](traduction.md)).
 - Avant tout `location.reload()`, mettre `running = false` (sinon `pagehide` ou la minuterie sauvegarderait un état à demi remis).
 - La simulation continue aux Enfers ; la surface n'y est pas animée. Tout ce qui est ajouté dans la branche « surface » de `frame` est suspendu aux Enfers : si cela doit continuer, le mettre avant.
 - Les actions du village faites depuis les Enfers doivent passer par `ensureSurface`, sinon elles s'exécutent avec la mauvaise scène.
