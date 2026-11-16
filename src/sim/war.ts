@@ -559,9 +559,12 @@ export class War {
 
   // ---------- L'invasion ----------
 
-  /** Les Enfers sont fermés tant que l'invasion n'est pas repoussée : la raison en une phrase (null : ouverts) */
+  /** Les Enfers sont fermés tant que l'invasion n'est pas repoussée, et après la chute du royaume : la raison en une phrase (null : ouverts) */
   hellWhy(): string | null {
-    if (!this.active || this.inv === 'done' || this.portalOut) return null;
+    if (!this.active) return null;
+    // (le royaume tombé, le portail est éteint : plus personne n'y passe, ni les troupes ni la vue)
+    if (this.portalOut) return tr('Le portail est éteint : la guerre est finie.');
+    if (this.inv === 'done') return null;
     if (this.pve !== 'on') return tr('Le portail est refermé : rouvrez-le quand vous voulez.');
     return this.inv === 'ready' ? tr('Affrontez d’abord les démons de l’île.') : tr('Repoussez d’abord l’invasion du portail.');
   }

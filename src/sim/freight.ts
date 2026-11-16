@@ -64,7 +64,7 @@ export function railStation(w: World, b: Building, stations?: { freight: Buildin
   return nearest(b, stations ? stations[want] : servedStations(w, want === 'freight'));
 }
 
-/** Multiplicateur de production d'un bâtiment : 1,5 s'il est servi par une gare de marchandises, 1 sinon */
+/** Multiplicateur de production d'un bâtiment : 1 + FREIGHT_BONUS (1,75) s'il est servi par une gare de marchandises, 1 sinon */
 export function railBoost(w: World, b: Building, stations?: { freight: Building[]; passenger: Building[] }) {
   return railWant(b.kind) === 'freight' && railStation(w, b, stations) ? 1 + FREIGHT_BONUS : 1;
 }

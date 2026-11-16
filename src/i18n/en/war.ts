@@ -131,7 +131,7 @@ registerDict('war', {
   'continuer sans combats': 'carry on without fighting',
   'Des démons rôdent de l’autre côté.': 'Demons lurk on the other side.',
   'Rouvrir le portail pour affronter les démons ?': 'Reopen the portal to fight the demons?',
-  'Vous pourrez changer d’avis plus tard.': 'You can change your mind later.',
+  'Une fois les démons affrontés, le portail ne se referme plus.': 'Once you face the demons, the portal never closes again.',
   'Fermer le portail': 'Close the portal',
   '🗼 Pour les affronter : « {tower} » et « {barracks} » sur l’île du portail, pas au village, puis une garnison.': '🗼 To fight them: “{tower}” and “{barracks}” on the portal island, not in the village, then a garrison.',
   '⚔️ Bâtissez ici, sur l’île du portail (pas au village) : « {tower} » et « {barracks} », puis recrutez une garnison.': '⚔️ Build here, on the portal island (not in the village): “{tower}” and “{barracks}”, then recruit a garrison.',

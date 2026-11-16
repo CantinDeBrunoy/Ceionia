@@ -77,7 +77,9 @@ export function autoRoad(w: World, b: Building): number {
   const first = (k: number, price: (k: number) => number) => price(k) + ((side.get(k) ?? b.rot) === b.rot ? 0 : other);
   const path = wisest(w, starts, goal, shore ? MAX_SHORE : MAX_LINK, first, b.id, shore);
   if (path) {
+    const fresh = path.filter((k) => !w.road[k]);
     added += lay(w, path);
+    remember(w, b.id, fresh.filter((k) => w.road[k]));
     // la façade se tourne vers le chemin (et celle du voisin qui l'accueille, sans route encore)
     if (!shore) b.rot = side.get(path[0]) ?? b.rot;
     near?.welcome(path[path.length - 1]);
@@ -286,6 +288,42 @@ function spoiled(w: World) {
 }
 
 /** Pose la route le long du chemin (les cases déjà en route ne comptent pas) */
+/** Cases de route posées par le chemin d'accès de chaque bâtiment (en mémoire seulement : pas dans la sauvegarde) */
+const laid = new WeakMap<World, Map<number, number[]>>();
+function remember(w: World, id: number, cells: number[]) {
+  let m = laid.get(w);
+  if (!m) laid.set(w, (m = new Map()));
+  m.set(id, cells);
+}
+
+/**
+ * Le bâtiment `id` est parti (déplacé) : son chemin d'accès s'efface, en partant du bout, tant qu'il finit en cul-de-sac sans
+ * desservir personne (une case reliée à une autre route, ou qui borde un bâtiment, reste). Renvoie le nombre de cases retirées
+ */
+export function unlayAccess(w: World, id: number): number {
+  const cells = laid.get(w)?.get(id);
+  if (!cells) return 0;
+  laid.get(w)!.delete(id);
+  const mine = new Set(cells), serves = new Set<number>();
+  for (const o of w.buildings.values()) for (const k of ringCells(w, o)) serves.add(k);
+  const degree = (k: number) => {
+    const x = k % N, z = Math.floor(k / N);
+    return DIRS.filter(([dx, dz]) => w.inCells(x + dx, z + dz) && w.road[(z + dz) * N + x + dx]).length;
+  };
+  let n = 0;
+  for (let again = true; again;) {
+    again = false;
+    for (const k of mine) {
+      if (!w.road[k]) { mine.delete(k); continue; }
+      if (degree(k) > 1 || serves.has(k)) continue;
+      if (w.setRoad(k % N, Math.floor(k / N), false)) n++;
+      mine.delete(k);
+      again = true;
+    }
+  }
+  return n;
+}
+
 function lay(w: World, path: number[]) {
   let n = 0;
   for (const k of path) if (!w.road[k] && w.setRoad(k % N, Math.floor(k / N), true)) n++;

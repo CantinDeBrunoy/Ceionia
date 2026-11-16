@@ -74,8 +74,6 @@ export class Sim {
   messageExp = false;
   /** le conseil propose de tracer une ligne de chemin de fer depuis cette gare (un clic dessus commence le tracé) */
   messageRail: number | null = null;
-  /** le conseil mène à l'île du portail (un clic dessus y prend le commandement de la garnison) */
-  messageIsle = false;
   /** le conseil mène au comptoir des voisins (un clic dessus ouvre la fiche de l'or) */
   messageGold = false;
   /** le conseil mène au grand choix de la fin de l'Antiquité (un clic dessus rouvre sa carte) */
@@ -100,12 +98,14 @@ export class Sim {
   recovering = 0;
   /** habitants partis pendant la disette en cours (défi) */
   fled = 0;
+  /** nouvelles à afficher (habitants partis faute de logement) : `Game` les vide à chaque image */
+  news: string[] = [];
   /** d'où vient chaque besoin : apports des bâtiments par sorte (et des maisons au bord de l'eau), puis la terre cultivée */
   private src: Record<NeedId, Map<string, { n: number; v: number }>> = { housing: new Map(), food: new Map(), water: new Map(), jobs: new Map(), joy: new Map(), health: new Map() };
   /** couverture des pompiers et de la police (indicateur et petit bonus de bien-être), refaite à chaque recalcul */
   coverage: Coverage = computeCoverage([]);
   private land = { fields: 0, fertile: 0, forests: 0 };
-  private lastVersion = -1;
+  private lastVersion = '';
   private recalcTimer = 0;
   onAgeUp: ((age: number) => void) | null = null;
   /**
@@ -310,13 +310,12 @@ export class Sim {
       }
       return about(k, text);
     };
-    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false; this.messageGold = false; this.messageChoice = false; this.messageConflict = false; this.messageNeed = false;
+    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageGold = false; this.messageChoice = false; this.messageConflict = false; this.messageNeed = false;
     // au bac à sable, aucun conseil : on bâtit comme on veut
     if (w.sandbox) return tr('Bac à sable : tout est ouvert et gratuit, bâtissez comme vous voulez.');
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
     if (w.buildings.size === 0) return about('gather', tr('Pour commencer, posez {name} au centre : c’est la place du village.', { name: quote('gather') }));
     if (!this.counts.house) return about('house', tr('Autour de la place, le centre du village : {house}, {farm} et {well}.', { house: quote('house'), farm: quote('farm'), well: quote('well') }));
-    if (!this.counts.house) return about('house', tr('Pour accueillir des habitants : {k}.', { k: say('house') }));
     if (!this.food.ok && this.fled >= 1) return need('farm', DIFF_TEXT.famine(say('farm')));
     if (!this.food.ok) return need('farm', this.drought ? tr('Sécheresse : les champs donnent moins ; {farm} ou {pier} de plus aiderait.', { farm: say('farm'), pier: quote('pier') }) : tr('Il manque de quoi manger : {farm} ou un champ.', { farm: say('farm') }));
     if (!this.water.ok) return need('well', tr('Il manque de l’eau : {k}.', { k: say('well') }));
@@ -352,11 +351,6 @@ export class Sim {
         const left = ap.items.filter((i) => i.mission && i.have < i.need).map((i) => tr('« {name} »', { name: tr(i.mission!) }));
         this.messageExp = true;
         return left.length > 1 ? tr('Pour l’âge suivant : réussissez les expéditions {list} et {last} (menu Expéditions).', { list: left.slice(0, -1).join(', '), last: left[left.length - 1] }) : tr('Pour l’âge suivant : réussissez l’expédition {name} (menu Expéditions).', { name: left[0] });
-      }
-      // l'île du portail à sécuriser : ses défenses, puis les vagues de démons à repousser
-      if (miss.label.startsWith('île du portail') && !miss.kind) {
-        this.messageIsle = true;
-        return tr('Pour l’âge suivant : sécurisez l’île du portail, repoussez les vagues de démons ({have}/{need}) ; recrutez une garnison à la caserne et donnez-lui vos ordres (cliquez ici).', { have: miss.have, need: miss.need });
       }
       if (miss?.kind) {
         const n = miss.need - miss.have, m = KINDS[miss.kind].reqMission;
@@ -450,8 +444,10 @@ export class Sim {
     this.recalcTimer -= realDt;
     // une ancienne partie à l'archipel échangeait sans comptoir : le premier qu'elle bâtit prend le relais
     if (this.world.trade.legacy && (this.counts.tradepost ?? 0) > 0) this.world.trade.legacy = false;
-    if (this.world.version !== this.lastVersion && this.recalcTimer <= 0) {
-      this.lastVersion = this.world.version;
+    // (un bâtiment qui change d'âge change ses capacités sans toucher au plan : `ageVersion`)
+    const v = `${this.world.version}|${this.world.ageVersion}`;
+    if (v !== this.lastVersion && this.recalcTimer <= 0) {
+      this.lastVersion = v;
       this.recalcTimer = 0.25;
       this.recalc();
     }
@@ -460,7 +456,12 @@ export class Sim {
     // bac à sable : dès l'Antiquité, le portail s'ouvre sans l'expédition ; la carte du choix (affronter les démons ou refermer
     // le portail) arrive alors d'elle-même (`Game.stepWar`)
     if (this.world.sandbox && this.age >= 1 && this.world.portal && !this.world.portalWoken) this.world.portalWoken = true;
-    if (this.pop > this.housing.cap) this.pop = Math.max(this.housing.cap, 0);
+    if (this.pop > this.housing.cap) {
+      // des maisons démolies (ou perdues) : ceux qui n'ont plus de toit s'en vont, et on le dit
+      const gone = Math.floor(this.pop) - Math.floor(Math.max(this.housing.cap, 0));
+      this.pop = Math.max(this.housing.cap, 0);
+      if (gone > 0) this.news.push(gone > 1 ? tr('🏚️ Faute de logement, {n} habitants ont quitté le village.', { n: gone }) : tr('🏚️ Faute de logement, un habitant a quitté le village.'));
+    }
     // horloge des expéditions : les effets passagers s'éteignent
     const e = this.world.exp;
     e.clock += dt;

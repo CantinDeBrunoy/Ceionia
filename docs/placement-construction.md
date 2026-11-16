@@ -32,7 +32,7 @@ Le joueur prend un bâtiment dans le menu Bâtir (outil `build`) ; un fantôme s
 - `World.rotateBuilding` ne change pas l'emprise ; les maisons voisines sont rafraîchies (blocs de façade).
 
 **Déplacer**
-- Outil Déplacer (M) puis un clic sur un bâtiment, ou bouton « Déplacer » de la fiche (`moveSelected`) : le bâtiment est retiré du monde (`pickUp`) et suit le curseur ; un clic le repose gratuitement (coût `null`), Échap le remet en place (`cancelMove`, refusé en silence si l'emplacement est pris). La rotation et le mode auto d'origine sont gardés ; l'âge devient celui du village.
+- Outil Déplacer (M) puis un clic sur un bâtiment, ou bouton « Déplacer » de la fiche (`moveSelected`) : le bâtiment est retiré du monde (`pickUp`) et suit le curseur ; un clic le repose gratuitement (coût `null`), Échap le remet en place (`cancelMove`, refusé en silence si l'emplacement est pris). La rotation et le mode auto d'origine sont gardés ; l'âge devient celui du village. En le ramassant, son ancien chemin d'accès s'efface (`unlayAccess`, `autoroads.ts`) ; le nouveau se trace à la pose, et Échap retrace celui d'origine.
 - Un chemin d'accès est de nouveau tracé à la repose (l'ancien reste).
 
 **Démolir**
@@ -42,7 +42,7 @@ Le joueur prend un bâtiment dans le menu Bâtir (outil `build`) ; un fantôme s
 - Démolir ne rend aucune ressource.
 
 **Annuler / rétablir**
-- Ctrl+Z, Maj+Ctrl+Z ou Ctrl+Y (`main.ts`). Pile de 60 instantanés (`undoStack`, `redoStack`), un par geste (glissé, pose, démolition, amélioration). L'instantané (`World.snapshot`) contient hauteurs, routes, végétation, biomes peints, bâtiments, bois, pierre, courbes de route. Annuler une pose rend donc le bois et la pierre.
+- Ctrl+Z, Maj+Ctrl+Z ou Ctrl+Y (`main.ts`). Pile de 60 instantanés (`undoStack`, `redoStack`), un par geste (glissé, pose, démolition, amélioration). L'instantané (`World.snapshot`) contient hauteurs, routes, végétation, biomes peints, bâtiments, bois, pierre, briques, lignes de chemin de fer, courbes de route. Annuler une pose rend donc le bois, la pierre et les briques (gare, usine automobile, raffinerie, amélioration payée en briques). Le minerai, le pétrole et le carburant n'y sont pas : aucun geste annulable ne les dépense. Annuler une gare retire aussi les lignes tracées depuis son instantané ; une ligne dont un arrêt a disparu se replie d'elle-même (`Railway.refresh`).
 - Un passage d'âge vide les deux piles (`sim.onAgeUp`, dans `main.ts`).
 
 **Améliorer**
@@ -67,8 +67,7 @@ Le joueur prend un bâtiment dans le menu Bâtir (outil `build`) ; un fantôme s
 - Relief : un pinceau de relief qui touche un bâtiment ne change rien (`brushOnBuilding`), [outils-terrain.md](outils-terrain.md).
 
 ## Pièges et invariants
-- **Les briques ne sont pas dans l'instantané** : `snapshot`/`restore` gardent bois et pierre, pas `w.brick`. Annuler la pose d'une gare, d'une usine automobile ou d'une raffinerie (prix en briques) ne rend pas les briques ; idem pour une amélioration payée en briques. Bug probable, à corriger dans `World.snapshot`.
-- Même cause : l'instantané ne contient pas les lignes de chemin de fer, ni l'état des habitants ; annuler après avoir tracé une ligne peut laisser une ligne dont un arrêt n'existe plus (`restore` rétablit les bâtiments, pas `lines`). À vérifier.
+- L'instantané ne contient ni l'état des habitants ni les stocks qui varient avec le temps autres que bois, pierre et briques. Un tracé de ligne n'est pas un geste annulable à lui seul : Ctrl+Z annule le dernier geste de construction, et les lignes reviennent à leur état d'alors (`tests/bugsManuel.test.ts`).
 - `ToolController.confirmed`, `doomed` et `showSpots` sont du code mort (plus de confirmation de démolition, plus de points verts) ; ne pas les croire actifs.
 - « Occupé » juste après une pose : tant que le curseur reste sur la case du bâtiment qu'on vient de poser, le refus « Emplacement occupé » est masqué (`placedAt`).
 - Un geste ne doit pousser qu'un instantané : toujours `mark()` avant de modifier, jamais après (`upgradeSelected` remet `pre` à la main parce que `beginStroke` y est appelé avant la tentative).

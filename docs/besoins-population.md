@@ -35,7 +35,7 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 - `canGrow` = les six `ok`. Quand c'est vrai : `grow += dt × 0,55 × growK × (recovering > 0 ? recoverK : 1)` ; à chaque unité de `grow`, `pop = min(pop + 1, cap)` : une population entamée par une disette (6,9 pour 7 places) se complète jusqu'à la dernière place (avec `pop + 1 <= cap`, elle restait bloquée sous le plafond, logement à 100 % et conseil « Le village grandit… »). Soit environ 0,55 habitant par seconde de jeu en Facile, 0,41 en Normal (`growK = 0,75`).
 - Le village plein (`housing.ok` faux) arrête la croissance : ce n'est pas un manque, le conseil devient « Village plein ». Si l'âge suivant attend des habitants : « Bâtissez « Hutte » (…) : le village manque de place pour grandir (6/12 habitants pour l'âge suivant). » ; un clic sur le conseil prend la maison en main (Bâtir › Habitat).
 - **Fondateurs** : un village sans maison à l'âge 0, avec une place du village, reçoit d'emblée `pop = 4`.
-- Si `pop > housing.cap` (maisons démolies), `pop` est ramenée **d'un coup** à `cap`, sans message.
+- Si `pop > housing.cap` (maisons démolies), `pop` est ramenée **d'un coup** à `cap`, et un message le dit (« 🏚️ Faute de logement, n habitants ont quitté le village », `Sim.news`, vidé par `Game.frame` en toast).
 
 ### Quand un besoin manque (`Sim.hardship`)
 - **Disette** (Normal seulement, `famine = 0,004`) : si la nourriture manque, `pop` baisse de `dt × famine × manque × pop` avec `manque = 1 − cap/demand` ; les partants s'accumulent dans `fled` (remis à 0 quand la nourriture revient). Facile et Bac à sable : `famine = 0`, personne ne part.
@@ -51,7 +51,7 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 - Un poste compte à tout âge et quelle que soit sa taille ; ce n'est pas le cas des secours animés (voir Pièges).
 
 ### Le conseil du moment (`Sim.computeMessage`)
-Calculé à chaque `update`, stocké dans `message`, avec des drapeaux : `messageKind` (un clic bâtit ce bâtiment), `messageExp` (ouvre Expéditions), `messageRail` (trace une ligne depuis la gare d'id donné), `messageIsle` (commande de l'île). Premier cas vrai gagne, dans cet ordre :
+Calculé à chaque `update`, stocké dans `message`, avec des drapeaux : `messageKind` (un clic bâtit ce bâtiment), `messageExp` (ouvre Expéditions), `messageRail` (trace une ligne depuis la gare d'id donné). Premier cas vrai gagne, dans cet ordre :
 1. Aucun bâtiment : poser la place du village (`gather`).
 2. Aucune maison : maison, ferme, puits.
 3. Nourriture manque : disette si `fled >= 1`, sinon sécheresse (si `drought`) ou « il manque de quoi manger ».
@@ -69,7 +69,7 @@ Le helper `build(k, texte)` remplace le conseil par « Il manque du bois / de la
 Affichage (`ui.ts` › `renderMessage`) : ton `warn` (un besoin hors logement manque, ou sécheresse), `goal` (âge suivant en vue, ou village plein), `calm`. À partir de l'âge 1, le conseil est masqué (`quiet`) sauf passage d'âge prêt ou conseil qui signale lui-même un besoin non comblé (`sim.messageNeed` : manger, boire, travail, rencontre, santé ; un besoin sans conseil, comme la sécurité, ne fait plus paraître le conseil de l'âge suivant), ou si l'aide est activée (bouton cible, clé `ceionia.aides` du `localStorage`). Masqué aussi pendant le tutoriel guidé et en plein commandement.
 
 ## Fonctionnement dans le code
-- `Sim.recalc()` : parcourt `world.buildings`, remplit `src` (détail par sorte pour les fiches), les totaux, compte les champs et les forêts, appelle `computeCoverage`. Déclenché par `Sim.update` quand `world.version` a changé **et** au plus tous les 0,25 s réelles (`recalcTimer`). `advance()` et le constructeur de `Game` l'appellent aussi.
+- `Sim.recalc()` : parcourt `world.buildings`, remplit `src` (détail par sorte pour les fiches), les totaux, compte les champs et les forêts, appelle `computeCoverage`. Déclenché par `Sim.update` quand `world.version` ou `world.ageVersion` a changé **et** au plus tous les 0,25 s réelles (`recalcTimer`). `advance()` et le constructeur de `Game` l'appellent aussi.
 - `Sim.evaluate()` : à chaque `update` (et après chaque habitant gagné ou perdu) ; applique bonus d'expédition, rendement des champs, demandes et `ok`.
 - `Sim.update(dt, realDt)` : `dt` est le temps de jeu (nul en pause, ×vitesse), `realDt` sert au minuteur de recalcul. Ordre : recalcul, fondateurs, plafond de logement, horloge des expéditions, humidité, `evaluate`, `hardship`, croissance, `computeMessage`. Appelé par `Game.frame` (`main.ts`) avec `sim.rain` et `sim.season` mis à jour juste avant.
 - `Sim.needDetail(k)` : alimente la fiche d'un besoin (`ui.ts` › `renderNeed`) : lignes triées par apport, bâtiment qui comble le mieux (`house, farm, well, workshop, gather, health`) et son apport `per` à l'âge du village.
@@ -87,9 +87,7 @@ Affichage (`ui.ts` › `renderMessage`) : ton `warn` (un besoin hors logement ma
 ## Pièges et invariants
 - Les jauges doivent dire la même chose que `ok` : d'où les parts entières (`down` / `up`, bug « 170 / 170, il manque 0.0 », commit 7728a53). Ne pas remettre de flottants dans `food`, `water`, `jobs`, `health`.
 - `pop` est fractionnaire en Normal après une disette (elle redevient entière en atteignant le plafond) ; l'affichage prend `floor`. `food.demand` utilise `floor(pop)`, `joy.demand` et `housing.demand` utilisent `pop` brute.
-- Les âges de bâtiment évoluent **dans le rendu** (`render/buildings.ts` › `update`, un bâtiment toutes les 0,06 s après un passage d'âge) en modifiant `b.age`, sans incrémenter `world.version`. Or `recalc` ne repart que si `version` change : les capacités du nouvel âge peuvent n'apparaître qu'à la prochaine pose ou démolition. **À vérifier** (bug probable).
-- `housing` sans `cap` plafonne `pop` sans prévenir le joueur quand on démolit des maisons.
-- Le conseil contient un bloc mort : `if (!this.counts.house) return …` apparaît deux fois de suite (le second ne s'exécute jamais) et la branche `miss.label.startsWith('île du portail')` ne correspond plus à aucune condition (l'île du portail n'est plus exigée), donc `messageIsle` reste toujours faux. À nettoyer, pas urgent.
+- Les âges de bâtiment évoluent **dans le rendu** (`render/buildings.ts` › `update`, un bâtiment toutes les 0,06 s après un passage d'âge) par `World.evolve`, qui incrémente `world.ageVersion` (pas `version` : le plan du village ne bouge pas, rien d'autre n'a à se refaire). `Sim.update` refait alors le compte : les capacités du nouvel âge comptent dès que le modèle a changé. Changer `b.age` à la main ne prévient pas la simulation.
 - Chaque texte passe par `tr('…')` avec le français exact comme clé : ne pas reformuler un message sans mettre à jour `src/i18n/en/` (voir [traduction.md](traduction.md)).
 - Secours animés et couverture n'ont pas les mêmes règles de portée (voir [incidents.md](incidents.md)) : la jauge peut afficher « couvert » alors qu'aucun camion ne part.
 

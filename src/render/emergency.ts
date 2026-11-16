@@ -3,6 +3,7 @@ import { wrapAngle } from '../core/rng';
 import { tr } from '../i18n';
 import { World, N } from '../world/world';
 import { Building, KindId, sizeOf } from '../build/catalog';
+import { reaches } from '../sim/coverage';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { Puffs } from './particles';
@@ -792,11 +793,12 @@ export class Emergencies {
 
   /** Le plus proche poste du service (à l'âge industriel au moins), à portée de la cible */
   private stationFor(service: Service, target: Building) {
-    let best: Building | null = null, bd = RANGE;
+    let best: Building | null = null, bd = Infinity;
     for (const o of this.world.buildings.values()) {
-      if (o.kind !== HOME[service] || o.age < 3 || o.small) continue;
+      // (la portée, comme la jauge de couverture et les pompiers de `Fires` : `reaches`, de centre à centre)
+      if (o.kind !== HOME[service] || o.age < 3 || o.small || !reaches(o, target, RANGE)) continue;
       const d = Math.hypot(o.x - target.x, o.z - target.z);
-      if (d <= bd) { bd = d; best = o; }
+      if (d < bd) { bd = d; best = o; }
     }
     return best;
   }

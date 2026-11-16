@@ -16,9 +16,9 @@ Trois incidents de village : l'**incendie** (vraie conséquence : le bâtiment p
 - un feu accidentel : `Emergencies` (voir plus bas), toujours sur une maison à portée d'une caserne.
 `Fires.ignite` refuse si les catastrophes sont désactivées (`world.disasters`, réglage sauvegardé, vrai par défaut), si le bâtiment est une lanterne (`lamp`) ou brûle déjà. Quand le feu prend : toast rouge « 🔥 Incendie : … », `agents.alert` (voir plus bas), son de destruction.
 
-**Évolution d'un feu** (constantes de `fires.ts`, en secondes **réelles**) :
+**Évolution d'un feu** (constantes de `fires.ts`, en secondes **de jeu** : rien ne bouge en pause, tout va plus vite en accéléré, comme les secours) :
 - `PUT_OUT = 30` : délai d'extinction par la chaîne des habitants quand il y a de l'eau à portée (`waterNear`).
-- `CREW = 40` : avec une caserne à portée (`crewNear`), le feu est éteint au plus tard au bout de 40 s.
+- `CREW = 40` : avec une caserne à portée (`crewNear`, de tout âge et de toute taille), le feu est éteint au plus tard au bout de 40 s. La portée est celle de la jauge de couverture (`reaches`, `coverage.ts` : `FIRE_RANGE` = 14 cases, de centre à centre).
 - `SPRAY_OUT = 14` : durée d'arrosage par le camion avant extinction.
 - `DOUSE = 18` : eau jetée par les seaux (au plus 3 seaux à la fois × 0,6 par seconde) ; au-delà, le feu s'éteint.
 - `BURN_DOWN = 70` : sans secours ni eau, le bâtiment brûle au bout de 70 s (140 s si un camion est assigné au feu) : il est **supprimé** (`world.removeBuilding`), toast « a brûlé ».
@@ -30,7 +30,7 @@ Trois incidents de village : l'**incendie** (vraie conséquence : le bâtiment p
 
 ### Les secours animés (`Emergencies`)
 Condition générale : `age >= 3` (âge industriel) ; en dessous, `update` ne fait rien (les incendies existent quand même, éteints de façon abstraite par `Fires`).
-- **Poste admissible** (`stationFor`) : bâtiment du bon genre (`fire`, `health`, `police`), `age >= 3`, **pas** `small` ; le plus proche à `RANGE = 14` cases au plus (distance entre coins d'origine). `dispatch` réutilise le véhicule de ce poste s'il est en ronde ou au retour, sinon en crée un autre.
+- **Poste admissible** (`stationFor`) : bâtiment du bon genre (`fire`, `health`, `police`), `age >= 3`, **pas** `small` ; à portée (`reaches`, de centre à centre : la portée du poste, `rangeOf`, ou `RANGE = 14` cases pour l'hôpital, qui n'en a pas) ; le plus proche l'emporte. `dispatch` réutilise le véhicule de ce poste s'il est en ronde ou au retour, sinon en crée un autre.
 - **Véhicule** : à cheval (pompe à vapeur, voiture hippomobile) tant qu'il n'y a pas d'usine automobile alimentée en carburant (`Emergencies.motor = Expeditions.cars()`) ; sinon automobile, hovercraft à l'âge 5. Vitesse : 0,9 attelé, 1,4 moteur, 1,7 à l'âge 4 et plus. Tout est recréé quand l'âge ou `motor` change. Gyrophares bleus et rouges clignotants en intervention.
 - **Incendie** : tout feu de `Fires.burning` à portée d'un poste reçoit un camion. Trois pompiers : lance et second (tuyau déroulé, jet balayant la façade), hache à la porte. Fin quand le feu est éteint ou après `GIVE_UP = 60` s sur place. `Emergencies.spraying(b)` renvoie à `Fires` le temps d'arrosage (`null` : pas de camion ; 0 : en route).
 - **Malaise** : toutes les 120 à 280 s de jeu (`timers.health`, premier appel à 140 s), sur une maison à portée d'un hôpital (`health`) ; deux ambulanciers, civière, soins sur place (7 s), transport. Message « 🚑 Un habitant a fait un malaise : l'ambulance arrive ».
@@ -55,7 +55,7 @@ Messages : les nouvelles de `Fires.news` s'affichent en toast `danger` s'ils com
 - **Imprévus d'expédition** (`events.ts`) : décisions à prendre en cours de mission (`EVENTS`, `eventsFor(ctx)`, `pickEvent`). Filtrés par destination, mission, scène, âge, mer / eau douce, climat chaud. Jamais deux fois le même par expédition ; 70 % de préférence pour ceux propres à la mission. Voir [expeditions.md](expeditions.md).
 
 ## Fonctionnement dans le code
-- `Game.frame` (`main.ts`) : `fires.update(dt)` avec le **temps réel**, puis diffusion des `news` ; plus loin, `emergencies.update(gdt, sim.age)` avec le **temps de jeu**, après `emergencies.motor = traffic.motor`.
+- `Game.frame` (`main.ts`) : `fires.update(dt, gdt)` (le feu en **temps de jeu** `gdt`, les flammes et la fumée en temps réel `dt`), puis diffusion des `news` ; plus loin, `emergencies.update(gdt, sim.age)` avec le **temps de jeu**, après `emergencies.motor = traffic.motor`.
 - Câblage dans le constructeur de `Game` : `fires.responder = emergencies`, `fires.pails = agents.pails`, `agents.burning = (id) => fires.burning.some(...)`, `emergencies.ignite = ignite`, `atmosphere.onStrike`, `eruptions.onImpact`.
 - `Emergencies.update` : (1) rappel des postes disparus, (2) un camion par feu à portée, (3) minuteurs d'appels, (4) ronde de police, (5) boucle sur les unités : états `go → work → back` (ou `patrol`), `stepFire` / `stepHealth` / `stepPolice` mènent une `Crew` d'étape en étape, chemins par BFS sur les routes (`route`, en contournant l'îlot des ronds-points sauf s'il n'y a pas d'autre passage ; sinon on termine à pied depuis `reachNear`).
 - Une cible démolie pendant l'intervention rappelle l'équipe et renvoie le véhicule au poste.
@@ -69,10 +69,9 @@ Messages : les nouvelles de `Fires.news` s'affichent en toast `danger` s'ils com
 - Caméra et cartes : [interface.md](interface.md), [architecture.md](architecture.md).
 
 ## Pièges et invariants
-- **Deux modèles de secours** : `Fires` éteint de façon abstraite (`CREW` 40 s) dès qu'une caserne `fire` est à 14 cases, **quel que soit son âge ou sa taille** ; `Emergencies` n'envoie un camion que d'un poste d'âge ≥ 3 et non `small`. Le camion est de la mise en scène : si l'envoi échoue (pas de route), le feu s'éteint quand même. Ne pas faire dépendre une règle du jeu de la présence du camion.
-- **Temps** : `Fires` tourne en temps réel (`dt`), `Emergencies` en temps de jeu (`gdt`). En pause, les feux continuent de brûler (et peuvent détruire un bâtiment) alors que les camions sont figés ; à ×8, les camions vont 8 fois plus vite que les minuteurs du feu. **Bug probable**, à vérifier côté intention.
-- **Distances** : la couverture mesure centre à centre (`sizeOf / 2`), `stationFor` et `crewNear` mesurent entre coins d'origine (`x, z`). Une maison peut apparaître « couverte » (jauge, surbrillance) sans que le poste la serve.
-- La jauge compte tout poste ; les secours animés exigent `age >= 3` et pas `small` : à l'âge 1 ou 2 la couverture peut être pleine sans aucun camion (le commentaire de `crewNear` dit « guetteur, tour de guet, pompiers » mais seul `kind === 'fire'` compte).
+- **Une règle, une mise en scène** : la règle du jeu est celle de `Fires` (une caserne `fire` de tout âge et de toute taille, à portée, éteint en `CREW` 40 s au plus) ; `Emergencies` n'envoie un camion que d'un poste d'âge ≥ 3 et non `small`. Le camion est de la mise en scène : si l'envoi échoue (pas de route), le feu s'éteint quand même. Ne pas faire dépendre une règle du jeu de la présence du camion. À l'âge 1 ou 2, la couverture peut être pleine sans aucun camion : ce sont les guetteurs qui accourent.
+- **Distances** : une seule mesure, `reaches` (`coverage.ts`), de centre à centre, à la portée du poste : la jauge, sa surbrillance, `crewNear` et `stationFor` disent la même chose (`tests/bugsManuel.test.ts`).
+- **Temps** : `Fires` et `Emergencies` tournent tous deux en temps de jeu ; en pause, un feu ne brûle plus. La fête au cœur du village (`fest.update(dt)`) et la fête foraine (`fairground.update(dt)`) restent en temps réel : elles ne font que de la mise en scène.
 - `Emergencies.update` rend tout de suite avant l'âge 3 : aucun malaise ni cambriolage avant l'âge industriel.
 - `ignite` doit rester l'unique entrée : c'est lui qui vérifie `disasters` (test `incendies.test.ts`), exclut les lanternes et évite le double feu.
 - Les clés de carte (`fire:<id>`, `unit:<service>:<id>`) servent aussi à la caméra : ne pas les changer sans suivre `incidentCam`.

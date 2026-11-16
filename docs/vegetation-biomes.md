@@ -78,7 +78,7 @@ Par case de terre (`cellAvg ≥ 0.12`), bruit `Simplex(seed+99)` :
 - Fiches, palettes et transitions : [saisons.md](saisons.md). Feuillus, buissons, touffes et sapins prennent leur teinte d'une palette de saison par instance (`addPalette`) ; les arbres à fleurs sont tirés par bosquets (`blossomAt`, `SPECIES`) ; chaque feuillu a son propre feuillage (`s.leaf` ± `trees.leafSpread`) : bouleau nu sous 0,5.
 - `Game.refreshSeason` (`main.ts`) : clé `floor(seasonT × 120)` ; à chaque nouveau pas, `veg.applySeason` (palettes branchées sur l'état ; si l'un des 10 réglages de forme a bougé de plus de 0,03, **toutes** les tuiles sont remises en file), neige des toits (`setSnowMap` avec les facteurs `SNOWY`), neige des routes. Le sol : `terrain.recolor` par bandes de `RECOLOR_ROWS = 6` lignes (`stepRecolor`), au plus tous les `2 × max(1, vitesse)` pas.
 - Berges (`VegView.bank`) : roseaux à fleur d'eau (pas au milieu d'une rivière, pas sur une case défrichée), touffes en haut de la grève, quelques fleurs ; ni au désert, ni au marais (il a les siens), ni sur l'île contaminée.
-- Facteur de neige par biome : `SNOWY = [1, 1, 0.15, 0.2, 1]` (sol et toits, `terrainView.ts`) et `snowy(b)` (`vegetation.ts` : taïga 1,2, désert 0,15, tropical 0,2, autres 1). Les deux tables ne sont pas identiques (taïga) : à garder en tête.
+- Facteur de neige par biome : une seule table, `BIOME_SNOW = [1, 1, 0.15, 0.2, 1]` (`world.ts`), lue par le sol, les toits et les routes (`SNOWY`, `terrainView.ts`) comme par les plantes et les rochers (`snowy(b)`, `vegetation.ts`). La taïga retient autant de neige que le tempéré (avant, les plantes de taïga en prenaient 1,2 : un peu plus blanches que le sol).
 - Lacs gelés et torrents figés : voir [eau-rivieres.md](eau-rivieres.md).
 - Station de ski (`alpine.ts`) : les skieurs chaussent des skis si la neige dépasse 0,35 ou si le sommet du site est au-dessus de `SNOW_LINE[0]` ; la pose exige un sommet d'au moins `ALPINE_PEAK` à `ALPINE_REACH` cases (`World.bigPeakNear`).
 
@@ -90,7 +90,7 @@ Par case de terre (`cellAvg ≥ 0.12`), bruit `Simplex(seed+99)` :
 - [economie-ressources.md](economie-ressources.md) : les forêts nourrissent les bûcherons (`vegAround`), les rochers les carrières.
 
 ## Pièges et invariants
-- Un nouveau biome change la taille des tableaux par biome (`NB = 5` dans `terrainView.ts`, `SNOWY`, `FERN_TINT`, `TUFT_TINT`, `SHRUB_COLORS`, `WILD_HUES`, `CAVE_ROCK`, `CAVE_TOP`, `dense` de `newWorld`, `lone` de `meadowDetails`, fleurs…) : tous dans le même ordre.
+- Un nouveau biome change la taille des tableaux par biome (`NB = 5` dans `terrainView.ts`, `BIOME_SNOW`, `FERN_TINT`, `TUFT_TINT`, `SHRUB_COLORS`, `WILD_HUES`, `CAVE_ROCK`, `CAVE_TOP`, `dense` de `newWorld`, `lone` de `meadowDetails`, fleurs…) : tous dans le même ordre.
 - Essences par biome : palmiers seulement au biome tropical (`forest`, `meadowDetails`), cactus au désert ; un palmier hors des tropiques vient donc toujours d'un biome mal placé, pas du rendu.
 - La peinture de biome (`biomePaint`) est sauvegardée (`toJSON` : `biomes`) ; le climat, lui, n'est pas sauvegardé et se recalcule depuis `gen` : changer `fillClimate` d'une version existante change les biomes des parties en cours.
 - Toute modification de `veg`, `road` ou du relief doit marquer la zone (`markVeg`) ; sans cela, l'ancien décor reste.

@@ -141,6 +141,11 @@ const JOB_RANK: JobKind[] = ['firefighter', 'farmer', 'priest', 'guard', 'healer
 const JOB_SHARE: Partial<Record<JobKind, number>> = { farmer: 2 };
 /** Où l'on habite : les maisons, et les manoirs qu'on en a faits */
 const isHome = (b: Building) => b.kind === 'house' || b.kind === 'manor';
+/** Où logent les habitants : les maisons ; sans maison encore, les fondateurs campent sur la place du village */
+const homesOf = (w: World) => {
+  const all = [...w.buildings.values()], houses = all.filter(isHome);
+  return houses.length ? houses : all.filter((b) => b.kind === 'gather');
+};
 /** Heures de travail (matin, puis après le repas de midi) */
 const working = (h: number) => (h >= 7.5 && h < 12) || (h >= 13.5 && h < 18);
 const PROP_FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
@@ -1050,7 +1055,7 @@ export class Agents {
 
   /** Un habitant de plus, chez lui ; `hand` : un bras des champs (un adulte, sans autre métier) */
   private addAgent(hand = false) {
-    const houses = [...this.world.buildings.values()].filter(isHome);
+    const houses = homesOf(this.world);
     if (!houses.length) return;
     const h = this.pick(houses)!;
     const id = this.nextId++;
@@ -1067,8 +1072,7 @@ export class Agents {
   private sendHome(a: Agent) {
     const hb = this.world.buildings.get(a.home);
     if (!hb) { // maison détruite : en choisir une autre
-      const houses = [...this.world.buildings.values()].filter(isHome);
-      const h = this.pick(houses);
+      const h = this.pick(homesOf(this.world));
       if (!h) { a.state = 'inside'; a.hidden = true; return; }
       a.home = h.id;
       this.sendHome(a);
@@ -1285,6 +1289,28 @@ export class Agents {
     a.rig = null;
   }
 
+  /**
+   * Un bâtiment vient d'être posé sur son chemin : il en cherche un autre jusqu'au même but, sans rien oublier de ce qu'il y
+   * allait faire ; sans autre chemin, il s'arrête là où il est (comme `startPath`), au lieu d'« arriver » sur place
+   */
+  private reroute(a: Agent) {
+    const goal = a.path[a.path.length - 1];
+    const start = Math.min(N - 1, Math.max(0, Math.floor(a.z))) * N + Math.min(N - 1, Math.max(0, Math.floor(a.x)));
+    const p = this.findPath(start, goal);
+    this.pathBudget--;
+    if (p?.length) {
+      const sm = this.smoothPath(p, a.x, a.z, start);
+      a.path = sm ? sm.cells : p; a.pts = sm ? sm.pts : null; a.pi = 0;
+      return;
+    }
+    a.path = []; a.pi = 0; a.pts = null; a.spot = null; a.face = null; a.deck = null;
+    if (a.mission) { this.arrive(a, false); return; }
+    this.release(a);
+    a.act = null; a.task = null; a.load = false; a.urgent = false;
+    a.state = 'doing'; a.timer = 2 + this.rnd() * 2; a.targetHidden = false; a.hidden = false; a.ax = a.x; a.az = a.z;
+    if (a.goingHome) { a.goingHome = false; a.state = 'inside'; a.hidden = true; }
+  }
+
   private startPath(a: Agent, goal: number, hiddenAtEnd: boolean) {
     a.spot = null; a.face = null; a.deck = null; a.act = null;
     a.task = null; a.load = false; a.lane = null;
@@ -1299,7 +1325,7 @@ export class Agents {
     a.path = sm ? sm.cells : p; a.pts = sm ? sm.pts : null; a.pi = 0; a.state = 'walking'; a.hidden = false; a.targetHidden = hiddenAtEnd;
   }
 
-  /** l'usine automobile est bâtie : sans elle, pas de tracteur ni de drone, les bœufs et le chariot à foin à tout âge */
+  /** l'usine automobile est bâtie et le carburant ne manque pas (`Expeditions.cars`) : sinon, pas de tracteur ni de drone, les bœufs et le chariot à foin à tout âge */
   motor = true;
   /** L'âge des engins des champs : celui du village, mais le Moyen Âge tant qu'il n'y a pas de moteur */
   private rigAge(age: number) { return this.motor ? age : Math.min(age, TRACTOR_AGE - 1); }
@@ -1402,7 +1428,7 @@ export class Agents {
         if (last && a.targetHidden && dist < 0.35) a.hidden = true;
         // un obstacle posé sur le chemin : on recalcule
         const nc = a.path[a.pi];
-        if (nc !== undefined && w.occ[nc] && nc !== a.path[a.path.length - 1] && w.buildings.get(w.occ[nc])?.kind !== 'lamp') { a.path = []; a.pi = 0; }
+        if (nc !== undefined && w.occ[nc] && nc !== a.path[a.path.length - 1] && w.buildings.get(w.occ[nc])?.kind !== 'lamp') { this.reroute(a); continue; }
         // la nuit, on rentre, sauf pour éteindre un feu
         if (night && !a.goingHome && !a.mission && !this.fighting(a) && this.pathBudget > 0) this.sendHome(a);
       } else if (a.state === 'doing') {

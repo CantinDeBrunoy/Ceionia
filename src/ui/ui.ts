@@ -303,11 +303,11 @@ const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string;
   ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; certaines expéditions en rapportent aussi.' },
   brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’époque moderne et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
   crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
-  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage).', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 50 % de plus.' },
+  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage).', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 75 % de plus.' },
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
-const reqOf = (label: string) => (label === CHOICE_LABEL ? 'choice' : label === CONFLICT_LABEL ? 'conflict' : label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
+const reqOf = (label: string) => (label === CHOICE_LABEL ? 'choice' : label === CONFLICT_LABEL ? 'conflict' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
 /** Le bâtiment est-il proposé dans cette partie ? (la diplomatie ; le comptoir : seulement avec l'archipel) */
 const offered = (w: World, k: KindId) => kindOffered(w, k) && (k !== 'tradepost' || archipelagoOn(w));
@@ -716,7 +716,6 @@ export class UI {
       if (req === 'choice') { this.host.audio.sfxClick(); this.host.openCrossroads?.(); return; }
       // le conflit des deux îles à régler : la carte de la diplomatie (paix ou guerre ; l'allié d'abord s'il manque)
       if (req === 'conflict') { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); return; }
-      if (req === 'isle') { this.host.audio.sfxClick(); this.host.commandIsle?.(); return; }
       // le chemin de fer : la gare qui manque, ou le tracé d'une ligne depuis une gare
       if (req === 'rail') { const nx = this.host.sim.railNext(); this.host.audio.sfxClick(); if ('kind' in nx) this.pick(nx.kind); else this.host.startRailEdit({ stop: nx.stop }); return; }
       $('#agePanel').classList.toggle('open');
@@ -728,7 +727,7 @@ export class UI {
     window.addEventListener('pointerdown', (e) => { if (!$('#notifPanel').hidden && !(e.target as HTMLElement).closest('#notifPanel, #bBell')) this.toggleNotifPanel(false); }, true);
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
     $('#helpBtn').onclick = () => { this.help = !this.help; setHelpOn(this.help); this.host.audio.sfxClick(); this.renderMessage(); };
-    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageChoice) { this.host.audio.sfxClick(); this.host.openCrossroads?.(); } else if (this.host.sim.messageConflict) { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageChoice) { this.host.audio.sfxClick(); this.host.openCrossroads?.(); } else if (this.host.sim.messageConflict) { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info(tr('Le brouillard se lève.')); };
     $('#bSpeed').onclick = () => {

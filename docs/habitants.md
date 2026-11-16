@@ -9,7 +9,7 @@ La population (`Sim.pop`, un nombre) n'est pas simulée une à une. `Agents` mon
 
 ## Règles du jeu
 **Combien on en voit** (`Agents.update`) :
-- `want = min(MAX_AGENTS = 90, min(MAX_SHOWN = 22, floor(pop × SHOWN)) + bras des champs + membres d'expédition)`, avec `SHOWN = 0.85 / 4` : environ un passant pour quatre à cinq habitants. Des maisons (`house`, `manor`) sont nécessaires pour en créer (`addAgent`).
+- `want = min(MAX_AGENTS = 90, min(MAX_SHOWN = 22, floor(pop × SHOWN)) + bras des champs + membres d'expédition)`, avec `SHOWN = 0.85 / 4` : environ un passant pour quatre à cinq habitants. Ils logent dans les maisons (`house`, `manor`) ; sans maison encore, les fondateurs logent sur la place du village (`homesOf`, `addAgent`).
 - 22 % des passants sont des enfants (plus petits, ils jouent, vont à l'école le matin).
 - `ABLE = 0.6` : part de la population disponible pour une expédition ou un voyage en train (`available()`).
 
@@ -22,7 +22,7 @@ La population (`Sim.pop`, un nombre) n'est pas simulée une à une. `Agents` mon
 
 **Métiers** (`JOB_OF`, `assignJobs`) : un lieu de travail offre `clamp(round(jobs / 3), 1, 3)` places (`KINDS[kind].jobs[âge]`). Priorité quand il y a plus de places que d'habitants : `JOB_RANK` (pompiers, paysans, prêtres, gardes, soignants…), les paysans comptent double (`JOB_SHARE`). L'outil tenu vient de `TOOL_OF`, le geste de `JOB_ACT`. Quand un bâtiment brûle, les pompiers (rayon 30) puis les voisins (rayon 16) accourent au seau (`alert`).
 
-**Champs** (`fields.ts`) : les « bras » (`hand`) travaillent des parcelles du printemps à l'automne ; l'hiver (`season === 3`, `fieldSeason`) ils réparent devant la grange. Nombre : `min(MAX_HANDS = 12, ceil(cases/2 × HAND_SHARE 0.35), floor(pop × HAND_POP 0.15))`. Travail selon la saison (`fieldTask`) : semer ou biner au printemps ; moissonner l'été (cueillir en cagettes dès l'âge 4) ; ramasser ou bêcher à l'automne. Engins (`machineOf`) : bœufs et chariot à foin dès l'âge 1 ; tracteur et accessoires dès l'âge 3 ; drones agricoles dès l'âge 5 (`MAX_DRONES = 3`) ; au plus `MAX_RIGS = 6`. **Sans usine automobile** (`Agents.motor` faux), l'âge des engins est plafonné au Moyen Âge (`rigAge`).
+**Champs** (`fields.ts`) : les « bras » (`hand`) travaillent des parcelles du printemps à l'automne ; l'hiver (`season === 3`, `fieldSeason`) ils réparent devant la grange. Nombre : `min(MAX_HANDS = 12, ceil(cases/2 × HAND_SHARE 0.35), floor(pop × HAND_POP 0.15))`. Travail selon la saison (`fieldTask`) : semer ou biner au printemps ; moissonner l'été (cueillir en cagettes dès l'âge 4) ; ramasser ou bêcher à l'automne. Engins (`machineOf`) : bœufs et chariot à foin dès l'âge 1 ; tracteur et accessoires dès l'âge 3 ; drones agricoles dès l'âge 5 (`MAX_DRONES = 3`) ; au plus `MAX_RIGS = 6`. **Sans usine automobile, ou sans carburant** (`Agents.motor` faux : `main.ts` lui donne `Expeditions.cars()`, la règle des voitures), l'âge des engins est plafonné au Moyen Âge (`rigAge`).
 
 **Fondateurs** : la place du village (`gather`) posée dans un village sans maison ni habitant fait arriver 4 habitants d'un coup (`Sim.update` : `pop = 4`, à l'âge 0) ; le catalogue lui donne 4 logements, de quoi manger (8) et boire (5). Deux peuvent partir en expédition.
 
@@ -51,9 +51,9 @@ La population (`Sim.pop`, un nombre) n'est pas simulée une à une. `Agents` mon
 
 ## Pièges et invariants
 - Les passants ne sont **pas** des habitants : retirer un `Agent` ne change pas `Sim.pop`. `recruit` en crée au besoin (`addAgent`) ; un membre d'équipe n'est jamais retiré (`mission`).
-- Sans maison, `addAgent` ne crée rien : `recruit` renvoie `null`. Les fondateurs ont donc `pop = 4` mais aucun passant avant la première maison ; `available()` compte 2 sur 4 (`floor(4 × 0,6)`) alors qu'aucun agent ne peut partir (à vérifier : le test `fondateurs.test.ts` ne passe que par `Expeditions.why`, pas par un départ réel).
-- Un obstacle posé sur le chemin remet `path` à vide : l'agent « arrive » là où il est (`arrive` cache le visé s'il avait `targetHidden`). Le commentaire parle de recalcul ; en fait il n'y en a pas (à vérifier : un habitant peut disparaître en pleine rue).
-- `Agents.motor` vaut vrai par défaut (les tests voient donc des tracteurs) ; `main.ts` le remet à `counts.carworks > 0` à chaque image.
+- Sans maison, `addAgent` loge l'habitant sur la place du village : avec les fondateurs (`pop = 4`), `available()` compte 2 et `recruit(2)` les fait partir (`tests/bugsManuel.test.ts`). Avec `pop = 4`, aucun passant n'est montré (`floor(4 × SHOWN) = 0`).
+- Un obstacle posé sur le chemin : l'habitant cherche un autre chemin vers le même but (`reroute`), sans oublier ce qu'il allait y faire ; sans autre chemin, il s'arrête là où il est (un membre d'expédition s'y arrête aussi, `arrive`). Avant, il « arrivait » sur place et pouvait disparaître en pleine rue.
+- `Agents.motor` vaut vrai par défaut (les tests voient donc des tracteurs) ; `main.ts` le remet à `Expeditions.cars()` à chaque image (usine automobile et carburant).
 - `assignJobs` est rappelée à chaque arrivée d'un nouvel habitant (`a.job === undefined`) : garder `undefined` (pas `null`) pour « pas encore réparti ».
 - Un bras des champs qui part en expédition perd sa parcelle et son rôle (`recruit`) ; au retour, simple passant.
 - Les trottoirs ne changent pas la logique de chemin : décalage visuel seulement. `findPath` rend le trajet brut (8 voisins, utilisé tel quel par les expéditions pour juger un détour et par le défilé des colons) ; seul `startPath` le lisse. Après le lissage, `path` peut contenir des cases absentes du trajet brut (vérifiées par `clearLine`) : l'obstacle posé en route se teste toujours sur la case suivante de `path`. Les sentinelles ignorent les tours dans leurs déplacements (`next` filtre `isTower`).

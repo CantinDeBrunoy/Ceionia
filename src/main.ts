@@ -2461,7 +2461,7 @@ class Game implements UIHost {
     this.sim.update(gdt, dt);
     this.eruptions.update(gdt);
     this.fauna.alarm = this.eruptions.alarm();
-    this.fires.update(dt);
+    this.fires.update(dt, gdt);
     // personne n'accourt vers un feu (tout le monde était à l'intérieur ou loin au moment où il a pris) : on rappelle à l'aide
     if ((this.fireCallT -= dt) <= 0) { this.fireCallT = 4; for (const b of this.fires.burning) if (!this.agents.responders(b)) this.agents.alert(b.z * N + b.x); }
     this.wakeVolcano(gdt, dt);
@@ -2469,8 +2469,9 @@ class Game implements UIHost {
     for (const m of this.fires.news.splice(0)) this.ui.toast(m, undefined, m.startsWith('🔥') ? 'danger' : 'info');
     for (const m of this.emergencies.news.splice(0)) this.ui.toast(m, undefined, 'danger');
     for (const m of w.losses.splice(0)) this.ui.toast(m, undefined, 'danger');
-    // pas de tracteur aux champs tant que l'usine automobile n'est pas bâtie
-    this.agents.motor = (this.sim.counts.carworks ?? 0) > 0;
+    for (const m of this.sim.news.splice(0)) this.ui.toast(m, undefined, 'danger');
+    // pas de tracteur aux champs sans usine automobile, ni sans carburant (la règle des voitures : `Expeditions.cars`)
+    this.agents.motor = this.expeditions.cars();
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night, this.time.season);
     // les rondes des soldats du village (torche à la main la nuit)
     this.patrols.update(gdt, this.sim.age);

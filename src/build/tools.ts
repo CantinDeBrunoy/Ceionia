@@ -7,7 +7,7 @@ import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize } from './catalog';
 import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin, doorCells, doorSide, orientable, sideToward } from './placement';
-import { autoRoad } from './autoroads';
+import { autoRoad, unlayAccess } from './autoroads';
 import { planRoad, RoadPlan } from './freeRoad';
 import { sampleCurve } from '../world/curves';
 import { priceIn, canPay, pay, shortLabel } from '../sim/economy';
@@ -929,6 +929,8 @@ export class ToolController implements ToolInput {
     this.ghostRot = b.rot;
     this.rotManual = !b.auto;
     w.removeBuilding(b.id);
+    // son ancien chemin d'accès s'efface (le nouveau se trace à la pose)
+    if (this.h.autoRoads) unlayAccess(w, b.id);
     this.ghostKey = '';
     this.h.toast(tr('Cliquez pour reposer le bâtiment (Échap pour annuler).'));
   }
@@ -938,7 +940,10 @@ export class ToolController implements ToolInput {
     this.moveOrigin = null;
     if (!o) return;
     const w = this.h.world;
-    if (w.canPlace(o.kind, o.x, o.z, o.small ? smallSize(o.kind) : undefined) === null) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
+    if (w.canPlace(o.kind, o.x, o.z, o.small ? smallSize(o.kind) : undefined) !== null) return;
+    const b = w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
+    // (son chemin d'accès s'était effacé en le ramassant : il se retrace)
+    if (this.h.autoRoads && b) autoRoad(w, b);
   }
 
   /** Pose en deux clics : 0 rien, 1 l'endroit est à cliquer, 2 l'endroit est fixé, le côté de l'entrée reste à cliquer */

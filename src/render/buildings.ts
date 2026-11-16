@@ -521,7 +521,7 @@ export class BuildingView implements WorldListener {
       } else {
         if (a.t < 0.3) { const k = a.t / 0.3; e.group.scale.set(1 + 0.1 * k, Math.max(0.05, 1 - k * 0.95), 1 + 0.1 * k); }
         else {
-          if (!a.swapped) { a.swapped = true; e.b.age = a.to; this.refresh(e.b); }
+          if (!a.swapped) { a.swapped = true; this.world.evolve(e.b, a.to); this.refresh(e.b); }
           const k = Math.min(1, (a.t - 0.3) / 0.5);
           const s = Math.max(0.001, easeOutBack(k));
           e.group.scale.set(s, s, s);

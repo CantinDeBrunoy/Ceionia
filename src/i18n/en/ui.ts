@@ -126,7 +126,7 @@ registerDict('ui', {
   'La raffinerie en fait du carburant.': 'The refinery turns it into fuel.',
   'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.': 'An oil well is drilled on a deposit: the dark patches where crude seeps out.',
   'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage).': 'Powers the village’s cars (2 per day for each car factory; without fuel they stay in the garage).',
-  'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 50 % de plus.': 'The refinery (unlocked by the expedition “Black Gold”) makes it from the wells’ crude oil. A freight station next to it makes it refine 50% more.',
+  'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 75 % de plus.': 'The refinery (unlocked by the expedition “Black Gold”) makes it from the wells’ crude oil. A freight station next to it makes it refine 75% more.',
 
   // ---- barre de construction
   'Relief': 'Terrain', 'Nature': 'Nature', 'Sculptez le terrain': 'Sculpt the terrain', 'Plantez et décorez': 'Plant and decorate',

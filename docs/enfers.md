@@ -96,7 +96,7 @@ Règles de pose (`HellBase.canBuild`) : zone tenue (`Hell.held` : le seuil, ou u
 - Le front dépend de la zone la plus profonde **gardée** : un poste sans camp ni troupe n'est pas « gardé » (`troopsIn`), il sera repris.
 - Le camp au seuil (zone 0) subit aussi des contre-attaques tant que rien n'est conquis, (`frontPosts` ne compte que les zones conquises ; il ne suspend plus rien sur l'île, où plus aucune vague ne vient après l'invasion).
 - Les bâtiments du joueur au combat sont des `HellBuilding` de côté `player` ; `HellBase.buildings` les reconnaît à `kind in BASE_DEFS` (la tour de garde et la caserne de l'île, aussi `player`, n'y sont pas).
-- Royaume tombé (`portalOut`) : `hellWhy()` rend `null`, donc `enterHell` reste possible par le clic sur le portail (`world.portalOpen` reste vrai), alors que `sendThroughPortal`, `recruitHell` et `hellPresence` refusent. À vérifier : est-ce voulu ?
+- Royaume tombé (`portalOut`) : `hellWhy()` rend « Le portail est éteint : la guerre est finie », donc ni la vue (`enterHell`) ni les troupes (`sendThroughPortal`, `recruitHell`) ne passent plus, et `hellPresence` est faux. Voir [fin-du-royaume.md](fin-du-royaume.md).
 - Distance des tirs et portées : toujours du **bord** de la cible (rayon déduit), pas du centre.
 
 ## Pour modifier
