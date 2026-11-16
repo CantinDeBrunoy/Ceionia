@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import * as THREE from 'three';
 import { World, N, MOUNTAIN_H, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { mulberry32 } from '../src/core/rng';
@@ -12,11 +13,12 @@ import { GEAR, gearGaps, emptyStock } from '../src/sim/gear';
  * « Fouiller l'épave » ne fouillait rien, « Ramer face aux vagues » ne faisait ramer personne
  */
 
-// l'imprévu à faire survenir : le tirage au hasard est remplacé par celui qu'on veut voir, au bon moment
+// l'imprévu à faire survenir : le tirage au hasard est remplacé par celui qu'on veut voir, au plus tôt de ce que ses règles
+// permettent (à l'arrivée s'il n'a ni `arrive` ni `from` : le pire moment pour être vu)
 let forced: ExpEvent | null = null;
 vi.mock('../src/sim/events', async (orig) => {
   const m = await orig<typeof import('../src/sim/events')>();
-  return { ...m, pickEvent: (ctx: { arrive: boolean }, seen: string[]) => (forced && !seen.includes(forced.id) && !!forced.arrive === ctx.arrive ? forced : null) };
+  return { ...m, pickEvent: (ctx: { arrive: boolean }, seen: string[]) => (forced && !seen.includes(forced.id) && (forced.arrive || (forced.from === undefined && !forced.missions?.length) ? ctx.arrive : !ctx.arrive) ? forced : null) };
 });
 const { Expeditions } = await import('../src/sim/expeditions');
 const { Agents } = await import('../src/sim/agents');
@@ -83,10 +85,16 @@ function fixture(ev: ExpEvent): { m: Mission; ci: number; age: number } | null {
   return null;
 }
 
+/**
+ * Imprévus que la scène annonce par ses effets plutôt que par des objets à elle : pierres qui tombent, poissons qui sautent,
+ * torches qui baissent, gaz, rafale autour de la montgolfière
+ */
+const BY_FX = new Set(['ledge', 'scree', 'rockfall', 'shoal', 'dark', 'firedamp', 'gust']);
+
 const r2 = (n: number) => Math.round(n * 50) / 50;
 
 /** Joue l'imprévu avec l'option `pick` et relève ce que montre la scène pendant les secondes qui suivent la décision */
-function play(ev: ExpEvent, fx: { m: Mission; ci: number; age: number }, pick: number): { sig: string; staged: boolean; took: boolean } | null {
+function play(ev: ExpEvent, fx: { m: Mission; ci: number; age: number }, pick: number): { sig: string; staged: boolean; took: boolean; seen: string } | null {
   const w = fresh(fx.age);
   if (fx.m.id === 'allywar') { w.diplo.path = 'war'; w.diplo.conflict = 'open'; w.diplo.battle = 'none'; } else if (fx.m.talks) { w.diplo.path = 'peace'; w.diplo.conflict = 'open'; }
   // tout se rejoue à l'identique : même hasard, mêmes habitants
@@ -106,6 +114,16 @@ function play(ev: ExpEvent, fx: { m: Mission; ci: number; age: number }, pick: n
     let i = 0;
     for (; i < 40000 && !a.wait && ex.active.includes(a); i++) { agents.update(0.1, 10, fx.age, false, 40, 0); ex.update(0.1); view.update(0.1); }
     if (!a.wait) return null;
+    // pendant la décision, ce que l'imprévu annonce est sur la scène, en vue, près de l'équipe (l'aileron annoncé à l'arrivée,
+    // quand le bateau était encore à quai, ne se voyait pas : retour de l'auteur, nov. 2026)
+    for (let f = 0; f < 20; f++) { agents.update(0.05, 10, fx.age, false, 40, 0); ex.update(0.05); view.update(0.05); }
+    const sc0 = (view as unknown as { shows: Map<number, { scene: { stagings: { id: string; objs: THREE.Object3D[] }[] } | null }> }).shows.get(a.id)?.scene;
+    // (près d'un membre de l'équipe, à pied ou à bord : là où regarde la caméra qui la suit)
+    const team = a.party.map((id) => agents.agents.find((g) => g.id === id)).filter((g) => !!g).map((g) => [g!.x, g!.z]);
+    const near = (sc0?.stagings.filter((x) => x.id === ev.id) ?? []).flatMap((x) => x.objs).filter((o) => { if (!o.visible) return false; const p = o.getWorldPosition(new THREE.Vector3()); return team.some(([x, z]) => Math.hypot(p.x - x, p.z - z) < 4); }).length;
+    // (le mégalodon qui fonce, le kraken : c'est le monstre de la scène qu'on annonce)
+    const monster = (sc0 as unknown as { monster?: { obj: THREE.Object3D } | null } | undefined)?.monster?.obj.visible;
+    const seen = near || monster ? '' : 'rien en vue pendant la décision';
     // l'équipe a emporté de tout : chaque option qui demande une pièce peut se prendre
     for (const g of GEAR) a.gear[g.id] = Math.max(a.gear[g.id] ?? 0, 1);
     const took = ex.canTake(a, pick) && ex.decide(a, pick);
@@ -123,7 +141,7 @@ function play(ev: ExpEvent, fx: { m: Mission; ci: number; age: number }, pick: n
         sc?.boat ? [r2(sc.boat.obj.position.x), r2(sc.boat.obj.position.z), r2(sc.boat.obj.rotation.y)] : 0,
       ]);
     }
-    return { sig: JSON.stringify(out), staged, took };
+    return { sig: JSON.stringify(out), staged, took, seen };
   } finally {
     spy.mockRestore();
     forced = null;
@@ -152,6 +170,7 @@ describe('chaque choix d’un imprévu a sa propre suite', () => {
         expect(play(ev, fx, 0)!.sig, `${ev.id} : relevé instable`).toBe(runs[0]!.sig);
         runs.forEach((r, i) => {
           if (!r!.took) bad.push(`${ev.id} ${i} : option refusée`);
+          if (i === 0 && r!.seen && !BY_FX.has(ev.id)) bad.push(`${ev.id} : ${r!.seen}`);
           if (!r!.staged) bad.push(`${ev.id} ${i} « ${ev.options[i].label} » : rien sur la scène`);
           for (let j = 0; j < i; j++) if (runs[j]!.sig === r!.sig) bad.push(`${ev.id} ${i} « ${ev.options[i].label} » = ${j} « ${ev.options[j].label} »`);
         });

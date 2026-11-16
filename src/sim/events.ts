@@ -236,7 +236,7 @@ export const EVENTS: ExpEvent[] = [
   },
   {
     // le mégalodon fonce sur la galère, gueule ouverte
-    id: 'lunge', where: ['river'], scenes: ['megalodon'], title: 'Le mégalodon fonce sur la galère',
+    id: 'lunge', where: ['river'], scenes: ['megalodon'], from: 0.25, title: 'Le mégalodon fonce sur la galère',
     text: 'L’aileron plonge, puis la gueule géante jaillit droit sur la galère !',
     options: [
       { label: 'Virer de bord à toutes rames', risk: 0.9, work: 4, text: 'Un coup de barre, et la gueule s’est refermée sur le vide.' },
@@ -303,12 +303,12 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'runes', where: ['river'], scenes: ['portal'], arrive: true, title: 'Des runes sur la plage',
-    text: 'Sur les rochers de la plage, des signes inconnus sont gravés dans la pierre noire, et ils luisent doucement.',
+    id: 'runes', where: ['river'], scenes: ['portal'], arrive: true, title: 'Des runes sur la rive',
+    text: 'Sur les rochers de la rive, face à l’île, des signes inconnus sont gravés dans la pierre noire, et ils luisent doucement.',
     options: [
-      { label: 'Recopier les runes avant de monter', risk: 0.8, work: 5, text: 'Les runes recopiées ont guidé l’équipe : elle savait où poser les mains sur l’arche.' },
+      { label: 'Recopier les runes avant d’embarquer', risk: 0.8, work: 5, text: 'Les runes recopiées ont guidé l’équipe : elle savait où poser les mains sur l’arche.' },
       { label: 'Les éclairer à la torche', needs: LIGHTS, risk: 0.7, work: 2, text: 'À la lueur des torches, les runes ont montré le chemin jusqu’à l’arche.' },
-      { label: 'Monter tout droit à l’arche', risk: 1.1, work: -3, text: 'On a filé droit sur l’arche, sans s’attarder sur ces drôles de signes.' },
+      { label: 'Embarquer sans s’attarder', risk: 1.1, work: -3, text: 'On a filé droit sur l’arche, sans s’attarder sur ces drôles de signes.' },
     ],
   },
   {

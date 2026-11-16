@@ -984,6 +984,12 @@ export class ExpeditionScene {
   private nudged = { x: 0, z: 0, yaw: 0, lift: 0 };
   /** où regarde l'équipage quand l'imprévu lui donne un geste (null : sa place habituelle), et le dernier coup de rame */
   private crewFace: number | null = null;
+  /** l'embarquement : les quais (par amarrage), ceux qui y vont, ceux qui sont à bord, ceux qui sont redescendus, depuis quand */
+  private docks = new Map<string, [number, number]>();
+  private boarding = new Set<number>();
+  private aboard = new Set<number>();
+  private landed = new Set<number>();
+  private boardT = 0;
   /** sur l'île du portail, l'équipe recule vers la plage (l'arche gronde) : de combien */
   private isleBack = 0;
   private stroke = 0;
@@ -1639,7 +1645,7 @@ export class ExpeditionScene {
       puncture: () => this.stagePuncture(s), gust: () => this.stageGust(s), clouds: () => this.stageClouds(s), cows: () => this.stageCows(s, a),
       tusks: () => this.stageTusks(s, a), blizzard: () => this.stageBlizzard(s, a, fail),
       shark: () => this.stageShark(s), croc: () => this.stageCroc(s, a), swell: () => this.stageSwell(s, 'swell'), wreck: () => this.stageWreck(s, false), derelict: () => this.stageWreck(s, true), squall: () => this.stageSwell(s, 'squall'),
-      crossing: () => this.stageSwell(s, 'crossing'), lunge: () => this.stageLunge(s), runes: () => this.stageRunes(s, a), rumble: () => this.stageRumble(s, a),
+      crossing: () => this.stageSwell(s, 'crossing'), lunge: () => this.stageLunge(s), runes: () => this.stageRunes(s), rumble: () => this.stageRumble(s, a),
       bones: () => this.stageBones(s, a), flames: () => this.stageFlames(s, a), flame: () => this.stageFlame(s, a), record: () => this.stageRecord(s, a),
       // la diplomatie de l'archipel : au large, contre le bateau de l'équipe
       mistrust: () => this.stageMistrust(s, a), grievance: () => this.stageGrievance(s, a), seat: () => this.stageSeat(s, a), menu: () => this.stageMenu(s, a),
@@ -2189,6 +2195,8 @@ export class ExpeditionScene {
       r += (want - r) * Math.min(1, dt * (pick === 1 && t > 1.1 ? 2.5 : 1.4));
       ang += dt * (pick === 1 && t > 1.1 ? 2.4 : 1.3);
       let x = o.x + Math.cos(ang) * r, z = o.z + Math.sin(ang) * r, y = bt.y - 0.03, pitch = 0, h = Math.atan2(-Math.sin(ang), Math.cos(ang));
+      // (jamais sur la berge : près de la rive, il tourne du côté du large)
+      if (this.depth(x, z) === null) { const [hx, hz] = bt.home, [qx, qz] = bt.out, l = Math.max(0.01, Math.hypot(qx - hx, qz - hz)); for (let k = 0.3; k <= 1.5 && this.depth(x, z) === null; k += 0.3) { x += (qx - hx) / l * 0.3; z += (qz - hz) / l * 0.3; } }
       // l'appât : trois poissons jetés au loin, le requin bondit dessus
       if (pick === 2) {
         if (!thrown) {
@@ -2817,38 +2825,32 @@ export class ExpeditionScene {
   }
 
   /**
-   * Des runes sur la plage de l'île du portail. Pendant la traversée, chaque choix se voit déjà à bord : on recopie (un
-   * parchemin), on allume les torches à la proue, ou l'on rame ferme pour arriver plus tôt. Débarqués, les pierres gravées
-   * luisent : on s'arrête devant pour les recopier, les torches les font briller, ou l'on passe tout droit
+   * Des runes sur les rochers de la rive, face à l'île du portail, à côté du quai d'où part la galère. Recopier : on s'y arrête,
+   * un parchemin au-dessus des pierres, et la galère attend. Les torches : deux flammes les éclairent, elles brillent deux fois
+   * plus. Embarquer sans s'attarder : à toutes rames, les pierres luisent seules derrière
    */
-  private stageRunes(s: Staging, a: ActiveExpedition) {
-    const isle = this.isle, bt = this.boat;
-    if (!isle || !bt) return () => false;
-    const [lx, lz] = isle.land, [gx, gz] = isle.gate, stones: THREE.Object3D[] = [], glow: THREE.Mesh[] = [];
+  private stageRunes(s: Staging) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    const [dx, dz] = this.dockOf(bt.home), [hx, hz] = bt.home, ux = dx - hx, uz = dz - hz, l = Math.max(0.01, Math.hypot(ux, uz));
+    const stones: THREE.Object3D[] = [], glow: THREE.Mesh[] = [];
     for (let i = 0; i < 3; i++) {
-      const k = 0.3 + i * 0.12, [x, z] = this.near(lx + (gx - lx) * k + (i - 1) * 0.35, lz + (gz - lz) * k, lx, lz);
+      const [x, z] = this.near(dx + ux / l * 0.35 - uz / l * (i - 1) * 0.3, dz + uz / l * 0.35 + ux / l * (i - 1) * 0.3, dx, dz);
       stones.push(this.sPut(s, stoneGeo(), x, z, i));
       const g = this.sAdd(s, new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), GREEN));
       g.position.set(x, this.world.surfaceAt(x, z) + 0.1, z); s.own.push(g.geometry); glow.push(g);
     }
     const scroll = this.sAdd(s, new THREE.Mesh(scrollGeo(), mats.body));
     scroll.visible = false;
-    const fires = [0, 1].map(() => { const f = this.sFlame(s, lx, lz, 0.6); f.visible = false; return f; });
+    const fires = [0, 1].map(() => { const f = this.sFlame(s, dx, dz, 0.6); f.visible = false; return f; });
     return () => {
-      const p = s.pick, t = s.after, ashore = this.boatK >= ISLE_LAND, o = bt.obj.position;
-      glow.forEach((g, i) => g.scale.setScalar((p === 1 && ashore ? 2 : 1) * (0.8 + 0.3 * Math.sin(this.t * 3 + i))));
+      const p = s.pick, t = s.after;
+      glow.forEach((g, i) => g.scale.setScalar((p === 1 && t < 5 ? 2 : 1) * (0.8 + 0.3 * Math.sin(this.t * 3 + i))));
       if (p < 0) return true;
-      if (!ashore) {
-        if (p === 0) { this.crewAct = 'work'; scroll.visible = true; scroll.position.set(o.x, o.y + 0.2, o.z); scroll.rotation.y = this.t; }
-        if (p === 1) fires.forEach((f, i) => { const hd = bt.obj.rotation.y; f.visible = true; f.position.set(o.x + Math.sin(hd) * 0.2 + Math.cos(hd) * (i ? 0.05 : -0.05), o.y + 0.12, o.z + Math.cos(hd) * 0.2 - Math.sin(hd) * (i ? 0.05 : -0.05)); });
-        if (p === 2) this.rowing = true;
-        return t < 60;
-      }
-      // débarqués : devant les pierres
-      scroll.visible = p === 0 && this.boatK < ISLE_UP;
-      if (scroll.visible) scroll.position.set(stones[1].position.x, stones[1].position.y + 0.2, stones[1].position.z);
-      fires.forEach((f, i) => { f.visible = p === 1 && this.boatK < ISLE_UP; f.position.set(stones[i * 2].position.x, stones[i * 2].position.y + 0.18, stones[i * 2].position.z); });
-      return this.boatK < ISLE_UP + 0.05 && t < 90;
+      if (p === 0 && t < 5) { this.moor = true; scroll.visible = true; scroll.position.set(stones[1].position.x, stones[1].position.y + 0.2, stones[1].position.z); scroll.rotation.y = this.t; } else scroll.visible = false;
+      fires.forEach((f, i) => { f.visible = p === 1 && t < 5; f.position.set(stones[i * 2].position.x, stones[i * 2].position.y + 0.18, stones[i * 2].position.z); });
+      if (p === 2 && t < 5) this.rowing = true;
+      return t < 6;
     };
   }
 
@@ -2927,10 +2929,11 @@ export class ExpeditionScene {
     const bt = this.boat;
     if (!bt) return () => false;
     const [hx, hz] = bt.home, [ox, oz] = bt.out, len = Math.max(0.01, Math.hypot(ox - hx, oz - hz)), ux = (ox - hx) / len, uz = (oz - hz) / len;
-    // là où le bateau passera : sur sa route vers le large, un peu de côté (sur l'eau) ; à défaut, à côté du bateau
+    // là où le bateau passera : sur sa route vers le large, un peu de côté (sur l'eau), à deux cases environ de la rive pour
+    // qu'on la voie dès qu'elle est annoncée ; à défaut, à côté du bateau
     const [bx0, bz0] = this.boatBase();
     let spot: [number, number] | null = null;
-    for (const k of [0.5, 0.4, 0.6, 0.3, 0.7]) for (const side of [1, -1]) {
+    for (const k of [2, 1.6, 2.4, 1.2, 2.8].map((d) => Math.min(0.7, d / len))) for (const side of [1, -1]) {
       const x = hx + (ox - hx) * k - uz * side * 0.55, z = hz + (oz - hz) * k + ux * side * 0.55;
       if (!spot && this.depth(x, z) !== null && Math.hypot(x - bx0, z - bz0) > 0.8) spot = [x, z];
     }
@@ -4144,6 +4147,13 @@ export class ExpeditionScene {
     else for (const b of this.beasts) this.stepBeast(b, dt, a);
     this.workK = k;
     if (this.boat && onSite) this.stepBoat(dt);
+    // le travail fini avant que tout l'équipage soit redescendu au quai : il y redescend d'abord, puis rentre au village à pied
+    // (avant, il partait à pied de sa place à bord et marchait dans l'eau jusqu'à la rive)
+    else if (this.boat && (a.phase === 'back' || a.phase === 'home') && this.aboard.size > this.landed.size) {
+      const left = [...this.aboard].filter((id) => !this.landed.has(id));
+      this.embark(left, this.escort?.riders.includes(left[0]) ? this.escort.home : this.boat.home, true);
+      for (const id of left) if (this.landed.has(id)) this.agents.partyGo([id], a.base[0], a.base[1]);
+    }
     if (this.float) this.float.update(dt, k, onSite, (x, y, z) => this.puffAt(x, y, z));
     { const gone = a.phase === 'back' || a.phase === 'home'; this.salv?.update(dt, k, onSite, gone, gone && !a.ok); }
     if (this.swimmers.length) this.stepSwimmers(dt);
@@ -4470,28 +4480,35 @@ export class ExpeditionScene {
     const bt = this.boat!;
     let u: number, back: boolean;
     // retenu par la suite d'un imprévu, il reste où il est ; libéré, il rattrape le travail en douceur
-    if (this.moor) this.idle += dt;
+    // (il attend aussi au quai que tout l'équipage soit monté)
+    this.boardT += dt;
+    const boarding = !this.salv && [...bt.riders, ...(this.escort?.riders ?? [])].some((id) => !this.aboard.has(id));
+    if (this.moor || boarding) this.idle += dt;
     else this.boatK = this.workK <= this.boatK ? this.workK : Math.min(this.workK, this.boatK + dt * 0.02 + (this.workK - this.boatK) * Math.min(1, dt * 0.6));
     if (this.offshore) {
       // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
       // (la galère de la chasse reste sur place jusqu'à ce que le monstre soit mort ou enfui, voir `FATE_AT`)
       const k = this.boatK, home = this.monster ? 0.87 : 0.8, go = this.isle ? ISLE_LAND : this.story === 'isles' ? FLOAT_LAND - 0.01 : 0.2;
-      u = k < go ? smooth(k / go) : k < home ? 1 : 1 - smooth(Math.min(1, (k - home) / (0.97 - home)));
+      // (rentré au quai à 0,93 du travail : le temps que l'équipage redescende avant de repartir)
+      u = k < go ? smooth(k / go) : k < home ? 1 : 1 - smooth(Math.min(1, (k - home) / (0.93 - home)));
       back = k >= home;
     } else {
       // aller-retour lent (une vingtaine de secondes), pause au large le temps de pêcher
       const ph = ((this.t - this.idle) / 22) % 1;
-      u = ph < 0.3 ? smooth(ph / 0.3) : ph < 0.75 ? 1 : 1 - smooth((ph - 0.75) / 0.25);
-      back = ph >= 0.75;
+      // (à la fin du travail, elle revient au quai, où l'équipage redescend)
+      u = (ph < 0.3 ? smooth(ph / 0.3) : ph < 0.75 ? 1 : 1 - smooth((ph - 0.75) / 0.25)) * Math.min(1, Math.max(0, (0.95 - this.workK) / 0.07));
+      back = ph >= 0.75 || this.workK > 0.88;
     }
     const war = this.story === 'megalodon' || this.story === 'kraken', es = this.escort;
     // la seconde galère de la chasse part avec la première, avec sa part de l'équipage, et prend le monstre de l'autre côté
     // (l'équipe du portail débarque sur l'île le temps du travail : la galère l'attend, vide, au bord de la plage)
     const ashore = !!this.isle && this.offshore && this.boatK >= ISLE_LAND && this.boatK < ISLE_BACK;
     const afloat = !!this.float && this.offshore && this.boatK >= FLOAT_LAND && this.boatK < FLOAT_BACK;
-    const crew = ashore || afloat || this.salv ? [] : es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders;
+    // on monte à bord depuis le quai (la berge au plus près de l'amarrage), et l'on y redescend, revenu, avant de rentrer à pied
+    const docked = this.offshore ? this.boatK >= 0.93 || this.workK >= 0.985 : this.workK >= 0.96;
+    const crew = ashore || afloat || this.salv ? [] : this.embark(es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders, bt.home, docked);
     const [px, pz] = this.sail(bt.obj, bt.home, bt.out, bt.y, u, back, dt, crew, war || !!this.isle, 0, this.salv ? 0.2 : 1);
-    if (es) this.sail(es.obj, es.home, es.out, bt.y, u, back, dt, es.riders, war, 1.3);
+    if (es) this.sail(es.obj, es.home, es.out, bt.y, u, back, dt, this.embark(es.riders, es.home, docked), war, 1.3);
     // la chasse : la vue garde le combat entier (les deux galères, le monstre entre elles)
     this.focus = this.arena && es ? [(px + es.obj.position.x) / 2, (pz + es.obj.position.z) / 2] : this.salv ? this.salv.focus : [px, pz];
     if (ashore) this.stepIsle(this.boatK);
@@ -4528,6 +4545,53 @@ export class ExpeditionScene {
       this.agents.ride(id, { x, z, y: w.surfaceAt(x, z), heading, act: this.crewAct ?? (moving ? 'stroll' : k > ISLE_WAKE ? 'cheer' : 'work') });
     });
     this.focus = [gate[0] + Math.cos(toBeach) * 1.2, gate[1] + Math.sin(toBeach) * 1.2];
+  }
+
+  /**
+   * Le quai d'un amarrage : le point de berge le plus proche (par où l'équipage monte à bord et redescend). Avant, l'équipe
+   * s'arrêtait à deux cases du bateau et glissait jusqu'à sa place au-dessus de l'eau, puis, revenue, redescendait de sa place
+   * et marchait dans l'eau jusqu'à la rive (retour de l'auteur, nov. 2026)
+   */
+  private dockOf(home: [number, number]): [number, number] {
+    const key = `${home[0].toFixed(2)},${home[1].toFixed(2)}`, had = this.docks.get(key);
+    if (had) return had;
+    let dock: [number, number] = home;
+    search: for (let r = 0.25; r <= 3; r += 0.25)
+      for (let i = 0; i < 24; i++) {
+        const x = home[0] + Math.cos((i / 24) * Math.PI * 2) * r, z = home[1] + Math.sin((i / 24) * Math.PI * 2) * r;
+        if (this.dry(x, z)) { dock = [x, z]; break search; }
+      }
+    this.docks.set(key, dock);
+    return dock;
+  }
+
+  /** Terre ferme : ni mer, ni lac, ni rivière, et le sol au-dessus de l'eau voisine (pas la vase de la rive) */
+  private dry(x: number, z: number) {
+    const w = this.world, cx = Math.floor(x), cz = Math.floor(z);
+    if (!w.inCells(cx, cz)) return false;
+    const k = w.ci(cx, cz);
+    return !w.lake[k] && !w.isWet(cx, cz) && w.hAt(x, z) > SEA + 0.03;
+  }
+
+  /**
+   * L'équipage d'un bateau : chacun va d'abord à pied jusqu'au quai, puis monte à bord (au bout de 8 s, il monte d'où il est) ;
+   * `docked` : revenu au quai, chacun redescend sur la berge en glissant, puis y pose pied. Rend ceux qui sont à bord
+   */
+  private embark(ids: number[], home: [number, number], docked: boolean): number[] {
+    const dock = this.dockOf(home), y = this.world.surfaceAt(dock[0], dock[1]), out: number[] = [];
+    for (const id of ids) {
+      const p = this.agents.partyPositions([id])[0];
+      if (docked) {
+        if (this.landed.has(id) || !this.aboard.has(id)) continue;
+        if (!p || Math.hypot(p[0] - dock[0], p[1] - dock[1]) < 0.05) { this.agents.ride(id, null); this.landed.add(id); continue; }
+        this.agents.ride(id, { x: dock[0], z: dock[1], y, heading: Math.atan2(dock[0] - p[0], dock[1] - p[1]), act: 'stroll' });
+        continue;
+      }
+      if (this.aboard.has(id)) { out.push(id); continue; }
+      if (!p || Math.hypot(p[0] - dock[0], p[1] - dock[1]) < 0.4 || this.boardT > 8) { this.aboard.add(id); out.push(id); continue; }
+      if (!this.boarding.has(id)) { this.boarding.add(id); this.agents.memberGo(id, dock[0], dock[1], Math.atan2(home[0] - dock[0], home[1] - dock[1])); }
+    }
+    return out;
   }
 
   /**

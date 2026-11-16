@@ -151,6 +151,8 @@ const SADDLE = 0.12 + 0.42 * (0.3 - HUMAN), RIDE_SPEED = 1.6;
 const CAR_SEAT = 0.035, CAR_SPEED = 2.1;
 /** Une place à bord plus loin que `GLIDE_MIN` cases se rejoint en glissant, à la vitesse `GLIDE_RATE` (part de l'écart par seconde, en exponentielle) */
 const GLIDE_MIN = 0.25, GLIDE_RATE = 5;
+/** Vitesse la plus grande d'une glissade (cases par seconde) : de loin, l'approche exponentielle faisait des bonds de 0,7 case */
+const GLIDE_MAX = 3;
 const SEAT_P = new THREE.Vector3();
 /** La selle, au-dessus de l'os du dos : sa hauteur au-dessus de l'os (repère du cheval de 0,34), le creux du dos où l'on s'assied */
 export const SADDLE_UP = 0.04;
@@ -1216,7 +1218,7 @@ export class Agents {
       const d = Math.hypot(r.x - a.x, r.z - a.z);
       if (d > GLIDE_MIN) a.glide = true;
       if (a.glide && d > 0.02) {
-        const k = 1 - Math.exp(-this.lastDt * GLIDE_RATE);
+        const k = Math.min(1 - Math.exp(-this.lastDt * GLIDE_RATE), (GLIDE_MAX * this.lastDt) / d);
         a.x += (r.x - a.x) * k; a.z += (r.z - a.z) * k;
       } else { a.glide = false; a.x = r.x; a.z = r.z; }
       a.ride = r; a.heading = r.heading;
