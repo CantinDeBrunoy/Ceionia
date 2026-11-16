@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
-import { Agents, type Act } from '../sim/agents';
+import { Agents, type Act, type Ride } from '../sim/agents';
 import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntSpot } from '../sim/expeditions';
 import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
@@ -819,6 +819,10 @@ export const ISLE_LAND = 0.22, ISLE_UP = 0.34, ISLE_WAKE = 0.6, ISLE_DOWN = 0.7,
  * jusqu'au bout. Pas de retour : l'expédition s'achève là-bas
  */
 export const SC_LAND = 0.42, SC_POST = 0.68;
+/** jusqu'où chercher, autour de la plage rivale, l'eau où la barque accoste (cases) */
+const SCOUT_REACH = 12;
+/** à combien de cases de la porte rivale les éclaireurs se tapissent */
+const SCOUT_GAP = 5;
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
 const LINE = new THREE.LineBasicMaterial({ color: 0xf2f2f2, transparent: true, opacity: 0.8 });
@@ -3904,7 +3908,7 @@ export class ExpeditionScene {
     // (le bateau est déjà au mouillage de départ, avant l'arrivée de l'équipe)
     bt.obj.position.set(bt.home[0], bt.y, bt.home[1]);
     bt.obj.rotation.y = Math.atan2(bt.out[0] - bt.home[0], bt.out[1] - bt.home[1]);
-    const diver = /scaphandr|plong|diver|dive/i.test(`${a.c.label} ${a.c.doing ?? ''}`);
+    const diver = a.c.variant === 'diver';
     this.salv = new Salvage({ world: this.world, agents: this.agents, group: this.group, depth: (x, z) => this.depth(x, z), splash: (x, z, lv, big) => this.splash(x, z, lv, big) }, bt, a.party, diver, a.age);
     for (const o of this.salv.objs) this.props.push(o);
     this.focus = this.salv.focus;
@@ -4545,7 +4549,7 @@ export class ExpeditionScene {
     const boarding = !this.salv && [...bt.riders, ...(this.escort?.riders ?? [])].some((id) => !this.aboard.has(id));
     if (this.moor || boarding) this.idle += dt;
     else this.boatK = this.workK <= this.boatK ? this.workK : Math.min(this.workK, this.boatK + dt * 0.02 + (this.workK - this.boatK) * Math.min(1, dt * 0.6));
-    if (this.scout) { this.stepScout(dt); return; }
+    if (this.scout) { this.stepScout(dt, boarding); return; }
     if (this.offshore) {
       // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
       // (la galère de la chasse reste sur place jusqu'à ce que le monstre soit mort ou enfui, voir `FATE_AT`)
@@ -4587,18 +4591,18 @@ export class ExpeditionScene {
     const plan = ally ? townPlans(w).find((p) => p.people !== ally) : null;
     if (!plan) return false;
     const [bx, bz] = plan.points.plage, wet = (x: number, z: number) => w.inCells(x, z) && this.depth(x + 0.5, z + 0.5) !== null;
-    // le but : l'eau la plus proche de la plage
-    let goal = -1, gd = Infinity;
-    for (let dz = -8; dz <= 8; dz++) for (let dx = -8; dx <= 8; dx++) {
-      const x = Math.floor(bx) + dx, z = Math.floor(bz) + dz, d = Math.hypot(dx, dz);
-      if (d < gd && wet(x, z)) { gd = d; goal = z * N + x; }
+    // le départ : la case d'eau la plus proche du mouillage (il tombe souvent au coin d'une case de berge : on la refusait,
+    // et la barque partait en simple voyage, deux à bord, le troisième éclaireur resté au quai)
+    let start = -1, sd = Infinity;
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      const x = Math.floor(wx) + dx, z = Math.floor(wz) + dz, d = Math.hypot(x + 0.5 - wx, z + 0.5 - wz);
+      if (d < sd && wet(x, z)) { sd = d; start = z * N + x; }
     }
-    const start = Math.floor(wz) * N + Math.floor(wx);
-    if (goal < 0 || !wet(Math.floor(wx), Math.floor(wz))) return false;
-    // le plus court chemin sur l'eau (huit voisins), du mouillage au but
+    if (start < 0) return false;
+    // toute l'eau que la barque peut atteindre (huit voisins, sans couper un coin de terre)
     const from = new Int32Array(N * N).fill(-1), q = [start];
     from[start] = start;
-    for (let i = 0; i < q.length && from[goal] < 0; i++) {
+    for (let i = 0; i < q.length; i++) {
       const c = q[i], x = c % N, z = (c / N) | 0;
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         const nx = x + dx, nz = z + dz, k = nz * N + nx;
@@ -4607,7 +4611,14 @@ export class ExpeditionScene {
         from[k] = c; q.push(k);
       }
     }
-    if (from[goal] < 0) return false;
+    // le but : de cette eau-là, la case la plus proche de la plage (la plus proche tout court pouvait être une flaque
+    // fermée au bord de la plage : plus de route, et la scène retombait en simple voyage)
+    let goal = -1, gd = Infinity;
+    for (let dz = -SCOUT_REACH; dz <= SCOUT_REACH; dz++) for (let dx = -SCOUT_REACH; dx <= SCOUT_REACH; dx++) {
+      const x = Math.floor(bx) + dx, z = Math.floor(bz) + dz, d = Math.hypot(dx, dz);
+      if (d < gd && w.inCells(x, z) && from[z * N + x] >= 0) { gd = d; goal = z * N + x; }
+    }
+    if (goal < 0) return false;
     const cells: number[] = [];
     for (let c = goal; c !== start; c = from[c]) cells.push(c);
     cells.push(start);
@@ -4620,10 +4631,19 @@ export class ExpeditionScene {
     // sur l'île : la plage, puis vers la ville jusqu'au poste d'observation (à mi-chemin des remparts, sur la terre)
     const walls: [number, number] = plan.points.portes[0] ?? [plan.x, plan.z];
     const land: [number, number] = [bx, bz];
+    // le poste : à `SCOUT_GAP` cases de la porte, côté plage, sur la terre ferme (à mi-chemin, il était à une vingtaine de
+    // cases des remparts, hors de la vue ; et un creux sous le niveau de la mer les tapissait dans une flaque)
+    const gl = Math.max(0.01, Math.hypot(walls[0] - bx, walls[1] - bz));
     let post: [number, number] = [(bx + walls[0]) / 2, (bz + walls[1]) / 2];
-    for (let k = 0.5; k > 0.15 && this.depth(post[0], post[1]) !== null; k -= 0.05) post = [bx + (walls[0] - bx) * k, bz + (walls[1] - bz) * k];
+    for (const gap of [SCOUT_GAP, SCOUT_GAP + 1, SCOUT_GAP - 1, SCOUT_GAP + 2, SCOUT_GAP + 3, SCOUT_GAP + 5, SCOUT_GAP + 8]) {
+      const k = Math.max(0.1, 1 - gap / gl), p: [number, number] = [bx + (walls[0] - bx) * k, bz + (walls[1] - bz) * k];
+      if (this.dry(p[0], p[1])) { post = p; break; }
+    }
     const mid: [number, number] = [(land[0] + post[0]) / 2 + (post[1] - land[1]) * 0.12, (land[1] + post[1]) / 2 - (post[0] - land[0]) * 0.12];
-    this.scout = { route, len, walk: [land, mid, post], post, walls };
+    // on met pied à terre sur la berge la plus proche de l'accostage, puis on remonte vers la plage
+    const ashore = this.dockOf(route[route.length - 1]);
+    const walk: [number, number][] = Math.hypot(ashore[0] - land[0], ashore[1] - land[1]) > 0.5 ? [ashore, land, mid, post] : [land, mid, post];
+    this.scout = { route, len, walk, post, walls };
     void a;
     return true;
   }
@@ -4632,15 +4652,16 @@ export class ExpeditionScene {
    * Les éclaireurs : la barque suit sa route jusqu'à la plage rivale (la vue la suit), puis l'équipe débarque, remonte la
    * plage et les dunes en file, et se tapit au poste d'observation, face aux remparts (la barque reste à la plage, vide)
    */
-  private stepScout(dt: number) {
+  private stepScout(dt: number, boarding: boolean) {
     const bt = this.boat!, sc = this.scout!, w = this.world, k = this.boatK;
-    if (!this.moor) this.boatK = this.workK <= this.boatK ? this.workK : Math.min(this.workK, this.boatK + dt * 0.02 + (this.workK - this.boatK) * Math.min(1, dt * 0.6));
+    // (la barque attend au quai que les trois soient montés)
+    if (!this.moor && !boarding) this.boatK = this.workK <= this.boatK ? this.workK : Math.min(this.workK, this.boatK + dt * 0.02 + (this.workK - this.boatK) * Math.min(1, dt * 0.6));
     const total = sc.len[sc.len.length - 1], d = smooth(Math.min(1, k / SC_LAND)) * total;
     let i = 1;
     while (i < sc.len.length - 1 && sc.len[i] < d) i++;
     const seg = Math.max(0.001, sc.len[i] - sc.len[i - 1]), u = Math.min(1, Math.max(0, (d - sc.len[i - 1]) / seg));
     const ashore = k >= SC_LAND;
-    const [px, pz] = this.sail(bt.obj, sc.route[i - 1], sc.route[i], bt.y, u, false, dt, ashore ? [] : bt.riders, false, 0);
+    const [px, pz] = this.sail(bt.obj, sc.route[i - 1], sc.route[i], bt.y, u, false, dt, ashore ? [] : this.embark(bt.riders, bt.home, false), false, 0);
     this.focus = [px, pz];
     if (!ashore) return;
     // sur l'île : la marche (en file, de la plage au poste), puis à plat ventre face aux remparts
@@ -4740,6 +4761,9 @@ export class ExpeditionScene {
     return out;
   }
 
+  /** Une place à bord : la barque des éclaireurs, qui file vite, emporte son équipage (voir `Agents.ride`) */
+  private seat(id: number, r: Ride) { this.agents.ride(id, this.scout ? { ...r, fixed: true } : r); }
+
   /**
    * Une embarcation entre la rive (`home`) et le large (`out`), à `u` du trajet (`back` : elle rentre), qui tangue, et son
    * équipage `riders` assis à bord ; `ph` : son décalage de houle. Renvoie où elle est
@@ -4771,17 +4795,17 @@ export class ExpeditionScene {
       const lz = (war ? 0.16 - i * 0.12 : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading), side = war ? (i % 2 ? -0.035 : 0.035) * sc : 0;
       if (this.story === 'dive' && i === 1 && u > 0.97) {
         // le plongeur se met à l'eau, masque au ras de l'eau, à côté de la barque
-        this.agents.ride(id, { x: px + cz * 0.2, z: pz - sx * 0.2, y: y - 0.13, heading: heading + Math.PI / 2 });
+        this.seat(id, { x: px + cz * 0.2, z: pz - sx * 0.2, y: y - 0.13, heading: heading + Math.PI / 2 });
         return;
       }
       const rx = px + sx * lz + cz * side, rz = pz + cz * lz - sx * side;
       // à la rame, chacun tourne le dos à la proue et tire sur son aviron ; un geste demandé par l'imprévu (harpon levé,
       // acclamations) passe avant le reste
-      if (main && this.rowing) { this.agents.ride(id, { x: rx, z: rz, y: y + seat, heading: heading + Math.PI, act: 'work' }); return; }
+      if (main && this.rowing) { this.seat(id, { x: rx, z: rz, y: y + seat, heading: heading + Math.PI, act: 'work' }); return; }
       const face = war ? (mon && !back ? Math.atan2(mon.x - rx, mon.z - rz) : heading + (i % 2 ? -1 : 1) * Math.PI / 2) : heading + (i ? Math.PI / 2 : 0);
-      if (main && this.crewAct) { this.agents.ride(id, { x: rx, z: rz, y: y + seat * (this.crewAct === 'sit' ? 1 : WAR_STAND), heading: this.crewFace ?? face, act: this.crewAct }); return; }
+      if (main && this.crewAct) { this.seat(id, { x: rx, z: rz, y: y + seat * (this.crewAct === 'sit' ? 1 : WAR_STAND), heading: this.crewFace ?? face, act: this.crewAct }); return; }
       // (au combat, les hommes d'armes se dressent, harpon au poing, et frappent)
-      this.agents.ride(id, war && mon && !back ? { x: rx, z: rz, y: y + seat * WAR_STAND, heading: face, act: 'work' } : { x: rx, z: rz, y: y + seat, heading: face });
+      this.seat(id, war && mon && !back ? { x: rx, z: rz, y: y + seat * WAR_STAND, heading: face, act: 'work' } : { x: rx, z: rz, y: y + seat, heading: face });
     });
     // les avirons qui plongent : une gerbe de chaque bord, en cadence
     if (main && this.rowing && riders.length) {
@@ -5189,7 +5213,7 @@ export class ExpeditionScene {
     const hoard = this.put(hoardGeo(), mx + fx * 0.7 - fz * 0.5, mz + fz * 0.7 + fx * 0.5, face);
     hoard.scale.setScalar(1.6);
     for (let i = 0; i < 4; i++) { const [bx, bz] = this.near(mx + fx * (1.5 + i * 0.15) + fz * (i - 1.5) * 0.2, mz + fz * (0.6 + i * 0.15) - fx * (i - 1.5) * 0.2, cx, cz); this.put(pebbleGeo(), bx, bz, i).scale.set(1.4, 0.4, 0.4); }
-    const smoke = /enfum|smok/.test(a.c.doing ?? '');
+    const smoke = a.c.variant === 'smoke';
     if (smoke) { const [sx, sz] = this.near(mx + fx * 0.85, mz + fz * 0.85, cx, cz); this.fireAt(sx, sz); this.emits.push({ x: sx, y: y(sx, sz) + 0.08, z: sz, kind: 'smoke', every: 0.15, t: 0 }); }
     // le dragon, couché en travers de l'entrée, tête vers l'équipe (enfumé : encore dans le noir de la grotte)
     const actor = makeBeast('dragon', Math.floor(Math.abs(cx * 7 + cz * 3)) % 3, 1.5);

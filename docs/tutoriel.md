@@ -64,7 +64,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   3. `archPost` « Le comptoir » : un comptoir (`tradepost`) sur l'île de l'allié, près du port (les routes automatiques les relient).
   Aux étapes 1 à 3, la bulle montre l'onglet Bâtir, le rayon Production, puis la vignette ; une vignette cachée hors de la rangée qui défile (le port, le comptoir, au bout du rayon) : la flèche › (ou ‹), et une ligne dit « Cliquez sur la flèche › pour faire venir « Port », puis sur sa vignette. ». Le surlignage passe à la vignette dès qu'elle est visible. C'est `UI.buildAnchor(genre)` (`ui.ts`), qui sert à tout tutoriel qui fait poser un bâtiment.
   4. `archGold` « L'or » (à lire) : l'or fait passer les âges (20, 50, 100 : lus dans `AGES[n].reqGold`), et un clic sur l'or ouvre le comptoir pour vendre bois, pierre ou minerai. La bulle montre l'or de la barre des stocks.
-  Il s'achève si l'archipel ou l'allié manque (`live`), se cache hors de la surface (`away`).
+  Il s'achève si l'archipel ou l'allié manque (`live`), se cache hors de la surface (`away`). Toute bulle se tait pendant la bataille de l'archipel (`body.rivalWar`, dans `Tutorial.update`) : celle-ci couvrait son bandeau.
 - **Quand les chapitres se lancent** : une seule fois chacun, même le tutoriel fini, même s'il est en cours (la suite
   principale reprend après le chapitre). Jamais si le joueur a mis le tutoriel de côté (« Passer le tutoriel », ou
   désactivé à l'accueil ou dans les réglages). Sauf « L'or des voisins » (`ALWAYS`, `chapterDue`) : un mécanisme neuf que le joueur ne connaît pas ; il ne se tait que si le tutoriel est désactivé à l'accueil (`off`). « Passer ce chapitre » ne passe que le chapitre. « Recommencer » les réarme.

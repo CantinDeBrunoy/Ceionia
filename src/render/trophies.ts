@@ -40,8 +40,22 @@ const SLOTS: [number, number][][] = [
   [[0.6, -0.65], [-0.65, 0.6], [0.66, 0.52], [-0.62, -0.66], [0, -0.92]],
 ];
 export function trophySlot(id: TrophyId, age: number): [number, number] {
+  return slotAt(TROPHIES.indexOf(id), age);
+}
+/** La place du trophée de rang `i` (exportée pour les tests) */
+export function slotAt(i: number, age: number): [number, number] {
   const s = SLOTS[Math.max(0, Math.min(5, age))];
-  return s[TROPHIES.indexOf(id) % s.length];
+  if (i < s.length) return s[i];
+  // un trophée de plus que de places prévues (à ajouter dans SLOTS) : sur le pourtour, là où il y a le plus d'espace entre les autres
+  // (un modulo le posait sur le premier)
+  const used = s.concat(Array.from({ length: i - s.length }, (_, j) => slotAt(s.length + j, age)));
+  let best: [number, number] = [0.9, 0], far = -1;
+  for (let k = 0; k < 48; k++) {
+    const p: [number, number] = [Math.cos((k / 48) * Math.PI * 2) * 0.9, Math.sin((k / 48) * Math.PI * 2) * 0.9];
+    const d = Math.min(...used.map(([x, z]) => Math.hypot(x - p[0], z - p[1])));
+    if (d > far) { far = d; best = p; }
+  }
+  return best;
 }
 
 /** l'orientation de la vue d'ensemble (voir CameraRig.reset) */

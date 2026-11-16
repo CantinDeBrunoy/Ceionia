@@ -154,6 +154,8 @@ const CALLERS: ReadonlySet<string> = new Set(Object.keys(CALLS));
 /** Une majuscule en tête (noms d'îles et d'objectifs en début de phrase) */
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Le nom d'un objectif de la bataille de l'archipel */
+/** Sur place, une scène qui file plus vite que ceci (cases par seconde) est suivie sans lissage */
+const FOLLOW_FAST = 2;
 const goalName = (g: BattleGoal) => ({ plage: trx('la plage'), remparts: trx('les remparts'), port: trx('le port'), palais: trx('le palais') })[g];
 
 class Game implements UIHost {
@@ -293,6 +295,8 @@ class Game implements UIHost {
   /** le point suivi, lissé : le balancement du porte-fanion ne secoue plus la vue */
   private followSm: [number, number] | null = null;
   private followVel: [number, number] = [0, 0];
+  /** le point suivi à l'image d'avant, avant lissage (pour voir si la scène file) */
+  private followRaw: [number, number] | null = null;
   /** la vue est descendue d'elle-même avec la troupe suivie (elle remonte quand l'expédition est finie) */
   private autoUnder = false;
   /** réveil spontané d'un volcan : délai (secondes de jeu) et secousses annonciatrices en cours */
@@ -1261,7 +1265,13 @@ class Game implements UIHost {
     while (left > 1e-6 && !b.outcome && !b.waiting) { const s = Math.min(0.25, left); b.step(s, true, false); left -= s; }
     const [ox, oz] = [b.map.ox, b.map.oz];
     for (const n of b.news.splice(0)) {
-      if (n.type === 'goal' && n.next) { this.ui.banner(trx('{goal} : pris !', { goal: cap(goalName(n.goal)) }), trx('Objectif suivant : {goal}', { goal: goalName(n.next) })); audio.sfxAgeUp(); }
+      if (n.type === 'goal' && n.next) {
+        this.ui.banner(trx('{goal} : pris !', { goal: cap(goalName(n.goal)) }), trx('Objectif suivant : {goal}', { goal: goalName(n.next) }));
+        audio.sfxAgeUp();
+        // la vue glisse vers l'objectif suivant (elle restait sur la plage pendant qu'on se battait au port, puis aux remparts)
+        const [gx, gz] = b.goalAt[n.next];
+        this.cam.goTo(gx + ox, gz + oz, Math.max(this.cam.dist, 22));
+      }
       else if (n.type === 'choice') { this.rivalPause(true); this.diploChoice.showTactic(n.step); }
       else if (n.type === 'boat') this.ui.toast(trx('⛵ Une autre barque accoste ({n}/3) : nos soldats sautent dans les vagues.', { n: n.n }));
       else if (n.type === 'allyLands') this.ui.banner(trx('Nos alliés débarquent'), trx('{people} se battent à nos côtés', { people: cap(peopleName(this.world.diplo.ally!)) }));
@@ -1768,7 +1778,7 @@ class Game implements UIHost {
       f.voyage = true;
       const was = this.time.paused;
       this.time.paused = true;
-      showVoyage(uiRoot, /saut|jump/i.test(a.c.label), () => { this.expeditions.landNow(a); this.time.paused = was; });
+      showVoyage(uiRoot, a.c.variant === 'warp', () => { this.expeditions.landNow(a); this.time.paused = was; });
     }
   }
 
@@ -1989,7 +1999,7 @@ class Game implements UIHost {
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
     if (!a) return;
-    this.followPhase = ''; this.followLast = null; this.followSm = null;
+    this.followPhase = ''; this.followLast = null; this.followSm = null; this.followRaw = null;
     if (this.mode === 'under') {
       // depuis le monde souterrain : une troupe (ou des éclaireurs) déjà dans les galeries, la vue reste en bas et la suit,
       // puis remonte avec elle ; une équipe en surface, la vue remonte la retrouver
@@ -2477,15 +2487,20 @@ class Game implements UIHost {
         const pt = followPoint(this.expView.flagOf(followed.id), pos.length ? [pos[0][0], pos[0][1]] : undefined, focus, followed.phase === 'work', this.expView.liftOf(followed.id))!;
         let x = pt.x, z = pt.z;
         const lift = pt.lift;
+        // sur place, une scène qui file (la barque des éclaireurs, 7 cases par seconde) : la vue se pose sur elle, sans lissage
+        // (lissée, elle traînait cinq cases derrière, la barque hors de l'écran)
+        const raw = this.followRaw, work = followed.phase === 'work';
+        this.followRaw = [x, z];
+        const racing = work && !!raw && gdt > 0 && Math.hypot(x - raw[0], z - raw[1]) / gdt > FOLLOW_FAST && Math.hypot(x - raw[0], z - raw[1]) < 6;
         const sm = this.followSm;
-        if (!sm || this.followLast === null || Math.hypot(x - sm[0], z - sm[1]) > 6) this.followSm = [x, z];
+        if (!sm || this.followLast === null || racing || Math.hypot(x - sm[0], z - sm[1]) > 6) this.followSm = [x, z];
         else { const k = 1 - Math.exp(-Math.min(gdt, 0.25) / 0.6); sm[0] += (x - sm[0]) * k; sm[1] += (z - sm[1]) * k; x = sm[0]; z = sm[1]; }
-        const arrived = followed.phase === 'work' && this.followPhase !== 'work';
+        const arrived = work && this.followPhase !== 'work';
         this.followPhase = followed.phase;
         // en route (à cheval surtout), la vue vise un peu devant l'équipe, là où elle va : elle ne la regarde plus filer
         const last = this.followLast;
         this.followLast = [x, z];
-        if (last && followed.phase !== 'work' && gdt > 0) {
+        if (last && !work && gdt > 0) {
           const vx = (x - last[0]) / gdt, vz = (z - last[1]) / gdt, sp = Math.hypot(vx, vz);
           if (sp < 8) { this.followVel[0] += (vx - this.followVel[0]) * 0.1; this.followVel[1] += (vz - this.followVel[1]) * 0.1; }
           x += this.followVel[0] * 0.6; z += this.followVel[1] * 0.6;

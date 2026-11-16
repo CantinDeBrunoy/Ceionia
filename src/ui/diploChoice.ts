@@ -66,7 +66,7 @@ export class DiploChoice {
       const one = this.step === 1;
       this.el.innerHTML = `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rivalOf(ally), 64)}</div>
         <h4>${one ? tr('Les remparts') : tr('L’assaut final')}</h4>
-        <p class="pcSub">${one ? tr('La plage est à nous. La porte principale est fermée, des archers tiennent les murs. Comment prendre les remparts ?') : tr('Les remparts sont tombés. Reste le palais, sa garde et le chef rival.')}</p>
+        <p class="pcSub">${(one ? tr('La plage est à nous. La porte principale est fermée, des archers tiennent les murs. Comment prendre les remparts ?') : tr('Les remparts sont tombés. Reste le palais, sa garde et le chef rival.')).replace(/ ([?!:;])/g, ' $1')}</p>
         <div class="pcBtns dcCol">${one
           ? tac('ram', 'pcGo', 'militaire', tr('Le bélier contre la porte'), tr('un assaut direct : la porte cédera plus vite')) + tac('climb', 'pcNo', 'route', tr('Escalader par le côté'), tr('une brèche loin de la porte, sans l’enfoncer')) + tac('bombard', 'pcNo', 'eclair', tr('La flotte alliée bombarde'), tr('30 secondes : des boulets sur la porte et ses défenseurs'))
           : tac('charge', 'pcGo', 'militaire', tr('Assaut immédiat'), tr('sans attendre, tant que l’élan est là')) + tac('regroup', 'pcNo', 'sante', tr('Regrouper et soigner'), tr('30 secondes : les blessures se referment')) + tac('allyLead', 'pcNo', 'equipe', tr('Laisser l’allié ouvrir la voie'), tr('ses troupes partent devant, les nôtres suivent'))}</div>

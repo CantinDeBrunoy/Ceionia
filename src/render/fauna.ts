@@ -1039,7 +1039,8 @@ export class Fauna {
         group(`z${zi}b${b}-`, z.kind, list, count, z.n, z.radius, z.salt + b * 7);
       }
     }
-    group('wolf', 'wolf', edge[BIOME_TAIGA], Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)), (i) => 4 - (i % 2), 3.5, 100);
+    // taïga : une ou deux meutes de loups aux lisières (déclarées une seule fois : deux fois, leurs clés se doublaient)
+    group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, (i) => 4 - (i % 2), 3.5, 100);
     // alentours du village : quelques groupes des bêtes du biome dans un anneau autour de la place, à l'écart des maisons,
     // pour qu'on en croise sans partir loin
     const vc = villageCenter(w);
@@ -1064,7 +1065,6 @@ export class Fauna {
     }
     // visiteurs : des bêtes venues près de la vue quand on n'en voit aucune (voir `scout`)
     for (const v of this.visitors) if (nearbyAllowed(v.kind, this.lastAge) && budget[v.kind] >= v.n) { budget[v.kind] -= v.n; src.push(v); }
-    group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, () => 3, 3.5, 100);
     // grenouilles : surtout au bord des mares et des étangs, et dans les marais
     const ponds = banks.filter(pond), frogBanks = ponds.concat(ponds, banks.filter((k) => w.biome[k] === BIOME_MARSH), banks.filter((_, i) => i % 4 === 0));
     group('frog', 'frog', frogBanks, Math.min(28, Math.floor(frogBanks.length / 5)), (i) => 2 + (i % 2), 1.3, 110);

@@ -278,6 +278,8 @@ export class CommandUI implements ToolInput {
     this.box.style.display = 'none';
     this.barKey = '';
     document.body.classList.toggle('commanding', !!t);
+    // (la bataille de l'archipel : la bulle du tutoriel, sans rapport, couvrait son bandeau)
+    document.body.classList.toggle('rivalWar', t?.kind === 'rival');
     this.host.canvas.style.cursor = '';
     this.render();
   }

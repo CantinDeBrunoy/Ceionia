@@ -355,7 +355,8 @@ interface Agent {
 
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
 /** une place où l'on est porté (barque, nacelle, voiture) ; `act` : ce qu'on y fait (assis par défaut, null : debout) */
-export interface Ride { x: number; z: number; y: number; heading: number; act?: Act | null }
+/** Une place à bord (voir `Agents.ride`) ; `fixed` : sur une embarcation rapide, elle emporte son passager sans qu'il glisse */
+export interface Ride { x: number; z: number; y: number; heading: number; act?: Act | null; fixed?: boolean }
 
 export class Heap {
   keys: number[] = []; vals: number[] = [];
@@ -1208,13 +1209,16 @@ export class Agents {
   /**
    * Membre porté (assis dans une barque…) à la place donnée ; null le repose sur la berge, là où il est monté. Plus personne
    * n'y saute d'un coup (on croyait l'équipe téléportée) : une place à plus de `GLIDE_MIN` de lui (en montant à bord, en
-   * débarquant sur une plage), il la rejoint en glissant ; descendu, il repart à pied de là où il est, vers la berge
+   * débarquant sur une plage), il la rejoint en glissant ; descendu, il repart à pied de là où il est, vers la berge. Une place
+   * `fixed` (la barque rapide des éclaireurs) emporte son passager déjà à bord : seul l'écart qui reste se glisse (à 7 cases
+   * par seconde, la barque semait son équipage, qui la suivait au pas sur la mer)
    */
   ride(id: number, r: Ride | null) {
     const a = this.byId(id);
     if (!a) return;
     if (r) {
       if (!a.ride) a.shore = [a.x, a.z];
+      else if (r.fixed && a.ride.fixed) { a.x += r.x - a.ride.x; a.z += r.z - a.ride.z; }
       const d = Math.hypot(r.x - a.x, r.z - a.z);
       if (d > GLIDE_MIN) a.glide = true;
       if (a.glide && d > 0.02) {
