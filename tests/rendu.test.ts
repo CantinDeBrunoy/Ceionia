@@ -334,12 +334,12 @@ describe('ciel', () => {
     const focus = new THREE.Vector3(100, 0, 100), cam = new THREE.PerspectiveCamera(50, 1.5, 0.1, 500);
     cam.position.set(100, 30, 130); cam.lookAt(focus);
     // (pas d'orage : la pluie reste sous le seuil des éclairs)
-    const env = { weatherKind: 'clear', wantKind: 'clear', weatherK: 0, rainK: 0, daylight: 1, night: 0 } as unknown as Environment;
+    const env = { weatherKind: 'clear', wantKind: 'clear', weatherK: 0, rainK: 0, daylight: 1, night: 0, show: { rain: true, snow: true, fog: true }, shownRain: 0, shownFog: 0, shownOvercast: 0 } as unknown as Environment;
     const time = { hour: 11, season: 1, days: 3, frac: 0.3 } as unknown as GameTime, s = makeSeasonState();
     const bowT = () => (atm as unknown as { bowT: number }).bowT;
     // le temps qu'il fait, celui qui vient, et l'avancée de la transition
     const run = (sec: number, kind: string, want: string, k: number) => {
-      Object.assign(env, { weatherKind: kind, wantKind: want, weatherK: k, rainK: kind === 'rain' ? k * 0.5 : 0 });
+      Object.assign(env, { weatherKind: kind, wantKind: want, weatherK: k, rainK: kind === 'rain' ? k * 0.5 : 0, shownRain: kind === 'rain' ? k : 0, shownOvercast: kind === 'clear' ? 0 : k });
       for (let t = 0; t < sec; t += 0.1) atm.update(0.1, time, s, env, cam, focus);
     };
     // la pluie cesse, le soleil revient : l'arc-en-ciel
@@ -358,7 +358,7 @@ describe('ciel', () => {
   it('l’arc-en-ciel se tient derrière l’île, jamais devant, et s’efface quand on la voit de très loin', () => {
     const w = continent();
     const atm = new Atmosphere(w, null as unknown as AudioEngine);
-    const env = { weatherKind: 'clear', wantKind: 'clear', weatherK: 0, rainK: 0, daylight: 1, night: 0 } as unknown as Environment;
+    const env = { weatherKind: 'clear', wantKind: 'clear', weatherK: 0, rainK: 0, daylight: 1, night: 0, show: { rain: true, snow: true, fog: true }, shownRain: 0, shownFog: 0, shownOvercast: 0 } as unknown as Environment;
     const time = { hour: 11, season: 1, days: 3, frac: 0.3 } as unknown as GameTime, s = makeSeasonState();
     const bow = (atm as unknown as { bow: THREE.Mesh }).bow;
     const focus = new THREE.Vector3(N / 2, 0, N / 2), cam = new THREE.PerspectiveCamera(38, 1.5, 0.1, 2000);

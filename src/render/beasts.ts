@@ -641,15 +641,24 @@ function elephant(c: Coat): { rig: Rig; clips: ClipDef[] } {
     }
   });
 
+  return { rig: r, clips: pachyClips(null) };
+}
+
+/**
+ * Gestes des pachydermes (éléphant, mammouth) : marche lente et ample, charge oreilles déployées trompe levée, cueillette de
+ * la trompe, barrissement, poussière sur le dos ; `lie` : il se couche pour dormir (null : il somnole debout) ; `flapK` :
+ * ampleur des battements d'oreilles (petites oreilles du mammouth : moins)
+ */
+function pachyClips(lie: Quad['lie'], flapK = 1): ClipDef[] {
   const ph = { hL: 0, fL: 0.2, hR: 0.5, fR: 0.7 };
   /** oreilles écartées de la tête (angle autour de la charnière) */
-  const flap = (P: Pose, a: number) => { R(P, 'eL', 0, -a); R(P, 'eR', 0, a); };
+  const flap = (P: Pose, a: number) => { R(P, 'eL', 0, -a * flapK); R(P, 'eR', 0, a * flapK); };
   const trunk = (P: Pose, a: number, b: number, d: number, y = 0) => { R(P, 'trunk1', a, y); R(P, 'trunk2', b, y * 0.6); R(P, 'trunk3', d, y * 0.4); };
   const clips = quadClips({
     walk: { dur: 1.6, A: 0.28, L: 0.6, ph, bob: 0.004 },
     run: { dur: 0.85, A: 0.42, L: 0.8, ph, bob: 0.01, rock: 0.05 },
     neck: ['neck'], graze: [0.12], grazeHead: 0.12,
-    lie: null,
+    lie,
     hook: (n, u, P) => {
       if (n === 'Walk') {
         // la trompe balance comme un pendule, les oreilles battent doucement
@@ -700,7 +709,163 @@ function elephant(c: Coat): { rig: Rig; clips: ClipDef[] } {
       flap(P, 0.3 + 0.3 * pos(sn(u, 3)));
     }],
   );
-  return { rig: r, clips };
+  return clips;
+}
+
+// ---------- Mammouth ----------
+
+const MAMMOTH_COATS: Coat[] = [
+  // brun roux, brun sombre, fauve : laine du dessus plus claire, longs poils plus sombres
+  { fur: 0x6a4228, top: 0x8c5a36, dark: 0x40281a, hair: 0x4e301e, skin: 0x3a302c, tusk: 0xeee2c4, tip: 0xd8c8a4, nail: 0x5a4c40, eye: 0x140e0a },
+  { fur: 0x54382a, top: 0x725040, dark: 0x30201a, hair: 0x3e2a20, skin: 0x342c2a, tusk: 0xf0e6cc, tip: 0xdacca8, nail: 0x564a40, eye: 0x120c0a },
+  { fur: 0x7a5434, top: 0xa47448, dark: 0x4a3220, hair: 0x5c3c24, skin: 0x3e322c, tusk: 0xeadcb8, tip: 0xd2c09a, nail: 0x5e5044, eye: 0x161008 },
+];
+
+/**
+ * Mammouth : les os et les gestes de l'éléphant (`pachyClips`), une autre bête : garrot haut en bosse, dos qui tombe vers une
+ * croupe basse, crâne en dôme au-dessus d'un creux de nuque ; laine nuancée face par face, longue frange de poils qui pend
+ * des flancs et du poitrail jusqu'aux genoux, manchons laineux aux pattes ; petites oreilles rondes et velues ; grandes
+ * défenses spiralées qui descendent, s'écartent puis remontent l'une vers l'autre ; queue courte à toupet ; il se couche
+ * pour dormir (ou épuisé) au lieu de somnoler debout
+ */
+function mammoth(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig(), rnd = mulberry32(31);
+  r.bone('hips', null, 0, 0.19, -0.05);
+  r.bone('chest', 'hips', 0, 0.2, 0.04);
+  r.bone('ribs', 'chest', 0, 0.2, 0.0);
+  r.bone('neck', 'chest', 0, 0.23, 0.1);
+  r.bone('head', 'neck', 0, 0.24, 0.122);
+  r.bone('jaw', 'head', 0, 0.18, 0.158);
+  r.bone('trunk1', 'head', 0, 0.194, 0.188);
+  r.bone('trunk2', 'trunk1', 0, 0.128, 0.203);
+  r.bone('trunk3', 'trunk2', 0, 0.07, 0.206);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.044, 0.262, 0.126));
+  r.bone('tail1', 'hips', 0, 0.23, -0.15);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.05, 0.17, 0.068);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.05, 0.09, 0.07);
+    r.bone(`h${L}1`, 'hips', s * 0.05, 0.17, -0.09);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.05, 0.09, -0.094);
+  });
+  const wool = { mottle: 0.1 };
+  type Ring = { c: V3; rx: number; ry: number; bone: string | [string, string] };
+
+  // corps d'une pièce : croupe basse et ronde, dos qui monte vers la bosse du garrot, poitrail profond
+  const body: Ring[] = [
+    { c: [0, 0.212, -0.16], rx: 0.03, ry: 0.032, bone: 'hips' },
+    { c: [0, 0.207, -0.146], rx: 0.062, ry: 0.062, bone: 'hips' },
+    { c: [0, 0.203, -0.114], rx: 0.08, ry: 0.078, bone: 'hips' },
+    { c: [0, 0.204, -0.064], rx: 0.087, ry: 0.086, bone: 'hips' },
+    { c: [0, 0.21, -0.016], rx: 0.09, ry: 0.096, bone: ['hips', 'ribs'] },
+    { c: [0, 0.219, 0.028], rx: 0.088, ry: 0.108, bone: 'ribs' },
+    { c: [0, 0.227, 0.066], rx: 0.08, ry: 0.112, bone: 'chest' },
+    { c: [0, 0.232, 0.096], rx: 0.062, ry: 0.092, bone: 'chest' },
+    { c: [0, 0.238, 0.116], rx: 0.047, ry: 0.066, bone: 'neck' },
+  ];
+  r.loft(body, 11, c.dark, c.top, { ...wool, range: [0.11, 0.34], seed: 41, phase: Math.PI / 2 });
+  // la bosse du garrot, plus sombre, et des mèches sur le dos
+  r.add('chest', ell(0.05, 0.03, 0.06, 1), [0, 0.318, 0.05], c.hair, [0.15, 0, 0], c.fur);
+  for (let i = 0; i < 7; i++) {
+    const z = -0.12 + i * 0.035, top = 0.29 + 0.035 * smooth((z + 0.12) / 0.18);
+    r.add(z > 0.01 ? 'chest' : 'hips', ell(0.022, 0.012, 0.03, 0), [(rnd() - 0.5) * 0.05, top, z], i % 2 ? c.top : c.fur, [0, rnd() * 3, 0]);
+  }
+
+  // la frange : de longues mèches pendent des flancs et du poitrail jusqu'aux genoux, un peu évasées, de teintes mêlées
+  body.forEach((g, i) => {
+    if (i < 2 || i > 7) return;
+    const bone = Array.isArray(g.bone) ? g.bone[0] : g.bone;
+    for (let k = 0; k < 9; k++) {
+      const a = Math.PI * (1.12 + (k / 8) * 0.76), x = g.c[0] + g.rx * Math.cos(a) * 1.02, y = g.c[1] + g.ry * Math.sin(a) * 0.96;
+      const len = 0.06 + 0.035 * Math.abs(Math.cos(a)) + rnd() * 0.02, rad = 0.016 + rnd() * 0.006, out = Math.cos(a) * 0.35;
+      const lock = new THREE.ConeGeometry(rad, len, 5).rotateX(Math.PI).translate(0, -len / 2 + 0.01, 0);
+      r.add(bone, lock, [x, y, g.c[2] + (rnd() - 0.5) * 0.02], rnd() < 0.5 ? c.hair : c.dark, [(rnd() - 0.5) * 0.15, rnd() * 2, -out], c.fur);
+    }
+  });
+  // le jabot : des mèches sous le cou et le poitrail
+  for (let k = 0; k < 5; k++) {
+    const x = (k - 2) * 0.022, len = 0.07 + rnd() * 0.02;
+    const lock = new THREE.ConeGeometry(0.018, len, 5).rotateX(Math.PI).translate(0, -len / 2 + 0.01, 0);
+    r.add(k % 2 ? 'chest' : 'neck', lock, [x, 0.17, 0.112 - Math.abs(k - 2) * 0.008], c.hair, [-0.25, rnd() * 2, x * 3], c.fur);
+  }
+
+  // tête et trompe d'une pièce : nuque creusée, crâne haut, face qui plonge vers la trompe, trompe effilée recourbée au bout
+  const head: Ring[] = [
+    { c: [0, 0.244, 0.112], rx: 0.038, ry: 0.044, bone: 'head' },
+    { c: [0, 0.256, 0.128], rx: 0.05, ry: 0.062, bone: 'head' },
+    { c: [0, 0.254, 0.148], rx: 0.05, ry: 0.064, bone: 'head' },
+    { c: [0, 0.232, 0.17], rx: 0.043, ry: 0.052, bone: 'head' },
+    { c: [0, 0.2, 0.186], rx: 0.031, ry: 0.033, bone: ['head', 'trunk1'] },
+    { c: [0, 0.17, 0.196], rx: 0.025, ry: 0.026, bone: 'trunk1' },
+    { c: [0, 0.146, 0.201], rx: 0.022, ry: 0.023, bone: 'trunk1' },
+    { c: [0, 0.126, 0.203], rx: 0.02, ry: 0.021, bone: ['trunk1', 'trunk2'] },
+    { c: [0, 0.104, 0.205], rx: 0.018, ry: 0.019, bone: 'trunk2' },
+    { c: [0, 0.084, 0.206], rx: 0.0165, ry: 0.017, bone: 'trunk2' },
+    { c: [0, 0.068, 0.206], rx: 0.015, ry: 0.0155, bone: ['trunk2', 'trunk3'] },
+    { c: [0, 0.048, 0.207], rx: 0.0135, ry: 0.014, bone: 'trunk3' },
+    { c: [0, 0.03, 0.211], rx: 0.0125, ry: 0.0125, bone: 'trunk3' },
+    { c: [0, 0.019, 0.221], rx: 0.0115, ry: 0.011, bone: 'trunk3' },
+    { c: [0, 0.016, 0.232], rx: 0.011, ry: 0.01, bone: 'trunk3' },
+  ];
+  r.loft(head, 10, c.dark, c.top, { ...wool, range: [0.02, 0.33], seed: 42, phase: Math.PI / 2, band: (i) => (i >= 5 && i % 2 ? 0.86 : 1) });
+  // le dôme du crâne, laineux, et la touffe du front
+  r.add('head', ell(0.04, 0.032, 0.042, 1), [0, 0.306, 0.138], c.fur, [0, 0, 0], c.top);
+  r.add('head', ell(0.026, 0.014, 0.022, 0), [0, 0.296, 0.168], c.hair, [0.4, 0, 0]);
+  // bouche sous la trompe
+  r.add('jaw', ell(0.017, 0.01, 0.017, 0), [0, 0.176, 0.176], c.dark);
+  r.add('jaw', ell(0.009, 0.004, 0.008, 0), [0, 0.18, 0.184], 0x5a3a36);
+  // yeux petits, dans un repli de laine
+  r.both((s) => {
+    r.add('head', ell(0.005, 0.01, 0.013, 0), [s * 0.046, 0.232, 0.168], c.hair, [0, 0, -s * 0.25]);
+    r.add('head', ell(0.004, 0.0055, 0.0065, 0), [s * 0.048, 0.233, 0.17], c.eye, [0, 0, -s * 0.25]);
+  });
+  // petites oreilles rondes et velues, plaquées contre la tête
+  r.both((s, L) => {
+    r.add(`e${L}`, ell(0.008, 0.024, 0.02, 1), [s * 0.048, 0.258, 0.122], c.hair, [0, -s * 0.3, s * 0.15], c.fur);
+    r.add(`e${L}`, ell(0.004, 0.015, 0.012, 0), [s * 0.052, 0.256, 0.126], c.skin, [0, -s * 0.3, s * 0.15]);
+  });
+  // défenses spiralées : elles sortent de leur gaine, descendent en avant, s'écartent, puis remontent l'une vers l'autre
+  r.both((s) => {
+    const pts: V3[] = [];
+    for (let k = 0; k <= 8; k++) {
+      const t = k / 8, a = t * Math.PI * 1.15;
+      pts.push([s * (0.026 + Math.sin(a) * 0.05 - t * t * 0.028), 0.192 - Math.sin(a * 0.9) * 0.05 + t * t * 0.06, 0.18 + (1 - Math.cos(a * 0.85)) * 0.07 - t * t * 0.03]);
+    }
+    r.put('head', seg([s * 0.024, 0.204, 0.168], pts[0], 0.017, 0.016, 7), c.fur);
+    for (let k = 0; k < 8; k++) {
+      // chaque tronçon déborde un peu sur le suivant : pas de jour aux coudes
+      const a = pts[k], b = pts[k + 1], e: V3 = [b[0] + (b[0] - a[0]) * 0.15, b[1] + (b[1] - a[1]) * 0.15, b[2] + (b[2] - a[2]) * 0.15];
+      r.put('head', seg(a, k < 7 ? e : b, 0.013 * (1 - k / 8) + 0.0025, 0.013 * (1 - (k + 1) / 8) + 0.002, 7), k > 5 ? c.tip : c.tusk);
+    }
+  });
+  // queue courte qui se perd dans la laine, toupet sombre
+  r.put('tail1', seg([0, 0.232, -0.155], [0, 0.195, -0.17], 0.008, 0.005, 5), c.fur);
+  r.add('tail1', ell(0.009, 0.022, 0.009, 0), [0, 0.18, -0.172], c.dark);
+  // pattes en colonnes, gainées de laine : cuisse dans le corps, manchon de longs poils au-dessus du genou, pied large
+  r.both((s, L) => {
+    const x = s * 0.05;
+    for (const [u, z, w] of [['f', 0.069, 1], ['h', -0.092, 1.08]] as [string, number, number][]) {
+      const b1 = `${u}${L}1`, b2 = `${u}${L}2`, top = u === 'f' ? 0.2 : 0.21;
+      r.loft([
+        { c: [x * 0.8, top, z], rx: 0.018 * w, ry: 0.03 * w, bone: b1 },
+        { c: [x, 0.15, z], rx: 0.034 * w, ry: 0.04 * w, bone: b1 },
+        { c: [x, 0.118, z + 0.001], rx: 0.031, ry: 0.034, bone: b1 },
+        { c: [x, 0.09, z + 0.002], rx: 0.027, ry: 0.029, bone: [b1, b2] },
+        { c: [x, 0.058, z + 0.002], rx: 0.0255, ry: 0.027, bone: b2 },
+        { c: [x, 0.03, z + 0.002], rx: 0.027, ry: 0.0285, bone: b2 },
+        { c: [x, 0.012, z + 0.002], rx: 0.03, ry: 0.031, bone: b2 },
+        { c: [x, 0.001, z + 0.002], rx: 0.031, ry: 0.032, bone: b2 },
+      ], 9, c.hair, c.fur, { ...wool, range: [0.0, 0.2], seed: u === 'f' ? 43 + s : 47 + s });
+      // le manchon : des mèches tout autour, de la cuisse au genou
+      for (let k = 0; k < 7; k++) {
+        const a = (k / 7) * TAU + rnd() * 0.4, len = 0.045 + rnd() * 0.015;
+        const lock = new THREE.ConeGeometry(0.012, len, 5).rotateX(Math.PI).translate(0, -len / 2 + 0.008, 0);
+        r.add(b1, lock, [x + Math.cos(a) * 0.028, 0.125, z + Math.sin(a) * 0.03], rnd() < 0.5 ? c.hair : c.dark, [Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25], c.fur);
+      }
+      r.add(b2, ell(0.032, 0.006, 0.033, 1), [x, 0.004, z + 0.003], c.nail);
+    }
+  });
+
+  return { rig: r, clips: pachyClips({ drop: 0.1, f: [1.3, -2.35], h: [-1.15, 2.25] }, 0.35) };
 }
 
 // ---------- Girafe ----------
@@ -2996,12 +3161,14 @@ function ibex(c: Coat): { rig: Rig; clips: ClipDef[] } {
 
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon' | 'sheep' | 'pig' | 'hen'
+export type BeastKind = 'bear' | 'elephant' | 'mammoth' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon' | 'sheep' | 'pig' | 'hen'
   | 'rabbit' | 'duck' | 'duckling' | 'goose' | 'frog' | 'ibex';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
   elephant: { coats: ELEPHANT_COATS, build: elephant },
+  // le mammouth de la chasse (expédition de la Préhistoire), pas une bête de la faune
+  mammoth: { coats: MAMMOTH_COATS, build: mammoth },
   giraffe: { coats: GIRAFFE_COATS, build: giraffe },
   camel: { coats: CAMEL_COATS, build: camel },
   moose: { coats: MOOSE_COATS, build: moose },

@@ -435,6 +435,8 @@ class Game implements UIHost {
     this.veg = new VegView(w);
     this.buildings = new BuildingView(w);
     this.env = new Environment(this.scene, renderer, coarse);
+    // effets de la météo coupés dans les réglages (absents des anciennes sauvegardes : tout s'affiche)
+    this.env.show = { rain: !settings.hideRain, snow: !settings.hideSnow, fog: !settings.hideFog };
     this.agents = new Agents(w);
     this.agents.camera = this.cam.camera;
     this.patrols = new Patrols(w);
@@ -779,7 +781,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -1617,7 +1619,9 @@ class Game implements UIHost {
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
   /** Brouillard visible : la météo « brume » et la nappe au ras du sol (0 … 1) */
-  fogLevel() { return Math.max(this.env.weatherKind === 'fog' ? this.env.weatherK : 0, this.atmosphere.mist); }
+  fogLevel() { return this.env.show.fog ? Math.max(this.env.shownFog, this.atmosphere.mist) : 0; }
+  get weatherFx() { return this.env.show; }
+  setWeatherFx(k: 'rain' | 'snow' | 'fog', on: boolean) { this.env.show[k] = on; this.applySettings(); }
   /** Dissipe le brouillard et la brume ; ils ne reviennent pas avant un bon moment */
   dispelFog() { this.env.dispelFog(); this.atmosphere.dispel(300); }
 

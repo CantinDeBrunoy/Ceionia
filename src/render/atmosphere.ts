@@ -214,8 +214,8 @@ void main(){
   update(dt: number, time: GameTime, s: SeasonState, env: Environment, camera: THREE.Camera, focus: THREE.Vector3) {
     const w = this.world, h = time.hour, season = time.season;
     if (w.visVersion !== this.builtVis) { this.builtVis = w.visVersion; this.buildMountainMap(); }
-    const overcast = env.weatherKind === 'clear' ? 0 : env.weatherK;
-    const fog = env.weatherKind === 'fog' ? env.weatherK : 0, rain = env.rainK;
+    // le décor suit ce qui se voit (réglages : pluie, neige ou brouillard coupés), pas le temps qu'il fait
+    const overcast = env.shownOvercast, fog = env.shownFog, rain = env.shownRain;
 
     // ---- brume : à l'aube surtout, plus en automne, avec le brouillard ; la pluie la disperse
     const dawn = smoothstep(3.5, 6, h) * (1 - smoothstep(8.5, 11, h));
@@ -228,7 +228,7 @@ void main(){
     this.calm = Math.max(0, this.calm - dt);
     const density = this.calm > 0 ? 0 : clamp((dawn * morningOn + dusk * eveningOn) * seasonK + fog * 0.45, 0, 1) * (1 - rain * 0.6) * (1 - fog * 0.35);
     this.mistK += (density - this.mistK) * Math.min(1, dt * (this.calm > 0 ? 1.2 : 0.3));
-    MIST.x = this.mistEnabled ? this.mistK : 0;
+    MIST.x = this.mistEnabled && env.show.fog ? this.mistK : 0;
     // par temps de brouillard, la nappe monte et noie les collines basses
     MIST.y = 2.1 + fog * 0.6;
     MIST.w = (MIST.w + dt) % 4000;
@@ -258,7 +258,7 @@ void main(){
     // la pluie tourne à la neige, et s'il neige pendant qu'il brille, il s'efface (en quelques secondes)
     const snowing = env.weatherKind === 'snow' || env.wantKind === 'snow';
     const sunny = (env.weatherKind === 'clear' || env.weatherK < 0.25) && env.wantKind !== 'rain';
-    if (env.weatherKind === 'rain' && env.weatherK > 0.5) this.wasRaining = true;
+    if (env.shownRain > 0.5) this.wasRaining = true;
     else if (this.wasRaining && env.weatherKind !== 'rain' && sunny && !snowing && env.daylight > 0.6 && h > 7 && h < 17.5) { this.wasRaining = false; this.bowT = 45; }
     else if (env.weatherKind !== 'rain' && env.wantKind !== 'rain') this.wasRaining = false;
     if (snowing) this.bowT = Math.min(this.bowT, 6);

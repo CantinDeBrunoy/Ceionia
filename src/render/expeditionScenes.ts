@@ -691,48 +691,15 @@ const sparkGeo = new THREE.BoxGeometry(0.02, 0.02, 0.02);
 const emberGeo = new THREE.IcosahedronGeometry(0.03, 0);
 
 // ---------------- La chasse au mammouth ----------------
-const FUR = 0x7a4a2a, FUR_DARK = 0x5a3620, IVORY = 0xefe4c8;
+const FUR = 0x7a4a2a, FUR_DARK = 0x5a3620;
+/** Taille du mammouth de `beasts.ts` pour une femelle adulte (0,5 au garrot, 0,7 des défenses à la queue) */
+const MAMMOTH_SCALE = 1.5;
 /** Un tronçon de cylindre de a à b, du rayon r0 au rayon r1 (pattes, trompe, queue, perches) */
 function tube(p: Parts, a: number[], b: number[], r0: number, r1: number, c: number, seg = 6) {
   const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
   const g = new THREE.CylinderGeometry(r1, r0, len, seg).translate(0, len / 2, 0).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
   p.add(g, a[0], a[1], a[2], c);
 }
-/**
- * Le mammouth, nez vers +z (0,6 de long, 0,5 au garrot) : torse massif à la fourrure brune, bosse sombre au garrot, frange de
- * longs poils sous le ventre, tête bombée, petites oreilles, défenses courbes, queue à touffe. Pattes et trompe à part : elles
- * bougent (voir `addMammoth`)
- */
-const mammothGeo = () => geo('mammoth', (p) => {
-  p.add(new THREE.IcosahedronGeometry(0.16, 1).scale(1, 0.9, 1.4), 0, 0.27, -0.02, FUR);
-  p.add(new THREE.IcosahedronGeometry(0.13, 1).scale(1, 0.95, 1.1), 0, 0.36, 0.08, FUR_DARK);
-  p.add(new THREE.IcosahedronGeometry(0.12, 1), 0, 0.27, -0.14, FUR);
-  // la frange de longs poils, sur les flancs et sous le poitrail
-  for (const s of [-1, 1]) for (let i = 0; i < 5; i++) p.add(new THREE.ConeGeometry(0.036, 0.12, 4).rotateX(Math.PI), s * (0.125 - Math.abs(i - 2) * 0.012), 0.15, -0.17 + i * 0.075, FUR_DARK);
-  for (let i = 0; i < 3; i++) p.add(new THREE.ConeGeometry(0.034, 0.1, 4).rotateX(Math.PI), (i - 1) * 0.06, 0.15, 0.13, FUR_DARK);
-  // la tête bombée, ses petites oreilles, ses yeux
-  p.add(new THREE.IcosahedronGeometry(0.1, 1).scale(0.85, 1.1, 0.95), 0, 0.37, 0.24, FUR);
-  p.add(new THREE.IcosahedronGeometry(0.065, 1), 0, 0.46, 0.21, FUR_DARK);
-  for (const s of [-1, 1]) {
-    p.add(new THREE.IcosahedronGeometry(0.035, 0).scale(0.45, 1, 1), s * 0.082, 0.39, 0.2, FUR_DARK);
-    p.sphere(0.011, s * 0.052, 0.395, 0.312, 0x1a1410);
-    // la défense : un arc d'ivoire qui part sous l'œil, descend en avant puis remonte, en s'écartant de l'autre
-    p.add(new THREE.TorusGeometry(0.1, 0.013, 4, 9, Math.PI * 0.9).rotateZ(Math.PI).rotateY(-Math.PI / 2), s * 0.06, 0.3, 0.41, IVORY, s * 0.3);
-  }
-  tube(p, [0, 0.3, -0.24], [0, 0.18, -0.29], 0.014, 0.01, FUR_DARK);
-  p.sphere(0.022, 0, 0.17, -0.295, FUR_DARK);
-});
-/** Une patte, de la hanche (à l'origine) au pied : un pilier, la cuisse laineuse */
-const mammothLegGeo = () => geo('mammothleg', (p) => {
-  tube(p, [0, 0, 0], [0, -0.22, 0], 0.048, 0.042, FUR, 7);
-  tube(p, [0, 0.02, 0], [0, -0.1, 0], 0.062, 0.055, FUR_DARK, 7);
-  p.cyl(0.048, 0.05, 0.024, 7, 0, -0.24, 0, 0x4a3a30);
-});
-/** La trompe, de sa racine (à l'origine) : elle pend, puis s'enroule vers l'avant au bout */
-const mammothTrunkGeo = () => geo('mammothtrunk', (p) => {
-  const pts = [[0, 0, 0], [0, -0.09, 0.015], [0, -0.17, 0.035], [0, -0.215, 0.075], [0, -0.205, 0.105]], r = [0.034, 0.028, 0.022, 0.017, 0.013];
-  for (let i = 0; i < pts.length - 1; i++) tube(p, pts[i], pts[i + 1], r[i], r[i + 1], i % 2 ? FUR_DARK : FUR);
-});
 /** Fosse de chasse : le trou sombre, la terre rejetée autour */
 const pitGeo = () => geo('pit', (p) => {
   p.cyl(0.25, 0.25, 0.006, 12, 0, 0, 0, 0x231a14);
@@ -893,7 +860,7 @@ interface Beast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number
  * Un mammouth de la scène : la bête (son groupe tourne et avance), ses pattes et sa trompe, sa taille, la cadence de son pas,
  * sa vitesse lissée, et ce qu'il fait : il barrit (trompe levée, 0 … 1), se couche (0 … 1), s'enfonce dans la fosse
  */
-interface Mammoth { b: Beast; legs: THREE.Object3D[]; trunk: THREE.Object3D; size: number; ph: number; px: number; pz: number; v: number; trumpet: number; lie: number; sink: number }
+interface Mammoth { b: Beast; actor: Actor; size: number; ph: number; px: number; pz: number; v: number; trumpet: number; lie: number; sink: number }
 /**
  * Le dragon de la grotte : la bête articulée, où elle se tient (devant la bouche de la grotte) et son cap, sa hauteur en vol,
  * ce qu'elle fait (dort, rugit, crache le feu, marche, vole, est touchée, meurt, s'enfuit) et depuis quand, le roulis de sa
@@ -1559,29 +1526,21 @@ export class ExpeditionScene {
     this.mam = { old: herd[0], at, dir, way, trap, axis, pits, covers, k: 0, back: 0 };
   }
 
-  /** Un mammouth de taille `size` (1 : une femelle adulte) en (x, z), tourné vers `heading` : son corps, ses pattes, sa trompe */
+  /**
+   * Un mammouth de taille `size` (1 : une femelle adulte) en (x, z), tourné vers `heading` : la bête articulée de `beasts.ts`
+   * (robe tirée de sa taille). Ses gestes sont menés par `stepMammoths`, pas par `sMove` (sa bête n'a pas d'`actor`)
+   */
   private addMammoth(x: number, z: number, size: number, heading: number): Mammoth {
-    const o = new THREE.Group(), body = new THREE.Mesh(mammothGeo(), mats.body), trunk = new THREE.Mesh(mammothTrunkGeo(), mats.body);
-    body.castShadow = trunk.castShadow = true;
-    trunk.position.set(0, 0.34, 0.31);
-    o.add(body, trunk);
-    const legs = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([lx, lz]) => {
-      const l = new THREE.Mesh(mammothLegGeo(), mats.body);
-      l.castShadow = true;
-      l.position.set(lx * 0.09, 0.24, lz * 0.12);
-      o.add(l);
-      return l;
-    });
-    // (il se cabre un peu en barrissant : autour de son propre travers, une fois tourné)
-    o.rotation.order = 'YXZ';
-    o.scale.setScalar(size);
+    const actor = makeBeast('mammoth', Math.floor(size * 7), MAMMOTH_SCALE * size, 0.94 + (size % 0.1));
+    const o = actor.root;
     o.position.set(x, this.world.surfaceAt(x, z), z);
     o.rotation.y = heading;
     this.group.add(o);
     const b: Beast = { obj: o, actor: null, x, z, tx: x, tz: z, heading, wait: 1 + size * 2, speed: 0.1 };
     this.beasts.push(b);
-    const m: Mammoth = { b, legs, trunk, size, ph: size * 3, px: x, pz: z, v: 0, trumpet: 0, lie: 0, sink: 0 };
+    const m: Mammoth = { b, actor, size, ph: size * 3, px: x, pz: z, v: 0, trumpet: 0, lie: 0, sink: 0 };
     this.mammoths.push(m);
+    play(actor, ['Idle']);
     return m;
   }
 
@@ -4449,25 +4408,34 @@ export class ExpeditionScene {
   }
 
   /**
-   * Les mammouths vivent : leurs pattes battent deux par deux au rythme de leur pas, la trompe se balance (levée pour barrir,
-   * avec un souffle de vapeur dans l'air froid), et ils se cabrent un peu en barrissant ; couché, il replie ses pattes ; pris
-   * dans la fosse, il y est enfoncé
+   * Les mammouths vivent : ils marchent, chargent, paissent ou se reposent selon leur allure (les clips de `beasts.ts`, au
+   * rythme de leur pas), barrissent trompe levée (avec un souffle de vapeur dans l'air froid) ; couché, il replie ses pattes ;
+   * pris dans la fosse, il y est enfoncé
    */
   private stepMammoths(dt: number) {
     for (const m of this.mammoths) {
-      const b = m.b, o = b.obj, moved = Math.hypot(b.x - m.px, b.z - m.pz);
+      const b = m.b, o = b.obj, a = m.actor, moved = Math.hypot(b.x - m.px, b.z - m.pz);
       m.px = b.x; m.pz = b.z;
       if (dt > 0) m.v += (moved / dt - m.v) * Math.min(1, dt * 6);
       m.ph += moved / (0.07 * m.size);
       // un mammouth qui charge barrit
       if (m.v > 0.8) m.trumpet = Math.max(m.trumpet, 0.7);
+      const fresh = m.trumpet > 0.95;
       m.trumpet = Math.max(0, m.trumpet - dt * 0.8);
-      const up = Math.sin(Math.min(1, m.trumpet) * Math.PI * 0.5), stride = Math.min(1, m.v / (0.2 * m.size)) * 0.42 * (1 - m.lie);
-      m.legs.forEach((l, i) => (l.rotation.x = Math.sin(m.ph + (i === 0 || i === 3 ? 0 : Math.PI)) * stride + m.lie * (i < 2 ? -1.35 : 1.35)));
-      m.trunk.rotation.x = -up * 1.7 + Math.sin(this.t * 1.4 + m.size * 7) * 0.12 * (1 - up);
-      m.trunk.rotation.z = Math.sin(this.t * 0.9 + m.size * 3) * 0.12 * (1 - up);
-      o.position.set(b.x, this.world.surfaceAt(b.x, b.z) + (Math.abs(Math.sin(m.ph)) * 0.01 * (1 - m.lie) - m.lie * 0.17 - m.sink) * m.size, b.z);
-      o.rotation.x = -up * 0.12 * (1 - m.lie);
+      const up = Math.sin(Math.min(1, m.trumpet) * Math.PI * 0.5);
+      // l'allure : couché, au galop, au pas, ou à l'arrêt (il barrit, broute ou regarde autour de lui)
+      const roar = a.actions.get('Idle_2')!, roaring = a.current === roar && roar.isRunning();
+      const run = m.v > 0.3 * m.size, walk = m.v > 0.02 * m.size;
+      if (m.lie > 0.05) play(a, ['Sleep'], 0.8);
+      else if (run) play(a, ['Gallop']);
+      else if (walk && !roaring) play(a, ['Walk']);
+      else if (fresh && !roaring) { a.current?.fadeOut(0.2); a.current = null; play(a, ['Idle_2'], 0.2); }
+      else if (!roaring) play(a, [Math.sin(this.t * 0.15 + m.size * 9) > 0.2 ? 'Eating' : 'Idle'], 0.5);
+      // le pas suit la vitesse (calée sur la taille : un petit trottine)
+      a.actions.get('Walk')!.timeScale = Math.min(1.8, Math.max(0.6, m.v / (0.15 * m.size)));
+      a.actions.get('Gallop')!.timeScale = Math.min(1.6, Math.max(0.7, m.v / (0.43 * m.size)));
+      a.mixer.update(dt);
+      o.position.set(b.x, this.world.surfaceAt(b.x, b.z) - m.sink * m.size, b.z);
       if (up > 0.8 && o.visible && Math.random() < dt * 5) {
         const f = 0.5 * m.size;
         this.puffAt(b.x + Math.sin(b.heading) * f, o.position.y + 0.62 * m.size, b.z + Math.cos(b.heading) * f, 'puff', Math.sin(b.heading) * 0.1, Math.cos(b.heading) * 0.1);
@@ -5454,6 +5422,7 @@ export class ExpeditionScene {
     if (this.rocket) { this.rocket.glare.geometry.dispose(); (this.rocket.glare.material as THREE.Material).dispose(); }
     for (const n of this.npcs) this.group.remove(n.folk.root);
     for (const b of [...this.beasts, ...this.dogs]) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
+    for (const m of this.mammoths) m.actor.mixer.stopAllAction();
     for (const s of this.swimmers) s.actor?.mixer.stopAllAction();
     for (const d of this.darts) this.group.remove(d.obj);
     for (const o of this.props) this.group.remove(o);
