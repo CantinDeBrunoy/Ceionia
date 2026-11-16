@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { World, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { Parts } from '../src/render/parts';
-import { TROPHIES, Trophies, trophiesWon, trophyParts, trophySlot } from '../src/render/trophies';
+import { TROPHIES, Trophies, trophiesWon, trophyParts, trophySlot, slotAt } from '../src/render/trophies';
 import type { Building } from '../src/build/catalog';
 
 describe('les trophées de la grande place', () => {
@@ -26,6 +26,16 @@ describe('les trophées de la grande place', () => {
         expect(Math.max(Math.abs(x), Math.abs(z)), `${age} ${TROPHIES[i]}`).toBeLessThan(1.3);
         expect(Math.hypot(x, z), `${age} ${TROPHIES[i]}`).toBeGreaterThan(0.8);
         for (const [j, q] of pts.entries()) if (j > i) expect(Math.hypot(x - q[0], z - q[1])).toBeGreaterThan(0.5);
+      }
+    }
+  });
+
+  it('un trophée de plus que de places prévues ne se pose pas sur un autre', () => {
+    for (let age = 0; age <= 5; age++) {
+      const pts = [0, 1, 2, 3, 4, 5, 6].map((i) => slotAt(i, age));
+      for (const [i, [x, z]] of pts.entries()) {
+        expect(Math.hypot(x, z), `${age} ${i}`).toBeGreaterThan(0.8);
+        for (const [j, q] of pts.entries()) if (j > i) expect(Math.hypot(x - q[0], z - q[1]), `${age} ${i} ${j}`).toBeGreaterThan(0.35);
       }
     }
   });

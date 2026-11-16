@@ -711,9 +711,10 @@ export class Tutorial {
       else if (performance.now() - this.doneAt > 1000) { this.next(); return; }
     }
     // une fenêtre ouverte (réglages, récit, décision) cache la bulle, sauf celle des expéditions à leur étape ; un chapitre
-    // attend que le joueur soit là où il se passe ; la suite principale se cache sous terre et dans les Enfers
+    // attend que le joueur soit là où il se passe ; la suite principale se cache sous terre et dans les Enfers ; tout se tait
+    // pendant la bataille de l'archipel
     const ov = this.ui.root.querySelector('.overlay'), body = document.body.classList;
-    const away = (!!ov && !((s.id === 'expeditions' || s.id === 'gear') && ov.querySelector('.expModal'))) || body.contains('photo') || (chap ? !!chap.away?.() : body.contains('under'));
+    const away = (!!ov && !((s.id === 'expeditions' || s.id === 'gear') && ov.querySelector('.expModal'))) || body.contains('photo') || body.contains('rivalWar') || (chap ? !!chap.away?.() : body.contains('under'));
     this.box.hidden = away;
     if (away) { this.ring.hidden = true; this.light(null); return; }
     this.render(s, all);

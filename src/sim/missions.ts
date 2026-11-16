@@ -120,6 +120,12 @@ export interface Choice {
    * rentre pas à l'écran (elle rejoint les troupes) et le récit arrive aussitôt, sans fête au village
    */
   oneWay?: boolean;
+  /**
+   * une variante du décor, lue par l'écran et non par le libellé (qu'on peut renommer ou traduire) : `craters`, l'alunissage
+   * au bord des cratères (retransmission) ; `warp`, le saut à travers l'espace (grand voyage de la colonie) ; `diver`, le
+   * scaphandrier qui descend à l'épave ; `smoke`, le grand feu devant la grotte du dragon
+   */
+  variant?: 'craters' | 'warp' | 'diver' | 'smoke';
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -559,7 +565,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'L’enfumer hors de sa grotte', text: 'Un grand feu devant l’entrée l’affaiblit. Plus long, plus sûr.',
-        dest: 'cave', scene: 'dragon', doing: 'enfume la grotte du dragon et l’attend, arbalètes braquées', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.3, carry: 'cart',
+        dest: 'cave', scene: 'dragon', variant: 'smoke', doing: 'enfume la grotte du dragon et l’attend, arbalètes braquées', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.3, carry: 'cart',
         win: [{ t: 'ore', n: 12 }, joy(3, 6), joy(2), { t: 'perk', id: 'dragon' }], lose: [hurt(1, 2), joy(-1, 3)],
         winText: 'Le dragon est sorti en toussant, et les carreaux d’arbalète ont fait le reste ! Son trésor rentre au village sur le chariot.',
         loseText: 'Le dragon a jailli de la fumée et s’est envolé par-dessus la montagne : un chevalier brûlé.',
@@ -798,7 +804,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Envoyer le scaphandrier', text: 'Casque de cuivre, pompe à bras : il descend jusqu’au pont.',
-        dest: 'river', sea: true, scene: 'wreck', fail: 'capsize', doing: 'descend le scaphandrier jusqu’au pont du galion', danger: ['water'], party: 4, work: 34, risk: 0.4, carry: 'sacks',
+        dest: 'river', sea: true, scene: 'wreck', variant: 'diver', fail: 'capsize', doing: 'descend le scaphandrier jusqu’au pont du galion', danger: ['water'], party: 4, work: 34, risk: 0.4, carry: 'sacks',
         win: [{ t: 'ore', n: 22 }, joy(4, 6), joy(1), { t: 'perk', id: 'galleon' }], lose: [hurt(2, 3), joy(-1, 3)],
         winText: 'Le scaphandrier a ouvert les coffres du galion : de l’or et de l’argent, remontés à la pompe. Le village en parlera longtemps.',
         loseText: 'Le tuyau d’air s’est emmêlé : le scaphandrier a été remonté de justesse, et deux marins sont blessés.',
@@ -961,7 +967,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Se poser au bord des grands cratères', text: 'Le plus beau paysage, et des roches inconnues… sur un sol accidenté.',
-        dest: 'spaceport', scene: 'moon', doing: 'lance la fusée lunaire et suit l’alunissage au bord des cratères', danger: ['weather'], party: 4, work: 54, risk: 0.35,
+        dest: 'spaceport', scene: 'moon', variant: 'craters', doing: 'lance la fusée lunaire et suit l’alunissage au bord des cratères', danger: ['weather'], party: 4, work: 54, risk: 0.35,
         win: [joy(14), jobs(6), { t: 'ore', n: 12 }, { t: 'perk', id: 'moon' }], lose: [joy(-5, 4), hurt(2, 4)],
         winText: 'Le module s’est posé au bord d’un cratère géant : les astronautes rapportent des roches lunaires, du minerai inconnu et des images à couper le souffle.',
         loseText: 'Le module a heurté un rocher : les astronautes ont dû redécoller en catastrophe, et rentrent blessés.',
@@ -982,7 +988,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Le saut à travers l’espace', text: 'Un moteur qui plie l’espace : quelques mois de voyage.',
-        dest: 'spaceport', scene: 'colony', doing: 'embarque les colons et allume le moteur expérimental', danger: ['weather'], party: 5, work: 56, risk: 0,
+        dest: 'spaceport', scene: 'colony', variant: 'warp', doing: 'embarque les colons et allume le moteur expérimental', danger: ['weather'], party: 5, work: 56, risk: 0,
         win: [joy(22), { t: 'perk', id: 'colony' }], lose: [],
         winText: 'Un éclair, et le vaisseau a disparu… pour reparaître au bord de l’autre étoile. Les colons se sont posés sur la planète bleue : un nouveau village est né !',
         loseText: 'Le moteur expérimental a lâché au décollage : le vaisseau est retombé en mer, et deux colons sont blessés.',
