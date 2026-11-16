@@ -13,19 +13,19 @@ Caractéristiques de base à l'âge d'origine de la troupe ; vie et dégâts × 
 
 | Troupe (âge d'origine, temps de recrutement) | Âge | Forme | Équipement | pv | dég. | portée | cad. | vit. |
 |---|---|---|---|---|---|---|---|---|
-| Soldat (1, 20 s) | 1-2 | Soldat | lance | 110 / 123 | 11 / 12,3 | 0,6 | 1,1 | 2 |
+| Soldat (1, 10 s) | 1-2 | Soldat | lance | 110 / 123 | 11 / 12,3 | 0,6 | 1,1 | 2 |
 | | 3 | Fusilier | fusil | 143 | 11,2 | 3,9 | 0,88 | 2 |
 | | 4 | Fantassin | fusil | 172 | 13,5 | 4,2 | 0,83 | 2 |
 | | 5 | Soldat à impulsions | fusil | 212 | 14,3 | 4,5 | 0,72 | 2,2 |
-| Archer (1, 26 s) | 1-2 | Archer | arc | 65 / 73 | 8 / 9 | 5,5 | 1,4 | 2 |
+| Archer (1, 13 s) | 1-2 | Archer | arc | 65 / 73 | 8 / 9 | 5,5 | 1,4 | 2 |
 | | 3 | Tirailleur | fusil | 81 | 21,8 | 8 | 2,38 | 2 |
 | | 4 | Tireur d'élite | fusil | 97 | 29,4 | 9,4 | 2,03 | 2 |
 | | 5 | Pilote de drones | fusil | 115 | 17,8 | 10,5 | 0,7 | 2 |
-| Chevalier (2, 40 s) | 2 | Chevalier | épée, armure | 230 | 20 | 0,7 | 1,3 | 2,3 |
+| Chevalier (2, 20 s) | 2 | Chevalier | épée, armure | 230 | 20 | 0,7 | 1,3 | 2,3 |
 | | 3 | Hallebardier (×1,6 contre les grands) | épée, armure | 283 | 25,8 | 0,7 | 1,3 | 2,18 |
 | | 4 | Bazooka (×1,5) | fusil, armure | 285 | 79,4 | 5,6 | 2,21 | 2,3 |
 | | 5 | Exo-lanceur (×1,4) | fusil, armure | 375 | 103,4 | 7 | 1,95 | 2,3 |
-| Cavalier (1, 34 s) | 1-3 | Cavalier | lance + cheval | 150 / 168 / 186 | 16 / 17,9 / 19,8 | 0,8 | 1,2 | 3,2 |
+| Cavalier (1, 17 s) | 1-3 | Cavalier | lance + cheval | 150 / 168 / 186 | 16 / 17,9 / 19,8 | 0,8 | 1,2 | 3,2 |
 | | 4 | Char | fusil, armure | 326 | 21,8 | 4,4 | 1,8 | 3,04 |
 | | 5 | Char antigrav | fusil, armure | 533 | 35,5 | 6,4 | 1,92 | 3,2 |
 
@@ -44,7 +44,7 @@ Caractéristiques de base à l'âge d'origine de la troupe ; vie et dégâts × 
 ### Recruter
 - À la caserne de l'île, onglet Recruter de « Ma garnison » (`isleRow`) : `War.recruit` → `army.recruit`. Refus (`recruitWhy`, dans l'ordre) : âge trop bas ; cavalerie sans écurie ; aucune caserne (`War.barracks()` : casernes de l'île, du village si l'île en a une, et casernes avancées des Enfers hors guerre finie) ; garnison au complet ; village trop petit ; pas de cheval ; pièce manquante.
 - Places : `troopCap(casernes, âge)` = casernes × (4 + 2 × max(1, âge)) (6 par caserne à l'âge 1, 14 à l'âge 5), et au plus un habitant sur `POP_SHARE` = 4 (`armyCap` = min des deux). `armySize` compte les troupes et les recrues en route.
-- La recrue part en galère (`Recruit.left` = durée de `TROOPS`, secondes de jeu) ; autant de recrues avancent à la fois que de casernes (`stepArmy`). Arrivée : une `Troop` valide, vie pleine, déployée devant la caserne (`War.deploy`).
+- La recrue part en galère (`Recruit.left` = durée de `TROOPS`, secondes de jeu) ; `TRAIN_SLOTS` (3) recrues avancent à la fois par caserne (`stepArmy`), les autres attendent leur tour. (Durées divisées par deux et trois recrues à la fois, à la demande de l'auteur, qui trouvait le recrutement trop long : 25 troupes, 15 soldats et 10 archers, d'une seule caserne passent de 560 s de jeu à 93 s.) Arrivée : une `Troop` valide, vie pleine, déployée devant la caserne (`War.deploy`).
 - Il ne manque que l'équipement : un clic fait fabriquer les pièces à l'atelier du village (`gearToCraft`, tout ou rien, `craftCheck`), la recrue est mise en attente (`CommandUI.waiting`) et part dès que tout est prêt (`stepWaiting`, appelé à chaque `render`), ou renonce si une autre condition tombe.
 - Aux Enfers (`recruitHell`, `planHellRecruit`, `orderHellRecruit`) : il faut une caserne avancée ; la recrue arrive au camp (`at: 'hell'`) en 75 % du temps ; trois issues d'un clic : `ready` (pièces en réserve), `craft` (l'atelier ou, à défaut, la forge de la base contre `SMITHY_ORE` = 4 minerai par pièce), `off` (raison dite ; si c'est la caserne, le bouton propose de la poser).
 - `dismiss` et `cancelRecruit` (`army.ts`) rendent l'équipement et le cheval mais **aucun écran ne les appelle** pour le moment : seuls les tests s'en servent.

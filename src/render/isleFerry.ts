@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World, SEA } from '../world/world';
 import { ferryRoute, FerryRoute } from '../world/ferry';
 import type { War } from '../sim/war';
-import { TROOPS, TroopKind, Recruit } from '../sim/army';
+import { TRAIN_SLOTS, TROOPS, TroopKind, Recruit } from '../sim/army';
 import { galleyGeo } from './expeditionScenes';
 import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
 import { troopLook } from './battleUnits';
@@ -98,7 +98,7 @@ export class IsleFerry {
     const a = war.army, barracks = war.isle ? [...war.isle.defs.values()].filter((b) => b.kind === 'barracks').length : 0;
     // les recrues dans leurs dernières secondes : à bord (une galère en prend plusieurs quand elles partent ensemble)
     a.queue.forEach((r: Recruit, i) => {
-      if (r.at === 'hell' || i >= barracks || this.carried.has(r)) return;
+      if (r.at === 'hell' || i >= barracks * TRAIN_SLOTS || this.carried.has(r)) return;
       const cross = Math.min(CROSS, TROOPS[r.kind].time);
       if (r.left > cross) return;
       const k = () => (a.queue.includes(r) ? Math.min(1, Math.max(0, 1 - r.left / cross)) : null);
