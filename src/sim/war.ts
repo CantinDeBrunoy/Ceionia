@@ -194,6 +194,7 @@ export class War {
   recruitHell(kind: TroopKind, age: number, pop: number): string | null {
     const b = this.base, w = this.world;
     if (this.portalOut) return tr('Le portail est éteint : la guerre est finie.');
+    if (this.pve === 'off') return tr('Le portail est refermé : rouvrez-le quand vous voulez.');
     if (!b || !b.posts()) return tr('Il faut une caserne avancée dans la base.');
     const ctx = this.recruitCtx(age, pop), miss = troopKit(kind, age).gear.filter((g) => (ctx.stock[g] ?? 0) < 1);
     if (miss.length && !w.unlimited && b.countOf('smithy') && w.ore >= miss.length * SMITHY_ORE) {
@@ -273,7 +274,7 @@ export class War {
   get portalOut() { return !!this.faction?.victory; }
 
   /** Des troupes (valides ou blessées) sont dans les Enfers, ou la base avancée y a des bâtiments : on peut aller les voir */
-  hellPresence() { return !this.portalOut && (this.army.troops.some((t) => t.where === 'hell') || this.army.queue.some((r) => r.at === 'hell') || !!this.base?.buildings().length); }
+  hellPresence() { return !this.portalOut && this.pve !== 'off' && (this.army.troops.some((t) => t.where === 'hell') || this.army.queue.some((r) => r.at === 'hell') || !!this.base?.buildings().length); }
 
   /** Les renforts : les troupes valides de l'île passent le portail vers les Enfers ; renvoie leur nombre */
   callGarrison() {
@@ -298,7 +299,10 @@ export class War {
     }
   }
 
-  /** Le portail éteint : toutes les troupes des Enfers (blessées comprises, et les recrues en route) rentrent sur l'île */
+  /**
+   * Le portail éteint ou refermé : toutes les troupes des Enfers (blessées comprises, et les recrues en route) rentrent sur
+   * l'île ; la base avancée reste là-bas, telle quelle
+   */
   private bringHome(age: number) {
     let n = 0;
     for (const t of this.army.troops) {
@@ -311,7 +315,7 @@ export class War {
       n++;
     }
     for (const r of this.army.queue) if (r.at === 'hell') { delete r.at; n++; }
-    if (n) this.news.push({ kind: 'info', text: tr('🌀 Avant que le portail ne s’éteigne, les troupes des Enfers sont rentrées sur l’île.') });
+    if (n) this.news.push({ kind: 'info', text: this.portalOut ? tr('🌀 Avant que le portail ne s’éteigne, les troupes des Enfers sont rentrées sur l’île.') : tr('🌀 Avant que le portail ne se referme, les troupes des Enfers sont rentrées sur l’île.') });
   }
 
   /** Une troupe passe le portail */
@@ -360,7 +364,8 @@ export class War {
     for (const t of joined) this.news.push(t.where === 'hell' ? { kind: 'portal', text: tr('⚔️ Un {troop} a rejoint la base avancée des Enfers.', { troop: this.nm(t.kind) }) } : { kind: 'troop', text: tr('⚔️ Un {troop} a débarqué sur l’île du portail : il rejoint la garnison.', { troop: this.nm(t.kind) }) });
     for (const t of healed) if (t.where === 'hell') this.news.push({ kind: 'info', text: tr('🩹 Un {troop} sort de l’infirmerie avancée, prêt à se battre.', { troop: this.nm(t.kind) }) });
     // le royaume tombé, le portail s'éteint : les troupes des Enfers rentrent sur l'île (une fois la vue revenue à la surface)
-    if (f.victory && !this.hellInView) this.bringHome(age);
+    // (de même quand le joueur le referme)
+    if ((f.victory || this.pve === 'off') && !this.hellInView) this.bringHome(age);
     // les troupes valides sans unité prennent place ; celles qui n'existent plus quittent le combat
     for (const t of ready(this.army)) if (!this.unitOf.has(t.id)) this.deploy(t, age);
     for (const [id, u] of [...this.unitOf]) {
@@ -369,7 +374,9 @@ export class War {
     }
     // la faction : à chaque image quand on la regarde (en plusieurs pas si l'image est longue : à ×4 sur une machine lente, le
     // temps des Enfers prenait du retard), à pas allégés sinon
-    if (this.hellInView) for (let left = Math.min(dt, 4 * COARSE); left > 1e-6; left -= COARSE) this.stepHell(Math.min(left, COARSE));
+    // (le portail refermé : les Enfers attendent, la base avancée ne risque rien)
+    if (this.pve === 'off') this.acc = 0;
+    else if (this.hellInView) for (let left = Math.min(dt, 4 * COARSE); left > 1e-6; left -= COARSE) this.stepHell(Math.min(left, COARSE));
     else {
       this.acc += dt;
       for (let i = 0; i < 4 && this.acc >= COARSE; i++) { this.acc -= COARSE; this.stepHell(COARSE); }
@@ -564,8 +571,9 @@ export class War {
     if (!this.active) return null;
     // (le royaume tombé, le portail est éteint : plus personne n'y passe, ni les troupes ni la vue)
     if (this.portalOut) return tr('Le portail est éteint : la guerre est finie.');
-    if (this.inv === 'done') return null;
+    // (refermé, même l'invasion faite : on n'y passe plus)
     if (this.pve !== 'on') return tr('Le portail est refermé : rouvrez-le quand vous voulez.');
+    if (this.inv === 'done') return null;
     return this.inv === 'ready' ? tr('Affrontez d’abord les démons de l’île.') : tr('Repoussez d’abord l’invasion du portail.');
   }
 
@@ -581,16 +589,29 @@ export class War {
   /** Le portail est refermé : aucune vague, aucun passage, le tourbillon éteint */
   get closed() { return this.pve === 'off' && this.active; }
 
-  /** « Refermer le portail » : le jeu continue sans PvE ; false si ce n'est pas possible (une vague en cours, ou l'invasion déjà repoussée) */
+  /**
+   * « Refermer le portail », à tout moment (sauf le portail éteint : le royaume tombé) ; le jeu continue sans PvE. Une vague sur
+   * l'île repart par le portail, sans compter ni pour une victoire ni pour une défaite ; le compte à rebours s'arrête : rouvert,
+   * l'invasion sera ré-annoncée et reprendra à la vague où elle en était. Les troupes des Enfers rentrent sur l'île (`bringHome`),
+   * la base avancée reste là-bas et les Enfers ne bougent plus. Une invasion déjà repoussée le reste. False : déjà refermé
+   */
   closePortal(): boolean {
-    if (this.pve === 'off' || this.inv === 'raid' || this.inv === 'coming' || this.inv === 'done') return false;
+    if (this.pve === 'off' || this.portalOut) return false;
+    const f = this.faction, isle = this.isle;
+    if (isle?.raid) isle.endRaid();
+    if (f) { f.activeRaid = null; if (this.inv !== 'done') { f.planned = null; f.nextRaid = -1; } }
+    if (this.inv !== 'done') this.inv = 'wait';
+    this.crossing.clear();
     this.pve = 'off';
-    this.choiceSeen = true;
+    this.choiceSeen = true; this.legacyPve = false;
     this.news.push({ kind: 'portalSealed', text: tr('🔒 Le portail est refermé. Rouvrez-le quand vous serez prêt.') });
     return true;
   }
 
-  /** « Affronter les démons » : le joueur joue le PvE (le portail se rouvre au besoin) ; le guidage prend le relais */
+  /**
+   * « Affronter les démons » : le joueur joue le PvE (le portail se rouvre au besoin) ; le guidage prend le relais. Rouvert,
+   * tout reprend où il en était : l'invasion à sa vague, les Enfers et la base avancée tels que laissés
+   */
   acceptPve(): boolean {
     if (this.pve === 'on') return false;
     this.pve = 'on'; this.choiceSeen = true; this.legacyPve = false;

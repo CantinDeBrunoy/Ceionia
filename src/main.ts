@@ -601,7 +601,7 @@ class Game implements UIHost {
       path: (p) => this.choosePath(p),
       tactic: (c) => this.rivalTactic(c),
     });
-    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
+    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), closed: () => { if (this.mode === 'hell') this.exitHell(true); this.ui.update(); this.saveNow(); }, thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
     // la cinématique « Explorer le monde » (elle tient lieu d'écran de chargement de l'agrandissement)
     this.voyageStage = new VoyageStage({
       cam: this.cam, world: w, scene: this.scene, root: uiRoot,
@@ -1455,11 +1455,11 @@ class Game implements UIHost {
   }
 
   /**
-   * « Affronter… » ou « Rouvrir » (bandeau de l'île, message des Enfers fermés) : le portail refermé rouvre sa carte ; pas
-   * encore choisi, c'est la voie des Enfers du grand choix
+   * « Affronter… », « Rouvrir » ou « Refermer » (bandeau de l'île, message des Enfers fermés) : la carte du portail (le PvE en
+   * cours, elle confirme la fermeture) ; pas encore choisi, c'est la voie des Enfers du grand choix
    */
   openPortalChoice() {
-    if (this.war.pve === 'off') this.portalChoice.show();
+    if (this.war.pve !== 'ask') this.portalChoice.show();
     else if (this.war.pve === 'ask') this.worldChoice.show('hell');
   }
 

@@ -903,8 +903,12 @@ export class CommandUI implements ToolInput {
   private waveStatus(next: number | null, raid: boolean) {
     const w = this.host.war, f = w.faction, k = w.invStep(), m = INVASION_WAVES;
     const esc = (s: string) => s.replace(/"/g, '&quot;');
-    const box = (mod: string, hot: boolean, icon: string, line: string, act = '') =>
-      `<div class="twave ${mod} wst${hot ? ' hot' : ''}" role="status"><span class="twm" aria-hidden="true">${pic(icon, 30)}</span><div class="twc">${line}</div>${act ? `<span class="twsep" aria-hidden="true"></span><div class="twa">${act}</div>` : ''}</div>`;
+    // (le PvE en cours : « Refermer le portail », à tout moment, au bout du bandeau ; le portail éteint, il n'y a plus rien à refermer)
+    const shut = () => w.pve === 'on' && !w.portalOut ? `<button data-a="pveChoice" class="twb twx ico" title="${esc(tr('Refermer le portail : plus aucune vague, les troupes des Enfers rentrent sur l’île'))}">${pic('🔒', 20)}<span class="twl">${tr('Refermer')}</span></button>` : '';
+    const box = (mod: string, hot: boolean, icon: string, line: string, act = '') => {
+      act += shut();
+      return `<div class="twave ${mod} wst${hot ? ' hot' : ''}" role="status"><span class="twm" aria-hidden="true">${pic(icon, 30)}</span><div class="twc">${line}</div>${act ? `<span class="twsep" aria-hidden="true"></span><div class="twa">${act}</div>` : ''}</div>`;
+    };
     const head = (s: string) => `<span class="twh">${s}</span>`;
     const big = (s: string) => `<b class="twt">${s}</b>`;
     const tail = (s: string) => s ? `<span class="twf">· ${s}</span>` : '';

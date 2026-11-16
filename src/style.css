@@ -1768,7 +1768,9 @@ body.cinematic #bannerWrap { display: none !important; }
 #troopBar .twk.ok { border: 1px solid rgba(140, 220, 120, 0.7); background: rgba(90, 170, 70, 0.25); color: #c8f2b4; }
 /* le filet, puis le bouton crème (picto et texte foncés) ; terni quand il ne sert pas, la raison en infobulle */
 #troopBar .twsep { flex: none; align-self: stretch; width: 1px; margin: 4px 6px; background: rgba(255, 255, 255, 0.22); }
-#troopBar .twa { flex: none; display: flex; align-items: center; }
+#troopBar .twa { flex: none; display: flex; align-items: center; gap: 8px; }
+/* « Refermer » : discret, à côté de l'action principale */
+#troopBar .twave .twb.twx { min-height: 38px; padding: 0 14px 0 10px; font-size: 13px; animation: none; }
 #troopBar .twave .twb { min-height: 46px; padding: 0 22px 0 16px; gap: 10px; border-radius: 999px; border: none; background: linear-gradient(180deg, #fffaf0, #f6ead6); color: #262a48; font-size: 16px; font-weight: 800; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 -2px 0 rgba(160, 120, 80, 0.15); cursor: pointer; transition: transform 0.12s, box-shadow 0.12s, filter 0.12s; }
 #troopBar .twave .twb:not(.ico) { padding: 0 22px; }
 #troopBar .twave .twb:hover { transform: translateY(-1px); filter: brightness(1.04); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 0 3px rgba(255, 255, 255, 0.25); }

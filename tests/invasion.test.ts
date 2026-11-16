@@ -249,14 +249,94 @@ describe('le PvE est un choix : « Affronter les démons » ou « Fermer le port
     expect(war.inv).toBe('ready');
   });
 
-  it('on ne referme pas en pleine invasion, ni une fois l’invasion repoussée', () => {
+  it('on referme à tout moment : le compte à rebours s’arrête, rouvert l’invasion est ré-annoncée à la même vague', () => {
     const war = pveWar(island());
     enlist(war, 3);
     tick(war, 2);
     war.startInvasion();
-    expect(war.closePortal()).toBe(false);
+    expect(war.closePortal()).toBe(true);
+    expect(war.inv).toBe('wait');
+    expect(war.nextWaveIn()).toBeNull();
+    tick(war, 60);
+    expect(war.isle!.raid).toBeNull();
+    war.acceptPve();
+    tick(war, 2);
+    expect(war.inv).toBe('ready');
+    expect(war.invStep()).toBe(1);
+  });
+
+  it('refermer en pleine vague : les démons repartent, ni victoire ni défaite ; rouvert, on reprend à cette vague', () => {
+    const war = pveWar(island());
+    enlist(war, 3);
+    tick(war, 2);
+    war.startInvasion();
+    tick(war, INVASION_DELAY + 2, () => !!war.isle!.raid);
+    expect(war.inv).toBe('raid');
+    const f = war.faction!, won = f.raidsRepelled, lost = f.raidsLost;
+    expect(war.closePortal()).toBe(true);
+    expect(war.isle!.raid).toBeNull();
+    expect(war.isle!.raiders().length).toBe(0);
+    expect(f.activeRaid).toBeNull();
+    tick(war, 10);
+    expect([f.raidsRepelled, f.raidsLost]).toEqual([won, lost]);
+    expect(said(war, 'lost') + said(war, 'repelled')).toBe(0);
+    war.acceptPve();
+    tick(war, 2);
+    expect(war.inv).toBe('ready');
+    expect(war.invStep()).toBe(won + 1);
+  });
+
+  it('refermer après l’invasion : les troupes des Enfers rentrent, la base attend, les Enfers fermés ; rouvert, tout est là', () => {
+    const war = pveWar(island());
+    enlist(war, 3);
     war.skipInvasion();
+    tick(war, 1);
+    const t = war.army.troops[0];
+    t.where = 'hell';
+    war.army.queue.push({ kind: 'soldier', left: 500, at: 'hell', gear: [] });
+    expect(war.hellPresence()).toBe(true);
+    const time = war.faction!.time;
+    expect(war.closePortal()).toBe(true);
+    tick(war, 5);
+    expect(war.army.troops.every((x) => x.where === 'isle')).toBe(true);
+    expect(war.army.queue.every((r) => r.at !== 'hell')).toBe(true);
+    expect(war.news.some((n) => n.text.includes('ne se referme'))).toBe(true);
+    // les Enfers ne bougent plus, on n'y va plus, on n'y recrute plus
+    expect(war.faction!.time).toBe(time);
+    expect(war.hellPresence()).toBe(false);
+    expect(war.hellWhy()).toBe('Le portail est refermé : rouvrez-le quand vous voulez.');
+    expect(war.recruitHell('soldier', 1, 50)).toBe('Le portail est refermé : rouvrez-le quand vous voulez.');
+    // l'invasion faite le reste : rouvert, aucune vague, les Enfers ouverts
+    war.acceptPve();
+    tick(war, 30);
+    expect(war.inv).toBe('done');
+    expect(war.isle!.raid).toBeNull();
+    expect(war.hellWhy()).toBeNull();
+    expect(war.faction!.time).toBeGreaterThan(time);
+  });
+
+  it('le portail éteint (royaume tombé) ne se referme pas : il n’y a plus rien à refermer', () => {
+    const war = pveWar(island());
+    war.skipInvasion();
+    tick(war, 1);
+    war.faction!.victory = true;
     expect(war.closePortal()).toBe(false);
+    expect(war.pve).toBe('on');
+  });
+
+  it('une partie refermée en pleine invasion se sauvegarde et se relit (le format ne change pas)', () => {
+    const war = pveWar(island());
+    enlist(war, 3);
+    tick(war, 2);
+    war.startInvasion();
+    war.closePortal();
+    const s = JSON.parse(JSON.stringify(war.save())) as Record<string, unknown>;
+    expect([s.pve, s.invasion, s.raid]).toEqual(['off', 'wait', null]);
+    const back = new War(island());
+    back.load(s);
+    tick(back, 1);
+    expect(back.closed).toBe(true);
+    expect(back.inv).toBe('wait');
   });
 
   it('la sauvegarde garde le choix ; une ancienne sauvegarde sans choix : la carte une fois si rien n’est engagé, sinon PvE en cours', () => {
@@ -280,6 +360,18 @@ describe('le PvE est un choix : « Affronter les démons » ou « Fermer le port
     const played = load({ ...s, pve: undefined, sealed: undefined, invasion: 'done' });
     expect(played.pve).toBe('on');
     expect(played.hellWhy()).toBeNull();
+  });
+});
+
+describe('l’interface du portail refermable', () => {
+  it('le bandeau de l’île offre « Refermer » tant que le PvE est en cours ; la carte le confirme et redit qu’on peut changer d’avis', () => {
+    const cmd = readFileSync('src/ui/command.ts', 'utf8'), card = readFileSync('src/ui/portalChoice.ts', 'utf8'), main = readFileSync('src/main.ts', 'utf8');
+    expect(cmd).toMatch(/const shut = \(\) => w\.pve === 'on' && !w\.portalOut \? `<button data-a="pveChoice"/);
+    expect(cmd).toMatch(/act \+= shut\(\)/);
+    expect(main).toMatch(/if \(this\.war\.pve !== 'ask'\) this\.portalChoice\.show\(\)/);
+    expect(card).toMatch(/if \(w\.pve === 'on'\) \{ this\.renderShut\(\); return; \}/);
+    expect(card).toContain('Vous pourrez changer d’avis plus tard.');
+    expect(card).not.toContain('ne se referme plus');
   });
 });
 

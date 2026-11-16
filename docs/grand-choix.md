@@ -86,7 +86,7 @@ Les images ont été jouées une à une, temps de calcul et de rendu de chaque i
 - **Bac à sable** : le portail s'éveille seul à l'Antiquité, sans carte ni invasion (voir [bac-a-sable.md](bac-a-sable.md)) ; pas de grand choix ; l'onglet « Grands choix » est là dès le départ (« Les Enfers » pour affronter les démons, « Explorer le monde »).
 
 ## Liens avec les autres systèmes
-- [portail-ile.md](portail-ile.md) : le portail ouvert par le grand choix ; la carte du portail ne s'ouvre plus d'elle-même, elle ne sert qu'à rouvrir un portail refermé.
+- [portail-ile.md](portail-ile.md) : le portail ouvert par le grand choix ; la carte du portail ne s'ouvre plus d'elle-même, elle sert à rouvrir un portail refermé et à confirmer « Refermer » (permis à tout moment).
 - [monde-carte.md](monde-carte.md) : `expandWorld`, `canExpand`, `archipelagoOn`.
 - [expeditions.md](expeditions.md) : l'expédition `portal` n'est plus proposée ; l'onglet « Grands choix ».
 - [ages.md](ages.md) : plus rien du portail pour sortir de l'Antiquité.
