@@ -22,9 +22,6 @@ import { tr } from '../i18n';
 
 export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
-/** points verts des emplacements libres : jusqu'à tant, dans ce rayon autour du curseur (en cases) */
-const MAX_SPOTS = 900, SPOTS_R = 10;
-
 export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'];
 export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'rocks', 'cave', 'fissure', 'erase'];
 /** Décors posés d'un clic, sans pinceau (la faille se creuse au pinceau, en glissant) */
@@ -121,8 +118,6 @@ export class ToolController implements ToolInput {
   private ghostBody: THREE.Mesh;
   private ghostGlow: THREE.Mesh;
   private ghostKey = '';
-  /** points verts : où viser pour que le grand bâtiment en main tienne (le milieu de chaque emplacement libre alentour) */
-  private spots: THREE.InstancedMesh;
   /**
    * L'entrée du bâtiment en main, pour le tourner du bon côté : un seuil doré qui bat au sol devant la porte, la porte
    * soulignée d'un cadre lumineux sur la façade, et des chevrons qui sortent de la porte (le chemin d'accès esquissé)
@@ -138,7 +133,6 @@ export class ToolController implements ToolInput {
    * `keySide` : le côté que visait la souris quand R a tourné le bâtiment (R l'emporte tant qu'elle ne change pas de côté)
    */
   private anchor: { kind: KindId | 'cave'; x: number; z: number; keySide: number | null } | null = null;
-  private spotsKey = '';
   /** taille du pinceau de chaque outil (le grand volcan ne couvre pas ensuite le village de rochers) */
   private radii: Partial<Record<ToolId, number>> = { bulldoze: 1 };
   /** emplacements possibles du bâtiment en main quand il ne se pose qu'à des endroits précis (port, mine, bûcheron…) */
@@ -171,8 +165,6 @@ export class ToolController implements ToolInput {
     const dir = new THREE.Shape([new THREE.Vector2(-0.5, -0.1), new THREE.Vector2(0, 0.55), new THREE.Vector2(0.5, -0.1), new THREE.Vector2(0.2, -0.1), new THREE.Vector2(0.2, -0.45), new THREE.Vector2(-0.2, -0.45), new THREE.Vector2(-0.2, -0.1)]);
     this.freeArrow = new THREE.Mesh(new THREE.ShapeGeometry(dir).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
     this.freeArrow.renderOrder = 10; this.freeArrow.visible = false;
-    this.spots = new THREE.InstancedMesh(new THREE.CircleGeometry(0.15, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x40e070, transparent: true, opacity: 0.8, depthTest: false, depthWrite: false }), MAX_SPOTS);
-    this.spots.renderOrder = 8; this.spots.visible = false; this.spots.frustumCulled = false; this.spots.count = 0;
     this.wallCells = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.86, 0.86).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, side: THREE.DoubleSide }), 64);
     this.wallCells.renderOrder = 9; this.wallCells.visible = false; this.wallCells.frustumCulled = false; this.wallCells.count = 0;
     h.scene.add(this.wallCells);
@@ -192,7 +184,7 @@ export class ToolController implements ToolInput {
     for (let i = 0; i < 3; i++) this.doorSteps.push(new THREE.Mesh(chevGeo, gold(0.9)));
     for (const m of [this.doorTile, this.doorFrame, ...this.doorSteps]) { m.renderOrder = 10; m.frustumCulled = false; this.door.add(m); }
     this.door.visible = false;
-    h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.freePulse, this.freeArrow, this.spots, this.door);
+    h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.freePulse, this.freeArrow, this.door);
     this.zones = new ZoneHighlight(() => this.h.world, h.scene);
     this.coverage = new CoverageView(() => this.h.world, h.scene);
     this.zones.onEmpty = (m) => this.h.toast(m);
@@ -352,22 +344,6 @@ export class ToolController implements ToolInput {
     this.select(null);
   }
 
-  /** grand bâtiment en attente de démolition : le premier clic le désigne, un second (dans les 6 s) le démolit */
-  private doomed: { id: number; stroke: number; t: number } | null = null;
-  private strokeN = 0;
-
-  /** La démolition de ce grand bâtiment est-elle confirmée ? Sinon, le premier clic demande confirmation */
-  private confirmed(b: Building, button = false) {
-    const d = this.doomed, now = performance.now();
-    if (d && d.id === b.id && now - d.t < 6000 && (button || d.stroke !== this.strokeN)) { this.doomed = null; return true; }
-    if (!d || d.id !== b.id || now - d.t >= 6000) {
-      this.doomed = { id: b.id, stroke: this.strokeN, t: now };
-      const name = KINDS[b.kind].names[Math.max(b.age, KINDS[b.kind].minAge)];
-      this.h.toast(tr(button ? 'Démolir « {name} » ? Recliquez « Démolir » pour confirmer (Ctrl+Z l’annulerait).' : 'Démolir « {name} » ? Cliquez de nouveau dessus pour confirmer (Ctrl+Z l’annulerait).', { name }));
-    }
-    return false;
-  }
-
   // ---------- historique ----------
   private beginStroke() { this.pre = this.h.world.snapshot(); this.strokeChanged = false; }
   private mark() {
@@ -435,7 +411,6 @@ export class ToolController implements ToolInput {
 
   down(e: PointerInfo) {
     this.pickAt(e);
-    this.strokeN++;
     this.pressed = true;
     this.touchMode = e.touch;
     this.refreshVisuals();
@@ -562,25 +537,6 @@ export class ToolController implements ToolInput {
       this.vegTimer -= dt;
       if (this.vegTimer <= 0) { this.vegTimer = 0.15; this.applyVeg(); }
     }
-  }
-
-  /** Points verts autour du curseur : le milieu de chaque emplacement où le grand bâtiment en main tiendrait */
-  private showSpots(kind: KindId, ox: number, oz: number) {
-    const w = this.h.world, s = KINDS[kind].size;
-    this.spots.visible = true;
-    // recalculés quand le curseur s'éloigne de quelques cases, ou que le village change
-    const key = `${kind}|${Math.round(ox / 3)}|${Math.round(oz / 3)}|${w.version}`;
-    if (key === this.spotsKey) return;
-    this.spotsKey = key;
-    const m = new THREE.Matrix4();
-    let n = 0;
-    for (let z = oz - SPOTS_R; z <= oz + SPOTS_R; z++)
-      for (let x = ox - SPOTS_R; x <= ox + SPOTS_R && n < MAX_SPOTS; x++) {
-        if (!w.inCells(x, z) || !w.inCells(x + s - 1, z + s - 1) || w.canPlace(kind, x, z) !== null) continue;
-        this.spots.setMatrixAt(n++, m.makeTranslation(x + s / 2, w.flatTarget(x, z, s) + 0.08, z + s / 2));
-      }
-    this.spots.count = n;
-    this.spots.instanceMatrix.needsUpdate = true;
   }
 
   /** Le pinceau de relief (ou le volcan) sous le curseur touche un bâtiment : il ne fera rien */
@@ -992,9 +948,7 @@ export class ToolController implements ToolInput {
     const where = w.canPlace(this.kind, o.x, o.z), reason = where ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
     if (reason) {
       const now = performance.now();
-      // un grand bâtiment refusé ici : les points verts montrent où il tient
-      const tip = '';
-      if (now - this.lastToast > 1200) { this.h.toast(tr(reason) + (tip ? `.${tip}` : '')); this.lastToast = now; }
+      if (now - this.lastToast > 1200) { this.h.toast(tr(reason)); this.lastToast = now; }
       // (l'endroit fixé ne tient plus, le village a changé entre les deux clics : on le libère)
       if (an) { this.anchor = null; this.refreshVisuals(); this.h.changed(); }
       return;
@@ -1044,7 +998,6 @@ export class ToolController implements ToolInput {
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
     this.placeWhy = null;
-    this.spots.visible = false;
     this.door.visible = false;
     this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = this.freePulse.visible = this.freeArrow.visible = this.wallCells.visible = false;
     this.wallCost = '';
@@ -1136,7 +1089,6 @@ export class ToolController implements ToolInput {
       // (un rempart en cours de tracé : l'aperçu du tracé a déjà dit ce qui manque ; une case occupée par un pan est son point de départ)
       const tracing = this.tracingWall && this.freeFrom;
       if (!tracing) this.placeWhy = this.placedAt === cellKey && reason === tr('Emplacement occupé') ? null : this.tracingWall && this.hitBuilding && (this.hitBuilding.kind === 'wall' || this.hitBuilding.kind === 'gate') ? null : why0;
-      // (les points verts des emplacements libres induisaient en erreur : retirés, `showSpots` n’est plus appelé)
       setGhostValid(tracing ? !this.placeWhy : !why0);
       const rot = an ? this.anchorRot() : this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);

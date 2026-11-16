@@ -5,7 +5,7 @@ import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, Zone, continentPlan, riverU, toPlan,
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
-import { MISSIONS, mandatoryFor, mandatoriesFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS, choiceAt } from '../src/sim/missions';
+import { MISSIONS, mandatoryFor, mandatoriesFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS } from '../src/sim/missions';
 import { KINDS, KindId, UPGRADES, Building } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { sculpt, brushOnBuilding } from '../src/world/terraform';
@@ -380,11 +380,11 @@ describe('sauvegarde', () => {
     expect(r.exp.done).toEqual(['herd']);
     expect(r.exp.perks).toEqual(['seeds']);
     expect('camp' in r.exp).toBe(false);
-    expect(r.exp.wins).toBe(4);
+    expect('wins' in r.exp).toBe(false);
     // la ligne qui menait à l'avant-poste n'a plus qu'un arrêt : elle s'oublie
     expect(r.lines).toEqual([]);
     // la partie tourne : expéditions, chemin de fer, besoins et conseil de l'âge suivant
-    const agents = new Agents(r), ex = new Expeditions(r, agents, () => 100, () => 0.5), rail = new Railway(r, agents, ex, () => 100), sim = new Sim(r);
+    const agents = new Agents(r), ex = new Expeditions(r, agents, () => 100, () => 0.5), rail = new Railway(r, agents), sim = new Sim(r);
     sim.age = 2;
     for (let i = 0; i < 40; i++) { agents.update(0.5, 10, 2, false, 20, 0); ex.update(0.5); rail.update(0.5); sim.update(0.5, 0.5); }
     expect(ex.start(MISSIONS.find((m) => m.id === 'herd')!, 0)).not.toBeNull();
@@ -1085,11 +1085,6 @@ describe('expéditions', () => {
     const pick = longer >= 0 ? longer : a.wait!.options.findIndex((_, i) => ex.canTake(a, i));
     expect(ex.decide(a, pick)).toBe(true);
     expect(ex.progress(a)).toBeCloseTo(before, 5);
-    // les libellés d'un choix suivent l'âge (le plus proche, en dessous ou égal)
-    const c = { ...m.choices[0], ages: { 3: { label: 'Âge industriel' }, 5: { label: 'Âge futuriste' } } };
-    expect(choiceAt(c, 2).label).toBe(m.choices[0].label);
-    expect(choiceAt(c, 4).label).toBe('Âge industriel');
-    expect(choiceAt(c, 5).label).toBe('Âge futuriste');
   });
 
   it('une mine ne se creuse que dans la montagne, et rapporte généreusement minerai et pierre', () => {
@@ -1141,7 +1136,7 @@ describe('expéditions', () => {
   it('la voie ferrée franchit une rivière ou un lac sur un pont, pas le large', () => {
     const w = continent();
     const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
-    const rail = new Railway(w, new Agents(w), ex, () => 100, () => 0.3);
+    const rail = new Railway(w, new Agents(w), () => 0.3);
     // deux places pour une gare, de part et d'autre d'une eau peu profonde (rivière, lac) de quelques cases, qui barre le
     // passage (elle continue au nord et au sud : la voie ne la contourne pas)
     const shallow = (x: number, z: number) => w.isWet(x, z) && (w.lake[w.ci(x, z)] === 1 || w.cellAvg(x, z) > -1.7);
@@ -1177,7 +1172,7 @@ describe('expéditions', () => {
     const agents = new Agents(w);
     for (let i = 0; i < 20; i++) agents.update(0.1, 10, 3, false, 40, 0);
     const ex = new Expeditions(w, agents, () => 100, () => 0.5);
-    const rail = new Railway(w, agents, ex, () => 100, () => 0.3);
+    const rail = new Railway(w, agents, () => 0.3);
     rail.update(0.1);
     expect(w.lines.length).toBe(0);
     const near = (cx: number, cz: number, kind: 'terminal' | 'station' | 'maglev') => {
@@ -1234,7 +1229,6 @@ describe('expéditions', () => {
     const w2 = new World();
     w2.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
     expect(w2.lines.map((l) => l.stops.map((id) => w2.buildings.get(id)!.kind))).toEqual([['terminal', 'station']]);
-    expect(w2.linesAuto).toBe(false);
     // la gare démolie : ses lignes ne roulent plus, tout le monde rentre au village
     w.removeBuilding(station!.id);
     rail.update(2.1);
@@ -1343,26 +1337,6 @@ describe('pétrole', () => {
     const r = new World();
     r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
     expect([r.crude, r.fuel]).toEqual([7, fuel]);
-  });
-
-  it('un choix qui roule au carburant le demande avant de partir, et le prend au départ', () => {
-    const w = continent();
-    const [x, z] = flatLand(w);
-    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 4, false);
-    const agents = new Agents(w);
-    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 4, false, 30, 0);
-    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
-    const herd = MISSIONS.find((m) => m.id === 'herd')!, m = { ...herd, choices: [{ ...herd.choices[0], fuel: 12, mounts: 0 }] }, c = m.choices[0];
-    expect(ex.why(m, c)).toMatch(/12 carburant.*0 pour l’instant.*raffinerie/);
-    expect(ex.preview(c).label).toMatch(/12 carburant/);
-    w.fuel = 20;
-    expect(ex.why(m, c)).toBeNull();
-    expect(ex.start(m, 0, 4)).not.toBeNull();
-    expect(w.fuel).toBe(8);
-    // en ressources illimitées, le carburant ne manque jamais
-    w.unlimited = true;
-    w.fuel = 0;
-    expect(ex.why({ ...m, id: 'herd2' }, c) ?? '').not.toMatch(/carburant/);
   });
 
 });

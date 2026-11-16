@@ -1,6 +1,6 @@
 # Monde souterrain
 
-> Fichiers : `src/world/underground.ts` (génération des galeries, zones, bassins, filons, parcours d'une troupe), `src/render/underView.ts` (la vue : relief en coupe, décor par zone, camp, gardes, patrouilles, troupes, mineurs, raids), `src/render/camp.ts` (pièces du camp par niveaux), `src/render/mobs.ts` (créatures), `src/render/caveLight.ts` (éclairage des sources), `src/sim/expeditions.ts` (`foesOf`, `ambushStep`, `isBelow`, champs de troupe d'`ActiveExpedition`), `src/world/mapgen.ts` et `src/build/tools.ts` (grottes et failles de surface), `src/main.ts` (`enterUnder`, `exitUnder`, mode `under`).
+> Fichiers : `src/world/underground.ts` (génération des galeries, zones, bassins, filons, parcours d'une troupe), `src/render/underView.ts` (la vue : relief en coupe, décor par zone, camp, gardes, patrouilles, troupes, mineurs, raids), `src/render/camp.ts` (pièces du camp par niveaux), `src/render/mobs.ts` (créatures), `src/render/caveLight.ts` (éclairage des sources), `src/sim/expeditions.ts` (`foesOf`, champs de troupe d'`ActiveExpedition`), `src/world/mapgen.ts` et `src/build/tools.ts` (grottes et failles de surface), `src/main.ts` (`enterUnder`, `exitUnder`, mode `under`).
 > Tests : `tests/world.test.ts` (« une partie d'avant le plan du continent garde… même souterrain »), `tests/expeditions.test.ts` (« le monde souterrain est retiré »).
 > Voir aussi : [expeditions.md](expeditions.md), [equipement.md](equipement.md), [outils-terrain.md](outils-terrain.md), [enfers.md](enfers.md), [architecture.md](architecture.md), [monde-carte.md](monde-carte.md), [vegetation-biomes.md](vegetation-biomes.md), [sauvegarde.md](sauvegarde.md).
 
@@ -31,7 +31,7 @@ Utilitaires : `walkable` (ouverte, hors bassin), `heightAt` (mêmes triangles qu
 `oreVeins(u, mined)` : sur les cases de galerie au pied de la roche (`wallDist === 1`, hors cases déjà minées ou creusées), 20 % de ces cases en roche (`hash2 < 0,2`), 6 % ailleurs, le minerai tiré par poids dans `ORE_KINDS` (charbon 40, fer 28, or 10, rubis 8, lapis 7, diamant 5, émeraude 2 ; rendements 1 à 5), décalé vers le précieux en magma. `world.mined` (filons abattus), `claimed` (galeries tenues), `dug`, `digs` (cases à creuser) sont des champs de `World` **ni sauvegardés ni relus** (`fromJSON` les vide).
 
 ### Troupes et embuscades
-`troopRoute(u, entry, targets, front, ambush)` : chemin de la case de descente, de filon en filon (halte `MINE_HALT = 6`), jusqu'au front, avec un combat (`FIGHT_HALT = 20`) à chaque case d'embuscade ; `routeAt` donne où elle en est. Le jeu et la vue le calculent de la même façon. Côté simulation (`expeditions.ts` › `ambushStep`) : à l'embuscade, `threat = n × FOE_MIGHT × (1,25 en magma) × 0,9`, `win = might / (might + threat)` ; au tirage : propre (`clean`), sinon blessés (`hurt`, 65 % du reste : +1 blessé, risque ×1,06) ou déroute (`rout` : +2 blessés, risque ×1,2) ; seul un non-échec compte dans `exp.wins`. Côté vue : `UnderView.setTroops(list, dt)` fait marcher la troupe (`Troop`, `moveTroop`, colonne blindée moderne `moveColumn`), les créatures de l'embuscade surgissent 10 s avant (`ambushes`). `Expeditions.under` donne le moteur à la simulation ; `isBelow(a)` = `entry >= 0 && phase === 'work'`.
+`troopRoute(u, entry, targets, front, ambush)` : chemin de la case de descente, de filon en filon (halte `MINE_HALT = 6`), jusqu'au front, avec un combat (`FIGHT_HALT = 20`) à chaque case d'embuscade ; `routeAt` donne où elle en est. Le jeu et la vue le calculent de la même façon. La simulation des embuscades (`ambushStep`, `exp.wins`) a été retirée le 16 nov. 2026 : aucune troupe ne descendait plus. Côté vue : `UnderView.setTroops(list, dt)` fait marcher la troupe (`Troop`, `moveTroop`, colonne blindée moderne `moveColumn`), les créatures de l'embuscade surgissent 10 s avant (`ambushes`). Le jeu lui passe une liste vide (`main.ts`). `Expeditions.under` garde le moteur.
 
 ### Créatures
 `mobs.ts` : `UnderMobs` peuple le souterrain (`populate`, graine `version * 7919 + 17`) : pour chaque espèce, une par `density[zone]` cases de galerie (hors 4 cases d'une entrée et galeries tenues), groupes à tour de rôle, plafond `MAX_MOBS = 90` ; chauves-souris (28) dans les grandes salles ; `MAX_FOES = 24` en plus pour une embuscade ; au-delà de 42 unités de la caméra elles ne réfléchissent plus.
@@ -57,15 +57,15 @@ Le souterrain n'a pas de soleil : seules des sources (cristaux, champignons, lav
 
 ### Passage surface ↔ souterrain (`main.ts`)
 - `enterUnder(cell)` : `fadeThrough` (écran noir « Descente sous terre… »), import dynamique de `underView` (`loadUnder`, hors du paquet principal), `under.sync()`, création de `UnderView`, `build()`, mode `'under'` (classe `body.under`), caméra : `minDist 2,4`, `maxDist 24`, `minPitch 0,95`, saut à 11 de distance sous l'entrée, `cam.handler = underInput`. Bandeau avec le nom de la zone.
-- `exitUnder(cell?, auto?)` : retour à la vue de surface sauvegardée (`surfaceView`, `surfaceZoom`), `saveNow`. Sans cible, devant l'entrée empruntée.
-- Suivi d'une équipe : `follow(id)` sous terre ne descend que si `isBelow(a)` (`autoUnder`) ; sinon la vue remonte. Aujourd'hui `isBelow` est toujours faux : la boucle de `main.ts` garde les branches mais elles ne se déclenchent pas.
+- `exitUnder(cell?)` : retour à la vue de surface sauvegardée (`surfaceView`, `surfaceZoom`), `saveNow`. Sans cible, devant l'entrée empruntée.
+- Suivi d'une équipe : `follow(id)` depuis le souterrain fait remonter la vue (la descente avec une troupe, `isBelow` / `autoUnder`, est retirée).
 - Les clics (`underClick`) : créature qui sursaute et détale, cristal qui tinte, puits de lumière qui ramène en surface.
 
 ### Réemploi par les Enfers
 `world/hell.ts` importe `UWALL`, `ROCK_ISO`, `FLOOR_ISO`, `POOL_LAVA` d'`underground.ts` ; `hellView.ts` utilise `caveLights`, `caveLit`, `glowMaterial`, `MAX_CAVE_LIGHTS` ; `battleUnits.ts` utilise `caveLit`. Modifier ces constantes ou ce shader change aussi les Enfers ([enfers.md](enfers.md)).
 
 ## Liens avec les autres systèmes
-- [expeditions.md](expeditions.md) : champs `targets`, `entry`, `front`, `ambush`, `might` d'`ActiveExpedition`, `Choice.troop`, `Expeditions.under`.
+- [expeditions.md](expeditions.md) : champs `targets`, `entry`, `front`, `might` d'`ActiveExpedition`, `Choice.troop`, `Expeditions.under`.
 - [outils-terrain.md](outils-terrain.md) : outils grotte et faille, `VEG_CAVE`, `VEG_FISSURE` ; une entrée posée ou rasée change `Underground.sync`.
 - [vegetation-biomes.md](vegetation-biomes.md) : `biomeAt` détermine les zones (donc les créatures).
 - [sauvegarde.md](sauvegarde.md) : `mined`, `claimed`, `dug`, `digs` ignorés au chargement ; anciennes missions `scout` et `deep` et le plan des galeries (`perks: 'map'`) oubliés par `readExpState`.

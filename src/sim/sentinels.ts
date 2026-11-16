@@ -36,7 +36,6 @@ export class Sentinels {
   chains: Chain[] = [];
   private rnd = mulberry32(13);
   private version = -1;
-  private age = 0;
 
   constructor(private world: World) {}
 
@@ -124,9 +123,8 @@ export class Sentinels {
     return options[Math.floor(this.rnd() * options.length)];
   }
 
-  update(dt: number, age: number) {
+  update(dt: number) {
     const w = this.world;
-    this.age = age;
     if (w.version !== this.version) { this.version = w.version; this.plan(); }
     for (const s of this.sentinels) {
       if (s.tower >= 0) {
@@ -162,5 +160,4 @@ export class Sentinels {
 
   /** Toutes les sentinelles, pour la vue (avec leur hauteur sur le mur) */
   all(): PatrolMember[] { return this.sentinels.map((s) => ({ x: s.x, y: s.y, z: s.z, heading: s.heading, mode: s.mode, phase: s.phase })); }
-  get role() { return this.age; }
 }

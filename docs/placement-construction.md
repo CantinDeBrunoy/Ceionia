@@ -68,7 +68,6 @@ Le joueur prend un bâtiment dans le menu Bâtir (outil `build`) ; un fantôme s
 
 ## Pièges et invariants
 - L'instantané ne contient ni l'état des habitants ni les stocks qui varient avec le temps autres que bois, pierre et briques. Un tracé de ligne n'est pas un geste annulable à lui seul : Ctrl+Z annule le dernier geste de construction, et les lignes reviennent à leur état d'alors (`tests/bugsManuel.test.ts`).
-- `ToolController.confirmed`, `doomed` et `showSpots` sont du code mort (plus de confirmation de démolition, plus de points verts) ; ne pas les croire actifs.
 - « Occupé » juste après une pose : tant que le curseur reste sur la case du bâtiment qu'on vient de poser, le refus « Emplacement occupé » est masqué (`placedAt`).
 - Un geste ne doit pousser qu'un instantané : toujours `mark()` avant de modifier, jamais après (`upgradeSelected` remet `pre` à la main parce que `beginStroke` y est appelé avant la tentative).
 - Un déplacement retire le bâtiment du monde avant de le reposer : pendant ce temps, les besoins (logement, vivres…) sont recalculés sans lui.

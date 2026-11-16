@@ -100,7 +100,6 @@ Sept bulles facultatives, une à la fois, une fois chacune (`ceionia.aidesMilita
 - `troopStats` arrondit : le chevalier de l'âge 2 a exactement 230 pv. Les tests d'équilibre (`equilibreBatailles.test.ts`) en dépendent : toute retouche des bases ou de `AGE_K` change les vagues.
 - Une recrue annulée ou renvoyée doit rendre pièces **et** cheval (`ride(−1)`) ; l'équipement est lu dans `Recruit.gear` / `Troop.gear` (ce que la recrue a vraiment pris), pas dans `troopKit` (la forme a pu changer d'âge entre-temps).
 - `recruitWhy` dit « à partir du Moyen Âge » pour n'importe quelle troupe encore trop jeune, même une de l'âge 1 : inatteignable aujourd'hui (la caserne demande l'âge 1).
-- `CommandUI.idleExpired` et `IDLE_MS` (ranger le mode ordres de l'île après 5 s) ne sont appelés nulle part : code mort. De même, dans `down` le champ `box` vaut toujours vrai, la branche « glissé = déplacer la vue » de `move` n'est jamais prise.
 - Les raccourcis du commandement sont lus **avant** ceux du village (`bindKeys`) ; une touche prise doit retirer sa touche de caméra (`take`).
 - En pause (`Espace`), `War.update` tourne avec `dt` = 0 : les ordres se donnent (`Hell.order` ne dépend pas du temps), rien ne bouge.
 - Textes : `recruitWhy` et les phrases de `recruitPlan.ts` sont reconnues par `shortWhy` à coups d'expressions régulières (français et anglais) ; changer un message oblige à relire `shortWhy`.

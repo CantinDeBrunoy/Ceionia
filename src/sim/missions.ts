@@ -70,12 +70,6 @@ export type Effect =
   /** la diplomatie de l'archipel avance : peuples rencontrés, comptoir chez le rival, trêve, fête (voir `diplomacy.ts`) */
   | { t: 'diplo'; act: DiploAct };
 
-/** Le choix tel qu'il se présente à cet âge : ses libellés et son récit de l'âge le plus proche, en dessous ou égal */
-export function choiceAt(c: Choice, age: number): Choice {
-  if (!c.ages) return c;
-  const keys = Object.keys(c.ages).map(Number).filter((k) => k <= age).sort((p, q) => p - q);
-  return keys.length ? { ...c, ...Object.assign({}, ...keys.map((k) => c.ages![k])) } : c;
-}
 
 export interface Choice {
   label: string;
@@ -102,17 +96,11 @@ export interface Choice {
   doing?: string;
   /** dangers rencontrés (sinon ceux de la destination) : l'équipement qui les pare rend le choix plus sûr */
   danger?: Danger[];
-  /** chevaux de l'écurie qu'emmène la troupe (ils reviennent avec elle) */
-  mounts?: number;
-  /** carburant brûlé par les véhicules de la troupe (pris au départ, raffiné du pétrole brut des puits) */
-  fuel?: number;
-  /** troupe (moteur du monde souterrain, gardé pour les Enfers : telle qu'on la verrait sous terre) */
-  troop?: 'cavalry' | 'armor' | 'miners';
   /**
-   * ce qui change avec les âges (à partir de l'âge donné) : nom et récit (chevaliers, puis cuirassiers et fusiliers…), et à
-   * l'époque moderne ce qu'il faut emmener (du carburant pour les blindés au lieu des chevaux) et ce qu'un échec coûte
+   * une troupe armée (les éclaireurs de l'archipel : `cavalry`) : l'expédition compte comme militaire (`isMilitary`), elle
+   * part à pied, sans chevaux de l'écurie ni voiture ni aéronef
    */
-  ages?: Partial<Record<number, Partial<Pick<Choice, 'label' | 'text' | 'doing' | 'winText' | 'loseText' | 'mounts' | 'fuel' | 'lose'>>>>;
+  troop?: 'cavalry' | 'armor' | 'miners';
   /** ce qu'on voit de l'échec sur la scène, au départ de l'équipe (l'orage, la pirogue qui chavire, la pierre qui roule…) */
   fail?: Fail;
   /**
@@ -143,8 +131,6 @@ export interface Mission {
   choices: Choice[];
   /** bâtiment que sa réussite permet de construire */
   unlocks?: KindId;
-  /** se refait autant de fois qu'on veut */
-  repeat?: boolean;
   /** ce qu'il faut avant de partir : missions réussies, bâtiments bâtis */
   requires?: { missions?: string[]; kinds?: KindId[] };
   /**
@@ -1061,8 +1047,6 @@ export interface ExpState {
   craftT: number;
   /** chevaux partis avec une troupe (relu à 0 : une expédition en route n'est pas sauvegardée) */
   riding: number;
-  /** combats gagnés par les troupes (embuscades repoussées) */
-  wins: number;
   /** derniers imprévus survenus, du plus ancien au plus récent : les prochaines expéditions en tirent d'autres */
   recent: string[];
   /** 1 une fois le volet maritime connu de la partie (les anciennes sauvegardes n'ont pas ce champ : voir `readExpState`) */
@@ -1072,7 +1056,7 @@ export interface ExpState {
 /** Imprévus récents dont on se souvient (les deux ou trois dernières expéditions) */
 export const RECENT_EVENTS = 6;
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), away: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, recent: [], sea: 1 });
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), away: emptyStock(), craft: [], craftT: 0, riding: 0, recent: [], sea: 1 });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
@@ -1095,7 +1079,6 @@ export function readExpState(d: any): ExpState {
   for (const k of Object.keys(s.gear) as GearId[]) s.gear[k] += Math.max(0, Math.floor(+d.away?.[k] || 0));
   s.craft = Array.isArray(d.craft) ? d.craft.filter((x: any) => x in GEAR_BY) : [];
   s.craftT = +d.craftT || 0;
-  s.wins = Math.max(0, Math.floor(+d.wins || 0));
   // (les sauvegardes d'avant ne s'en souviennent pas : rien d'évité)
   // (les sauvegardes d'avant le volet maritime : la caravelle, obligatoire au Moyen Âge, ne bloque pas qui a déjà fini les autres
   // obligatoires de cet âge ou ouvert l'âge suivant ; son chantier naval est alors disponible)

@@ -35,7 +35,7 @@ Le joueur trace des lignes de gare en gare ; la voie se pose toute seule entre d
 **Explications en jeu** : fiche d'un producteur ou d'une gare (`railStat` dans `ui.ts` : « +75 % par le rail », « Voisins à servir »), fiche de bâtiment à bâtir (`railTip`), conseil du moment (`railAgeTip`, `computeMessage` dans `sim.ts` : briqueterie, puis gare centrale, puis « posez une gare à 8 cases d'un producteur »), message d'échec d'une ligne (`Train.why`). Tous les textes passent par `tr` ([traduction.md](traduction.md)).
 
 ## Fonctionnement dans le code
-- Données : `World.lines: RailLine[]` (`id`, `stops` = ids de bâtiments, `color`, `via` = cases de passage par tronçon, `freight`, `ok`), sauvegardées en `{ c, s, v, f }` avec les arrêts en rang de bâtiment et `mergeVia` pour les arrêts disparus. `linesAuto` ne sert plus à rien d'autre qu'à la sauvegarde (aucune ligne automatique n'est plus créée).
+- Données : `World.lines: RailLine[]` (`id`, `stops` = ids de bâtiments, `color`, `via` = cases de passage par tronçon, `freight`, `ok`), sauvegardées en `{ c, s, v, f }` avec les arrêts en rang de bâtiment et `mergeVia` pour les arrêts disparus.
 - `Railway` possède un `Train` par ligne (`trains: Map<idLigne, Train>`). `refresh` tourne toutes les 2 s (`refreshT`) ou en `force` : si la clé change (lignes, via, position/rot/âge des bâtiments, `visVersion`), elle vide `stops`, `segs`, `lanes`, attribue les voies de la gare centrale, recalcule `Stop` de chaque arrêt, vérifie chaque tronçon (`seg`) et pose `Train.why` (texte affiché) ou le démarre. Si le tracé bouge, le train garde sa place « à proportion » sur son trajet.
 - `Stop` : milieu du quai `c`, axe `u`, demi-longueur `half` (0,95 petite gare, `TERM_HALF = 1` centrale), `ends` (bouts par où une voie peut partir), `board` (où attendent les voyageurs). `stopKey = id:voie`.
 - Tracé (`lay`) : Dijkstra 8 voisins (`route`) sur `cost` : infini sur bâtiment, décor, volcan ; eau franchissable seulement lac ou mer peu profonde (`cellAvg > -1.7`, coût 5, c'est un pont) ; forêt +1,5, champ +3, route +1,2, pente ×5 ; dénivelé de plus de 0,9 entre deux cases : interdit. Sorties dans l'axe du quai, un morceau de chemin par point de passage, puis simplification (`clear`, coût ≤ 2,6) et lissage de Chaikin (3 passes). Un tronçon se calcule une fois pour les deux sens (`seg`, clé = deux arrêts ordonnés par id + via) ; `plan` sert l'éditeur avec un cache de 48 entrées.
@@ -49,7 +49,7 @@ Le joueur trace des lignes de gare en gare ; la voie se pose toute seule entre d
 - Économie : `Expeditions.yields`, `refining`, `spaceRail` ; briques des gares ([economie-ressources.md](economie-ressources.md)).
 - Âges et conseils : `Sim.railNext`, `railNet`, `reqRail` ([ages.md](ages.md), [besoins-population.md](besoins-population.md)).
 - Terrain : eau, ponts, `deckY`, `cellSlope` ([eau-rivieres.md](eau-rivieres.md)). Défricher : la voie arrache arbres et rochers sur son passage.
-- Sauvegarde : champs `lines`, `linesAuto` ([sauvegarde.md](sauvegarde.md)).
+- Sauvegarde : champ `lines` ([sauvegarde.md](sauvegarde.md)). Le drapeau `linesAuto` des anciennes parties n'est plus ni lu ni écrit.
 
 ## Pièges et invariants
 - `Railway.refresh` doit rester appelée avec `force` après tout changement de ligne : `addLine`, `setStops`, `removeLine` le font. Une ligne relue d'une sauvegarde n'a pas encore `ok` : `railNet` et `servedStations` la comptent tant que `ok !== false`.
@@ -58,7 +58,6 @@ Le joueur trace des lignes de gare en gare ; la voie se pose toute seule entre d
 - Un train sort d'un quai par le bout par où il est arrivé = demi-tour : `flip` inverse les voitures sans les déplacer. Ne pas l'oublier en touchant à `legOf`.
 - Le dessin de la voie dépend de `used` (bouts de quai atteints par une voie) : sans lui, des butoirs apparaissent sur des voies actives.
 - Les arrêts sont mis en cache (`stops`) ; la gare centrale a une entrée par voie. Appeler `stopOf(b)` sans voie donne celle du milieu (utile à l'éditeur, faux pour un train).
-- Constantes inutilisées : le constructeur de `Railway` reçoit `ex`, `dayLen`, `rnd` ; seul `rnd` sert (à vérifier avant de nettoyer).
 - Un `Train.why` n'est jamais traduit en cache : il est calculé avec `tr` à chaque `refresh`.
 
 ## Pour modifier

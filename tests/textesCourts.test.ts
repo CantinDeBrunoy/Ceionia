@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MISSIONS, choiceAt, splitIntro, effectChips } from '../src/sim/missions';
+import { MISSIONS, splitIntro, effectChips } from '../src/sim/missions';
 import { EVENTS } from '../src/sim/events';
 import { GEAR } from '../src/sim/gear';
 
@@ -20,9 +20,8 @@ describe('textes courts des expéditions', () => {
     }
   });
 
-  it('un choix : titre court et une demi-phrase, à chaque âge (≤ 160 caractères hors titre)', () => {
-    for (const m of MISSIONS) for (let age = 0; age <= 7; age++) for (const c0 of m.choices) {
-      const c = choiceAt(c0, age);
+  it('un choix : titre court et une demi-phrase (≤ 160 caractères hors titre)', () => {
+    for (const m of MISSIONS) for (const c of m.choices) {
       expect(c.label.length, `${m.id}/${c.label}`).toBeLessThanOrEqual(MAX_LABEL);
       expect(c.text.length, `${m.id}/${c.label}`).toBeLessThanOrEqual(MAX_CHOICE_TEXT);
       expect(c.text.length, `${m.id}/${c.label}`).toBeLessThanOrEqual(MAX_CARD);

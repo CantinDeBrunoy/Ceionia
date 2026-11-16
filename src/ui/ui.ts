@@ -20,7 +20,7 @@ import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
 import { isleName, kindOffered, CONFLICT_LABEL } from '../sim/diplomacy';
-import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
+import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
@@ -1113,7 +1113,7 @@ export class UI {
 
   /** Sur la carte d'une mission : équipe, durée et risque (de tous ses choix) en pastilles, et ce qu'elle peut rapporter en icônes */
   private missionPills(m: Mission) {
-    const age = this.host.sim.age, cs = m.choices.map((c) => choiceAt(c, age));
+    const cs = m.choices;
     const range = (a: number[], f: (n: number) => string) => { const lo = Math.min(...a), hi = Math.max(...a); return lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`; };
     const risks = cs.map((c) => this.host.expeditions.preview(c).risk);
     const lvl = Math.max(...risks) <= 0.12 ? 'low' : Math.max(...risks) <= 0.22 ? 'mid' : 'high';
@@ -2029,12 +2029,12 @@ export class UI {
     const next = max < partyLimit(1e9) ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: max * 30, pop }) : tr('Équipes au maximum');
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${pic(a.m.icon, 18)} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
-    const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);
+    const rank = (m: Mission) => (ex.done(m) ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);
     // une carte par mission : son illustration à gauche ; à droite la pastille et le titre, les étiquettes, une phrase, les
     // pastilles (équipe, durée, risque), les gains, ce qu'elle débloque ou ce qui manque, et un bouton qui ouvre la petite
     // fenêtre de départ (les choix, l'équipement, le risque)
     const card = (m: Mission) => {
-      const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, leg = isLegendary(m), mil = isMilitary(m);
+      const done = ex.done(m), run = ex.running(m), redo = done, leg = isLegendary(m), mil = isMilitary(m);
       const tags = `${m.mandatory ? `<span class="mtag must">${pic('★', 14)} ${tr('Obligatoire')}</span>` : ''}${leg ? `<span class="mtag leg">${pic('✨', 14)} ${tr('Légendaire')}</span>` : ''}${mil ? `<span class="mtag mil">${pic('⚔️', 14)} ${tr('Militaire')}</span>` : ''}`;
       const label = tr(run ? 'Équipe en route…' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe');
       const art = missionArt(m);
@@ -2062,7 +2062,7 @@ export class UI {
     };
     const sorted = ex.list(age).sort((a, b) => rank(a) - rank(b));
     // les expéditions disponibles, puis la grille des réussies (cartes compactes) sous un intertitre
-    const compact = (m: Mission) => ex.done(m) && !m.repeat && !ex.running(m), doneList = sorted.filter(compact);
+    const compact = (m: Mission) => ex.done(m) && !ex.running(m), doneList = sorted.filter(compact);
     const cards = sorted.filter((m) => !compact(m)).map(card).join('')
       + (doneList.length ? `<div class="doneBox"><h5 class="doneHead">✓ ${tr('Réussies')} <small>(${doneList.length})</small></h5><div class="doneGrid">${doneList.map(card).join('')}</div></div>` : '');
     const nMil = sorted.filter(isMilitary).length, nLeg = sorted.filter(isLegendary).length;
@@ -2275,7 +2275,7 @@ export class UI {
 
   /** Le choix montré d'avance à l'ouverture de la fenêtre de départ : l'équilibré, sinon le premier qu'on peut faire */
   private defaultChoice(m: Mission) {
-    const ex = this.host.expeditions, cs = m.choices.map((c) => choiceAt(c, this.host.sim.age)), st = choiceStyles(cs);
+    const ex = this.host.expeditions, cs = m.choices, st = choiceStyles(cs);
     const ok = (i: number) => !ex.why(m, cs[i]);
     const bal = st.findIndex((x, i) => x.style === 'balanced' && ok(i));
     if (bal >= 0) return bal;
@@ -2291,8 +2291,8 @@ export class UI {
    */
   private sendHtml(m: Mission, sel: number) {
     const h = this.host, ex = h.expeditions, age = h.sim.age, st = ex.state;
-    const cs = m.choices.map((c0) => choiceAt(c0, age)), styles = choiceStyles(cs);
-    const i = Math.min(sel, cs.length - 1), c = cs[i], done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
+    const cs = m.choices, styles = choiceStyles(cs);
+    const i = Math.min(sel, cs.length - 1), c = cs[i], done = ex.done(m), run = ex.running(m), redo = done;
     const why = run ? tr('Une équipe est déjà en route.') : ex.why(m, c);
     const pv = ex.preview(c);
     const STYLE: Record<ChoiceStyleKind, string> = { cautious: 'Prudent', balanced: 'Équilibré', bold: 'Audacieux' };

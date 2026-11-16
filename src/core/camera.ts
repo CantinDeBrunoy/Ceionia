@@ -180,9 +180,6 @@ export class CameraRig {
   /** le joueur fait glisser la vue (on cesse alors de suivre le train) */
   onPan: (() => void) | null = null;
 
-  /** Déplace la vue de dx, dy pixels (le glissé du bouton gauche sur le sol vide, en commandement) */
-  panBy(dx: number, dy: number) { this.panScreen(dx, dy); }
-
   private panScreen(dx: number, dy: number) {
     this.onPan?.();
     const k = this.goal.dist * 0.0017;

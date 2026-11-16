@@ -135,14 +135,14 @@ export function validate(d: any): SaveData {
 }
 
 export function exportSave(d: SaveData) {
-  download(JSON.stringify(d), `ceionia-carte${d.map + 1}-${new Date().toISOString().slice(0, 10)}.json`);
+  download(JSON.stringify(d), `ceionia-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 /** Télécharge la sauvegarde mise de côté, telle quelle (pour la réparer ou l'envoyer) ; false s'il n'y en a pas */
 export function exportAside(map: number): boolean {
   const s = asideSlot(map);
   if (!s) return false;
-  download(s, `ceionia-carte${map + 1}-illisible-${new Date().toISOString().slice(0, 10)}.json`);
+  download(s, `ceionia-illisible-${new Date().toISOString().slice(0, 10)}.json`);
   return true;
 }
 

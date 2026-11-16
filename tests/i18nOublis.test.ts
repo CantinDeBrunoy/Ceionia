@@ -74,7 +74,7 @@ describe('anglais : les textes jadis oubliés', () => {
     expect(src('src/ui/homeButton.ts')).toContain("tr('Retourner au village')");
     expect(src('src/ui/homeButton.ts')).not.toMatch(/\}Retourner au village/);
     const main = src('src/main.ts');
-    expect(main).toContain("trx('Bon retour dans votre village !')");
+    expect(main).toContain("tr('Bon retour dans votre village !')");
     expect(src('src/ui/spaceViews.ts')).toContain("tr('En direct de la Lune')");
   });
 });

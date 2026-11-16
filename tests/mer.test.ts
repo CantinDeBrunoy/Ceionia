@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { mulberry32 } from '../src/core/rng';
-import { MISSIONS, boatKindFor, BoatKind, choiceAt, isLegendary, mandatoriesFor, readExpState } from '../src/sim/missions';
+import { MISSIONS, boatKindFor, BoatKind, isLegendary, mandatoriesFor, readExpState } from '../src/sim/missions';
 import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
 import { Expeditions, ActiveExpedition, seaClearance, SEA_CLEAR, SEA_CLEAR_MIN, openWater } from '../src/sim/expeditions';
 import { GEN } from '../src/world/continent';
@@ -98,8 +98,6 @@ describe('le récif, la pêche au large et la chasse au monstre', () => {
       expect(c.win.some((e) => e.t === 'need' && e.need === 'joy')).toBe(true);
       expect(c.win.some((e) => e.t === 'need' && e.need === 'food')).toBe(true);
       expect(c.lose.some((e) => e.t === 'injured')).toBe(true);
-      // à tous les âges, la même troupe
-      expect(choiceAt(c, 4).party).toBe(c.party);
     }
     // le trophée est propre à chaque monstre
     for (const m of [kraken, mega]) for (const c of m.choices) expect(c.win.some((e) => e.t === 'perk' && e.id === m.id)).toBe(true);

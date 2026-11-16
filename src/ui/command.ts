@@ -85,8 +85,6 @@ export interface CommandHost {
   canvas: HTMLCanvasElement;
   /** les touches de déplacement de la caméra (on retire celles qu'un ordre a prises) */
   camKeys: Set<string>;
-  /** déplace la vue de dx, dy pixels (glissé du bouton gauche sur le sol vide) */
-  pan(dx: number, dy: number): void;
   /** le nom de la zone regardée dans les Enfers (pour la frise) */
   zoneName?(): string | null;
   /** la vue suit les troupes (Enfers) : lire, ou la mettre en marche / l'arrêter */
@@ -142,8 +140,6 @@ const PERSON_PLUS = '<svg class="ic" width="18" height="18" viewBox="0 0 24 24" 
 
 /** L'illustration de la carte de passage : un portail violet lumineux dans une arche dorée */
 const PORTAL_ART = `<svg class="tpi" viewBox="0 0 120 60" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><defs><radialGradient id="tpiGlow" cx="50%" cy="58%" r="52%"><stop offset="0" stop-color="#fff6ff"/><stop offset=".3" stop-color="#e2b8ff"/><stop offset=".65" stop-color="#a55ff0" stop-opacity=".75"/><stop offset="1" stop-color="#6a2fc0" stop-opacity="0"/></radialGradient><linearGradient id="tpiVoid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c58cff"/><stop offset=".55" stop-color="#7b3fd6"/><stop offset="1" stop-color="#3d1a7a"/></linearGradient></defs><ellipse cx="60" cy="56" rx="50" ry="5" fill="#1e0b3c" opacity=".45"/><ellipse cx="60" cy="34" rx="50" ry="30" fill="url(#tpiGlow)"/><path d="M40 57V31a20 20 0 0 1 40 0v26z" fill="url(#tpiVoid)"/><path d="M60 37m-9 0a9 9 0 1 1 9 9a5.5 5.5 0 1 1-5.5-5.5" fill="none" stroke="#f6e2ff" stroke-width="2.4" stroke-linecap="round" opacity=".95"/><path d="M36 58V31a24 24 0 0 1 48 0v27" fill="none" stroke="#f6c35a" stroke-width="5" stroke-linejoin="round"/><path d="M36 58V31a24 24 0 0 1 48 0v27" fill="none" stroke="#fff2c8" stroke-width="1.2" opacity=".7"/><rect x="31" y="54" width="14" height="5" rx="1.5" fill="#e39a2f"/><rect x="75" y="54" width="14" height="5" rx="1.5" fill="#e39a2f"/><circle cx="60" cy="6.5" r="3" fill="#fff2c8"/><circle cx="22" cy="22" r="1.4" fill="#f3dcff"/><circle cx="99" cy="17" r="1.8" fill="#f3dcff"/><circle cx="104" cy="38" r="1.1" fill="#f3dcff"/><circle cx="16" cy="42" r="1.2" fill="#f3dcff"/></svg>`;
-/** Sans ordre ni clic pendant ce temps (ms), le mode ordres de l'île se range de lui-même */
-export const IDLE_MS = 5000;
 
 /** Le rappel des contrôles (le bouton « ? » de la barre des troupes) : touche ou geste, ce qu'il fait */
 export const CONTROLS_HELP: [string, string][] = [
@@ -166,10 +162,9 @@ export class CommandUI implements ToolInput {
   private bar: HTMLElement;
   private box: HTMLElement;
   private alertEl: HTMLElement;
-  private start: { x: number; y: number; touch: boolean; box: boolean; lx: number; ly: number } | null = null;
+  private start: { x: number; y: number; touch: boolean } | null = null;
   private dragging = false;
   private press = 0;
-  private lastAct = performance.now();
   private pressed = false;
   private lastClick = { t: 0, kind: '' };
   private lastGroup = { n: -1, t: 0 };
@@ -271,7 +266,6 @@ export class CommandUI implements ToolInput {
     this.theater = t;
     // hors des Enfers, `frame` n'est plus appelé : la cible du prochain bastion restait affichée à la surface
     if (t?.kind !== 'hell') this.goalEl.classList.remove('show');
-    this.touch();
     this.cmd.clear();
     this.cmd.groups = {};
     if (t) t.layer.selected = this.cmd.selected;
@@ -294,21 +288,11 @@ export class CommandUI implements ToolInput {
 
   // ---------- Souris et doigts ----------
 
-  /** Un ordre, un clic ou une touche en mode ordres : le minuteur d'inactivité repart de zéro */
-  touch() { this.lastAct = performance.now(); }
-
-  /** Le mode ordres de l'île est resté 5 s sans ordre ni clic (pas en pause, pas pendant un glisser) : on le range */
-  idleExpired(now = performance.now()): boolean {
-    const t = this.theater;
-    if (!t || t.kind !== 'isle' || this.host.paused() || this.start || this.placing) { if (t) this.lastAct = now; return false; }
-    return now - this.lastAct >= IDLE_MS;
-  }
 
   down(e: PointerInfo) {
-    this.touch();
     // l'aide des contrôles se replie dès qu'on joue (un clic sur la carte)
     if (this.helpOpen) this.closeHelp();
-    this.start = { x: e.x, y: e.y, touch: e.touch, box: true, lx: e.x, ly: e.y };
+    this.start = { x: e.x, y: e.y, touch: e.touch };
     this.dragging = false;
     this.pressed = false;
     clearTimeout(this.press);
@@ -333,13 +317,7 @@ export class CommandUI implements ToolInput {
     if (isLineKind(this.placing)) { const p = this.theater?.pick(e.x, e.y); if (p) { this.wall.drag(p); this.ghostAt(p); } return; }
     if (!this.dragging && Math.hypot(e.x - s.x, e.y - s.y) > DRAG) { this.dragging = true; clearTimeout(this.press); }
     if (!this.dragging) return;
-    // glissé simple sur le sol : on déplace la vue ; le cadre de sélection se trace avec Maj (ou Ctrl) enfoncée
-    if (!s.box) {
-      this.host.pan(e.x - s.lx, e.y - s.ly);
-      s.lx = e.x; s.ly = e.y;
-      this.host.canvas.style.cursor = 'grabbing';
-      return;
-    }
+    // un glissé sur le sol trace le cadre de sélection
     const b = this.box.style;
     b.display = 'block';
     b.left = `${Math.min(s.x, e.x)}px`; b.top = `${Math.min(s.y, e.y)}px`;
@@ -355,7 +333,6 @@ export class CommandUI implements ToolInput {
     // la pose d'un mur : un glissé relâché pose le mur de A à B ; un simple clic laisse A choisi
     if (isLineKind(this.placing)) { const p = t.pick(e.x, e.y); if (p && this.wall.release(p)) this.placeWall(p); return; }
     const add = this.shift || !!e.shift;
-    if (this.dragging && !s.box) { this.host.canvas.style.cursor = ''; return; }
     if (this.dragging) {
       const hit = inRect(this.units(), { x0: s.x, y0: s.y, x1: e.x, y1: e.y }, (u) => t.screen(u.x, u.z));
       this.cmd.select(hit.map((u) => u.id), add);
@@ -662,7 +639,6 @@ export class CommandUI implements ToolInput {
   key(e: KeyboardEvent): boolean {
     const t = this.theater;
     if (!t) return false;
-    this.touch();
     const k = e.key.toLowerCase(), digit = /^(?:Digit|Numpad)([1-5])$/.exec(e.code)?.[1];
     this.shift = e.shiftKey;
     if (digit) {
@@ -724,7 +700,6 @@ export class CommandUI implements ToolInput {
   private onBar(e: MouseEvent) {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-a]');
     if (!el || !this.theater) return;
-    this.touch();
     const a = el.dataset.a!, w = this.host.war;
     if (a === 'all') this.selectAll();
     else if (a.startsWith('kind:')) { const k = a.slice(5); this.cmd.select(this.units().filter((u) => u.kind === k).map((u) => u.id), e.shiftKey); }

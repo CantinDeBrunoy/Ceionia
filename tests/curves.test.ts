@@ -154,7 +154,7 @@ describe('voie ferrée tracée à la main', () => {
     const w = continent();
     const [x, z] = flatStrip(w, 22, 12);
     const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
-    const rail = new Railway(w, new Agents(w), ex, () => 100, () => 0.3);
+    const rail = new Railway(w, new Agents(w), () => 0.3);
     const a = w.place('station', x + 1, z + 4, 0, false, 3, false), b = w.place('station', x + 18, z + 4, 0, false, 3, false);
     const line = rail.addLine([a.id, b.id]), tr = rail.trains.get(line.id)!;
     expect(tr.why).toBeNull();

@@ -337,9 +337,8 @@ export class World {
   get sandbox() { return this.difficulty === 'sandbox'; }
   /** L'expédition `id` a-t-elle débloqué ce qu'elle offre ? Toujours, au bac à sable */
   missionDone(id: string) { return this.sandbox || this.exp.done.includes(id); }
-  /** lignes de chemin de fer (`linesAuto` : drapeau des anciennes sauvegardes, gardé tel quel) */
+  /** lignes de chemin de fer (le drapeau `linesAuto` des anciennes sauvegardes n'est plus lu ni écrit) */
   lines: RailLine[] = [];
-  linesAuto = true;
   /** routes tracées en courbe (mode libre) : leurs cases sont des routes ordinaires, la vue les dessine courbes */
   curves: RoadCurve[] = [];
   /** cases des courbes (recalculées quand elles changent) */
@@ -1834,7 +1833,6 @@ export class World {
         const kept = l.stops.map((id, i) => (order.has(id) ? i : -1)).filter((i) => i >= 0), via = mergeVia(l.via, kept);
         return { c: l.color, s: kept.map((i) => order.get(l.stops[i])!), ...(via ? { v: via } : {}), ...(l.freight ? { f: 1 } : {}) };
       }),
-      linesAuto: this.linesAuto,
       portal: this.portal,
       isleGuard: { waves: this.isleGuard.waves, days: Math.round(this.isleGuard.days * 100) / 100 },
       ...(this.portalWoken ? { portalWoken: true } : {}),
@@ -1981,7 +1979,6 @@ export class World {
       const via = mergeVia(legs, kept);
       if (stops.length >= 2) this.lines.push({ id: this.lines.length + 1, stops, color: Number.isFinite(+l.c) ? +l.c : 0xd8553c, ...(via ? { via } : {}), ...(l.f ? { freight: true } : {}) });
     }
-    this.linesAuto = d.linesAuto ?? !Array.isArray(d.lines);
     // une partie d'avant l'île du portail n'en a pas : elle se joue sans
     this.portal = readPortal(d.portal, N);
     const g = d.isleGuard ?? {};

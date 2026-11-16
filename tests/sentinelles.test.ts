@@ -21,7 +21,7 @@ const setup = () => {
   const P = (k: 'wall' | 'gate' | 'watchtower', x: number, z: number, age = 2) => { expect(w.canPlace(k, x, z), `${k} ${x},${z}`).toBeNull(); return w.place(k, x, z, 0, false, age, false); };
   return { w, sx, sz, P };
 };
-const run = (s: Sentinels, t: number, age = 2) => { for (let i = 0; i < t * 20; i++) s.update(0.05, age); };
+const run = (s: Sentinels, t: number) => { for (let i = 0; i < t * 20; i++) s.update(0.05); };
 
 describe('sentinelles des remparts', () => {
   beforeAll(() => setMapSize(192));
@@ -69,13 +69,13 @@ describe('sentinelles des remparts', () => {
     P('gate', sx + 4, sz, 3);
     P('watchtower', sx + 9, sz, 3);
     const s = new Sentinels(w);
-    run(s, 0.1, 3);
+    run(s, 0.1);
     const walkers = s.sentinels.filter((x) => x.tower < 0);
     expect(walkers.length).toBe(2);
     const wk = WALK[3], base = w.cellAvg(sx, sz);
     let onGate = 0, moved = 0;
     for (let i = 0; i < 20 * 120; i++) {
-      s.update(0.05, 3);
+      s.update(0.05);
       for (const m of walkers) {
         const cx = Math.floor(m.x), cz = Math.floor(m.z + 0.2), b = w.buildingAt(cx, cz) ?? w.buildingAt(Math.round(m.x - 0.5), Math.round(m.z - 0.5));
         expect(b, `hors du mur en ${m.x.toFixed(2)}, ${m.z.toFixed(2)}`).toBeDefined();

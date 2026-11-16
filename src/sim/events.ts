@@ -16,11 +16,6 @@ export interface EventOption {
    * de travail est un temps d'attente, pendant lequel le travail est suspendu et l'équipe reste à l'arrêt
    */
   wait?: boolean;
-  /**
-   * Un éclaireur part devant reconnaître le chemin : la troupe s'arrête et l'attend (son temps de travail, comme une attente),
-   * on le voit s'avancer dans la galerie puis revenir
-   */
-  scout?: boolean;
   /** équipement nécessaire : l'une de ces pièces, emportée par l'équipe */
   needs?: GearId[];
   /** multiplicateur du risque de l'expédition */

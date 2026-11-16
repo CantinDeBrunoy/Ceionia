@@ -2,7 +2,6 @@ import { World, N, RailLine, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_V
 import { Building, KINDS, sizeOf } from '../build/catalog';
 import { tr as tx } from '../i18n';
 import { Agents, Heap } from './agents';
-import type { Expeditions } from './expeditions';
 import { FREIGHT_KINDS, gap, isStation, RAIL_REACH } from './freight';
 
 /** Couleurs des lignes, dans l'ordre où on les trace */
@@ -120,7 +119,7 @@ export class Railway {
   private refreshT = 0;
   private newsT = 0;
 
-  constructor(private world: World, private agents: Agents, private ex: Expeditions, private dayLen: () => number, private rnd: () => number = Math.random) {}
+  constructor(private world: World, private agents: Agents, private rnd: () => number = Math.random) {}
 
   update(dt: number) {
     this.newsT -= dt;
@@ -141,7 +140,6 @@ export class Railway {
     // une ligne qui dessert une briqueterie, une mine, une scierie… (une gare à côté d'elles) roule d'office en marchandises
     if (this.industrial(stops)) l.freight = true;
     w.lines.push(l);
-    w.linesAuto = false;
     this.refresh(true);
     return l;
   }
@@ -193,7 +191,6 @@ export class Railway {
   removeLine(id: number) {
     const w = this.world;
     w.lines = w.lines.filter((l) => l.id !== id);
-    w.linesAuto = false;
     this.refresh(true);
   }
 

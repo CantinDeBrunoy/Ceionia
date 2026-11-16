@@ -916,7 +916,10 @@ export class Fauna {
     }
     yield;
     // la place en mer (bêtes marines, jamais dans un lac) et dans toute eau (poissons, aussi dans les lacs)
-    const room = this.room = seaRoom(w, 10), wet = this.wetRoom = seaRoom(w, 9, false);
+    // (deux parcours de toute la carte, d'une dizaine de ms chacun : un pas chacun)
+    const room = this.room = seaRoom(w, 10);
+    yield;
+    const wet = this.wetRoom = seaRoom(w, 9, false);
     for (let k = 0; k < N * N; k++) if (room[k] >= OPEN_SEA) deep.push(k);
     const roomy = (list: number[], r: number) => list.filter((k) => room[k] >= r);
     yield;
@@ -1041,6 +1044,8 @@ export class Fauna {
     }
     // taïga : une ou deux meutes de loups aux lisières (déclarées une seule fois : deux fois, leurs clés se doublaient)
     group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, (i) => 4 - (i % 2), 3.5, 100);
+    // (ce pas et les deux suivants coûtaient 15 ms d'un bloc au passage d'âge : coupés en trois)
+    yield;
     // alentours du village : quelques groupes des bêtes du biome dans un anneau autour de la place, à l'écart des maisons,
     // pour qu'on en croise sans partir loin
     const vc = villageCenter(w);
@@ -1063,6 +1068,7 @@ export class Fauna {
         }
       }
     }
+    yield;
     // visiteurs : des bêtes venues près de la vue quand on n'en voit aucune (voir `scout`)
     for (const v of this.visitors) if (nearbyAllowed(v.kind, this.lastAge) && budget[v.kind] >= v.n) { budget[v.kind] -= v.n; src.push(v); }
     // grenouilles : surtout au bord des mares et des étangs, et dans les marais
