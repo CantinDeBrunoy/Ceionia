@@ -13,6 +13,15 @@ export const policeRange = (age: number) => 12 + Math.max(0, Math.min(5, age));
 /** (la tour de garde du village veille comme un poste de police, à la même portée) */
 export const rangeOf = (b: { kind: string; age: number }) => (b.kind === 'fire' ? FIRE_RANGE : b.kind === 'police' || b.kind === 'watchtower' ? policeRange(b.age) : 0);
 
+/**
+ * Le poste `s` dessert-il le bâtiment `h` ? Distance de centre à centre, à la portée du poste : une seule règle pour la jauge,
+ * les pompiers qui éteignent (`Fires`) et les véhicules envoyés (`Emergencies`, portée `fallback` pour un service sans portée)
+ */
+export const reaches = (s: Building, h: Building, fallback = 0) => {
+  const ms = sizeOf(s) / 2, mh = sizeOf(h) / 2;
+  return Math.hypot(s.x + ms - h.x - mh, s.z + ms - h.z - mh) <= (rangeOf(s) || fallback);
+};
+
 /** Bien-être par habitation couverte par les deux services, et plafond (léger : le village ne dépend pas de la sécurité) */
 export const COVER_JOY = 0.04;
 export const COVER_JOY_MAX = 2;
@@ -43,8 +52,7 @@ export function computeCoverage(buildings: Iterable<Building>): Coverage {
     else if (b.kind === 'police' || b.kind === 'watchtower') policeSt.push(b);
     else if ((KINDS[b.kind]?.housing?.[b.age] ?? 0) > 0) homes.push(b);
   }
-  const mid = (b: Building) => sizeOf(b) / 2;
-  const near = (st: Building[], h: Building) => st.some((s) => Math.hypot(s.x + mid(s) - h.x - mid(h), s.z + mid(s) - h.z - mid(h)) <= rangeOf(s));
+  const near = (st: Building[], h: Building) => st.some((s) => reaches(s, h));
   let fire = 0, police = 0, both = 0;
   const uf: Building[] = [], up: Building[] = [];
   for (const h of homes) {

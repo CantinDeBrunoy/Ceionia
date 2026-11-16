@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, SEA, MIN_H, MAX_H, VR, VS, seaMargin, SEA_FLOOR, SEA_SLOPE, marginFloor, marginDeep, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
+import { World, N, SEA, MIN_H, MAX_H, VR, VS, seaMargin, SEA_FLOOR, SEA_SLOPE, marginFloor, marginDeep, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, BIOME_SNOW, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { computeFlow } from '../world/flow';
 import { Simplex } from '../world/noise';
@@ -59,9 +59,8 @@ const MAX_HALOS = 8;
 const MAX_CAVES = 24;
 /** Lignes de cases reteintes par image quand la saison change */
 const RECOLOR_ROWS = 6;
-/** Part de la neige de saison qui tient dans chaque biome */
-/** Neige que retient chaque biome (tempéré, taïga, désert, tropical, marais) */
-export const SNOWY = [1, 1, 0.15, 0.2, 1];
+/** Neige que retient chaque biome (tempéré, taïga, désert, tropical, marais) : la table unique de `world.ts` */
+export const SNOWY = BIOME_SNOW;
 /** Nombre de biomes */
 const NB = 5;
 /** Strates de la falaise sous l'île, de la terre du haut à la roche du bas */

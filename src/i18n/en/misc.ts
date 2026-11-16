@@ -78,5 +78,7 @@ registerDict('misc', {
   'Fichier de sauvegarde invalide': 'Invalid save file',
   'Sauvegarde d’une carte qui n’existe plus (seul le continent reste)': 'Save from a map that no longer exists (only the continent remains)',
   'Sauvegarde d’une ancienne version (carte plus petite)': 'Save from an older version (smaller map)',
+  '🏚️ Faute de logement, {n} habitants ont quitté le village.': '🏚️ With no homes left for them, {n} villagers have left the village.',
+  '🏚️ Faute de logement, un habitant a quitté le village.': '🏚️ With no home left for them, a villager has left the village.',
   janvier: 'January', février: 'February', mars: 'March', avril: 'April', mai: 'May', juin: 'June', juillet: 'July', août: 'August', septembre: 'September', octobre: 'October', novembre: 'November', décembre: 'December',
 });

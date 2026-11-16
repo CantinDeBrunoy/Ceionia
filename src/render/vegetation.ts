@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
-  BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, SNOW_LINE, LavaPool, seaMargin, marginFloor, marginOff,
+  BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, BIOME_SNOW, SNOW_LINE, LavaPool, seaMargin, marginFloor, marginOff,
 } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
@@ -1500,7 +1500,7 @@ const DESERT_ROCK = new THREE.Color(1.08, 0.9, 0.76);
 const BED_BROWN = new THREE.Color(1.06, 0.84, 0.62);
 const ICE_SLAB = new THREE.Color(0.82, 0.92, 1.02);
 /** Part de la neige de saison qui tient dans chaque biome */
-const snowy = (b: number) => (b === BIOME_DESERT ? 0.15 : b === BIOME_TROPICAL ? 0.2 : b === BIOME_TAIGA ? 1.2 : 1);
+const snowy = (b: number) => BIOME_SNOW[b] ?? 1;
 
 /** Balancement au vent proportionnel au carré de la hauteur locale, en vague qui traverse la carte */
 function addWind(m: THREE.Material, uTime: { value: number }, amp: number) {

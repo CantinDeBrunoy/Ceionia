@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World } from '../world/world';
 import { Building, KINDS, sizeOf } from '../build/catalog';
-import { FIRE_RANGE } from '../sim/coverage';
+import { reaches } from '../sim/coverage';
 import { Puffs } from './particles';
 import { tr } from '../i18n';
 
@@ -12,7 +12,7 @@ const PUT_OUT = 30, BURN_DOWN = 70;
  * Avec une caserne à portée : les pompiers accourent avec leurs seaux (au plus tard, le feu est éteint au bout de CREW
  * secondes) ; le camion arrose SPRAY_OUT secondes. L'eau des seaux l'éteint aussi : DOUSE seaux × secondes en tout
  */
-const CREW = 40, CREW_RANGE = FIRE_RANGE, SPRAY_OUT = 14, DOUSE = 18;
+const CREW = 40, SPRAY_OUT = 14, DOUSE = 18;
 const WATER = new THREE.Color(0.78, 0.9, 1);
 const SMOKE = new THREE.Color(0.22, 0.2, 0.2), STEAM = new THREE.Color(0.95, 0.96, 0.97);
 
@@ -81,7 +81,11 @@ export class Fires {
     return Math.max(0, 1 - d / 10);
   }
 
-  update(dt: number) {
+  /**
+   * `gdt` : temps de jeu (le feu brûle, les seaux et la lance l'éteignent : rien ne bouge en pause, tout va plus vite en
+   * accéléré, comme les secours) ; `dt` : temps réel, pour les flammes qui dansent et la fumée
+   */
+  update(dt: number, gdt = dt) {
     const w = this.world, d = this.dummy;
     this.t += dt;
     let n = 0;
@@ -89,16 +93,16 @@ export class Fires {
       const f = this.list[i], b = f.b;
       // bâtiment démoli entre-temps
       if (!w.buildings.has(b.id)) { this.list.splice(i, 1); continue; }
-      f.t += dt;
+      f.t += gdt;
       // le camion des pompiers en route, le feu attend les secours (il finit par brûler si rien n'arrive)
       const crew = this.crewNear(b), spray = crew ? this.responder?.spraying(b) ?? null : null;
       const water = crew || this.waterNear(b), out = crew ? CREW : PUT_OUT;
       // ceux qui sont arrivés avec leur seau jettent l'eau sur les flammes, chacun à son tour
       const pails = water ? this.pails?.(b) ?? [] : [];
       // trois seaux à la fois au plus devant les flammes (les autres font la chaîne) : on en a pour un bon moment
-      f.doused += dt * Math.min(3, pails.length) * 0.6;
+      f.doused += gdt * Math.min(3, pails.length) * 0.6;
       const s0 = sizeOf(b), cx = b.x + s0 / 2, cz = b.z + s0 / 2, ground = w.h(b.x, b.z);
-      f.throw -= dt * pails.length * 0.9;
+      f.throw -= gdt * pails.length * 0.9;
       if (pails.length && f.throw <= 0) {
         f.throw += 1;
         const [px, pz] = pails[Math.floor(Math.random() * pails.length)], y0 = w.surfaceAt(px, pz) + 0.16;
@@ -142,9 +146,9 @@ export class Fires {
     this.smoke.update(dt);
   }
 
-  /** Une caserne (guetteur, tour de guet, pompiers…) à portée */
+  /** Une caserne à portée, de tout âge et de toute taille (la même règle que la jauge de couverture : `reaches`) */
   private crewNear(b: Building) {
-    for (const o of this.world.buildings.values()) if (o.kind === 'fire' && o.id !== b.id && Math.hypot(o.x - b.x, o.z - b.z) <= CREW_RANGE) return true;
+    for (const o of this.world.buildings.values()) if (o.kind === 'fire' && o.id !== b.id && reaches(o, b)) return true;
     return false;
   }
 

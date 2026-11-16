@@ -1093,7 +1093,7 @@ export class CommandUI implements ToolInput {
    */
   private hellLinks(isle: boolean) {
     const w = this.host.war;
-    if (isle) return w.hellPresence() || (w.hellWhy() && w.pve === 'on') ? `<button data-a="goHell" class="tord gth sm${w.hellWhy() ? ' closed' : ''}" title="${w.hellWhy() ?? tr('Aller dans les Enfers, auprès des troupes et de la base avancée')}"><span class="oi">${pic('🔥', 20)}</span>${tr('Voir les Enfers')}</button>` : '';
+    if (isle) return w.hellPresence() || (w.hellWhy() && w.pve === 'on' && !w.portalOut) ? `<button data-a="goHell" class="tord gth sm${w.hellWhy() ? ' closed' : ''}" title="${w.hellWhy() ?? tr('Aller dans les Enfers, auprès des troupes et de la base avancée')}"><span class="oi">${pic('🔥', 20)}</span>${tr('Voir les Enfers')}</button>` : '';
     const n = w.portalOut || !w.isle ? 0 : w.troopsIn(w.isle.sim).filter((u) => !w.crossing.has(u.id)).length;
     return n ? `<button data-a="garrison" class="tord gar sm" title="${tr('Renforts : les {n} de l’île passent le portail et vous rejoignent', { n: `${n} ${plural(n, 'troupe', 'troupes')} ${plural(n, 'valide', 'valides')}` })}"><span class="oi">${pic('🌀', 20)}</span>${tr('Renforts')} +${n}</button>` : '';
   }

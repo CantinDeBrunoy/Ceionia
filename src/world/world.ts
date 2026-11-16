@@ -12,7 +12,7 @@ import { TradeState, newTradeState, readTradeState, saveTradeState } from '../si
 import { allyLand, awayWhy, tradepostWhy } from '../sim/allyLand';
 import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
-import { Crossing, crossingMap, nearestOnDeck } from './crossings';
+import { Crossing, crossingMap, nearestOnDeck, DECK_CLEAR, waterLevel } from './crossings';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
@@ -93,9 +93,12 @@ export interface Snapshot {
   rift?: Uint8Array;
   buildings: Building[];
   nextId: number;
-  /** stocks de bois et de pierre (un bâtiment annulé rend ce qu'il avait coûté) */
+  /** stocks de bois, de pierre et de briques (un bâtiment annulé rend ce qu'il avait coûté) */
   wood?: number;
   stone?: number;
+  brick?: number;
+  /** lignes de chemin de fer (absent : celles d'avant restent) */
+  lines?: RailLine[];
   /** routes en courbe (absent : celles d'avant restent) */
   curves?: RoadCurve[];
 }
@@ -110,6 +113,7 @@ export interface Snapshot {
  * (sinon de voyageurs) ; `ok` (non sauvegardé) : faux tant que son train ne peut pas rouler
  */
 export interface RailLine { id: number; stops: number[]; color: number; via?: number[][]; freight?: boolean; ok?: boolean }
+const copyLine = (l: RailLine): RailLine => ({ ...l, stops: [...l.stops], ...(l.via ? { via: l.via.map((v) => [...v]) } : {}) });
 
 /**
  * L'île du portail (voir `portal.ts`) : le centre du portail (un sommet du relief, au coin de ses quatre cases) et le rayon de
@@ -178,6 +182,11 @@ function valueNoise(x: number, z: number) {
 /** Biomes, déduits du climat (température, humidité) et du relief : ils choisissent les essences, le sol et la faune */
 export const BIOME_TEMPERATE = 0, BIOME_TAIGA = 1, BIOME_DESERT = 2, BIOME_TROPICAL = 3, BIOME_MARSH = 4;
 export const BIOME_NAMES = ['Tempéré', 'Taïga', 'Désert', 'Tropical', 'Marais'];
+/**
+ * Part de la neige de saison que retient chaque biome (tempéré, taïga, désert, tropical, marais) : la même pour le sol
+ * (`terrainView.ts`, `SNOWY`), les routes, la carte de la neige et les plantes et rochers (`vegetation.ts`)
+ */
+export const BIOME_SNOW = [1, 1, 0.15, 0.2, 1];
 
 /** Hash 0..1 d'une case (orientation des décors) */
 const hashCell = (x: number, z: number) => {
@@ -203,6 +212,11 @@ export class World {
   vegDirty = true;
   /** Incrémenté à chaque modification structurelle (pour la simulation) */
   version = 0;
+  /**
+   * Incrémenté quand un bâtiment change d'âge (`evolve`) : ses capacités (logements, emplois, besoins servis) changent sans que
+   * le plan du village bouge ; la simulation se refait (`Sim.update`) sans tout invalider comme `version`
+   */
+  ageVersion = 0;
   listeners: WorldListener[] = [];
   /** Hauteurs affichées (grille VS×VS) : relief adouci, emprises des bâtiments gardées à plat */
   vis = new Float32Array(VS * VS);
@@ -1185,12 +1199,13 @@ export class World {
     return this.lake[this.ci(cx, cz)] === 1 || this.cellAvg(cx, cz) < 0.08 || this.cellMin(cx, cz) <= -0.15;
   }
 
-  /** Tablier d'un pont posé sur la case (null si la case n'est pas un pont) */
-  /** Hauteur du tablier d'un pont posé sur une case d'eau (route ou voie ferrée), ou null si la case est sèche */
+  /**
+   * Hauteur du tablier d'un pont de chemin de fer posé sur une case d'eau, ou null si la case est sèche : au-dessus de l'eau
+   * de `DECK_CLEAR`, comme les ponts des routes (`crossings.ts`)
+   */
   deckY(cx: number, cz: number): number | null {
     if (!this.inCells(cx, cz) || !this.isWet(cx, cz)) return null;
-    const k = this.ci(cx, cz);
-    return (this.lake[k] ? this.lakeLevel[k] : SEA) + 0.32;
+    return waterLevel(this, this.ci(cx, cz)) + DECK_CLEAR;
   }
 
   /** Eau qu'il faut vraiment franchir : ni une flaque, ni une rive qui trempe à peine (là, la route reste sur le sol) */
@@ -1705,6 +1720,13 @@ export class World {
     this.version++;
   }
 
+  /** Le bâtiment passe à l'âge `age` (son modèle évolue) : la simulation en refait le compte */
+  evolve(b: Building, age: number) {
+    if (b.age === age) return;
+    b.age = age;
+    this.ageVersion++;
+  }
+
   // ---------- Snapshots / sérialisation ----------
   snapshot(): Snapshot {
     return {
@@ -1718,6 +1740,8 @@ export class World {
       nextId: this.nextId,
       wood: this.wood,
       stone: this.stone,
+      brick: this.brick,
+      lines: this.lines.map(copyLine),
       curves: this.curves.map((c) => ({ id: c.id, pts: c.pts.slice() })),
     };
   }
@@ -1741,6 +1765,9 @@ export class World {
     this.nextId = s.nextId;
     if (s.wood !== undefined) this.wood = s.wood;
     if (s.stone !== undefined) this.stone = s.stone;
+    if (s.brick !== undefined) this.brick = s.brick;
+    // (une ligne dont une gare a disparu se replie d'elle-même au prochain passage de `Railway.refresh`)
+    if (s.lines) this.lines = s.lines.map(copyLine);
     if (s.curves) { this.curves = s.curves.map((c) => ({ id: c.id, pts: c.pts.slice() })); this.curveMap = null; }
     this.roadsDirty = this.vegDirty = true;
     this.markTerrainAll();

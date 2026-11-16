@@ -88,7 +88,7 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 - Le prix dépend de l'âge du village **et** de `minAge` : un bâtiment ne devient pas moins cher en reculant.
 - Ne pas prélever avant d'avoir posé : `tools.ts` vérifie `canPay`, pose, puis `pay`. Une pose qui échoue ne doit rien coûter (cas de l'amélioration sans place).
 - En Normal, les producteurs offerts se déduisent du nombre déjà posé : démolir le seul bûcheron rend le suivant gratuit.
-- **Incohérence relevée** : `FREIGHT_BONUS = 0,75` (donc ×1,75) mais le commentaire de `railBoost` parle de ×1,5 et la fiche carburant (`RES_META.fuel.more`, `ui.ts`) annonce « 50 % de plus ». Le conseil du rail calcule le pourcentage depuis la constante (75 %). Le code fait foi.
+- `FREIGHT_BONUS = 0,75` (donc ×1,75) : le commentaire de `railBoost`, la fiche du carburant (`RES_META.fuel.more`, `ui.ts`, « 75 % de plus », texte écrit en dur) et le conseil du rail (calculé depuis la constante) disent la même chose. En changeant la constante, changer aussi la fiche (`tests/bugsManuel.test.ts` le vérifie).
 - Le texte de `RES_META.ore.use` dit « sert à passer les âges et à fabriquer l'équipement » ; la mine produit aussi de la pierre (`YIELD.mine.stone`), dite seulement dans `RES_META.stone.more`.
 - Le marché (`gather` âge 2) produit du bois et de la pierre : `Sim.producing` le compte comme producteur.
 
