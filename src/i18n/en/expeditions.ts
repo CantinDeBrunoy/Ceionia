@@ -93,6 +93,8 @@ registerDict('expeditions', {
   'Légendaire': 'Legendary',
   'Militaire': 'Military',
   'réussie': 'completed',
+  'Réussies': 'Completed',
+  'Refaire': 'Redo',
   'en route…': 'under way…',
   'Équipe en route…': 'Team on its way…',
   'Refaire l’expédition': 'Redo the expedition',
