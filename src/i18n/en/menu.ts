@@ -9,6 +9,7 @@ registerDict('menu', {
   'Façonnez votre monde': 'Shape your world',
   'Options': 'Options',
   'Votre monde vous attend…': 'Your world awaits…',
+  '⚠️ Votre sauvegarde n’a pas pu être lue ({why}). Elle sera gardée de côté : une nouvelle partie ne l’écrasera pas.': '⚠️ Your save could not be read ({why}). It will be kept aside: a new game will not overwrite it.',
   'Mode {name}': '{name} mode',
   'Construisez librement, sans contraintes.': 'Build freely, without constraints.',
   'Apprenez les bases en douceur.': 'Learn the basics gently.',

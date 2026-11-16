@@ -50,7 +50,7 @@ Calculé sur les choix d'une mission, rien n'est stocké : le risque le plus bas
 
 ### Le déroulé (`Phase`)
 `out` (trajet) → `work` (sur place) → `back` → `home` (fête, 4 s) → `finish`. `gather` ne sert plus qu'aux anciennes équipes (et au grand départ `farewell`).
-1. **Départ** (`Expeditions.start`) : refus par `why` (déjà en route, pas d'île, il manque un bâtiment ou une mission, chevaux, carburant, équipes au maximum, pas de village, pas assez d'habitants libres), ou `lastFail` (pas de haute mer, pas assez de recrues). Il choisit la destination (`findDest`, repli `FALLBACK` : grotte → montagne → au loin → plaine), recrute (`agents.recruit`), prend l'équipement (`loadout`, retiré de `exp.gear`), équipe chacun (`Kit` : arme, armure, torche, corde, cheval, voiture) et lance `partyGo`. `a.might` (force au combat) ne sert plus qu'aux embuscades.
+1. **Départ** (`Expeditions.start`) : refus par `why` (déjà en route, pas d'île, il manque un bâtiment ou une mission, chevaux, carburant, équipes au maximum, pas de village, pas assez d'habitants libres), ou `lastFail` (pas de haute mer, pas assez de recrues). Il choisit la destination (`findDest`, repli `FALLBACK` : grotte → montagne → au loin → plaine), recrute (`agents.recruit`), prend l'équipement (`loadout`, retiré de `exp.gear` et noté dans `exp.away`), équipe chacun (`Kit` : arme, armure, torche, corde, cheval, voiture) et lance `partyGo`. `a.might` (force au combat) ne sert plus qu'aux embuscades.
 2. **Trajet** : à pied, `arrived` quand tous sont arrivés ou après `OUT_MAX = 480` s (bloquée : elle travaille là où elle est). Voir « Véhicules ».
 3. **Travail** : `a.t` compte jusqu'à `c.work + a.extra`. À l'arrivée, `raise(a, true)` tente un imprévu « d'arrivée » ; sinon `arriveMiss`. Les imprévus suivants tombent à `nextEventAt` : 0,3, 0,55 puis 0,75 du travail. `events` = 2 si `work >= 20` et un tirage à 50 %, sinon 1. L'équipe s'arrête (`a.wait`), `onEvent` ouvre la fenêtre (`showDecision`, jeu en pause), le joueur choisit (`decide`) : `riskK *= option.risk`, `extra += option.work`, gains en plus (`bonus`), blessés, texte pour le récit.
    - Option **Attendre** (`wait`) et **éclaireur** (`scout`) : le travail est suspendu `waitTime(o)` secondes (de 4 à 12) ; `a.hold` compte à rebours. (`scout` n'est plus employé par aucun imprévu.)
@@ -87,7 +87,7 @@ En bas : « Retour » (referme la fenêtre de départ), une ligne qui dit pourqu
 ## Fonctionnement dans le code
 
 ### Données
-`ActiveExpedition` (`expeditions.ts`) vit seulement en mémoire (`Expeditions.active`). `world.exp` (`ExpState`, sauvegardé) : `done`, `perks`, `herd`, `bonus`, `temp`, `clock`, `gear`, `craft`, `craftT`, `wins`, `recent`, `sea`. `riding` (chevaux partis) n'est pas sauvegardé. Lecture : `readExpState` (valeurs par défaut, anciennes sauvegardes).
+`ActiveExpedition` (`expeditions.ts`) vit seulement en mémoire (`Expeditions.active`). `world.exp` (`ExpState`, sauvegardé) : `done`, `perks`, `herd`, `bonus`, `temp`, `clock`, `gear`, `away` (équipement emporté par les équipes en route), `craft`, `craftT`, `wins`, `recent`, `sea`. `riding` (chevaux partis) est relu à 0. Lecture : `readExpState` (valeurs par défaut, anciennes sauvegardes).
 `Expeditions.update(dt)` est appelé chaque image par la boucle de jeu : fabrication (`craftStep`), rente des bâtiments (`mineStep`), puis pour chaque équipe la machine d'états ci-dessus.
 
 ### Destinations
@@ -134,7 +134,7 @@ Quand une expédition rapporte un trophée de la place (`CINE_TROPHIES` : mammou
 
 ## Pièges et invariants
 - Cinématique d'un trophée : la place doit exister (sinon rien ne se joue, le récit vient aussitôt). Une nouvelle condition qui doit la retenir (fenêtre, mode) va dans `trophyCalm` (rangée dans un champ de `CineScene`). Ne pas y remettre les notifications. Un trophée qui s'ajoute à `TROPHIES` (render) et que rapporte une expédition va aussi dans `CINE_TROPHIES`, avec son bandeau (`CAPTION`, `trophyStage.ts`) et sa traduction.
-- **Une équipe en route n'est pas sauvegardée** : `ActiveExpedition` n'est pas dans `world.toJSON`. L'équipement qu'elle emporte a été retiré de `exp.gear` au départ : sauvegarder (ou recharger) pendant une expédition perd ces pièces. Bug probable, non corrigé.
+- **Une équipe en route n'est pas sauvegardée** : `ActiveExpedition` n'est pas dans `world.toJSON`. L'équipement qu'elle emporte passe de `exp.gear` à `exp.away` au départ, et revient au retour ; au chargement, `readExpState` remet `away` en réserve : rien n'est perdu (test : `sauvegardeBugs.test.ts`).
 - Données mortes mais gardées : `Choice.troop`, `mounts`, `fuel`, `ages`, `Mission.repeat`, `EventOption.scout`, `ActiveExpedition.targets/entry/front/ambush/might`, `Expeditions.ambushStep`, `exp.wins` (voir [monde-souterrain.md](monde-souterrain.md)). Ne pas les supprimer sans le moteur des Enfers ; ne pas en dépendre pour une nouvelle mission.
 - Tous les imprévus ont leur entrée dans `stageEvent`, et chaque option sa suite (test `suitesDesChoix.test.ts`). Un imprévu ajouté sans scène, ou une option qui ne montre rien de plus qu'une autre, fait échouer ce test.
 - Une pièce d'équipement ou un bâtiment renommé selon l'âge : les textes passent par `nameOf` (`Expeditions`), pas par un nom figé (test « les conditions nomment les bâtiments comme à l'âge du village »).

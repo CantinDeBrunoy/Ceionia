@@ -1048,10 +1048,12 @@ export interface ExpState {
   clock: number;
   /** équipement en réserve (celui des équipes en route n'y est pas) */
   gear: Stock;
+  /** équipement emporté par les équipes en route : une expédition en route n'est pas sauvegardée, il revient en réserve au chargement */
+  away: Stock;
   /** fabrication en cours, dans l'ordre, et avancement de la première pièce (secondes de jeu) */
   craft: GearId[];
   craftT: number;
-  /** chevaux partis avec une troupe (pas sauvegardé : une expédition en route ne l'est pas) */
+  /** chevaux partis avec une troupe (relu à 0 : une expédition en route n'est pas sauvegardée) */
   riding: number;
   /** combats gagnés par les troupes (embuscades repoussées) */
   wins: number;
@@ -1064,7 +1066,7 @@ export interface ExpState {
 /** Imprévus récents dont on se souvient (les deux ou trois dernières expéditions) */
 export const RECENT_EVENTS = 6;
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, recent: [], sea: 1 });
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), away: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, recent: [], sea: 1 });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
@@ -1083,6 +1085,8 @@ export function readExpState(d: any): ExpState {
   s.temp = Array.isArray(d.temp) ? d.temp.filter((t: any) => t && t.need in s.bonus && isFinite(t.n) && isFinite(t.until)) : [];
   s.clock = +d.clock || 0;
   for (const k of Object.keys(s.gear) as GearId[]) s.gear[k] = Math.max(0, Math.floor(+d.gear?.[k] || 0));
+  // l'équipement des équipes en route revient en réserve (elles ne sont pas sauvegardées ; les anciennes sauvegardes le perdaient)
+  for (const k of Object.keys(s.gear) as GearId[]) s.gear[k] += Math.max(0, Math.floor(+d.away?.[k] || 0));
   s.craft = Array.isArray(d.craft) ? d.craft.filter((x: any) => x in GEAR_BY) : [];
   s.craftT = +d.craftT || 0;
   s.wins = Math.max(0, Math.floor(+d.wins || 0));
