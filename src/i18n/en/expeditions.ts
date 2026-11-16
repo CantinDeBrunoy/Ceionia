@@ -226,4 +226,7 @@ registerDict('expeditions', {
   'Le tentacule du kraken rejoint la place': 'The kraken tentacle joins the square',
   'La dent du mégalodon rejoint la place': 'The megalodon tooth joins the square',
   'Le crâne du dragon rejoint la place': 'The dragon skull joins the square',
+  // la recherche des expéditions
+  'Rechercher une expédition': 'Search for an expedition',
+  'Aucune expédition ne répond à « {q} ».': 'No expedition matches “{q}”.',
 });

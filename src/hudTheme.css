@@ -1185,12 +1185,8 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 @media (max-width: 860px) {
   #dock > #homeBack { align-self: flex-start; margin: 0 0 4px 2px; min-height: 40px; }
 }
-/* ---------- un rayon de peu de cartes ne laisse plus un grand panneau vide : la barre des bâtiments se resserre sur ses
-   cartes (fit-content), sans descendre sous la largeur des rayons ; le bloc reste centré ---------- */
-@media (min-width: 1400px) {
-  #dock > #dockRow { grid-template-columns: auto fit-content(1180px) 330px auto; }
-  #dock #dockMain { min-width: clamp(480px, calc(100vw - 880px), 640px); }
-}
+/* (la barre des bâtiments ne se resserre plus sur les cartes du rayon : retour de l'auteur du 16 nov. 2026, elle garde la
+   même taille quel que soit le rayon ; voir plus bas « la mini-carte toujours collée au coin bas droit ») */
 
 /* le champ de blé : sa vignette peinte, comme une carte de bâtiment */
 #items button.tile.thumb .gv { display: none; }
@@ -1329,7 +1325,7 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   #troopBar .tfoot > .ttool { justify-self: end; }
 }
 @media (min-width: 1400px) {
-  #dock > #dockRow { grid-template-columns: minmax(max-content, 1fr) fit-content(1180px) 330px minmax(max-content, 1fr); justify-content: stretch; }
+  #dock > #dockRow { grid-template-columns: minmax(max-content, 1fr) minmax(0, 1180px) 330px minmax(max-content, 1fr); justify-content: stretch; }
   #troopBar .tfoot { grid-template-columns: minmax(max-content, 1fr) minmax(0, 1180px) 330px minmax(max-content, 1fr); justify-content: stretch; }
   #dock #dockSide, #troopBar .tfoot > .ttool { justify-self: end; }
   #dockRow > #dockRight, #troopBar .tfoot > .tcorner { grid-column: 4; justify-self: end; }
@@ -1353,3 +1349,43 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   body.dockMin #dock #dockTop { justify-content: flex-end; }
 }
 body.dockMin #dock > #homeBack { margin-bottom: 26px; }
+
+/* ---------- la recherche du menu (retour de l'auteur, 16 nov. 2026) : un champ en chemise au bout de la rangée des rayons, posé
+   sur le bord haut de la barre comme eux ; il s'allonge quand on y tape. Pendant une recherche, aucun rayon n'est ouvert ---------- */
+#dockSearch { flex: 0 1 auto; display: flex; align-items: center; gap: 6px; min-width: 0; height: 32px; margin-left: auto; padding: 0 6px 2px 11px; border: 2px solid var(--hEdge); border-bottom: 0; border-radius: 12px 12px 0 0; background: linear-gradient(180deg, #FFFCF4, #F6E7C9); color: var(--hInk2); cursor: text; align-self: flex-end; }
+#dockSearch svg { flex: none; }
+#dockSearch input { width: 112px; min-width: 0; height: 26px; padding: 0; border: 0; outline: none; background: transparent; color: var(--hInk); font-family: inherit; font-size: 13.5px; font-weight: 700; transition: width 0.2s; }
+#dockSearch input::placeholder { color: rgba(110, 88, 67, 0.7); font-weight: 600; }
+#dockSearch input::-webkit-search-cancel-button { display: none; }
+#dockSearch:focus-within input, #dockSearch.on input { width: 170px; }
+/* repliée en loupe tant qu'on n'y tape rien : la rangée des rayons garde sa place ; pendant une recherche, les rayons
+   n'ont plus que leur picto */
+@media (min-width: 861px) {
+  #dockSearch:not(:focus-within):not(.on) { padding: 0 9px 2px; }
+  #dockSearch:not(:focus-within):not(.on) input { width: 0; }
+  #dockTop:has(#dockSearch:focus-within, #dockSearch.on) #subcats .cl { display: none; }
+  #dockTop:has(#dockSearch:focus-within, #dockSearch.on) #subcats button { padding: 0 10px 2px; }
+  /* les réglages de l'outil en main (pinceau, biome, tracé des routes) flottent au-dessus des rayons, à droite : la barre
+     garde la même hauteur quel que soit l'outil */
+  #dock #dockBottom { position: absolute; right: 12px; bottom: calc(100% + 44px); z-index: 2; max-width: calc(100% - 24px); min-height: 0; margin: 0; padding: 4px 6px; border: 2px solid var(--hEdge); border-radius: 14px; background: linear-gradient(180deg, #FFFCF4, #F6E7C9); box-shadow: 0 4px 12px rgba(80, 50, 20, 0.18); }
+  #dock #dockBottom #brush { min-height: 30px; }
+  /* une recherche sans résultat (ou un rayon vide) garde la hauteur d'une rangée de cartes */
+  #dock #items { min-height: 110px; }
+}
+#dockSearch:focus-within { box-shadow: 0 0 0 2px rgba(224, 173, 69, 0.45); }
+#dockSearch.on { border: 2px solid var(--hGold); border-radius: 12px; background: var(--hGoldFill); box-shadow: var(--hGoldShadow); color: var(--hInk); }
+#itClear { display: none; flex: none; width: 20px; height: 20px; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: rgba(90, 60, 30, 0.12); color: var(--hInk); }
+#dockSearch.on #itClear { display: inline-flex; align-items: center; justify-content: center; }
+#subcats.searching button:not(:hover) { opacity: 0.8; }
+@media (max-width: 860px) {
+  #dockSearch { height: 40px; padding: 0 6px 0 9px; border: 1.5px solid var(--hEdge); border-radius: 12px; margin-left: 3px; }
+  #dockSearch input { width: 64px; font-size: 13px; }
+  #dockSearch:focus-within input, #dockSearch.on input { width: 120px; }
+}
+/* la recherche des expéditions, dans la barre des filtres */
+.expFind { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--hEdge); background: #FFFCF4; color: var(--hInk2); cursor: text; }
+.expFind[hidden] { display: none; }
+.expFind input { width: 150px; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--hInk); font-family: inherit; font-size: 14px; font-weight: 700; }
+.expFind input::-webkit-search-cancel-button { display: none; }
+.expFind:focus-within { border-color: var(--hGold); box-shadow: 0 0 0 2px rgba(224, 173, 69, 0.35); }
+@media (max-width: 600px) { .expFind input { width: 90px; } }

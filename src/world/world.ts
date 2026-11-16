@@ -238,6 +238,11 @@ export class World {
    * (voir `addDefaultDecor`) : ceux que le joueur efface ensuite ne reviennent plus. Sauvegardé
    */
   decorDone = false;
+  /**
+   * Cap de l'ouverture des grottes que le joueur a tournées à la pose (case → angle, en radians, voir `caveFrame`) ; une grotte
+   * absente d'ici s'ouvre vers le bas de la pente, comme celles de la carte. Sauvegardé (`caveYaw`, absent des anciennes parties)
+   */
+  caveYaw = new Map<number, number>();
   private temp = new Float32Array(N * N);
   private wet = new Float32Array(N * N);
   private climateKey = '';
@@ -557,7 +562,8 @@ export class World {
     const x = cx + 0.5, z = cz + 0.5, e = 0.6;
     // cap tiré du relief de jeu : la butte ajoutée derrière la grotte ne le fait pas tourner
     const gx = this.rawAt(x + e, z) - this.rawAt(x - e, z), gz = this.rawAt(x, z + e) - this.rawAt(x, z - e);
-    const yaw = Math.hypot(gx, gz) > 0.08 ? Math.atan2(-gx, -gz) : hashCell(cx, cz) * Math.PI * 2;
+    const fixed = this.caveYaw.get(cz * N + cx);
+    const yaw = fixed !== undefined ? fixed : Math.hypot(gx, gz) > 0.08 ? Math.atan2(-gx, -gz) : hashCell(cx, cz) * Math.PI * 2;
     return { x, y: at(x, z), z, yaw };
   }
 
@@ -1773,6 +1779,8 @@ export class World {
       rift,
       // décors de la carte (grottes, failles, épaves) déjà posés : ceux que le joueur efface ne reviennent pas au chargement
       ...(this.decorDone ? { decor: 1 } : {}),
+      // le cap des grottes tournées à la pose (case, angle en centièmes de radian), seulement celles qui existent encore
+      ...(this.caveYaw.size ? { caveYaw: [...this.caveYaw].filter(([k]) => this.veg[k] === VEG_CAVE).flatMap(([k, a]) => [k, Math.round(a * 100)]) } : {}),
       buildings: [...this.buildings.values()].map((b) => (b.small ? [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age, 1] : [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age])),
       nextId: this.nextId,
       plaza3: PLAZA3,
@@ -1905,6 +1913,10 @@ export class World {
       veg[k] = 0;
     }
     this.decorDone = !!d.decor;
+    // (avant `restore`, qui refait les emprises des grottes d'après leur cap)
+    this.caveYaw.clear();
+    const cy = Array.isArray(d.caveYaw) ? d.caveYaw : [];
+    for (let i = 0; i + 1 < cy.length; i += 2) if (cy[i] >= 0 && cy[i] < N * N && Number.isFinite(cy[i + 1])) this.caveYaw.set(cy[i], cy[i + 1] / 100);
     this.restore({ heights, road, veg, biomePaint, cleared, rift, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.basalt.fill(0);

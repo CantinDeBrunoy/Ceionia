@@ -10,6 +10,9 @@ const homeFor = () => 62 * (Math.min(N, 192) / 48) * 0.8;
 /** Au village, la vue peut descendre jusqu'à l'horizontale (regarder le paysage à hauteur d'homme) */
 export const SURFACE_MIN_PITCH = 0;
 
+/** largeur de la bande du bord de l'écran qui fait défiler la vue (contrôles à la souris) */
+export const EDGE_PX = 14;
+
 export interface PointerInfo { x: number; y: number; touch: boolean; button: number; shift?: boolean; ctrl?: boolean }
 
 export interface ToolInput {
@@ -47,6 +50,18 @@ export class CameraRig {
   maxDist = maxDistFor();
   /** inclinaison minimale : 0 au village, la vue descend jusqu'à l'horizontale (plus plongeante sous terre, pour voir par-dessus les parois) */
   minPitch = SURFACE_MIN_PITCH;
+  /**
+   * Contrôles choisis par le joueur (voir `core/controls.ts`). Au clavier (`letterKeys`) : les lettres ZQSD / WASD et A / E
+   * bougent la vue. À la souris (`edgeScroll`) : la souris au bord de l'écran la fait défiler, et un glissé du clic gauche
+   * la déplace quand `dragPan` le permet (l'outil Voir en main). Les flèches, la molette et le clic droit marchent toujours
+   */
+  letterKeys = true;
+  edgeScroll = false;
+  dragPan: (() => boolean) | null = null;
+  /** la souris sur le canevas, sans bouton appuyé (le défilement au bord) ; null : ailleurs (sur l'interface, hors de la page) */
+  private edgeAt: { x: number; y: number } | null = null;
+  /** clic gauche appuyé qui pourra devenir un glissé de la vue (`dragPan`) : où il a commencé */
+  private dragFrom: { x: number; y: number } | null = null;
 
   constructor(private el: HTMLElement) {
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.5, 1800);
@@ -63,7 +78,8 @@ export class CameraRig {
       this.keys.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
+    window.addEventListener('blur', () => { this.keys.clear(); this.edgeAt = null; });
+    document.addEventListener('mouseleave', () => (this.edgeAt = null));
     this.apply(1);
   }
 
@@ -95,7 +111,7 @@ export class CameraRig {
       this.handler?.down(i);
       return;
     }
-    if (e.button === 0) { this.mode = 'tool'; this.handler?.down(i); }
+    if (e.button === 0) { this.mode = 'tool'; this.dragFrom = this.dragPan?.() ? { x: i.x, y: i.y } : null; this.handler?.down(i); }
     else if (e.button === 2) { this.mode = e.shiftKey ? 'pan' : 'rotate'; this.rightAt = { x: i.x, y: i.y, moved: 0 }; }
     else if (e.button === 1) this.mode = 'pan';
   }
@@ -104,8 +120,16 @@ export class CameraRig {
     const p = this.pointers.get(e.pointerId);
     const i = this.info(e);
     if (!p) {
+      if (!i.touch) this.edgeAt = e.target === this.el ? { x: i.x, y: i.y } : null;
       if (e.target === this.el && !i.touch && this.enabled) this.handler?.hover(i);
       return;
+    }
+    this.edgeAt = null;
+    // à la souris, l'outil Voir en main : un glissé du clic gauche déplace la vue (un clic sans bouger choisit toujours)
+    if (this.mode === 'tool' && this.dragFrom && !i.touch && Math.hypot(i.x - this.dragFrom.x, i.y - this.dragFrom.y) > 7) {
+      this.dragFrom = null;
+      this.handler?.cancel();
+      this.mode = 'pan';
     }
     p.x = i.x; p.y = i.y;
     if (this.mode === 'gesture') {
@@ -138,6 +162,7 @@ export class CameraRig {
     if (!p) return;
     const i = this.info(e);
     this.pointers.delete(e.pointerId);
+    this.dragFrom = null;
     // un clic droit sans glisser (le glisser fait tourner la vue) : un ordre aux troupes, en commandement
     const ra = this.rightAt;
     this.rightAt = null;
@@ -256,10 +281,19 @@ export class CameraRig {
     const k = this.keys;
     const sp = this.goal.dist * 0.7 * dt;
     let fx = 0, fz = 0;
-    if (k.has('KeyW') || k.has('ArrowUp')) fz -= 1;
-    if (k.has('KeyS') || k.has('ArrowDown')) fz += 1;
-    if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
-    if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
+    const L = this.letterKeys;
+    if ((L && k.has('KeyW')) || k.has('ArrowUp')) fz -= 1;
+    if ((L && k.has('KeyS')) || k.has('ArrowDown')) fz += 1;
+    if ((L && k.has('KeyA')) || k.has('ArrowLeft')) fx -= 1;
+    if ((L && k.has('KeyD')) || k.has('ArrowRight')) fx += 1;
+    // la souris au bord de l'écran (à 14 px du bord du canevas) : la vue défile de ce côté, sans bouton appuyé
+    const ea = this.edgeAt;
+    if (this.edgeScroll && ea && this.enabled && this.pointers.size === 0 && document.hasFocus()) {
+      const r = this.el.getBoundingClientRect(), m = EDGE_PX;
+      if (ea.x < m) fx -= 1; else if (ea.x > r.width - m) fx += 1;
+      if (ea.y < m) fz -= 1; else if (ea.y > r.height - m) fz += 1;
+    }
+    fx = Math.sign(fx); fz = Math.sign(fz);
     if (fx || fz) {
       this.onPan?.();
       const c = Math.cos(this.goal.yaw), s = Math.sin(this.goal.yaw);
@@ -267,8 +301,8 @@ export class CameraRig {
       this.goal.z += (-fx * s + fz * c) * sp * 0.6;
       this.clampGoal();
     }
-    if (k.has('KeyQ')) this.goal.yaw += dt * 1.4;
-    if (k.has('KeyE')) this.goal.yaw -= dt * 1.4;
+    if (L && k.has('KeyQ')) this.goal.yaw += dt * 1.4;
+    if (L && k.has('KeyE')) this.goal.yaw -= dt * 1.4;
     // inclinaison au clavier : Page haut / Page bas
     if (k.has('PageUp')) this.goal.pitch = clamp(this.goal.pitch + dt * 1.0, this.minPitch, 1.5);
     if (k.has('PageDown')) this.goal.pitch = clamp(this.goal.pitch - dt * 1.0, this.minPitch, 1.5);

@@ -6,7 +6,7 @@ import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
 import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize } from './catalog';
 import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
-import { facingRoadRot, footprintOrigin } from './placement';
+import { facingRoadRot, footprintOrigin, doorCells, doorSide, orientable, sideToward } from './placement';
 import { autoRoad } from './autoroads';
 import { planRoad, RoadPlan } from './freeRoad';
 import { sampleCurve } from '../world/curves';
@@ -123,8 +123,21 @@ export class ToolController implements ToolInput {
   private ghostKey = '';
   /** points verts : où viser pour que le grand bâtiment en main tienne (le milieu de chaque emplacement libre alentour) */
   private spots: THREE.InstancedMesh;
-  /** flèche posée au sol devant la façade du bâtiment en main : son entrée, pour le tourner du bon côté */
-  private door: THREE.Mesh;
+  /**
+   * L'entrée du bâtiment en main, pour le tourner du bon côté : un seuil doré qui bat au sol devant la porte, la porte
+   * soulignée d'un cadre lumineux sur la façade, et des chevrons qui sortent de la porte (le chemin d'accès esquissé)
+   */
+  private door = new THREE.Group();
+  private doorTile: THREE.Mesh;
+  private doorFrame: THREE.Mesh;
+  private doorSteps: THREE.Mesh[] = [];
+  private doorT = 0;
+  /**
+   * Pose en deux clics (bâtiment orientable, grotte) : le premier clic a fixé l'endroit (`x`, `z` : origine de l'emprise ; pour
+   * la grotte, sa case), le second donne le côté de l'entrée ; entre les deux, l'aperçu se tourne vers la souris.
+   * `keySide` : le côté que visait la souris quand R a tourné le bâtiment (R l'emporte tant qu'elle ne change pas de côté)
+   */
+  private anchor: { kind: KindId | 'cave'; x: number; z: number; keySide: number | null } | null = null;
   private spotsKey = '';
   /** taille du pinceau de chaque outil (le grand volcan ne couvre pas ensuite le village de rochers) */
   private radii: Partial<Record<ToolId, number>> = { bulldoze: 1 };
@@ -163,10 +176,22 @@ export class ToolController implements ToolInput {
     this.wallCells = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.86, 0.86).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, side: THREE.DoubleSide }), 64);
     this.wallCells.renderOrder = 9; this.wallCells.visible = false; this.wallCells.frustumCulled = false; this.wallCells.count = 0;
     h.scene.add(this.wallCells);
-    // la flèche de l'entrée : un chevron jaune qui pointe vers la rue (vers +z avant d'être tourné avec le bâtiment)
-    const arrow = new THREE.Shape([new THREE.Vector2(-0.22, 0), new THREE.Vector2(0, 0.26), new THREE.Vector2(0.22, 0), new THREE.Vector2(0.09, 0), new THREE.Vector2(0.09, -0.16), new THREE.Vector2(-0.09, -0.16), new THREE.Vector2(-0.09, 0)]);
-    this.door = new THREE.Mesh(new THREE.ShapeGeometry(arrow).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd04a, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
-    this.door.renderOrder = 10; this.door.visible = false;
+    // l'entrée : dessinée pour une porte tournée vers +z, au bord de l'emprise (z = 0), puis tournée et placée avec le bâtiment
+    const gold = (o: number) => new THREE.MeshBasicMaterial({ color: 0xffd04a, transparent: true, opacity: o, depthTest: false, depthWrite: false, side: THREE.DoubleSide });
+    // le seuil : une dalle dorée sur la case devant la porte (élargie à deux cases pour une porte double)
+    this.doorTile = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.92).rotateX(-Math.PI / 2).translate(0, 0, 0.5), gold(0.5));
+    // le cadre de la porte, debout contre la façade : un arc doré (la porte en surbrillance, vue à travers le fantôme)
+    const arch = new THREE.Shape(), hole = new THREE.Path(), W = 0.34, H = 0.62, T = 0.09;
+    arch.moveTo(-W, 0); arch.lineTo(-W, H); arch.absarc(0, H, W, Math.PI, 0, true); arch.lineTo(W, 0); arch.lineTo(-W, 0);
+    hole.moveTo(-W + T, 0); hole.lineTo(W - T, 0); hole.lineTo(W - T, H); hole.absarc(0, H, W - T, 0, Math.PI, false); hole.lineTo(-W + T, 0);
+    arch.holes.push(hole);
+    this.doorFrame = new THREE.Mesh(new THREE.ShapeGeometry(arch, 10).translate(0, 0, 0.04), gold(0.95));
+    // le chemin esquissé : trois chevrons qui sortent de la porte et s'éloignent sur deux cases et demie (voir `update`)
+    const chev = new THREE.Shape([new THREE.Vector2(-0.26, -0.12), new THREE.Vector2(0, 0.1), new THREE.Vector2(0.26, -0.12), new THREE.Vector2(0.26, 0.02), new THREE.Vector2(0, 0.24), new THREE.Vector2(-0.26, 0.02)]);
+    const chevGeo = new THREE.ShapeGeometry(chev).rotateX(Math.PI / 2);
+    for (let i = 0; i < 3; i++) this.doorSteps.push(new THREE.Mesh(chevGeo, gold(0.9)));
+    for (const m of [this.doorTile, this.doorFrame, ...this.doorSteps]) { m.renderOrder = 10; m.frustumCulled = false; this.door.add(m); }
+    this.door.visible = false;
     h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.freePulse, this.freeArrow, this.spots, this.door);
     this.zones = new ZoneHighlight(() => this.h.world, h.scene);
     this.coverage = new CoverageView(() => this.h.world, h.scene);
@@ -183,7 +208,7 @@ export class ToolController implements ToolInput {
     if (t !== 'none') this.selected = null;
     // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route
     if (t !== this.tool || (kind && kind !== this.kind)) this.rotManual = false;
-    if (t !== this.tool || (kind && kind !== this.kind)) this.freeFrom = null;
+    if (t !== this.tool || (kind && kind !== this.kind)) { this.freeFrom = null; this.anchor = null; }
     if (t !== this.tool) {
       // chaque pinceau retrouve sa propre taille
       this.radii[this.tool] = this.radius;
@@ -211,7 +236,15 @@ export class ToolController implements ToolInput {
   /** Quart de tour du bâtiment en main, à partir de l'orientation affichée ; sinon, du bâtiment sélectionné */
   rotate() {
     if (!this.holding()) { this.rotateSelected(); return; }
-    const hit = this.hit;
+    const hit = this.hit, an = this.anchor;
+    // l'endroit est fixé : R tourne à partir de ce que montre l'aperçu, et l'emporte tant que la souris reste du même côté
+    if (an && an.kind !== 'cave') {
+      this.ghostRot = (this.anchorRot() + 1) % 4;
+      this.rotManual = true;
+      an.keySide = this.anchorSide();
+      this.refreshVisuals();
+      return;
+    }
     if (!this.rotManual && hit) {
       const o = footprintOrigin(this.kind, hit.x, hit.z);
       this.ghostRot = facingRoadRot(this.h.world, this.kind, o.x, o.z, this.ghostRot);
@@ -244,6 +277,8 @@ export class ToolController implements ToolInput {
   escape() {
     // une route libre commencée : Échap oublie son point A, l'outil reste en main
     if (this.freeFrom) { this.freeFrom = null; this.refreshVisuals(); return; }
+    // l'endroit d'un bâtiment (ou d'une grotte) est fixé : Échap le libère, l'outil reste en main
+    if (this.anchor) { this.anchor = null; this.refreshVisuals(); this.h.changed(); return; }
     if (this.moveOrigin) this.cancelMove();
     this.setTool('none');
     this.select(null);
@@ -507,6 +542,16 @@ export class ToolController implements ToolInput {
       this.freePulse.scale.set(f, 1, f);
       (this.freePulse.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - k);
     }
+    // l'entrée du bâtiment en main : le seuil bat, les chevrons sortent de la porte l'un après l'autre et s'effacent au loin
+    if (this.door.visible) {
+      this.doorT += dt;
+      (this.doorTile.material as THREE.MeshBasicMaterial).opacity = 0.32 + 0.3 * (0.5 + 0.5 * Math.sin(this.doorT * 4.5));
+      this.doorSteps.forEach((m, i) => {
+        const k = (this.doorT * 0.8 + i / 3) % 1;
+        m.position.set(0, 0, 0.3 + k * 2.3);
+        (m.material as THREE.MeshBasicMaterial).opacity = 0.95 * Math.sin(Math.PI * k);
+      });
+    }
     if (!this.pressed || !this.hit) return;
     const t = this.tool;
     if (SCULPT_TOOLS.includes(t) && t !== 'volcano') {
@@ -559,10 +604,29 @@ export class ToolController implements ToolInput {
     if (this.tool === 'erase' && this.eraseVolcanoUnderCursor()) return;
     if (this.tool === 'fissure') { this.applyRift(); return; }
     if (SINGLE_TOOLS.includes(this.tool)) {
-      // une seule grotte sous le curseur
-      const cx = Math.floor(hit.x), cz = Math.floor(hit.z);
-      if (w.setVeg(cx, cz, VEG_CAVE)) { this.mark(); this.h.audio.sfxPlace(); }
-      else this.h.toast(tr('Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.'));
+      // une grotte en deux clics : le premier fixe sa case, le second le côté de son ouverture (vers la souris) ; un second
+      // clic sur la case même la laisse s'ouvrir vers le bas de la pente, comme celles de la carte
+      const refuse = () => this.h.toast(tr('Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.'));
+      const an = this.anchor;
+      if (!an || an.kind !== 'cave') {
+        const cx = Math.floor(hit.x), cz = Math.floor(hit.z);
+        if (!w.inCells(cx, cz) || w.veg[w.ci(cx, cz)] >= VEG_CAVE || !w.decorFits(cx, cz, VEG_CAVE)) { refuse(); return; }
+        this.anchor = { kind: 'cave', x: cx, z: cz, keySide: null };
+        this.refreshVisuals();
+        this.h.changed();
+        return;
+      }
+      this.anchor = null;
+      const k = w.ci(an.x, an.z), yaw = this.caveYawAt(an.x, an.z), old = w.caveYaw.get(k);
+      if (yaw === null) w.caveYaw.delete(k); else w.caveYaw.set(k, yaw);
+      if (w.setVeg(an.x, an.z, VEG_CAVE)) { this.mark(); this.h.audio.sfxPlace(); }
+      else {
+        // (tournée ainsi, la butte de la grotte touche quelque chose : on remet le cap d'avant)
+        if (old === undefined) w.caveYaw.delete(k); else w.caveYaw.set(k, old);
+        refuse();
+      }
+      this.refreshVisuals();
+      this.h.changed();
       return;
     }
     const r = Math.max(0.6, this.radius * 0.8);
@@ -706,6 +770,7 @@ export class ToolController implements ToolInput {
       if (n >= 4) {
         const ex = s[n - 2], ez = s[n - 1], dx = ex - s[n - 4], dz = ez - s[n - 3];
         this.freeArrow.position.set(ex, w.surfaceAt(ex, ez) + 0.14, ez);
+        this.freeArrow.scale.setScalar(1);
         this.freeArrow.rotation.y = Math.atan2(dx, dz);
       }
     }
@@ -876,11 +941,47 @@ export class ToolController implements ToolInput {
     if (w.canPlace(o.kind, o.x, o.z, o.small ? smallSize(o.kind) : undefined) === null) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
   }
 
+  /** Pose en deux clics : 0 rien, 1 l'endroit est à cliquer, 2 l'endroit est fixé, le côté de l'entrée reste à cliquer */
+  get placeStage(): 0 | 1 | 2 {
+    if (this.tool === 'cave') return this.anchor ? 2 : 1;
+    if (!this.holding() || !orientable(this.kind) || this.tracingWall) return 0;
+    return this.anchor ? 2 : 1;
+  }
+
+  /** Côté visé par la souris depuis le centre de l'emprise fixée (-1 : près du centre, ou pas d'endroit fixé) */
+  private anchorSide() {
+    const an = this.anchor, hit = this.hit;
+    if (!an || an.kind === 'cave' || !hit) return -1;
+    const s = KINDS[an.kind].size;
+    return sideToward(an.x + s / 2, an.z + s / 2, s, hit.x, hit.z);
+  }
+
+  /**
+   * Rotation du bâtiment fixé, d'après la souris : l'entrée du côté qu'elle vise ; près du centre (ou tant que R l'emporte),
+   * la rotation de R, sinon celle qui regarde la route
+   */
+  private anchorRot() {
+    const an = this.anchor!, kind = an.kind as KindId, side = this.anchorSide();
+    if (an.keySide !== null && side !== an.keySide) an.keySide = null;
+    if (side >= 0 && an.keySide === null) return side;
+    return this.rotManual ? this.ghostRot : facingRoadRot(this.h.world, kind, an.x, an.z, this.ghostRot);
+  }
+
+  /** Cap de l'ouverture d'une grotte vers la souris (au centième de radian, comme la sauvegarde) ; null : la souris est sur sa case */
+  private caveYawAt(cx: number, cz: number) {
+    const hit = this.hit;
+    if (!hit) return null;
+    const dx = hit.x - (cx + 0.5), dz = hit.z - (cz + 0.5);
+    return Math.hypot(dx, dz) < 0.7 ? null : Math.round(Math.atan2(dx, dz) * 100) / 100;
+  }
+
   private tryPlace() {
     const hit = this.hit;
     if (!hit) return;
     const w = this.h.world;
-    const o = footprintOrigin(this.kind, hit.x, hit.z);
+    // un bâtiment orientable se pose en deux clics : l'endroit, puis le côté de l'entrée (l'aperçu se tourne vers la souris)
+    const two = orientable(this.kind), an = this.anchor;
+    const o = an && an.kind === this.kind ? { x: an.x, z: an.z } : footprintOrigin(this.kind, hit.x, hit.z);
     // un grand bâtiment neuf se paie en bois et en pierre, et tous en Normal (déplacer est gratuit)
     const cost = this.moveOrigin ? null : priceIn(w, this.kind, this.h.getAge());
     const where = w.canPlace(this.kind, o.x, o.z), reason = where ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
@@ -889,12 +990,24 @@ export class ToolController implements ToolInput {
       // un grand bâtiment refusé ici : les points verts montrent où il tient
       const tip = '';
       if (now - this.lastToast > 1200) { this.h.toast(tr(reason) + (tip ? `.${tip}` : '')); this.lastToast = now; }
+      // (l'endroit fixé ne tient plus, le village a changé entre les deux clics : on le libère)
+      if (an) { this.anchor = null; this.refreshVisuals(); this.h.changed(); }
       return;
     }
+    if (two && !an) {
+      this.anchor = { kind: this.kind, x: o.x, z: o.z, keySide: null };
+      this.h.audio.sfxClick();
+      this.refreshVisuals();
+      this.h.changed();
+      return;
+    }
+    const rot = an ? this.anchorRot() : this.rotManual ? this.ghostRot : facingRoadRot(w, this.kind, o.x, o.z, this.ghostRot);
+    // l'entrée choisie à la souris (ou par R) ne bouge plus ; près du centre sans R, la façade suit la route comme avant
+    const auto = an ? this.anchorSide() < 0 && !this.rotManual : !this.rotManual;
+    this.anchor = null;
     this.mark();
     pay(w, cost);
-    const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, this.kind, o.x, o.z, this.ghostRot);
-    const b = w.place(this.kind, o.x, o.z, rot, !this.rotManual, this.h.getAge(), true);
+    const b = w.place(this.kind, o.x, o.z, rot, auto, this.h.getAge(), true);
     // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
     if (this.h.autoRoads) autoRoad(w, b);
     this.moveOrigin = null;
@@ -909,6 +1022,19 @@ export class ToolController implements ToolInput {
   placeWhy: string | null = null;
   /** la case (origine) du dernier bâtiment posé : tant que le curseur y reste, pas de refus « occupé » */
   private placedAt: string | null = null;
+
+  /**
+   * L'entrée d'un bâtiment posé en (x, z), tourné de `rot` : le seuil doré sur les cases devant la porte, le cadre de la porte
+   * contre la façade, les chevrons du chemin qui en sort (le ponton et le port ont leur porte à l'arrière, côté terre)
+   */
+  private showDoor(kind: KindId, x: number, z: number, s: number, rot: number, y: number) {
+    const side = doorSide(kind, rot), f = [[0, 1], [1, 0], [0, -1], [-1, 0]][side], cells = doorCells(kind, x, z, s, side).length || 1;
+    this.door.position.set(x + s / 2 + f[0] * s / 2, y + 0.06, z + s / 2 + f[1] * s / 2);
+    this.door.rotation.y = side * Math.PI / 2;
+    this.doorTile.scale.set(cells, 1, 1);
+    this.doorFrame.scale.setScalar(s <= 1 ? 0.62 : s === 2 ? 0.85 : 1.2);
+    this.door.visible = true;
+  }
 
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
@@ -934,10 +1060,22 @@ export class ToolController implements ToolInput {
     if (SCULPT_TOOLS.includes(t) || VEG_TOOLS.includes(t) || t === 'biome' || wide) {
       // (la faille : la largeur du ravin qu'elle creuse)
       const r = t === 'fissure' ? this.riftHalf() + 0.4 : VEG_TOOLS.includes(t) || t === 'biome' ? Math.max(0.6, this.radius * 0.8) : t === 'volcano' ? volcanoRadius(this.radius) : this.radius;
+      // la grotte dont la case est fixée : le cercle y reste, une flèche montre où s'ouvrira l'entrée (vers la souris ; sur la
+      // case même, vers le bas de la pente)
+      const an = t === 'cave' && this.anchor?.kind === 'cave' ? this.anchor : null;
+      const cx0 = an ? an.x + 0.5 : hit.x, cz0 = an ? an.z + 0.5 : hit.z;
+      if (an) {
+        const yaw = this.caveYawAt(an.x, an.z) ?? w.caveFrame(an.x, an.z).yaw, d = 1.7;
+        const ax = cx0 + Math.sin(yaw) * d, az = cz0 + Math.cos(yaw) * d;
+        this.freeArrow.position.set(ax, w.hAt(Math.min(N, Math.max(0, ax)), Math.min(N, Math.max(0, az))) + 0.15, az);
+        this.freeArrow.rotation.set(0, yaw, 0);
+        this.freeArrow.scale.setScalar(1.6);
+        this.freeArrow.visible = true;
+      }
       const pos = this.ring.geometry.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < 48; i++) {
         const a = (i / 48) * Math.PI * 2;
-        const x = hit.x + Math.cos(a) * r, z = hit.z + Math.sin(a) * r;
+        const x = cx0 + Math.cos(a) * r, z = cz0 + Math.sin(a) * r;
         pos.setXYZ(i, x, w.hAt(Math.min(N, Math.max(0, x)), Math.min(N, Math.max(0, z))) + 0.12, z);
       }
       pos.needsUpdate = true;
@@ -970,8 +1108,9 @@ export class ToolController implements ToolInput {
       return;
     }
     if (t === 'build' || (t === 'move' && this.moveOrigin)) {
-      const kind = this.kind, s = KINDS[kind].size;
-      const o = footprintOrigin(kind, hit.x, hit.z);
+      const kind = this.kind, s = KINDS[kind].size, an = this.anchor && this.anchor.kind === kind ? this.anchor : null;
+      // l'endroit fixé au premier clic : l'aperçu y reste et se tourne vers la souris
+      const o = an ? { x: an.x, z: an.z } : footprintOrigin(kind, hit.x, hit.z);
       if (!w.inCells(o.x, o.z)) return;
       const reason = w.canPlace(kind, o.x, o.z);
       const age = this.h.getAge();
@@ -994,20 +1133,14 @@ export class ToolController implements ToolInput {
       if (!tracing) this.placeWhy = this.placedAt === cellKey && reason === tr('Emplacement occupé') ? null : this.tracingWall && this.hitBuilding && (this.hitBuilding.kind === 'wall' || this.hitBuilding.kind === 'gate') ? null : why0;
       // (les points verts des emplacements libres induisaient en erreur : retirés, `showSpots` n’est plus appelé)
       setGhostValid(tracing ? !this.placeWhy : !why0);
-      const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
+      const rot = an ? this.anchorRot() : this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);
       this.ghost.rotation.y = rot * Math.PI / 2;
       this.ghost.visible = true;
-      // l'entrée : la flèche devant la façade, côté rue (R tourne le bâtiment et la flèche avec lui) ; pas de flèche pour la
-      // place du village, qu'on rejoint de tous côtés
-      if (hasDoor(kind)) {
-        const f = [[0, 1], [1, 0], [0, -1], [-1, 0]][rot], d = s / 2 + 0.5;
-        this.door.position.set(o.x + s / 2 + f[0] * d, y + 0.08, o.z + s / 2 + f[1] * d);
-        this.door.rotation.y = rot * Math.PI / 2;
-        this.door.scale.setScalar(1.8 + s * 0.2);
-        this.door.visible = true;
-      }
+      // l'entrée (R ou la souris tournent le bâtiment, l'entrée avec lui) ; rien pour la place du village, qu'on rejoint de
+      // tous côtés
+      if (hasDoor(kind)) this.showDoor(kind, o.x, o.z, s, rot, y);
       this.markerMat.color.setHex(tracing ? (this.placeWhy ? 0xff5a5a : 0x40e070) : reason ? 0xff5a5a : 0x40e070);
       this.marker.scale.set(s, 1, s);
       this.marker.position.set(o.x + s / 2, y + 0.05, o.z + s / 2);

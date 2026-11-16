@@ -610,6 +610,22 @@ body.under #selCard, body.photo #selCard { display: none; }
 .popMsg { max-width: 340px; margin: 0 auto 22px; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 23px; font-weight: 700; line-height: 1.3; color: var(--pInk); }
 .popFoot { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; }
 #ui > .overlay > .cePop .popFoot button { min-width: 150px; min-height: 52px; }
+/* le choix des contrôles de la vue (premier lancement) : deux cartes, la souris et les touches, puis la disposition du clavier */
+#ui > .overlay > .cePop.ctlPick { width: min(620px, 100%); max-width: none; padding-bottom: 96px; }
+.ctlPick .ctlCards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+#ui > .overlay > .cePop .ctlCard { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; min-height: 0; padding: 16px 14px 14px; border-radius: 22px; text-align: center; white-space: normal; }
+.ctlCard .ctlArt { display: flex; align-items: center; justify-content: center; height: 66px; }
+.ctlCard b { font-family: var(--hSerif, serif); font-size: 19px; }
+.ctlCard .ctlTxt { font-size: 13.5px; font-weight: 600; line-height: 1.35; opacity: 0.85; }
+.kcaps { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.kcaps > span { display: flex; gap: 4px; }
+.kcaps kbd { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; border: 1.5px solid #7a5a32; border-bottom-width: 3px; background: #fffaf0; color: #3a2a14; font: 800 14px/1 var(--hSans, sans-serif); }
+.kcaps kbd.t { background: #f3e2bf; }
+.ctlPick .ctlLay { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 14px 0 6px; font-weight: 700; transition: opacity 0.2s; }
+.ctlPick .ctlLay.dim { opacity: 0.55; }
+#ui > .overlay > .cePop .ctlLay button { min-height: 38px; padding: 0 16px; font-size: 14px; }
+.ctlPick .hint { text-align: center; margin: 6px 0 14px; }
+@media (max-width: 560px) { .ctlPick .ctlCards { grid-template-columns: 1fr; } }
 /* les paramètres en jeu (openSettings), dans la même coque : sous-titre sous le titre, onglets en colonne à gauche,
    panneau clair à droite (titre de section, réglages l'intitulé à gauche et les contrôles à droite, sous-titres à filet) */
 #ui > .overlay > .cePop.settings { width: min(940px, 100%); max-width: none; padding-bottom: 92px; text-align: left; }
