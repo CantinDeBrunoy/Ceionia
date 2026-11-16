@@ -2716,6 +2716,8 @@ export interface MenuHost {
   /** `seed` : graine d'une nouvelle partie (celle du continent montré en aperçu) ; `difficulty` : celle qu'a choisie le joueur */
   start(map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty, age?: number): void;
   importFile(f: File): void;
+  /** le volume de la musique (0 à 1) et sa coupure, réglés depuis les options de l'accueil (même réglage qu'en jeu) */
+  music: { vol: number; muted: boolean; setVol(v: number): void; setMuted(on: boolean): void };
 }
 
 export function drawPreview(canvas: HTMLCanvasElement, heights: ArrayLike<number>) {
@@ -2862,13 +2864,22 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
   });
   const f = $<HTMLInputElement>('#mFile', ov);
   f.onchange = () => { if (f.files?.[0]) host.importFile(f.files[0]); };
-  // les options : langue, tutoriel, carte, import (les crédits sont dans les paramètres du jeu)
+  // les options : langue, musique, tutoriel, carte, import (les crédits sont dans les paramètres du jeu)
   $('.mGear', ov).onclick = () => {
     const { ov: m, close } = menuPop(root, 'menuOpts', 'options', tr('Options'), `
       <div class="row"><span class="popKey">${popIc('langue')}<label>${tr('Langue')}</label></span>${langPicker(getLang(), 'mLang')}</div>
+      <div class="row mMusic"><span class="popKey">${ic('volume', 26)}<label for="mVol">${tr('Musique')}</label></span><input id="mVol" type="range" min="0" max="1" step="0.05" value="${host.music.vol}"><button class="mMute${host.music.muted ? ' active' : ''}" aria-label="${tr('Couper la musique')}" title="${tr('Couper la musique')}">${ic(host.music.muted ? 'mute' : 'volume', 18)}</button></div>
       <div class="row mTuto"><span class="popKey">${popIc('tutoriel')}<label>${tr('Tutoriel')}</label></span></div>
       ${MAPS.length > 1 ? `<div class="row"><span class="popKey"><label for="mMapSel">${tr('Carte')}</label></span><select id="mMapSel">${MAPS.map((x) => `<option value="${x.id}"${x.id === map ? ' selected' : ''}>${x.name}</option>`).join('')}</select></div>` : ''}
       <div class="mBtns"><button class="mImport">${popIc('importer')}${tr('Importer une sauvegarde')}</button></div>`);
+    // la musique de l'accueil : le curseur s'entend aussitôt ; le bouton la coupe ou la rend
+    const vol = $<HTMLInputElement>('#mVol', m), mute = $<HTMLButtonElement>('.mMute', m);
+    vol.oninput = () => host.music.setVol(+vol.value);
+    mute.onclick = () => {
+      host.music.setMuted(!host.music.muted);
+      mute.innerHTML = ic(host.music.muted ? 'mute' : 'volume', 18);
+      mute.classList.toggle('active', host.music.muted);
+    };
     // le tutoriel guidé, pour la partie qu'on lance
     $('.mTuto', m).appendChild(menuToggle());
     const sel = m.querySelector<HTMLSelectElement>('#mMapSel');

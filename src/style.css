@@ -593,6 +593,10 @@ body.under #selCard, body.photo #selCard { display: none; }
 .cePop .tutoToggle button.on .sw { background: linear-gradient(180deg, #f6c35a, #e39a2f); box-shadow: 0 0 8px rgba(227, 154, 47, 0.45); }
 .cePop .tutoToggle button.on .sw::after { transform: translateX(22px); }
 .menuOpts select { font: inherit; font-weight: 700; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: #fffbf5; color: var(--pInk); }
+/* la musique : l'icône à la place d'une image, le curseur, puis le bouton qui la coupe */
+.menuOpts .mMusic .popKey > svg { flex: none; width: 34px; height: 34px; padding: 4px; color: #b9772a; }
+#ui > .overlay > .cePop .mMute { flex: none; display: grid; place-items: center; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; }
+#ui > .overlay > .cePop .mMute.active { color: #b4532a; }
 .menuOpts .mBtns { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 0; }
 #ui > .overlay > .cePop .mBtns button { min-height: 54px; padding: 0 24px 0 12px; }
 /* l'âge de départ du bac à sable : une pilule par âge, avec son icône (brune sur la pilule dorée) */

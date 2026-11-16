@@ -407,7 +407,11 @@ class Game implements UIHost {
     // une sauvegarde illisible est mise de côté (la partie neuve ne l'écrase pas) ; le joueur est prévenu au lancement
     const slot = openSlot(mapId), save = mode === 'continue' ? slot.save : null;
     this.loadError = slot.error;
-    const settings = { ...loadSettings(), ...(save?.settings ?? {}) } as Partial<Settings>;
+    // le son vient des réglages du navigateur s'ils sont à l'échelle actuelle : ils sont écrits à chaque changement,
+    // y compris depuis l'accueil, donc toujours plus frais que ceux d'une sauvegarde
+    const local = loadSettings();
+    const sound = local.volV === VOL_V ? { musicVol: local.musicVol, sfxVol: local.sfxVol, ambVol: local.ambVol, volV: VOL_V, music: local.music, musicChosen: local.musicChosen, sfx: local.sfx, sfxChosen: local.sfxChosen } : {};
+    const settings = { ...local, ...(save?.settings ?? {}), ...Object.fromEntries(Object.entries(sound).filter(([, v]) => v !== undefined)) } as Partial<Settings>;
     this.sim = new Sim(w);
     this.under = new Underground(w);
     this.war = new War(w);
@@ -2720,11 +2724,22 @@ async function boot() {
   audioSettings(loadSettings());
   audio.music('menu');
   audio.unlockOn(window);
+  // un réglage de la musique fait à l'accueil s'entend tout de suite et reste dans les réglages (la partie lancée le reprend)
+  const keepMusic = () => {
+    audio.applyVolumes();
+    saveSettings({ ...loadSettings(), musicVol: audio.musicVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen } as Settings);
+  };
   menu = showMenu(uiRoot, {
     start: (map, mode, seed, difficulty, age) => start(map, mode, seed, difficulty, age),
     importFile: async (f) => {
       try { const d = await readSaveFile(f); saveSlot(d); void start(d.map, 'continue'); }
       catch (e) { alert(tr('Import impossible : {why}', { why: (e as Error).message })); }
+    },
+    music: {
+      get vol() { return audio.musicVol; },
+      get muted() { return audio.muteMusic; },
+      setVol: (v) => { audio.musicVol = v; keepMusic(); },
+      setMuted: (on) => { audio.muteMusic = on; audio.musicChosen = true; keepMusic(); },
     },
   });
   void KINDS;
