@@ -1654,6 +1654,7 @@ export class ExpeditionScene {
       bones: () => this.stageBones(s, a), flames: () => this.stageFlames(s, a), flame: () => this.stageFlame(s, a), record: () => this.stageRecord(s, a),
       // la diplomatie de l'archipel : au large, contre le bateau de l'équipe
       mistrust: () => this.stageMistrust(s, a), grievance: () => this.stageGrievance(s, a), seat: () => this.stageSeat(s, a), menu: () => this.stageMenu(s, a),
+      patrolboat: () => this.stagePatrol(s), cliffire: () => this.stageCliffire(s, a),
       music: () => this.stageMusic(s, a), blockade: () => this.stageBlockade(s, a), parley: () => this.stageParley(s, a), maelstrom: () => this.stageMaelstrom(s),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
@@ -2695,6 +2696,52 @@ export class ExpeditionScene {
       });
       if (p === 0 && t < 8) this.crewAct = 'cheer';
       return p < 0 || t < 8.5;
+    };
+  }
+
+  /**
+   * La patrouille rivale (les éclaireurs) : une galère rivale, lanternes masquées, glisse vers la barque. Se cacher : la barque
+   * s'arrête, l'équipage se tasse, la galère passe à distance et s'éloigne. La suivre : l'équipage la guette debout, elle file
+   * vers les remparts rivaux et la barque reprend sa route dans son sillage
+   */
+  private stagePatrol(s: Staging) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    const [bx, bz] = this.boatBase(), hd0 = bt.obj.rotation.y, fx = Math.sin(hd0), fz = Math.cos(hd0), px = Math.cos(hd0), pz = -Math.sin(hd0);
+    const galley = this.sAdd(s, new THREE.Mesh(boatGeo('sail'), mats.body));
+    const to = this.scout ? this.scout.walls : [bx + fx * 6, bz + fz * 6];
+    return () => {
+      const p = s.pick, t = s.after;
+      // elle approche de biais, puis (selon le choix) passe au large ou file vers la ville
+      let x = bx + fx * 2.2 + px * 1.2, z = bz + fz * 2.2 + pz * 1.2;
+      if (p < 0) { const u = Math.min(1, s.t / 4); x -= px * 0.6 * u; z -= pz * 0.6 * u; }
+      else if (p === 0) { const u = Math.min(1, t / 7); x += -px * 0.6 - fx * 3 * u + px * 1.4 * u; z += -pz * 0.6 - fz * 3 * u + pz * 1.4 * u; this.moor = t < 6; this.crewAct = t < 6 ? 'sit' : null; }
+      else { const u = Math.min(1, t / 8), sx = bx + fx * 2.2 + px * 0.6, sz = bz + fz * 2.2 + pz * 0.6; x = sx + (to[0] - sx) * u * 0.5; z = sz + (to[1] - sz) * u * 0.5; this.crewAct = t < 3 ? 'work' : null; this.crewFace = Math.atan2(x - bt.obj.position.x, z - bt.obj.position.z); }
+      if (this.depth(x, z) !== null) galley.position.set(x, bt.y + 0.005 + Math.sin(this.t * 1.3) * 0.006, z);
+      galley.rotation.y = p === 0 ? hd0 + Math.PI : p === 1 ? Math.atan2(to[0] - x, to[1] - z) : hd0 + Math.PI / 2;
+      return p < 0 || t < 8;
+    };
+  }
+
+  /**
+   * Le feu sur la falaise (les éclaireurs) : un grand feu sur la côte rivale, des silhouettes autour. Approcher : l'équipage
+   * s'accroupit, tourné vers le feu, et les silhouettes tiennent conseil. Noter l'endroit et passer : on garde la route, le feu
+   * baisse et fume, les silhouettes s'en vont
+   */
+  private stageCliffire(s: Staging, a: ActiveExpedition) {
+    const [ox, oz] = this.focus, sc = this.scout;
+    const c: [number, number] = sc ? [sc.post[0] + (sc.walls[0] - sc.post[0]) * 0.3 + 1.2, sc.post[1] + (sc.walls[1] - sc.post[1]) * 0.3] : [ox + 2.5, oz + 1.5];
+    const f = this.sFlame(s, c[0], c[1], 1.2);
+    const men = [0, 1, 2].map((i) => { const an = i * 2.1, x = c[0] + Math.cos(an) * 0.45, z = c[1] + Math.sin(an) * 0.45; return this.sNpc(s, 'villager', a.age, x, z, Math.atan2(c[0] - x, c[1] - z), 'talk'); });
+    let pt = 0;
+    return (dt: number) => {
+      const p = s.pick, t = s.after, y = this.world.surfaceAt(c[0], c[1]);
+      f.position.set(c[0], y + 0.3, c[1]);
+      f.scale.setScalar(p === 1 ? Math.max(0.3, 1.2 - t * 0.2) : 1 + 0.2 * Math.sin(this.t * 17));
+      men.forEach((m, i) => (m.pose = p === 1 ? (t > 2 + i ? 'idle' : 'talk') : p === 0 && t > 3 ? 'cheer' : 'talk'));
+      if (p === 0) { this.moor = t < 6; this.crewAct = 'work'; const o = this.boat?.obj.position; if (o) this.crewFace = Math.atan2(c[0] - o.x, c[1] - o.z); }
+      if (p === 1 && (pt -= dt) <= 0) { pt = 0.15; this.puffAt(c[0], y + 0.4, c[1], 'smoke', 0.3, 0.06); }
+      return p < 0 || t < 7;
     };
   }
 

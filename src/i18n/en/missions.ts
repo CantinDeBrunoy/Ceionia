@@ -491,9 +491,9 @@ registerDict('missions', {
   "À notre bord, au milieu du bras de mer, les deux chefs ont signé la paix. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde à bâtir.": "Aboard our ship, in the middle of the strait, the two chiefs signed the peace. Guests from both islands come to celebrate the peace with us. To remember it: a Concord Monument to build.",
   // la guerre de l'archipel : les éclaireurs
   "Envoyer des éclaireurs": "Send Scouts",
-  "Avant la bataille, il faut connaître la côte rivale : ses défenses, la plage où débarquer, combien de soldats la gardent. Une barque d’éclaireurs part de nuit, la longue-vue à la main.": "Before the battle, we must know the rival coast: its defences, the beach to land on, how many soldiers guard it. A boat of scouts sets out at night, spyglass in hand.",
+  "Avant la bataille, il faut connaître la côte rivale. Ses défenses, la plage où débarquer, combien de soldats la gardent : une barque d’éclaireurs part de nuit, la longue-vue à la main.": "Before the battle, we must know the rival coast. Its defences, the beach to land on, how many soldiers guard it: a boat of scouts sets out at night, spyglass in hand.",
   "Sonder la plage de nuit": "Survey the Beach at Night",
-  "Prudent : la barque accoste de nuit sur la plage rivale, on repère où débarquer.": "Careful: the boat lands at night on the rival beach and we find where to land.",
+  "Prudent : on accoste de nuit sur la plage rivale pour repérer où débarquer.": "Careful: we land at night on the rival beach, to find where to come ashore.",
   "traverse jusqu’à l’île rivale, débarque et observe ses défenses": "crosses to the rival island, lands and watches its defences",
   "Les éclaireurs ont trouvé une plage en pente douce, mal gardée, à l’écart du port : nos troupes y débarqueront. La bataille peut commencer.": "The scouts found a gently sloping, poorly guarded beach away from the port: our troops will land there. The battle can begin.",
   "La brume est tombée sur la côte rivale : les éclaireurs n’ont rien vu, un rameur blessé. Il faudra retenter.": "Fog fell on the rival coast: the scouts saw nothing, one rower hurt. We will have to try again.",

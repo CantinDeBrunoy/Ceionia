@@ -656,10 +656,10 @@ export const MISSIONS: Mission[] = [
   {
     // (l'id `allywar` reste celui de l'ancienne expédition « Aux côtés de notre allié » : les sauvegardes et le diorama le lisent)
     id: 'allywar', age: 2, mandatory: false, icon: '🔭', title: 'Envoyer des éclaireurs',
-    intro: 'Avant la bataille, il faut connaître la côte rivale : ses défenses, la plage où débarquer, combien de soldats la gardent. Une barque d’éclaireurs part de nuit, la longue-vue à la main.',
+    intro: 'Avant la bataille, il faut connaître la côte rivale. Ses défenses, la plage où débarquer, combien de soldats la gardent : une barque d’éclaireurs part de nuit, la longue-vue à la main.',
     choices: [
       {
-        label: 'Sonder la plage de nuit', text: 'Prudent : la barque accoste de nuit sur la plage rivale, on repère où débarquer.',
+        label: 'Sonder la plage de nuit', text: 'Prudent : on accoste de nuit sur la plage rivale pour repérer où débarquer.',
         dest: 'river', sea: true, scene: 'scout', oneWay: true, troop: 'cavalry', fail: 'fog', doing: 'traverse jusqu’à l’île rivale, débarque et observe ses défenses', danger: ['water'], party: 3, work: 80, risk: 0.15, carry: 'sacks',
         win: [{ t: 'diplo', act: 'landing' }, { t: 'diplo', act: 'scoutBeach' }], lose: [hurt(1, 2)],
         winText: 'Les éclaireurs ont trouvé une plage en pente douce, mal gardée, à l’écart du port : nos troupes y débarqueront. La bataille peut commencer.',
