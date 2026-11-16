@@ -196,7 +196,7 @@ export const EVENTS: ExpEvent[] = [
   },
   // ---------------- Les dents de l'eau : le requin au large, le crocodile des eaux douces chaudes ----------------
   {
-    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive', 'voyage', 'wreck', 'trawl', 'isles'], title: 'Un aileron dans l’eau',
+    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive', 'voyage', 'wreck', 'trawl', 'isles', 'scout'], title: 'Un aileron dans l’eau',
     text: 'Un grand aileron gris fend l’eau et tourne autour du bateau : un requin !',
     options: [
       { label: 'Fuir vers la rive', risk: 0.9, work: 6, text: 'On a mis le cap sur la rive à toute vitesse, l’aileron sur les talons.' },
@@ -264,7 +264,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'squall', where: ['river'], scenes: ['voyage', 'wreck', 'trawl', 'isles'], water: 'sea', from: 0.4, title: 'Un grain se lève',
+    id: 'squall', where: ['river'], scenes: ['voyage', 'wreck', 'trawl', 'isles', 'scout'], water: 'sea', from: 0.4, title: 'Un grain se lève',
     text: 'Le ciel se couvre d’un coup : la pluie tombe en rideau, le vent se lève et les vagues grossissent autour du bateau.',
     options: [
       { label: 'Réduire la toile et tenir le cap', risk: 0.85, work: 4, text: 'Voile réduite, barre bien tenue : le bateau a traversé le grain sans une avarie.' },

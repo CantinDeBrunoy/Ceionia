@@ -584,6 +584,7 @@ class Game implements UIHost {
         this.onAllyChosen?.(p);
       },
       path: (p) => this.choosePath(p),
+      tactic: (c) => this.rivalTactic(c),
     });
     this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
     // la cinématique « Explorer le monde » (elle tient lieu d'écran de chargement de l'agrandissement)
@@ -1204,7 +1205,7 @@ class Game implements UIHost {
     const w = this.world, d = w.diplo;
     if (this.rivalBattle || !battleReady(d, w.exp.clock) || !d.ally || this.mode !== 'surface') return false;
     let b: RivalBattle;
-    try { b = new RivalBattle(w, rivalOf(d.ally), Math.max(2, this.sim.age), w.difficulty === 'easy' || w.sandbox); } catch { return false; }
+    try { b = new RivalBattle(w, rivalOf(d.ally), Math.max(1, this.sim.age), w.difficulty === 'easy' || w.sandbox, undefined, d.intel); } catch { return false; }
     this.leaveIsle(true);
     this.follow(null); this.trainCam = null; this.incidentCam = null;
     this.tools.setTool('none');
@@ -1214,7 +1215,9 @@ class Game implements UIHost {
     const { ox, oz } = b.map, layer = new BattleLayer(b.sim, (x, z) => w.hAt(x + ox, z + oz));
     layer.group.position.set(ox, 0, oz);
     layer.people = b.people;
+    layer.allyPeople = d.ally;
     layer.age = this.sim.age;
+    this.victoryT = 0;
     this.rivalLayer = layer;
     this.scene.add(layer.group);
     const v = new THREE.Vector3(), [bx, bz] = b.goalAt.plage;
@@ -1242,17 +1245,62 @@ class Game implements UIHost {
     return `<div class="twave gold wst" role="status"><span class="twm" aria-hidden="true">⚔️</span><div class="twc"><span class="twh">${line}</span><span class="twf">· ${nplural(n, 'soldat', 'soldats')}</span></div></div>`;
   }
 
-  /** Un pas de la bataille (par pas de 0,25 s de jeu au plus, quatre par image), ses nouvelles, sa vue */
+  /**
+   * Un pas de la bataille (par pas de 0,25 s de jeu au plus, quatre par image ; sans ordre, nos troupes marchent sur
+   * l'objectif, mais les choix tactiques attendent le joueur), ses nouvelles, sa vue ; puis, gagnée, la victoire mise en
+   * scène (`victoryT` : la vue sur le palais, le salut de la flotte alliée) avant le retour au village
+   */
   private stepRivalBattle(dt: number, gdt: number) {
     const b = this.rivalBattle;
     if (!b) return;
     let left = Math.min(gdt, 1);
-    while (left > 1e-6 && !b.outcome) { const s = Math.min(0.25, left); b.step(s); left -= s; }
+    while (left > 1e-6 && !b.outcome && !b.waiting) { const s = Math.min(0.25, left); b.step(s, true, false); left -= s; }
+    const [ox, oz] = [b.map.ox, b.map.oz];
     for (const n of b.news.splice(0)) {
       if (n.type === 'goal' && n.next) { this.ui.banner(trx('{goal} : pris !', { goal: cap(goalName(n.goal)) }), trx('Objectif suivant : {goal}', { goal: goalName(n.next) })); audio.sfxAgeUp(); }
-      else if (n.type === 'end') { this.endRivalBattle(n.outcome); return; }
+      else if (n.type === 'choice') { this.rivalPause(true); this.diploChoice.showTactic(n.step); }
+      else if (n.type === 'boat') this.ui.toast(trx('⛵ Une autre barque accoste ({n}/3) : nos soldats sautent dans les vagues.', { n: n.n }));
+      else if (n.type === 'allyLands') this.ui.banner(trx('Nos alliés débarquent'), trx('{people} se battent à nos côtés', { people: cap(peopleName(this.world.diplo.ally!)) }));
+      else if (n.type === 'counter') this.ui.toast(trx('⚔️ Contre-attaque ! Les défenseurs sortent de la ville.'));
+      else if (n.type === 'wave') this.ui.toast(trx('🛡️ Des renforts rivaux sortent du palais.'));
+      else if (n.type === 'relief') { this.ui.banner(trx('Les renforts de notre allié !'), trx('Sa flotte accoste : quinze soldats de plus')); audio.sfxAgeUp(); }
+      else if (n.type === 'gate') this.ui.banner(trx('La porte cède !'), trx('En avant, dans la ville'));
+      else if (n.type === 'breach') this.ui.toast(trx('🧗 Une brèche s’ouvre dans les remparts, loin de la porte.'));
+      else if (n.type === 'bombard') this.ui.toast(trx('💥 La flotte alliée bombarde la porte et ses défenseurs.'));
+      else if (n.type === 'cry') this.ui.banner(trx('Le chef rival !'), trx('Son cri de guerre rallie sa garde'));
+      else if (n.type === 'surrender') this.ui.toast(trx('🏳️ Le chef est tombé : sa garde dépose les armes.'));
+      else if (n.type === 'end') {
+        if (n.outcome === 'lost') { this.endRivalBattle('lost'); return; }
+        // la victoire : la vue sur le palais, les deux drapeaux, le salut de la flotte, puis le retour au village
+        this.victoryT = 7;
+        const [px, pz] = b.goalAt.palais;
+        this.cam.goTo(px + ox, pz + oz, 22);
+        this.ui.banner(trx('Victoire !'), trx('La ville rivale se rend, nos drapeaux flottent sur le palais'));
+        audio.sfxAgeUp();
+      }
+    }
+    if (this.victoryT > 0) {
+      this.victoryT -= dt;
+      // le salut de la flotte alliée : des tirs vers le ciel au-dessus du palais
+      if (Math.random() < dt * 3) { const [fx, fz] = b.fleet, [px, pz] = b.goalAt.palais; b.sim.events.push({ type: 'shot', x0: fx, z0: fz, y0: 1.2, x1: px + (Math.random() - 0.5) * 6, z1: pz + (Math.random() - 0.5) * 6, source: -1, target: -1, fire: true }); }
+      if (this.victoryT <= 0) { if (this.rivalLayer) this.rivalLayer.update(dt, this.cam.camera, []); this.endRivalBattle('won'); return; }
     }
     if (this.rivalLayer) { this.rivalLayer.age = this.sim.age; this.rivalLayer.update(dt, this.cam.camera, b.sim.events.splice(0)); }
+  }
+  /** la victoire de la bataille, mise en scène (s réelles restantes) */
+  private victoryT = 0;
+  /** le jeu suspendu pendant un choix tactique (on retrouve l'état d'avant) */
+  private rivalWas: boolean | null = null;
+  private rivalPause(on: boolean) {
+    if (on) { if (this.rivalWas === null) this.rivalWas = this.time.paused; this.time.paused = true; }
+    else if (this.rivalWas !== null) { this.time.paused = this.rivalWas; this.rivalWas = null; }
+  }
+  /** Le choix tactique du joueur : la bataille reprend */
+  private rivalTactic(c: string) {
+    const b = this.rivalBattle;
+    if (!b || !b.choose(c as never)) return;
+    this.rivalPause(false);
+    this.ui.update();
   }
 
   /**
@@ -1264,12 +1312,15 @@ class Game implements UIHost {
     if (!b) return;
     this.rivalBattle = null;
     this.allyBattle = false;
+    this.victoryT = 0;
+    this.rivalPause(false);
+    if (this.diploChoice.visible) this.diploChoice.hide();
     this.command.setTheater(null);
     if (this.mode === 'surface') this.cam.handler = this.tools;
     canvas.style.cursor = '';
     if (this.rivalLayer) { this.scene.remove(this.rivalLayer.group); this.rivalLayer.dispose(); this.rivalLayer = null; }
     if (outcome === 'won' && claimVictory(w)) {
-      this.ui.banner(trx('Victoire !'), trx('Le rival se rend : {gold} or de butin, puis un tribut chaque jour', { gold: WAR_SPOILS.loot }));
+      this.ui.banner(trx('La guerre est gagnée'), trx('Le rival se rend : {gold} or de butin, puis un tribut chaque jour', { gold: WAR_SPOILS.loot }));
       audio.sfxAgeUp();
       const c = this.villageCenter();
       if (c) this.festAt(c[0], c[1]);
@@ -2380,7 +2431,8 @@ class Game implements UIHost {
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);
     // une équipe rentre victorieuse : tout le village fait la fête au cœur du village, à la mode de son âge
-    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
+    // (un aller sans retour, les éclaireurs : pas de fête, l'équipe n'est pas rentrée)
+    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.c.oneWay && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
     this.fest.update(dt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe

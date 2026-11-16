@@ -547,7 +547,7 @@ export class Expeditions {
       } else if (a.phase === 'work' && a.fate === undefined && FATED.has(a.c.scene) && a.seen.length >= a.events && a.t >= (a.c.work + a.extra) * FATE_AT) {
         // la chasse au monstre se joue sous les yeux de l'équipe : il meurt (ou s'échappe) avant qu'elle ne reparte
         a.fate = this.rnd() >= this.chance(a);
-      } else if (a.phase === 'work' && a.t >= a.c.work + a.extra && a.m.farewell) {
+      } else if (a.phase === 'work' && a.t >= a.c.work + a.extra && (a.m.farewell || a.c.oneWay)) {
         // les colons sont partis pour de bon : pas de retour, le récit arrive aussitôt
         a.ok = this.rnd() >= this.chance(a);
         a.phase = 'home'; a.t = 4;

@@ -16,6 +16,7 @@ import { makeBeast } from './beasts';
 import { Building, sizeOf } from '../build/catalog';
 import { FloatIsles, FLOAT_LAND, FLOAT_BACK } from './floatIsles';
 import { Salvage } from './galleon';
+import { townPlans } from '../world/rivalTown';
 
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
 export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34], wolf: ['wolf', 0.3] };
@@ -804,12 +805,20 @@ const BEHAVIOR: Record<Scene, string> = {
   voyage: 'boat', wreck: 'boat', trawl: 'boat',
   // les îles flottantes : l'hydroglisseur accoste l'archipel, l'équipe y débarque (voir `FloatIsles`)
   isles: 'boat',
+  // les éclaireurs de l'archipel : la barque traverse jusqu'à l'île rivale, l'équipe y débarque (voir `stepScout`)
+  scout: 'boat',
 };
 /**
  * L'expédition du portail, en part du travail : la galère touche l'île, l'équipe arrive à l'arche, le tourbillon s'éveille,
  * elle redescend, elle remonte à bord (la galère rentre ensuite)
  */
 export const ISLE_LAND = 0.22, ISLE_UP = 0.34, ISLE_WAKE = 0.6, ISLE_DOWN = 0.7, ISLE_BACK = 0.8;
+/**
+ * Les éclaireurs de l'archipel, en part du travail : la barque traverse jusqu'à la plage rivale (`SC_LAND`), l'équipe
+ * débarque, remonte la plage et les dunes jusqu'à un poste d'observation face aux remparts (`SC_POST`), s'y tapit et observe
+ * jusqu'au bout. Pas de retour : l'expédition s'achève là-bas
+ */
+export const SC_LAND = 0.42, SC_POST = 0.68;
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
 const LINE = new THREE.LineBasicMaterial({ color: 0xf2f2f2, transparent: true, opacity: 0.8 });
@@ -955,6 +964,8 @@ export class ExpeditionScene {
   private salv: Salvage | null = null;
   /** l'île du portail : où l'équipe débarque, et le portail qu'elle va réveiller */
   private isle: { land: [number, number]; gate: [number, number] } | null = null;
+  /** les éclaireurs : la route de la barque sur l'eau (jusqu'au mouillage de la plage rivale), puis la marche sur l'île */
+  private scout: { route: [number, number][]; len: number[]; walk: [number, number][]; post: [number, number]; walls: [number, number] } | null = null;
   /** les îles flottantes (scène `isles`) : l'archipel, que l'équipe visite à pied */
   private float: FloatIsles | null = null;
   /**
@@ -3758,6 +3769,8 @@ export class ExpeditionScene {
       }
       this.isle = { land, gate: [p.x, p.z] };
     }
+    // les éclaireurs : une route sur l'eau jusqu'à la plage de l'île rivale (voir `scoutTrip`)
+    else if (this.story === 'scout' && this.scoutTrip(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
     else if (this.offshore) {
       let best = 0;
@@ -3783,7 +3796,7 @@ export class ExpeditionScene {
     // la chasse armée : toute la troupe embarque, sur deux galères (`riders` : tout l'équipage ; la seconde a sa moitié) ;
     // l'équipe du portail aussi, sur une seule
     // (au galion englouti, tout l'équipage est à bord de la gabare de relevage)
-    const riders = a.party.slice(0, war || this.isle || this.story === 'isles' || (this.story === 'wreck' && this.offshore) ? a.party.length : Math.min(2, a.party.length));
+    const riders = a.party.slice(0, war || this.isle || this.scout || this.story === 'isles' || (this.story === 'wreck' && this.offshore) ? a.party.length : Math.min(2, a.party.length));
     this.boat = { obj, home: [wx, wz], out, y: wat.level, riders };
     if (war && this.offshore) {
       // les deux galères encadrent le monstre, de part et d'autre du point de combat, chacune bord à bord face à lui
@@ -4472,6 +4485,7 @@ export class ExpeditionScene {
     // retenu par la suite d'un imprévu, il reste où il est ; libéré, il rattrape le travail en douceur
     if (this.moor) this.idle += dt;
     else this.boatK = this.workK <= this.boatK ? this.workK : Math.min(this.workK, this.boatK + dt * 0.02 + (this.workK - this.boatK) * Math.min(1, dt * 0.6));
+    if (this.scout) { this.stepScout(dt); return; }
     if (this.offshore) {
       // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
       // (la galère de la chasse reste sur place jusqu'à ce que le monstre soit mort ou enfui, voir `FATE_AT`)
@@ -4496,6 +4510,91 @@ export class ExpeditionScene {
     this.focus = this.arena && es ? [(px + es.obj.position.x) / 2, (pz + es.obj.position.z) / 2] : this.salv ? this.salv.focus : [px, pz];
     if (ashore) this.stepIsle(this.boatK);
     if (this.float) this.stepFloat(afloat);
+  }
+
+  /**
+   * La route des éclaireurs : depuis le mouillage (wx, wz), le plus court chemin sur l'eau (cases où une barque flotte) jusqu'à
+   * l'eau la plus proche de la plage rivale (`TownPlan.points.plage`), allégé en points espacés ; puis, sur l'île, la marche
+   * de la plage vers la ville et le poste d'observation, à mi-chemin des remparts. Faux s'il n'y a pas de route (la barque
+   * reste alors au large, comme un voyage)
+   */
+  private scoutTrip(a: ActiveExpedition, wx: number, wz: number) {
+    const w = this.world, ally = w.diplo.ally;
+    const plan = ally ? townPlans(w).find((p) => p.people !== ally) : null;
+    if (!plan) return false;
+    const [bx, bz] = plan.points.plage, wet = (x: number, z: number) => w.inCells(x, z) && this.depth(x + 0.5, z + 0.5) !== null;
+    // le but : l'eau la plus proche de la plage
+    let goal = -1, gd = Infinity;
+    for (let dz = -8; dz <= 8; dz++) for (let dx = -8; dx <= 8; dx++) {
+      const x = Math.floor(bx) + dx, z = Math.floor(bz) + dz, d = Math.hypot(dx, dz);
+      if (d < gd && wet(x, z)) { gd = d; goal = z * N + x; }
+    }
+    const start = Math.floor(wz) * N + Math.floor(wx);
+    if (goal < 0 || !wet(Math.floor(wx), Math.floor(wz))) return false;
+    // le plus court chemin sur l'eau (huit voisins), du mouillage au but
+    const from = new Int32Array(N * N).fill(-1), q = [start];
+    from[start] = start;
+    for (let i = 0; i < q.length && from[goal] < 0; i++) {
+      const c = q[i], x = c % N, z = (c / N) | 0;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = x + dx, nz = z + dz, k = nz * N + nx;
+        if (nx < 0 || nz < 0 || nx >= N || nz >= N || from[k] >= 0 || !wet(nx, nz)) continue;
+        if (dx && dz && (!wet(x + dx, z) || !wet(x, z + dz))) continue;
+        from[k] = c; q.push(k);
+      }
+    }
+    if (from[goal] < 0) return false;
+    const cells: number[] = [];
+    for (let c = goal; c !== start; c = from[c]) cells.push(c);
+    cells.push(start);
+    cells.reverse();
+    const route: [number, number][] = [[wx, wz]];
+    for (let i = 4; i < cells.length - 1; i += 4) route.push([(cells[i] % N) + 0.5, ((cells[i] / N) | 0) + 0.5]);
+    route.push([(goal % N) + 0.5, ((goal / N) | 0) + 0.5]);
+    const len = [0];
+    for (let i = 1; i < route.length; i++) len.push(len[i - 1] + Math.hypot(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1]));
+    // sur l'île : la plage, puis vers la ville jusqu'au poste d'observation (à mi-chemin des remparts, sur la terre)
+    const walls: [number, number] = plan.points.portes[0] ?? [plan.x, plan.z];
+    const land: [number, number] = [bx, bz];
+    let post: [number, number] = [(bx + walls[0]) / 2, (bz + walls[1]) / 2];
+    for (let k = 0.5; k > 0.15 && this.depth(post[0], post[1]) !== null; k -= 0.05) post = [bx + (walls[0] - bx) * k, bz + (walls[1] - bz) * k];
+    const mid: [number, number] = [(land[0] + post[0]) / 2 + (post[1] - land[1]) * 0.12, (land[1] + post[1]) / 2 - (post[0] - land[0]) * 0.12];
+    this.scout = { route, len, walk: [land, mid, post], post, walls };
+    void a;
+    return true;
+  }
+
+  /**
+   * Les éclaireurs : la barque suit sa route jusqu'à la plage rivale (la vue la suit), puis l'équipe débarque, remonte la
+   * plage et les dunes en file, et se tapit au poste d'observation, face aux remparts (la barque reste à la plage, vide)
+   */
+  private stepScout(dt: number) {
+    const bt = this.boat!, sc = this.scout!, w = this.world, k = this.boatK;
+    if (!this.moor) this.boatK = this.workK <= this.boatK ? this.workK : Math.min(this.workK, this.boatK + dt * 0.02 + (this.workK - this.boatK) * Math.min(1, dt * 0.6));
+    const total = sc.len[sc.len.length - 1], d = smooth(Math.min(1, k / SC_LAND)) * total;
+    let i = 1;
+    while (i < sc.len.length - 1 && sc.len[i] < d) i++;
+    const seg = Math.max(0.001, sc.len[i] - sc.len[i - 1]), u = Math.min(1, Math.max(0, (d - sc.len[i - 1]) / seg));
+    const ashore = k >= SC_LAND;
+    const [px, pz] = this.sail(bt.obj, sc.route[i - 1], sc.route[i], bt.y, u, false, dt, ashore ? [] : bt.riders, false, 0);
+    this.focus = [px, pz];
+    if (!ashore) return;
+    // sur l'île : la marche (en file, de la plage au poste), puis à plat ventre face aux remparts
+    const t = Math.min(1, (k - SC_LAND) / (SC_POST - SC_LAND)), n = bt.riders.length;
+    const along = (s: number): [number, number] => {
+      const p = sc.walk, f = Math.max(0, Math.min(1, s)) * (p.length - 1), j = Math.min(p.length - 2, Math.floor(f)), r = f - j;
+      return [p[j][0] + (p[j + 1][0] - p[j][0]) * r, p[j][1] + (p[j + 1][1] - p[j][1]) * r];
+    };
+    bt.riders.forEach((id, j) => {
+      const s = smooth(Math.max(0, t - j * 0.06)), [x, z] = along(s);
+      const [ax, az] = along(Math.min(1, s + 0.05)), off = (j - (n - 1) / 2) * 0.35;
+      const hx = sc.walls[0] - sc.post[0], hz = sc.walls[1] - sc.post[1], hl = Math.max(0.01, Math.hypot(hx, hz));
+      const at: [number, number] = t >= 1 ? [x - (hz / hl) * off, z + (hx / hl) * off] : [x, z];
+      const heading = t >= 1 ? Math.atan2(hx, hz) : Math.atan2(ax - x, az - z);
+      this.agents.ride(id, { x: at[0], z: at[1], y: w.surfaceAt(at[0], at[1]), heading, act: this.crewAct ?? (t >= 1 ? 'work' : 'stroll') });
+    });
+    const [lx, lz] = along(smooth(t));
+    this.focus = t >= 1 ? [(sc.post[0] * 2 + sc.walls[0]) / 3, (sc.post[1] * 2 + sc.walls[1]) / 3] : [lx, lz];
   }
 
   /** L'équipe sur les îles flottantes : chacun suit son parcours (scan, balises, cultures, récolte, caisses au drone) */

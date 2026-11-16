@@ -44,7 +44,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // le volet maritime : voyage de découverte ou de commerce au large, chasse à l'épave, pêche en haute mer
   | 'voyage' | 'wreck' | 'trawl'
   // les îles flottantes de l'âge futuriste (archipel de plateformes, balises, cultures, drone-barge)
-  | 'isles';
+  | 'isles'
+  // les éclaireurs de l'archipel : la barque traverse jusqu'à l'île rivale, l'équipe débarque et observe ses défenses
+  | 'scout';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -113,6 +115,11 @@ export interface Choice {
   ages?: Partial<Record<number, Partial<Pick<Choice, 'label' | 'text' | 'doing' | 'winText' | 'loseText' | 'mounts' | 'fuel' | 'lose'>>>>;
   /** ce qu'on voit de l'échec sur la scène, au départ de l'équipe (l'orage, la pirogue qui chavire, la pierre qui roule…) */
   fail?: Fail;
+  /**
+   * un aller sans retour (les éclaireurs de l'archipel) : l'expédition s'achève là-bas, à la fin du travail ; l'équipe ne
+   * rentre pas à l'écran (elle rejoint les troupes) et le récit arrive aussitôt, sans fête au village
+   */
+  oneWay?: boolean;
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -652,18 +659,18 @@ export const MISSIONS: Mission[] = [
     intro: 'Avant la bataille, il faut connaître la côte rivale : ses défenses, la plage où débarquer, combien de soldats la gardent. Une barque d’éclaireurs part de nuit, la longue-vue à la main.',
     choices: [
       {
-        label: 'Sonder la plage de nuit', text: 'Prudent : on longe la côte au large et on repère où débarquer.',
-        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'fog', doing: 'observe la côte rivale à la longue-vue et sonde la plage', danger: ['water'], party: 3, work: 34, risk: 0.15, carry: 'sacks',
+        label: 'Sonder la plage de nuit', text: 'Prudent : la barque accoste de nuit sur la plage rivale, on repère où débarquer.',
+        dest: 'river', sea: true, scene: 'scout', oneWay: true, troop: 'cavalry', fail: 'fog', doing: 'traverse jusqu’à l’île rivale, débarque et observe ses défenses', danger: ['water'], party: 3, work: 80, risk: 0.15, carry: 'sacks',
         win: [{ t: 'diplo', act: 'landing' }, { t: 'diplo', act: 'scoutBeach' }], lose: [hurt(1, 2)],
         winText: 'Les éclaireurs ont trouvé une plage en pente douce, mal gardée, à l’écart du port : nos troupes y débarqueront. La bataille peut commencer.',
-        loseText: 'La brume est tombée sur la côte : les éclaireurs n’ont rien vu et sont rentrés, un rameur blessé. Il faudra retenter.',
+        loseText: 'La brume est tombée sur la côte rivale : les éclaireurs n’ont rien vu, un rameur blessé. Il faudra retenter.',
       },
       {
-        label: 'Compter la garnison', text: 'Audacieux : un éclaireur se glisse jusqu’au port rival.',
-        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'se glisse jusqu’au port rival pour compter sa garnison', danger: ['water', 'weather'], party: 3, work: 26, risk: 0.3, carry: 'sacks',
+        label: 'Compter la garnison', text: 'Audacieux : les éclaireurs se glissent jusqu’aux remparts rivaux.',
+        dest: 'river', sea: true, scene: 'scout', oneWay: true, troop: 'cavalry', fail: 'storm', doing: 'traverse jusqu’à l’île rivale et se glisse vers les remparts pour compter la garnison', danger: ['water', 'weather'], party: 3, work: 70, risk: 0.3, carry: 'sacks',
         win: [{ t: 'diplo', act: 'landing' }, { t: 'diplo', act: 'scoutGarrison' }], lose: [hurt(1, 3), joy(-1, 3)],
         winText: 'Les éclaireurs ont compté les soldats du port et des remparts, et noté l’heure de la relève : leurs renforts arriveront tard. La bataille peut commencer.',
-        loseText: 'Une sentinelle a donné l’alarme : les éclaireurs ont fui sous les flèches, un blessé. Il faudra retenter.',
+        loseText: 'Une sentinelle a donné l’alarme : les éclaireurs ont dû fuir sous les flèches, un blessé. Il faudra retenter.',
       },
     ],
   },

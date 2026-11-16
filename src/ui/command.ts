@@ -286,7 +286,8 @@ export class CommandUI implements ToolInput {
   units(): HellUnit[] {
     const t = this.theater;
     if (!t) return [];
-    return t.sim.alive('player');
+    // (la bataille de l'archipel : les alliés, pilotés par l'ordinateur, ne se commandent pas)
+    return t.sim.alive('player').filter((u) => !u.kind.startsWith('ally:'));
   }
 
   // ---------- Souris et doigts ----------
