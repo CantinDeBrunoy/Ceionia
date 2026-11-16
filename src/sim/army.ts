@@ -50,7 +50,7 @@ export interface TroopDef {
 
 export const TROOPS: Record<TroopKind, TroopDef> = {
   soldier: {
-    kind: 'soldier', name: 'Soldat', plural: 'Soldats', icon: '🛡️', age: 1, gear: ['spear'], time: 20,
+    kind: 'soldier', name: 'Soldat', plural: 'Soldats', icon: '🛡️', age: 1, gear: ['spear'], time: 10,
     base: { hp: 110, dmg: 11, range: 0.6, speed: 2, cooldown: 1.1, sight: 6, radius: 0.28 },
     desc: 'Lance et bouclier : il tient la ligne au corps à corps (à l’âge industriel, il troque la lance contre le fusil).',
     forms: [
@@ -61,7 +61,7 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
     ],
   },
   archer: {
-    kind: 'archer', name: 'Archer', plural: 'Archers', icon: '🏹', age: 1, gear: ['bow'], time: 26,
+    kind: 'archer', name: 'Archer', plural: 'Archers', icon: '🏹', age: 1, gear: ['bow'], time: 13,
     base: { hp: 65, dmg: 8, range: 5.5, speed: 2, cooldown: 1.4, sight: 7, radius: 0.26 },
     desc: 'Tire de loin : à garder derrière les soldats.',
     forms: [
@@ -71,7 +71,7 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
     ],
   },
   knight: {
-    kind: 'knight', name: 'Chevalier', plural: 'Chevaliers', icon: '⚔️', age: 2, gear: ['sword', 'armor'], time: 40,
+    kind: 'knight', name: 'Chevalier', plural: 'Chevaliers', icon: '⚔️', age: 2, gear: ['sword', 'armor'], time: 20,
     base: { hp: 230, dmg: 20, range: 0.7, speed: 2.3, cooldown: 1.3, sight: 6, radius: 0.34 },
     desc: 'Épée et armure (à partir du Moyen Âge) : le plus solide de la garnison.',
     forms: [
@@ -81,7 +81,7 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
     ],
   },
   cavalry: {
-    kind: 'cavalry', name: 'Cavalier', plural: 'Cavaliers', icon: '🐎', age: 1, gear: ['spear'], mount: true, time: 34,
+    kind: 'cavalry', name: 'Cavalier', plural: 'Cavaliers', icon: '🐎', age: 1, gear: ['spear'], mount: true, time: 17,
     base: { hp: 150, dmg: 16, range: 0.8, speed: 3.2, cooldown: 1.2, sight: 6, radius: 0.4 },
     desc: 'Un cheval de l’écurie et une lance : rapide, il charge et frappe fort au corps à corps, mais ne tient pas la ligne.',
     forms: [
@@ -141,6 +141,11 @@ export function troopStats(kind: TroopKind, age: number): UnitStats {
   return st;
 }
 
+/**
+ * Recrues formées à la fois par caserne (les autres attendent leur tour). Demande de l'auteur (le recrutement était trop
+ * long) : trois à la fois et des durées divisées par deux ; 25 troupes d'une caserne passent de 560 s de jeu à 93 s
+ */
+export const TRAIN_SLOTS = 3;
 /** Soins d'un soldat abattu, ramené à la caserne (secondes de jeu) */
 export const HEAL_TIME = 60;
 /** Les blessures légères se referment d'elles-mêmes hors combat, sur l'île (points de vie par seconde) */
@@ -259,14 +264,14 @@ export function dismiss(a: Army, id: number, stock: Stock, unlimited = false, ri
 }
 
 /**
- * Le temps passe pour l'armée (`dt` en secondes de jeu) : les recrues avancent (autant à la fois que de casernes ; sans
+ * Le temps passe pour l'armée (`dt` en secondes de jeu) : les recrues avancent (`TRAIN_SLOTS` à la fois par caserne ; sans
  * caserne, elles attendent), les blessés se soignent (`healK` : plus vite avec un lieu de soins). Renvoie les nouvelles troupes
  * (arrivées sur l'île) et celles qui sortent de soins
  */
 export function stepArmy(a: Army, dt: number, barracks: number, age: number, healK = 1): { joined: Troop[]; healed: Troop[] } {
   const joined: Troop[] = [], healed: Troop[] = [];
   if (dt <= 0) return { joined, healed };
-  for (let i = 0; i < Math.min(barracks, a.queue.length); i++) a.queue[i].left -= dt;
+  for (let i = 0; i < Math.min(barracks * TRAIN_SLOTS, a.queue.length); i++) a.queue[i].left -= dt;
   while (a.queue.length && a.queue[0].left <= 0) {
     const r = a.queue.shift()!, st = troopStats(r.kind, age);
     const t: Troop = { id: a.nextId++, kind: r.kind, hp: st.hp, maxHp: st.hp, where: r.at ?? 'isle', heal: 0, ...(r.gear ? { gear: r.gear } : {}), ...(r.mount ? { mount: true } : {}) };

@@ -34,7 +34,7 @@ const BAR_M = new THREE.Matrix4(), BAR_S = new THREE.Matrix4();
 const BAR_BG = new THREE.Color(0x1a0a0c), HELL_C = new THREE.Color(0xff4a3a), PLAYER_C = new THREE.Color(0x5adf6a), WEAK_C = new THREE.Color(0xffc040);
 const BARS = 600, RINGS = 120;
 /** Taille des soldats du joueur (au-dessus de celle des habitants : on les lit de loin) */
-const TROOP_K: Record<string, number> = { soldier: 1.6, archer: 1.5, knight: 1.85, cavalry: 1.5 };
+const TROOP_K: Record<string, number> = { soldier: 1.6, archer: 1.5, knight: 1.85, cavalry: 1.5, warlord: 2.6 };
 /** Le modèle de chaque troupe : lancier (lance et bouclier), archer (arc, carquois, capuchon), chevalier (armure, écu, épée) */
 const TROOP_ROLE: Record<string, SoldierRole> = { soldier: 'spearman', archer: 'archer', knight: 'knight' };
 
@@ -66,6 +66,8 @@ export class BattleLayer {
    * l'âge du village, au lieu de démons
    */
   people: 'orient' | 'asie' | null = null;
+  /** la bataille de l'archipel : nos alliés (sortes `ally:…`), à la tenue de leur peuple */
+  allyPeople: 'orient' | 'asie' | null = null;
   private uTime = 0;
   private rigs = {} as Record<DemonKind, Rig>;
   /** (le cavalier : `r`, cheval et cavalier de `riders.ts` ; les autres : `s`) */
@@ -221,8 +223,10 @@ export class BattleLayer {
       const foe = u.side === 'hell';
       if (foe && (!this.people || u.kind in DEMONS)) continue;
       seen.add(u.id);
-      const look = foe ? { role: peopleRole(this.people!, u.kind === 'archer') as SoldierRole, era: this.age, mount: undefined, drones: undefined } : troopLook(u.kind, this.age);
-      const horse = !!look.mount, age = look.era, key = `${foe ? this.people : ''}${look.role}${look.mount ?? ''}${age}`;
+      // (les soldats d'un peuple : l'ennemi, ou nos alliés ; le chef rival, `warlord`, en fantassin plus grand)
+      const ally = !foe && u.kind.startsWith('ally:') && this.allyPeople, people = foe ? this.people! : ally ? this.allyPeople! : null;
+      const look = people ? { role: peopleRole(people, u.kind.endsWith('archer')) as SoldierRole, era: this.age, mount: undefined, drones: undefined } : troopLook(u.kind, this.age);
+      const horse = !!look.mount, age = look.era, key = `${people ?? ''}${look.role}${look.mount ?? ''}${age}`;
       let t = this.troops.get(u.id);
       if (t && (t.key !== key || t.kind !== u.kind)) { this.dropTroop(t); t = undefined; }
       if (!t) {
@@ -239,7 +243,7 @@ export class BattleLayer {
       // (mort : le cavalier bascule sur le côté, comme une bête qui s'écroule)
       if (horse) root.rotation.set(0, u.heading, dead ? Math.min(1, u.hurt / 0.4) * 1.4 : 0, 'YXZ');
       else root.rotation.set(dead ? -Math.min(1, u.hurt / 0.4) * 1.4 : 0, u.heading, 0, 'YXZ');
-      root.scale.setScalar((TROOP_K[u.kind] ?? 1.6) * (dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1) / 0.9) : 1));
+      root.scale.setScalar((TROOP_K[u.kind.replace('ally:', '')] ?? 1.6) * (dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1) / 0.9) : 1));
       if (t.r?.hover) {
         // char antigrav : il flotte et tangue, recul des canons à plasma à chaque tir, le bouclier scintille quand il est touché
         hoverStep(t.r, this.uTime, u.moving ? 1 : 0, u.state === 'attack' ? -0.03 : -0.06, dead ? 0 : Math.max(0, 1 - (this.uTime - (this.shotAt.get(u.id) ?? -9)) / 0.3), dead ? 0 : u.hurt < 0.4 ? 1 - u.hurt / 0.4 : 0);
@@ -330,6 +334,7 @@ export class BattleLayer {
     // un petit socle pâle sous chaque troupe du joueur non choisie
     let kn = 0;
     for (const u of this.hell.alive('player')) {
+      if (u.kind.startsWith('ally:')) continue;
       if (this.selected.has(u.id) || kn >= RINGS) continue;
       v.set(u.x, this.groundY(u.x, u.z) + 0.025, u.z);
       s.setScalar(u.stats.radius * 0.75 + 0.03);

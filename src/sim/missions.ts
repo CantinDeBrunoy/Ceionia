@@ -44,7 +44,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // le volet maritime : voyage de découverte ou de commerce au large, chasse à l'épave, pêche en haute mer
   | 'voyage' | 'wreck' | 'trawl'
   // les îles flottantes de l'âge futuriste (archipel de plateformes, balises, cultures, drone-barge)
-  | 'isles';
+  | 'isles'
+  // les éclaireurs de l'archipel : la barque traverse jusqu'à l'île rivale, l'équipe débarque et observe ses défenses
+  | 'scout';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -113,6 +115,11 @@ export interface Choice {
   ages?: Partial<Record<number, Partial<Pick<Choice, 'label' | 'text' | 'doing' | 'winText' | 'loseText' | 'mounts' | 'fuel' | 'lose'>>>>;
   /** ce qu'on voit de l'échec sur la scène, au départ de l'équipe (l'orage, la pirogue qui chavire, la pierre qui roule…) */
   fail?: Fail;
+  /**
+   * un aller sans retour (les éclaireurs de l'archipel) : l'expédition s'achève là-bas, à la fin du travail ; l'équipe ne
+   * rentre pas à l'écran (elle rejoint les troupes) et le récit arrive aussitôt, sans fête au village
+   */
+  oneWay?: boolean;
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -647,22 +654,23 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'allywar', age: 2, mandatory: false, icon: '⚔️', title: 'Aux côtés de notre allié',
-    intro: 'Notre allié appelle à l’aide contre son rival. Nos soldats embarquent pour gagner la côte rivale ; une fois à terre, la bataille commence.',
+    // (l'id `allywar` reste celui de l'ancienne expédition « Aux côtés de notre allié » : les sauvegardes et le diorama le lisent)
+    id: 'allywar', age: 2, mandatory: false, icon: '🔭', title: 'Envoyer des éclaireurs',
+    intro: 'Avant la bataille, il faut connaître la côte rivale. Ses défenses, la plage où débarquer, combien de soldats la gardent : une barque d’éclaireurs part de nuit, la longue-vue à la main.',
     choices: [
       {
-        label: 'Escorter la flotte alliée', text: 'Prudent : nos navires se joignent aux leurs, en bon ordre.',
-        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'escorte la flotte alliée vers la côte rivale', danger: ['beast', 'water'], party: 5, work: 40, risk: 0.18, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'landing' }, joy(1, 4)], lose: [hurt(1, 3)],
-        winText: 'Nos navires et ceux de notre allié ont forcé le blocus : nos troupes ont pris pied sur la plage rivale. La bataille peut commencer.',
-        loseText: 'Une tempête a dispersé les deux flottes avant d’atteindre la côte ; un soldat blessé. Il faudra retenter.',
+        label: 'Sonder la plage de nuit', text: 'Prudent : on accoste de nuit sur la plage rivale pour repérer où débarquer.',
+        dest: 'river', sea: true, scene: 'scout', oneWay: true, troop: 'cavalry', fail: 'fog', doing: 'traverse jusqu’à l’île rivale, débarque et observe ses défenses', danger: ['water'], party: 3, work: 80, risk: 0.15, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'landing' }, { t: 'diplo', act: 'scoutBeach' }], lose: [hurt(1, 2)],
+        winText: 'Les éclaireurs ont trouvé une plage en pente douce, mal gardée, à l’écart du port : nos troupes y débarqueront. La bataille peut commencer.',
+        loseText: 'La brume est tombée sur la côte rivale : les éclaireurs n’ont rien vu, un rameur blessé. Il faudra retenter.',
       },
       {
-        label: 'Débarquer par surprise, de nuit', text: 'Audacieux : plus vite, mais la côte est gardée.',
-        dest: 'river', sea: true, scene: 'voyage', troop: 'cavalry', fail: 'storm', doing: 'débarque de nuit sur la côte rivale', danger: ['beast', 'water'], party: 6, work: 28, risk: 0.32, carry: 'sacks',
-        win: [{ t: 'diplo', act: 'landing' }, joy(2, 4), { t: 'ore', n: 6 }], lose: [hurt(2, 3), joy(-1, 3)],
-        winText: 'À la faveur de la nuit, nos troupes ont pris pied sur la plage rivale, et pillé un entrepôt au passage. La bataille peut commencer.',
-        loseText: 'Les guetteurs rivaux ont donné l’alarme : nos soldats ont rembarqué, deux blessés. Il faudra retenter.',
+        label: 'Compter la garnison', text: 'Audacieux : les éclaireurs se glissent jusqu’aux remparts rivaux.',
+        dest: 'river', sea: true, scene: 'scout', oneWay: true, troop: 'cavalry', fail: 'storm', doing: 'traverse jusqu’à l’île rivale et se glisse vers les remparts pour compter la garnison', danger: ['water', 'weather'], party: 3, work: 70, risk: 0.3, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'landing' }, { t: 'diplo', act: 'scoutGarrison' }], lose: [hurt(1, 3), joy(-1, 3)],
+        winText: 'Les éclaireurs ont compté les soldats du port et des remparts, et noté l’heure de la relève : leurs renforts arriveront tard. La bataille peut commencer.',
+        loseText: 'Une sentinelle a donné l’alarme : les éclaireurs ont dû fuir sous les flèches, un blessé. Il faudra retenter.',
       },
     ],
   },
@@ -1125,8 +1133,8 @@ PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place d
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** Ce que la diplomatie gagne, en clair et en pastille */
-const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la paix des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', landing: 'nos troupes à terre : la bataille peut commencer', victory: 'la guerre gagnée : butin et tribut d’or' };
-const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', landing: '⚔️', victory: '🏆' };
+const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la paix des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', landing: 'la côte reconnue : la bataille peut commencer', victory: 'la guerre gagnée : butin et tribut d’or', scoutBeach: 'la plage de débarquement repérée', scoutGarrison: 'la garnison rivale comptée', scoutChief: 'le chef rival repéré', scoutGate: 'la porte faible repérée' };
+const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', landing: '🔭', victory: '🏆', scoutBeach: '🏖️', scoutGarrison: '🛡️', scoutChief: '👑', scoutGate: '🚪' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

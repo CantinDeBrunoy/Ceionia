@@ -42,9 +42,11 @@ export interface DiploState {
   retry: number;
   /** paix : la cinématique de la paix est à jouer (une fois) */
   cine: boolean;
+  /** guerre : ce que les éclaireurs ont appris (il prépare la bataille) */
+  intel: Intel[];
 }
 
-export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false });
+export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [] });
 
 const PEOPLES: People[] = ['orient', 'asie'];
 const PATHS: Path[] = ['peace', 'war'];
@@ -68,6 +70,7 @@ export function readDiplo(d: any): DiploState {
   s.battle = d.battle === 'ready' || d.battle === 'lost' ? d.battle : 'none';
   s.retry = Number.isFinite(+d.retry) ? Math.max(0, +d.retry) : 0;
   s.cine = d.cine === true;
+  s.intel = Array.isArray(d.intel) ? INTELS.filter((x) => d.intel.includes(x)) : [];
   return s;
 }
 
@@ -163,7 +166,10 @@ export function missionWhy(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string
  * le rival), `truce` (la paix signée), `feast` (la fête des trois peuples), `landing` (les troupes débarquées : la bataille
  * est prête). `meet` et `victory` ne servent plus qu'aux anciennes parties
  */
-export type DiploAct = 'meet' | 'post' | 'truce' | 'feast' | 'landing' | 'victory';
+export type DiploAct = 'meet' | 'post' | 'truce' | 'feast' | 'landing' | 'victory' | Intel;
+/** Ce que les éclaireurs ont appris, pour la bataille : la plage, la garnison, le chef, la porte faible */
+export type Intel = 'scoutBeach' | 'scoutGarrison' | 'scoutChief' | 'scoutGate';
+const INTELS: Intel[] = ['scoutBeach', 'scoutGarrison', 'scoutChief', 'scoutGate'];
 export function applyDiplo(d: DiploState, act: DiploAct) {
   if (act === 'meet') d.met = [...PEOPLES];
   else if (act === 'post') d.post = true;
@@ -172,6 +178,7 @@ export function applyDiplo(d: DiploState, act: DiploAct) {
   else if (act === 'feast') d.feast = true;
   else if (act === 'landing') { if (d.path === 'war' && d.conflict === 'open') d.battle = 'ready'; }
   else if (act === 'victory') winAllyWar(d);
+  else if (!d.intel.includes(act)) d.intel.push(act);
 }
 
 /**

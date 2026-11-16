@@ -6,7 +6,7 @@ import { isleOrigins, zoneOrigins } from '../src/build/zones';
 import { HellMap } from '../src/world/hell';
 import { Hell, HellUnit, RAID_FIRST, INVASION_WAVES, INVASION_GAP, demonStats } from '../src/sim/hell';
 import { Command, formation, unitAt, foeAt, inRect, SPACING } from '../src/sim/command';
-import { TROOPS, newArmy, recruit, recruitWhy, cancelRecruit, dismiss, stepArmy, wound, troopStats, readArmy, troopCap, armyCap, RecruitCtx, HEAL_TIME, isTroopKind, onlyGearMissing } from '../src/sim/army';
+import { TRAIN_SLOTS, TROOPS, newArmy, recruit, recruitWhy, cancelRecruit, dismiss, stepArmy, wound, troopStats, readArmy, troopCap, armyCap, RecruitCtx, HEAL_TIME, isTroopKind, onlyGearMissing } from '../src/sim/army';
 import { emptyStock } from '../src/sim/gear';
 import { War } from '../src/sim/war';
 import { isleSecured } from '../src/world/portal';
@@ -127,13 +127,13 @@ describe('l’armée : recrutement, file, blessés', () => {
     expect(recruit(newArmy(), 'knight', { ...u, age: 2 })).toBeNull();
   });
 
-  it('la file avance avec le temps (une recrue par caserne à la fois), les blessés guérissent', () => {
+  it('la file avance avec le temps (TRAIN_SLOTS recrues par caserne à la fois), les blessés guérissent', () => {
     const a = newArmy(), c = ctx({ stock: { ...emptyStock(), spear: 5 } });
-    recruit(a, 'soldier', c); recruit(a, 'soldier', c);
+    for (let i = 0; i <= TRAIN_SLOTS; i++) recruit(a, 'soldier', c);
     let r = stepArmy(a, TROOPS.soldier.time - 1, 1, 1);
     expect(r.joined).toHaveLength(0);
     r = stepArmy(a, 2, 1, 1);
-    expect(r.joined).toHaveLength(1);
+    expect(r.joined).toHaveLength(TRAIN_SLOTS);
     expect(a.troops[0]).toMatchObject({ kind: 'soldier', where: 'isle', heal: 0, hp: troopStats('soldier', 1).hp });
     // sans caserne, la recrue attend
     expect(stepArmy(a, 999, 0, 1).joined).toHaveLength(0);
@@ -187,8 +187,8 @@ describe('la défense de l’île du portail', () => {
     expect(w.exp.gear.spear).toBe(6);
     tick(war, 2);
     expect(war.isle!.defs.size).toBe(2);
-    // (une recrue à la fois par caserne)
-    tick(war, 4 * TROOPS.soldier.time + 2 * TROOPS.archer.time - 2 + 5);
+    // (TRAIN_SLOTS recrues à la fois par caserne : 3 soldats, puis le 4e et 2 archers)
+    tick(war, TROOPS.soldier.time + TROOPS.archer.time - 2 + 5);
     expect(war.isle!.sim.alive('player')).toHaveLength(6);
     expect(war.isle!.raid).toBeNull();
     expect(war.inv).toBe('ready');

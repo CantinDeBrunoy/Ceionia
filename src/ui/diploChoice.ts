@@ -16,9 +16,11 @@ import { DiploState, Path, isleName, peopleName, rivalOf } from '../sim/diplomac
  */
 export class DiploChoice {
   private el: HTMLElement;
-  private mode: 'ally' | 'path' = 'ally';
+  private mode: 'ally' | 'path' | 'tactic' = 'ally';
+  /** le choix tactique en cours de la bataille (1 : les remparts ; 2 : l'assaut final) */
+  private step: 1 | 2 = 1;
 
-  constructor(root: HTMLElement, private host: { diplo(): DiploState; click(): void; ally(p: People): void; path(p: Path): void }) {
+  constructor(root: HTMLElement, private host: { diplo(): DiploState; click(): void; ally(p: People): void; path(p: Path): void; tactic?(c: string): void }) {
     this.el = document.createElement('div');
     this.el.id = 'diploChoice';
     this.el.className = 'panel';
@@ -29,7 +31,8 @@ export class DiploChoice {
       this.host.click();
       const a = b.dataset.a!;
       this.hide();
-      if (a === 'orient' || a === 'asie') this.host.ally(a);
+      if (b.dataset.tac) this.host.tactic?.(b.dataset.tac);
+      else if (a === 'orient' || a === 'asie') this.host.ally(a);
       else if (a === 'peace' || a === 'war') this.host.path(a);
     });
     root.append(this.el);
@@ -41,6 +44,8 @@ export class DiploChoice {
   showAlly() { this.mode = 'ally'; this.render(); this.el.style.display = ''; }
   /** La carte du dénouement */
   showPath() { this.mode = 'path'; this.render(); this.el.style.display = ''; }
+  /** Un choix tactique de la bataille de l'archipel (le jeu est en pause tant qu'il attend) */
+  showTactic(step: 1 | 2) { this.mode = 'tactic'; this.step = step; this.render(); this.el.style.display = ''; }
 
   private render() {
     const d = this.host.diplo();
@@ -54,6 +59,18 @@ export class DiploChoice {
         <p class="pcSub">${tr('Les Sablais et les Jadéens se font la guerre. Avec lequel de ces peuples ferez-vous alliance ?')}</p>
         <div class="pcBtns dcCol">${card('orient')}${card('asie')}</div>
         <small class="pcNote">${tr('Ce choix est définitif. Votre allié accueillera votre cosmodrome.')}</small>`;
+      return;
+    }
+    if (this.mode === 'tactic') {
+      const ally = d.ally ?? 'orient', tac = (id: string, cls: string, icon: string, title: string, sub: string) => `<button data-a="tac" data-tac="${id}" class="${cls}">${hudPic(icon, 34)}<span><b>${title}</b><small>${sub}</small></span></button>`;
+      const one = this.step === 1;
+      this.el.innerHTML = `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rivalOf(ally), 64)}</div>
+        <h4>${one ? tr('Les remparts') : tr('L’assaut final')}</h4>
+        <p class="pcSub">${one ? tr('La plage est à nous. La porte principale est fermée, des archers tiennent les murs. Comment prendre les remparts ?') : tr('Les remparts sont tombés. Reste le palais, sa garde et le chef rival.')}</p>
+        <div class="pcBtns dcCol">${one
+          ? tac('ram', 'pcGo', 'militaire', tr('Le bélier contre la porte'), tr('un assaut direct : la porte cédera plus vite')) + tac('climb', 'pcNo', 'route', tr('Escalader par le côté'), tr('une brèche loin de la porte, sans l’enfoncer')) + tac('bombard', 'pcNo', 'eclair', tr('La flotte alliée bombarde'), tr('30 secondes : des boulets sur la porte et ses défenseurs'))
+          : tac('charge', 'pcGo', 'militaire', tr('Assaut immédiat'), tr('sans attendre, tant que l’élan est là')) + tac('regroup', 'pcNo', 'sante', tr('Regrouper et soigner'), tr('30 secondes : les blessures se referment')) + tac('allyLead', 'pcNo', 'equipe', tr('Laisser l’allié ouvrir la voie'), tr('ses troupes partent devant, les nôtres suivent'))}</div>
+        <small class="pcNote">${tr('La bataille attend votre choix.')}</small>`;
       return;
     }
     const ally = d.ally ?? 'orient', rival = rivalOf(ally);

@@ -71,20 +71,19 @@ export const EVENTS: ExpEvent[] = [
   // ---------------- La diplomatie de l'archipel : le premier contact, puis les pourparlers de la paix ----------------
   // (les pourparlers ne peuvent pas échouer : leurs options changent le récit et les petits gains, jamais le risque)
   {
-    id: 'blockade', where: ['river'], missions: ['allywar'], water: 'sea', title: 'Le blocus en vue',
-    text: 'Les navires rivaux barrent l’entrée du port allié, bord contre bord.',
+    id: 'patrolboat', where: ['river'], missions: ['allywar'], water: 'sea', title: 'Une patrouille rivale',
+    text: 'Une galère rivale passe au ras de l’eau, lanternes masquées. Elle vient droit sur la barque des éclaireurs.',
     options: [
-      { label: 'Attaquer de front', risk: 1.2, work: -4, text: 'On a foncé droit sur la ligne rivale.' },
-      { label: 'Attendre la flotte alliée', risk: 0.85, work: 8, wait: true, text: 'On a attendu la flotte alliée pour attaquer ensemble.' },
-      { label: 'Contourner par les récifs', risk: 0.95, work: 4, text: 'On a contourné la ligne rivale par les récifs.' },
+      { wait: true, label: 'Se cacher derrière les rochers', risk: 0.85, work: 8, text: 'On s’est caché derrière les rochers jusqu’à ce que la patrouille passe.' },
+      { label: 'La suivre de loin', risk: 1.15, bonus: [{ t: 'diplo', act: 'scoutGate' }], text: 'On a suivi la patrouille jusqu’aux remparts : une porte est mal gardée.' },
     ],
   },
   {
-    id: 'parley', where: ['river'], missions: ['allywar'], water: 'sea', from: 0.4, title: 'Un émissaire rival',
-    text: 'Une barque rivale hisse un drapeau blanc : son chef veut parlementer.',
+    id: 'cliffire', where: ['river'], missions: ['allywar'], water: 'sea', from: 0.4, title: 'Un feu sur la falaise',
+    text: 'Au sommet de la falaise, un grand feu et des silhouettes : on y tient conseil.',
     options: [
-      { label: 'Exiger sa reddition', risk: 0.9, text: 'On a exigé la reddition du rival, qui a fini par plier.' },
-      { label: 'Refuser et poursuivre', risk: 1.1, work: -3, text: 'On a renvoyé l’émissaire et poursuivi l’assaut.' },
+      { label: 'Approcher pour écouter', risk: 1.2, bonus: [{ t: 'diplo', act: 'scoutChief' }], text: 'On a approché sans bruit : on sait où se tiendra le chef rival.' },
+      { label: 'Noter l’endroit et passer', risk: 0.9, text: 'On a noté l’endroit sur la carte et poursuivi la reconnaissance.' },
     ],
   },
   {
@@ -197,7 +196,7 @@ export const EVENTS: ExpEvent[] = [
   },
   // ---------------- Les dents de l'eau : le requin au large, le crocodile des eaux douces chaudes ----------------
   {
-    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive', 'voyage', 'wreck', 'trawl', 'isles'], title: 'Un aileron dans l’eau',
+    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive', 'voyage', 'wreck', 'trawl', 'isles', 'scout'], title: 'Un aileron dans l’eau',
     text: 'Un grand aileron gris fend l’eau et tourne autour du bateau : un requin !',
     options: [
       { label: 'Fuir vers la rive', risk: 0.9, work: 6, text: 'On a mis le cap sur la rive à toute vitesse, l’aileron sur les talons.' },
@@ -265,7 +264,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'squall', where: ['river'], scenes: ['voyage', 'wreck', 'trawl', 'isles'], water: 'sea', from: 0.4, title: 'Un grain se lève',
+    id: 'squall', where: ['river'], scenes: ['voyage', 'wreck', 'trawl', 'isles', 'scout'], water: 'sea', from: 0.4, title: 'Un grain se lève',
     text: 'Le ciel se couvre d’un coup : la pluie tombe en rideau, le vent se lève et les vagues grossissent autour du bateau.',
     options: [
       { label: 'Réduire la toile et tenir le cap', risk: 0.85, work: 4, text: 'Voile réduite, barre bien tenue : le bateau a traversé le grain sans une avarie.' },
