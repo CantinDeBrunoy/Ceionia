@@ -5,7 +5,7 @@ import { it, expect } from 'vitest';
  * l'expédition du lancement refusait de partir (« aucun chemin praticable ») ; une navette emmène maintenant l'équipe de
  * près du village au pied du pas de tir, et l'en ramène
  */
-import { World, N, setMapSize } from '../src/world/world';
+import { World, N, setMapSize, VEG_FOREST, VEG_ROCKS } from '../src/world/world';
 import { newWorld, CONTINENT } from '../src/world/mapgen';
 import { GEN_ARCH } from '../src/world/continent';
 import { isleOf } from '../src/sim/diplomacy';
@@ -47,6 +47,11 @@ it('le lancement part en navette vers le cosmodrome de l’île alliée, l’éq
     const a = ex.start(m, 0, 5);
     expect(a, ex.lastFail ?? 'refusée').not.toBeNull();
     expect(a!.air?.kind).toBe('heli');
+    // les deux aires de l'hélicoptère sont dégagées : ni arbre, ni rocher, ni eau sous ses pales (il se posait dans la forêt)
+    for (const [x, z] of [a!.air!.pad, a!.air!.land]) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const i = w.ci(Math.floor(x) + dx, Math.floor(z) + dz);
+      expect(w.veg[i] === VEG_FOREST || w.veg[i] === VEG_ROCKS || w.lake[i] || w.occ[i], `aire (${x}, ${z})`).toBeFalsy();
+    }
     // le pied du pas de tir est sur l'île de l'allié
     expect(Math.hypot(a!.dest[0] - (pad![0] + 2), a!.dest[1] - (pad![1] + 2))).toBeLessThan(6);
     let worked = false;

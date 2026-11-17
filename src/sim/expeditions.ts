@@ -1,5 +1,5 @@
 import { Underground, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
-import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from '../world/world';
+import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from '../world/world';
 import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, RECENT_EVENTS } from './missions';
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
@@ -640,15 +640,37 @@ export class Expeditions {
     return pad && land ? airTrip(air, pad, land) : null;
   }
 
-  /** Aire d'atterrissage près du lieu de travail : la case libre la moins pentue autour, sur le côté (la scène occupe le cœur du lieu), d'où l'on rejoint le lieu à pied */
+  /**
+   * Une aire où l'appareil se pose : la case et ses huit voisines libres de bâtiments, d'eau et d'arbres (l'hélicoptère se posait
+   * au milieu de la forêt, retour de l'auteur, 17 nov. 2026)
+   */
+  private clearPad(cx: number, cz: number) {
+    const w = this.world;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const x = cx + dx, z = cz + dz;
+      if (!w.inCells(x, z)) return false;
+      const i = w.ci(x, z), v = w.veg[i];
+      if (w.occ[i] || w.lake[i] || w.decor[i] || w.cellAvg(x, z) < 0.1 || v === VEG_FOREST || v === VEG_ROCKS) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Aire d'atterrissage près du lieu de travail : la case libre la moins pentue autour, sur le côté (la scène occupe le cœur du
+   * lieu), d'où l'on rejoint le lieu à pied ; une aire dégagée (`clearPad`) d'abord, plus loin s'il le faut
+   */
   private landing(dest: [number, number], base: [number, number]): [number, number] | null {
+    return this.landingAt(dest, base, true) ?? this.landingAt(dest, base, false);
+  }
+
+  private landingAt(dest: [number, number], base: [number, number], open: boolean): [number, number] | null {
     const w = this.world, side = Math.atan2(base[1] - dest[1], base[0] - dest[0]) + Math.PI / 2, cand: [number, number, number][] = [];
-    for (const r of [1.6, 2.3, 3])
+    for (const r of open ? [1.6, 2.3, 3, 4, 5] : [1.6, 2.3, 3])
       for (let k = 0; k < 8; k++) {
         const ang = side + (k * Math.PI) / 4, x = dest[0] + Math.cos(ang) * r, z = dest[1] + Math.sin(ang) * r, cx = Math.floor(x), cz = Math.floor(z);
         if (!w.inCells(cx, cz)) continue;
         const i = w.ci(cx, cz);
-        if (w.occ[i] || w.lake[i] || w.decor[i] || w.cellAvg(cx, cz) < 0.1) continue;
+        if (w.occ[i] || w.lake[i] || w.decor[i] || w.cellAvg(cx, cz) < 0.1 || (open && !this.clearPad(cx, cz))) continue;
         cand.push([x, z, w.cellSlope(cx, cz) + r * 0.05 + k * 0.01]);
       }
     cand.sort((p, q) => p[2] - q[2]);
@@ -1084,12 +1106,12 @@ export class Expeditions {
   /** Une case libre et plate près du cœur du village, d'où l'on y revient à pied (l'aire d'une navette sans héliport) */
   private nearBase(base: [number, number]): [number, number] | null {
     const w = this.world, from = w.ci(Math.floor(base[0]), Math.floor(base[1])), cand: [number, number, number][] = [];
-    for (let r = 2; r <= 9; r++)
+    for (let r = 2; r <= 14; r++)
       for (let k = 0; k < 16; k++) {
         const ang = (k * Math.PI) / 8, x = base[0] + Math.cos(ang) * r, z = base[1] + Math.sin(ang) * r, cx = Math.floor(x), cz = Math.floor(z);
         if (!w.inCells(cx, cz)) continue;
         const i = w.ci(cx, cz);
-        if (w.occ[i] || w.lake[i] || w.decor[i] || w.road[i] || w.cellAvg(cx, cz) < 0.1 || w.cellSlope(cx, cz) > 0.4) continue;
+        if (w.occ[i] || w.lake[i] || w.decor[i] || w.road[i] || w.cellAvg(cx, cz) < 0.1 || w.cellSlope(cx, cz) > 0.4 || !this.clearPad(cx, cz)) continue;
         cand.push([cx + 0.5, cz + 0.5, r + w.cellSlope(cx, cz)]);
       }
     cand.sort((p, q) => p[2] - q[2]);

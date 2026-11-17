@@ -3894,124 +3894,263 @@ function tradepost(p: Parts, age: number) {
 }
 
 /**
- * Le monument de la victoire (2 × 2, la guerre des deux îles gagnée aux côtés de notre allié). Au Médiéval, un obélisque de
- * pierre claire à pointe dorée sur un socle à degrés, entouré des boucliers rouges pris à l'ennemi et des bannières de notre
- * village et de l'allié ; dès l'Industriel, il devient un arc de triomphe : deux piles, l'arche, l'attique sculpté surmonté
- * d'un char doré, et l'avenue pavée qui le traverse. À l'époque moderne, une flamme brûle sous l'arche
+ * Le monument de la victoire (2 × 2, la guerre des deux îles gagnée aux côtés de notre allié), sur une esplanade pavée que
+ * traverse l'avenue. Au Médiéval, un obélisque de pierre claire gravé de frises, à bague et pyramidion dorés, sur un socle à
+ * degrés orné de couronnes de laurier ; à ses pieds les trophées pris à l'ennemi (boucliers rouges, lances, un casque sur sa
+ * hampe), deux gardes, des cyprès et des massifs. Dès l'Industriel, il devient un arc de triomphe : deux piles à colonnes
+ * engagées et reliefs sculptés, la voûte à caissons, la clé ornée d'une couronne, l'attique et sa frise dorée sous un char
+ * attelé de quatre chevaux, des statues aux angles ; réverbères le long de l'avenue, bancs et promeneurs. À l'époque moderne,
+ * la flamme du souvenir brûle sous l'arche, cerclée de bornes et d'une chaîne, et les visiteurs la photographient
  */
 function triumph(p: Parts, age: number) {
-  const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.82), FOE = 0xc0392e, OURS = 0x3a6ab8, ALLY = 0x2aa8a0;
+  const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.8), FOE = 0xc0392e, OURS = 0x3a6ab8, ALLY = 0x2aa8a0, LAUREL = 0x5f8f4a;
   p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
-  // l'esplanade pavée et l'avenue d'avant en arrière
-  p.box(1.5, 0.02, 1.5, 0, 0, 0, 0xe2d6bc);
-  p.box(0.42, 0.024, 1.9, 0, 0, 0, 0xd4c6a8);
+  // l'esplanade pavée, sa bordure, et l'avenue d'avant en arrière
+  p.box(1.42, 0.012, 1.42, 0, 0.002, 0, dark(STONE, 0.86));
+  cobbles(p, -0.68, -0.68, 0.68, 0.68, 0xe2d6bc, 0.012, 7);
+  cobbles(p, -0.2, -0.95, 0.2, -0.7, 0xd4c6a8, 0.006, 8);
+  cobbles(p, -0.2, 0.7, 0.2, 0.95, 0xd4c6a8, 0.006, 9);
+  // aux quatre coins, des massifs bordés de buis et leurs fleurs
+  for (const [x, z] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]] as [number, number][]) {
+    p.cyl(0.1, 0.11, 0.03, 8, x, 0.012, z, 0x8fcf7e);
+    for (let k = 0; k < 5; k++) p.sphere(0.018, x + Math.cos(k * 1.3) * 0.06, 0.05, z + Math.sin(k * 1.3) * 0.06, [C.pink, 0xd84a3e, C.butter, C.lav, C.white][k], 0, 0.8);
+  }
+  for (const s of [-1, 1]) { hedge(p, s * 0.82, 0, 0.06, 0.9, 0.06, 0.012); }
+  // une couronne de laurier : un anneau vert et son nœud doré
+  const wreath = (x: number, y: number, z: number, r: number, ry = 0) => {
+    p.add(new THREE.TorusGeometry(r, r * 0.28, 4, 12), x, y, z, LAUREL, ry);
+    p.box(r * 0.5, r * 0.5, r * 0.3, x, y - r - r * 0.1, z, C.gold, ry);
+  };
   if (age < 3) {
-    // le socle à trois degrés, l'obélisque effilé, son pyramidion doré
-    p.box(0.62, 0.05, 0.62, 0, 0.02, 0, STONE);
-    p.box(0.48, 0.05, 0.48, 0, 0.07, 0, PALE);
-    p.box(0.34, 0.12, 0.34, 0, 0.12, 0, STONE);
-    p.box(0.36, 0.02, 0.36, 0, 0.24, 0, SHADE);
-    p.add(new THREE.CylinderGeometry(0.085, 0.13, 0.95, 4).rotateY(Math.PI / 4).translate(0, 0.475, 0), 0, 0.26, 0, PALE);
-    p.pyramid(0.12, 0.1, 0.12, 0, 1.21, 0, C.gold);
-    // une plaque gravée face à l'avenue
-    p.box(0.14, 0.07, 0.006, 0, 0.145, 0.172, C.gold);
-    // les boucliers ennemis rangés au pied, deux lances croisées derrière chaque tas
-    for (const [x, z, r] of [[-0.42, 0.2, 0.3], [0.42, 0.2, -0.3], [-0.42, -0.3, -0.4], [0.42, -0.3, 0.4]] as [number, number, number][]) {
-      for (let k = 0; k < 2; k++) p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.012, 10).rotateX(Math.PI / 2 - 0.35), x + k * 0.05 - 0.025, 0.07 + k * 0.01, z, k ? FOE : 0xa83226, r);
-      for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.005, 0.005, 0.3, 4), x, 0.15, z - 0.05, C.darkwood, r, false, s * 0.5);
+    // le socle à trois degrés, ses couronnes de laurier, la plaque gravée
+    p.box(0.66, 0.05, 0.66, 0, 0.012, 0, STONE);
+    p.box(0.5, 0.05, 0.5, 0, 0.062, 0, PALE);
+    p.box(0.36, 0.13, 0.36, 0, 0.112, 0, STONE);
+    p.box(0.38, 0.02, 0.38, 0, 0.242, 0, SHADE);
+    for (const [ry, dx, dz] of [[0, 0, 1], [Math.PI / 2, 1, 0], [0, 0, -1], [Math.PI / 2, -1, 0]] as [number, number, number][]) wreath(dx * 0.183, 0.18, dz * 0.183, 0.035, ry);
+    p.box(0.16, 0.05, 0.006, 0, 0.12, 0.182, C.gold);
+    // l'obélisque effilé : sa bague dorée, ses frises gravées sur les quatre faces, son pyramidion
+    p.add(new THREE.CylinderGeometry(0.085, 0.13, 0.95, 4).rotateY(Math.PI / 4).translate(0, 0.475, 0), 0, 0.262, 0, PALE);
+    p.box(0.19, 0.025, 0.19, 0, 0.262, 0, C.gold);
+    for (let k = 0; k < 5; k++) {
+      const y = 0.38 + k * 0.15, half = 0.13 - (0.045 * (y - 0.262)) / 0.95;
+      for (const [ry, dx, dz] of [[0, 0, 1], [Math.PI / 2, 1, 0], [0, 0, -1], [Math.PI / 2, -1, 0]] as [number, number, number][]) {
+        p.box(half * 0.9, 0.008, 0.004, dx * half * 0.99, y, dz * half * 0.99, SHADE, ry);
+        p.box(0.012, 0.05, 0.004, dx * half * 0.99, y + 0.02, dz * half * 0.99, SHADE, ry);
+      }
     }
+    p.pyramid(0.12, 0.1, 0.12, 0, 1.212, 0, C.gold);
+    p.sphere(0.012, 0, 1.32, 0, C.gold);
+    // les trophées pris à l'ennemi : des tas de boucliers rouges, deux lances croisées derrière chacun
+    for (const [x, z, r] of [[-0.42, 0.24, 0.3], [0.42, 0.24, -0.3], [-0.42, -0.32, -0.4], [0.42, -0.32, 0.4]] as [number, number, number][]) {
+      for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0.055, 0.055, 0.012, 10).rotateX(Math.PI / 2 - 0.35), x + k * 0.045 - 0.045, 0.07 + k * 0.012, z, k % 2 ? FOE : 0xa83226, r);
+      for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.005, 0.005, 0.32, 4), x, 0.16, z - 0.05, C.darkwood, r, false, s * 0.5);
+    }
+    // un trophée d'armes : un casque et une cuirasse ennemis sur leur hampe
+    p.cyl(0.006, 0.008, 0.36, 5, 0.3, 0.012, 0.42, C.darkwood);
+    p.box(0.07, 0.08, 0.04, 0.3, 0.24, 0.42, FOE); p.sphere(0.03, 0.3, 0.35, 0.42, 0x9aa3ad, 0, 0.9); p.box(0.08, 0.008, 0.008, 0.3, 0.31, 0.42, C.darkwood);
+    // les cyprès de part et d'autre, deux gardes à l'entrée de l'avenue
+    for (const s of [-1, 1]) for (const z of [-0.5, 0.5]) cypress(p, s * 0.62, z, 0.26);
+    figure(p, -0.27, 0.66, OURS, 0); figure(p, 0.27, 0.66, OURS, 0);
+    for (const s of [-1, 1]) p.cyl(0.004, 0.004, 0.2, 4, s * 0.27 + s * 0.035, 0.012, 0.66, C.darkwood);
+    figure(p, 0.5, -0.1, ALLY, -2.2); figure(p, 0.58, -0.02, C.butter, -2.6, false, 0x6a4a2a);
   } else {
-    // l'arc : deux piles, l'arche entre elles, l'attique au-dessus
-    const W = 0.34, H = 0.62, D = 0.42, GAP = 0.32;
+    // l'arc : deux piles, chacune avec ses colonnes engagées, ses reliefs, sa corniche
+    const W = 0.34, H = 0.62, D = 0.42, GAP = 0.32, spring = 0.07 + H * 0.62;
     for (const s of [-1, 1]) {
       const x = s * (GAP / 2 + W / 2);
-      p.box(W + 0.04, 0.05, D + 0.04, x, 0.02, 0, STONE);
-      p.box(W, H, D, x, 0.07, 0, PALE);
-      // les reliefs sculptés et les corniches des piles
-      p.box(W * 0.7, 0.18, 0.008, x, 0.2, D / 2 + 0.002, SHADE);
-      p.box(W * 0.7, 0.18, 0.008, x, 0.2, -D / 2 - 0.002, SHADE);
-      p.box(W + 0.02, 0.02, D + 0.02, x, 0.07 + H * 0.62, 0, STONE);
+      p.box(W + 0.05, 0.05, D + 0.05, x, 0.012, 0, STONE);
+      p.box(W, H, D, x, 0.062, 0, PALE);
+      for (const fz of [-1, 1]) {
+        for (const cx of [-0.11, 0.11]) p.add(new THREE.CylinderGeometry(0.022, 0.025, H - 0.06, 8, 1, false, 0, Math.PI).rotateY(fz > 0 ? 0 : Math.PI), x + cx, 0.062 + (H - 0.06) / 2, fz * (D / 2), PALE);
+        // les reliefs : un cadre et ses personnages en léger relief
+        p.box(0.16, 0.2, 0.006, x, 0.16, fz * (D / 2 + 0.002), SHADE);
+        for (let k = 0; k < 3; k++) { p.box(0.022, 0.07, 0.008, x - 0.05 + k * 0.05, 0.19, fz * (D / 2 + 0.005), PALE); p.sphere(0.012, x - 0.05 + k * 0.05, 0.27, fz * (D / 2 + 0.006), PALE); }
+        p.box(0.16, 0.05, 0.006, x, 0.42, fz * (D / 2 + 0.002), SHADE);
+        wreath(x, 0.445, fz * (D / 2 + 0.008), 0.018);
+      }
+      p.box(W + 0.02, 0.022, D + 0.02, x, spring, 0, STONE);
     }
-    // la voûte : un demi-anneau épais sous l'attique
-    p.add(new THREE.TorusGeometry(GAP / 2, 0.045, 6, 12, Math.PI).scale(1, 1, D / 0.09), 0, 0.07 + H * 0.62, 0, PALE);
-    p.box(GAP, 0.12, D, 0, 0.07 + H - 0.12, 0, PALE);
-    // l'attique, sa frise dorée, et le char de la victoire
-    const top = 0.07 + H;
-    p.box(GAP + W * 2 + 0.06, 0.04, D + 0.06, 0, top, 0, STONE);
-    p.box(GAP + W * 2, 0.16, D, 0, top + 0.04, 0, PALE);
-    p.box(GAP + W * 2 - 0.08, 0.04, 0.006, 0, top + 0.1, D / 2 + 0.002, C.gold);
-    p.box(GAP + W * 2 + 0.04, 0.025, D + 0.04, 0, top + 0.2, 0, STONE);
-    const q = top + 0.225;
-    p.box(0.18, 0.05, 0.1, 0, q, 0, C.gold);
-    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 10).rotateZ(Math.PI / 2), s * 0.095, q + 0.03, 0, C.gold);
-    for (let k = 0; k < 4; k++) { p.box(0.025, 0.06, 0.09, -0.09 + k * 0.06, q + 0.02, 0.1, C.gold); p.box(0.02, 0.04, 0.03, -0.09 + k * 0.06, q + 0.08, 0.15, C.gold); }
-    p.box(0.03, 0.12, 0.03, 0, q + 0.05, -0.02, C.gold);
-    // à l'époque moderne : la flamme du souvenir sous l'arche
-    if (age >= 4) { p.cyl(0.07, 0.08, 0.025, 10, 0, 0.024, 0, 0x6a6a72); p.cone(0.04, 0.12, 6, 0, 0.05, 0, C.flame, true); }
+    // la voûte : l'arche, ses caissons, sa clé couronnée
+    p.add(new THREE.TorusGeometry(GAP / 2, 0.045, 6, 12, Math.PI).scale(1, 1, D / 0.09), 0, spring, 0, PALE);
+    p.box(GAP, 0.12, D, 0, 0.062 + H - 0.12, 0, PALE);
+    for (let k = 0; k < 3; k++) p.box(GAP * 0.7, 0.003, 0.08, 0, spring + GAP / 2 - 0.01, -0.13 + k * 0.13, SHADE);
+    for (const fz of [-1, 1]) { p.box(0.05, 0.07, 0.01, 0, spring + GAP / 2 - 0.03, fz * (D / 2 + 0.003), STONE); wreath(0, spring + GAP / 2 + 0.06, fz * (D / 2 + 0.01), 0.03); }
+    // l'attique : sa frise dorée, son inscription, sa corniche
+    const top = 0.062 + H;
+    p.box(GAP + W * 2 + 0.07, 0.04, D + 0.07, 0, top, 0, STONE);
+    p.box(GAP + W * 2, 0.17, D, 0, top + 0.04, 0, PALE);
+    for (const fz of [-1, 1]) {
+      p.box(GAP + W * 2 - 0.1, 0.05, 0.006, 0, top + 0.09, fz * (D / 2 + 0.002), C.gold);
+      for (let k = 0; k < 9; k++) p.box(0.04, 0.012, 0.004, -0.4 + k * 0.1, top + 0.105, fz * (D / 2 + 0.006), SHADE);
+    }
+    p.box(GAP + W * 2 + 0.05, 0.025, D + 0.05, 0, top + 0.21, 0, STONE);
+    // le char de la victoire et ses quatre chevaux, tout d'or ; une statue à chaque angle de l'attique
+    const q = top + 0.235;
+    p.box(0.12, 0.06, 0.1, 0, q, -0.04, C.gold);
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 10).rotateZ(Math.PI / 2), s * 0.065, q + 0.03, -0.06, C.gold);
+    for (let k = 0; k < 4; k++) {
+      const hx = -0.09 + k * 0.06;
+      p.box(0.026, 0.055, 0.1, hx, q + 0.025, 0.08, C.gold);
+      p.box(0.02, 0.045, 0.03, hx, q + 0.075, 0.14, C.gold, 0, false, -0.5);
+      for (const lz of [0.04, 0.12]) p.box(0.008, 0.04, 0.008, hx, q - 0.012, lz, C.gold);
+    }
+    p.box(0.025, 0.1, 0.025, 0, q + 0.06, -0.06, C.gold); p.sphere(0.016, 0, q + 0.17, -0.06, C.gold);
+    for (const sx of [-1, 1]) for (const fz of [-1, 1]) { p.box(0.05, 0.03, 0.05, sx * 0.47, q - 0.01, fz * 0.17, STONE); p.box(0.022, 0.08, 0.022, sx * 0.47, q + 0.02, fz * 0.17, PALE); p.sphere(0.014, sx * 0.47, q + 0.11, fz * 0.17, PALE); }
+    // à l'époque moderne : la flamme du souvenir sous l'arche, ses bornes et sa chaîne ; des visiteurs qui la photographient
+    if (age >= 4) {
+      p.cyl(0.075, 0.085, 0.025, 10, 0, 0.012, 0, 0x6a6a72);
+      p.cone(0.04, 0.12, 6, 0, 0.037, 0, C.flame, true); p.cone(0.022, 0.08, 5, 0.01, 0.04, 0.01, 0xffe08a, true);
+      for (let k = 0; k < 6; k++) { const a = (k * Math.PI) / 3; p.cyl(0.008, 0.01, 0.06, 6, Math.cos(a) * 0.13, 0.012, Math.sin(a) * 0.13, 0x3a3a40); }
+      p.add(new THREE.TorusGeometry(0.13, 0.003, 3, 18).rotateX(Math.PI / 2), 0, 0.06, 0, 0x3a3a40);
+      figure(p, 0.12, 0.42, C.red, Math.PI); figure(p, -0.1, 0.46, C.sky, Math.PI, false, 0xc8a060);
+      p.box(0.02, 0.014, 0.01, 0.12, 0.2, 0.395, 0x2a2a30);
+    } else {
+      figure(p, 0.1, 0.4, OURS, Math.PI); figure(p, -0.12, -0.42, ALLY, 0);
+    }
+    // l'avenue bordée de réverbères, des bancs et des promeneurs
+    for (const s of [-1, 1]) for (const z of [-0.6, 0.6]) lampPost(p, s * 0.26, z);
+    for (const s of [-1, 1]) bench(p, s * 0.55, 0.58, 0);
+    figure(p, 0.55, 0.62, C.lav, Math.PI, true); figure(p, -0.6, -0.3, C.mint, 1.2);
+    for (const s of [-1, 1]) for (const z of [-0.45, 0.45]) tree(p, s * 0.68, z, 0.9);
   }
-  // les bannières de notre village et de l'allié, de part et d'autre de l'avenue
-  for (const [x, z, col] of [[-0.75, 0.62, OURS], [0.75, 0.62, ALLY], [-0.75, -0.62, ALLY], [0.75, -0.62, OURS]] as [number, number, number][]) {
-    p.cyl(0.007, 0.009, 0.62, 5, x, 0.02, z, C.metal);
-    p.sphere(0.012, x, 0.65, z, C.gold);
+  // les bannières de notre village et de l'allié aux quatre coins de l'esplanade
+  for (const [x, z, col] of [[-0.68, 0.84, OURS], [0.68, 0.84, ALLY], [-0.68, -0.84, ALLY], [0.68, -0.84, OURS]] as [number, number, number][]) {
+    p.cyl(0.007, 0.009, 0.62, 5, x, 0.012, z, C.metal);
+    p.sphere(0.012, x, 0.645, z, C.gold);
     const f = sway([x, 0.6, z], [0, 1, 0], 0.25, 0.7);
     f.box(0.004, 0.1, 0.13, 0, -0.1, 0.065, col);
+    f.box(0.005, 0.02, 0.13, 0, -0.1, 0.065, C.gold);
   }
-  // des braseros de part et d'autre du monument
-  for (const x of [-0.62, 0.62]) { p.cyl(0.03, 0.02, 0.1, 6, x, 0.02, 0, 0x5a5048); p.cone(0.025, 0.06, 5, x, 0.12, 0, C.flame, true); }
+  // des braseros de part et d'autre du monument (au Médiéval), puis des vasques fleuries
+  for (const x of [-0.5, 0.5]) {
+    if (age < 3) { p.cyl(0.03, 0.02, 0.1, 6, x, 0.012, 0.3, 0x5a5048); p.cone(0.025, 0.06, 5, x, 0.112, 0.3, C.flame, true); }
+    else { p.cyl(0.05, 0.035, 0.06, 8, x, 0.012, -0.62, STONE); for (let k = 0; k < 4; k++) p.sphere(0.018, x + Math.cos(k * 1.6) * 0.025, 0.08, -0.62 + Math.sin(k * 1.6) * 0.025, [C.pink, 0xd84a3e, C.butter, C.lav][k]); }
+  }
 }
 
 /**
- * L'ambassade (2 × 2, la paix des deux îles) : au Médiéval, une demeure de pierre à portique, aux trois drapeaux des peuples
- * réconciliés ; à l'Industriel, le palais des nations, coiffé d'un dôme ; dès l'époque moderne, le siège des nations unies :
- * la haute lame de verre et sa salle d'assemblée basse à toit courbe, devant une longue rangée de mâts
+ * L'ambassade (2 × 2, la paix des deux îles), derrière sa grille et son jardin. Au Médiéval, une demeure de pierre à toit de
+ * tuiles et cheminées, perron, portique de quatre colonnes et fronton armorié, fenêtres à volets, trois bannières des peuples
+ * réconciliés sur la façade, deux gardes à la porte, des émissaires des trois peuples qui conversent dans la cour. À
+ * l'Industriel, le palais des nations : étage de plus, dôme vert-de-gris à lanternon, horloge au fronton, réverbères, fontaine
+ * devant. Dès l'époque moderne, le siège des nations unies : la haute lame de verre (meneaux, planchers, couronnement), la
+ * salle de l'assemblée basse à toit courbe et coupole, l'esplanade et son bassin, la sphère et le revolver noué, l'arc des
+ * mâts aux couleurs des nations, des délégués et des visiteurs ; à l'âge futuriste, un globe holographique au-dessus du bassin
  */
 function embassy(p: Parts, age: number) {
-  const STONE = 0xeee6d4, PALE = 0xf7f1e4, FLAGS = [0x3a6ab8, 0x2aa8a0, 0xc0392e, 0xe8c66a, 0x6aa84f, 0x8e5bb4, 0xe0803a];
+  const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.8), OURS = 0x3a6ab8, ALLY = 0x2aa8a0, OTHER = 0xc0392e;
+  const FLAGS = [OURS, ALLY, OTHER, 0xe8c04a, 0x6aa84f, 0x8e5bb4, 0xe0803a, 0xf2f2f2, 0x2a2a30];
   p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
-  p.box(1.5, 0.018, 0.42, 0, 0, 0.66, 0xe2d6bc);
-  // une rangée de mâts, un drapeau par peuple
-  const flags = (n: number, z: number, h: number) => {
-    for (let k = 0; k < n; k++) {
-      const x = n > 1 ? (k - (n - 1) / 2) * (1.4 / (n - 1)) : 0;
-      p.cyl(0.006, 0.008, h, 5, x, 0.02, z, C.metal);
-      p.sphere(0.01, x, h + 0.025, z, C.gold);
-      const f = sway([x, h - 0.03, z], [0, 1, 0], 0.25, 0.7 + k * 0.05);
-      f.box(0.004, 0.08, 0.11, 0, -0.08, 0.055, FLAGS[k % FLAGS.length]);
-    }
+  // une rangée de mâts, un drapeau par peuple ; `arc` : en demi-cercle autour d'un point
+  const mast = (x: number, z: number, h: number, col: number, k: number) => {
+    p.cyl(0.006, 0.008, h, 5, x, 0.012, z, C.metal);
+    p.sphere(0.01, x, h + 0.02, z, C.gold);
+    const f = sway([x, h - 0.03, z], [0, 1, 0], 0.25, 0.7 + k * 0.05);
+    f.box(0.004, 0.08, 0.11, 0, -0.08, 0.055, col);
   };
   if (age < 4) {
-    // la demeure, son perron, son portique de quatre colonnes et son fronton
-    const hh = age >= 3 ? 0.42 : 0.34, top = 0.05 + hh;
-    p.box(1.3, 0.04, 0.7, 0, 0.01, -0.12, STONE);
+    // la cour pavée, l'allée, la grille et son portail, le jardin
+    cobbles(p, -0.62, 0.22, 0.62, 0.62, 0xe2d6bc, 0.012, 11);
+    cobbles(p, -0.16, 0.62, 0.16, 0.95, 0xd4c6a8, 0.006, 12);
+    for (const s of [-1, 1]) {
+      p.box(0.7, 0.03, 0.03, s * 0.55, 0.012, 0.86, STONE);
+      for (let k = 0; k < 12; k++) p.box(0.006, 0.12, 0.006, s * (0.22 + k * 0.058), 0.042, 0.86, 0x2c2c32);
+      p.box(0.7, 0.008, 0.008, s * 0.55, 0.15, 0.86, 0x2c2c32);
+      p.box(0.06, 0.2, 0.06, s * 0.19, 0.012, 0.86, STONE); p.sphere(0.03, s * 0.19, 0.24, 0.86, C.gold);
+      hedge(p, s * 0.78, 0.4, 0.22, 0.4, 0.06, 0.012);
+      tree(p, s * 0.78, -0.62, 1);
+      for (let k = 0; k < 3; k++) p.sphere(0.018, s * (0.66 + k * 0.08), 0.05, 0.7, [C.pink, 0xd84a3e, C.butter][k], 0, 0.8);
+    }
+    // la demeure : soubassement, murs, chaînages d'angle, corniche, toit, cheminées
+    const hh = age >= 3 ? 0.44 : 0.34, top = 0.05 + hh;
+    p.box(1.3, 0.04, 0.72, 0, 0.012, -0.12, STONE);
     p.box(1.2, hh, 0.6, 0, 0.05, -0.15, PALE);
+    for (const sx of [-1, 1]) for (let k = 0; k < Math.floor(hh / 0.06); k++) p.box(0.04, 0.03, 0.61, sx * 0.59, 0.06 + k * 0.06, -0.15, k % 2 ? STONE : SHADE);
+    if (age >= 3) p.box(1.22, 0.012, 0.62, 0, 0.27, -0.15, STONE);
     p.box(1.26, 0.03, 0.66, 0, top, -0.15, STONE);
+    if (age < 3) {
+      // le toit de tuiles en croupe, ses rangs de tuiles et son faîtage
+      p.pyramid(1.28, 0.24, 0.68, 0, top + 0.03, -0.15, C.terracotta);
+      for (let k = 1; k < 4; k++) p.box(1.28 * (1 - k * 0.22), 0.006, 0.68 * (1 - k * 0.22) + 0.004, 0, top + 0.03 + k * 0.053, -0.15, dark(C.terracotta, 0.85));
+      for (const sx of [-0.36, 0.36]) { p.box(0.07, 0.16, 0.07, sx, top + 0.06, -0.3, STONE); p.box(0.08, 0.02, 0.08, sx, top + 0.22, -0.3, SHADE); }
+    }
+    // le portique : quatre colonnes, l'entablement, le fronton et ses armoiries
     for (let k = 0; k < 4; k++) column(p, -0.24 + k * 0.16, 0.2, top - 0.05, 0.05, 0.028);
-    p.box(0.6, 0.03, 0.14, 0, top - 0.005, 0.2, STONE);
-    p.add(new THREE.CylinderGeometry(0.0001, 0.34, 0.12, 3).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).scale(1, 1, 0.5), 0, top + 0.055, 0.2, STONE);
-    // fenêtres hautes de part et d'autre du portique, la porte au fond
-    for (const s of [-1, 1]) for (let k = 0; k < 2; k++) p.box(0.07, 0.12, 0.006, s * (0.42 + k * 0.14), 0.14, 0.152, C.win);
-    p.box(0.1, 0.16, 0.006, 0, 0.05, 0.152, C.door);
+    p.box(0.62, 0.035, 0.16, 0, top - 0.01, 0.2, STONE);
+    // (le fronton : un triangle de pierre, en relief sur l'entablement, son tympan plus sombre)
+    const gable = (w: number, h: number, d: number) => { const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.lineTo(-w / 2, 0); return new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); };
+    p.add(gable(0.66, 0.15, 0.16), 0, top + 0.025, 0.12, STONE);
+    p.add(gable(0.54, 0.1, 0.01), 0, top + 0.04, 0.275, SHADE);
+    p.sphere(0.03, 0, top + 0.075, 0.29, C.gold, 0, 1.1);
+    if (age >= 3) { p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 12).rotateX(Math.PI / 2), 0, top + 0.13, 0.286, C.white); p.box(0.003, 0.022, 0.003, 0, top + 0.12, 0.292, 0x2a2a30); }
+    // les marches du perron, la porte et ses fenêtres hautes à volets
+    for (let k = 0; k < 3; k++) p.box(0.66 - k * 0.04, 0.016, 0.08, 0, 0.012 + k * 0.016, 0.33 - k * 0.04, STONE);
+    p.box(0.11, 0.17, 0.006, 0, 0.05, 0.152, C.door); p.sphere(0.006, 0.03, 0.13, 0.156, C.gold);
+    for (const s of [-1, 1]) for (let k = 0; k < 2; k++) for (const y of age >= 3 ? [0.12, 0.31] : [0.13]) {
+      const x = s * (0.4 + k * 0.13);
+      p.box(0.06, 0.11, 0.006, x, y, 0.152, C.win);
+      for (const sh of [-1, 1]) p.box(0.022, 0.11, 0.004, x + sh * 0.042, y, 0.153, 0x3a6a5a);
+      p.box(0.07, 0.012, 0.012, x, y + 0.115, 0.155, STONE);
+    }
+    // les bannières des trois peuples sur la façade
+    [OURS, ALLY, OTHER].forEach((col, k) => { const x = -0.48 + k * 0.48; if (Math.abs(x) < 0.1) return; p.box(0.08, 0.16, 0.004, x, top - 0.2, 0.155, col); p.box(0.09, 0.012, 0.01, x, top - 0.04, 0.156, C.gold); });
     if (age >= 3) {
-      // le palais des nations : un tambour et un dôme vert-de-gris
-      p.cyl(0.17, 0.18, 0.12, 14, 0, top + 0.03, -0.15, PALE);
-      p.add(new THREE.SphereGeometry(0.17, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0, top + 0.15, -0.15, 0x7fb3a3);
-      p.cone(0.012, 0.08, 6, 0, top + 0.31, -0.15, C.gold);
-    } else p.box(1.0, 0.1, 0.3, 0, top + 0.03, -0.25, C.terracotta);
-    flags(3, 0.62, 0.55);
+      // le palais des nations : un tambour à fenêtres, le dôme vert-de-gris, son lanternon
+      p.cyl(0.18, 0.19, 0.13, 14, 0, top + 0.03, -0.15, PALE);
+      for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; p.box(0.03, 0.06, 0.004, Math.sin(a) * 0.187, top + 0.07, -0.15 + Math.cos(a) * 0.187, C.win, a); }
+      p.add(new THREE.SphereGeometry(0.18, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0, top + 0.16, -0.15, 0x7fb3a3);
+      for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; p.add(new THREE.TorusGeometry(0.18, 0.004, 3, 10, Math.PI / 2).rotateY(a).rotateZ(Math.PI / 2), 0, top + 0.16, -0.15, dark(0x7fb3a3, 0.8)); }
+      p.cyl(0.03, 0.035, 0.06, 8, 0, top + 0.33, -0.15, PALE); p.cone(0.03, 0.05, 8, 0, top + 0.39, -0.15, 0x7fb3a3); p.cone(0.008, 0.05, 5, 0, top + 0.44, -0.15, C.gold);
+      // devant : la fontaine, des réverbères le long de l'allée
+      fountainFr(p, 0, 0.5, 0.09);
+      for (const s of [-1, 1]) lampPost(p, s * 0.24, 0.74);
+    } else for (const s of [-1, 1]) { p.cyl(0.02, 0.016, 0.07, 6, s * 0.36, 0.012, 0.38, 0x5a5048); p.cone(0.018, 0.04, 5, s * 0.36, 0.082, 0.38, C.flame, true); }
+    // les gardes à la porte, et les émissaires des trois peuples qui conversent dans la cour
+    figure(p, -0.1, 0.4, OURS, 0); figure(p, 0.1, 0.4, OURS, 0);
+    figure(p, -0.38, 0.5, ALLY, 0.9); figure(p, -0.27, 0.56, OTHER, -2.2, false, 0x222222); figure(p, 0.4, 0.5, C.lav, -1.2, false, 0x9a7050);
+    for (let k = 0; k < 3; k++) mast(-0.25 + k * 0.25, 0.78, 0.5, FLAGS[k], k);
   } else {
-    // la lame de verre du secrétariat, ses meneaux, son couronnement
-    const W = 0.6, H = age >= 5 ? 1.75 : 1.55, D = 0.2, x0 = -0.25, z0 = -0.35;
-    p.box(W, H, D, x0, 0.012, z0, age >= 5 ? 0x9fd8e6 : 0x86b8cc);
-    for (let k = 1; k < 8; k++) for (const s of [-1, 1]) p.box(0.006, H, 0.004, x0 - W / 2 + (k * W) / 8, 0.012, z0 + s * (D / 2 + 0.001), 0xe6eef2);
-    for (const s of [-1, 1]) p.box(0.02, H, D + 0.01, x0 + s * (W / 2), 0.012, z0, 0xf0ece4);
-    p.box(W + 0.02, 0.05, D + 0.02, x0, 0.012 + H, z0, 0xf0ece4);
-    // la salle de l'assemblée : basse et longue, toit courbe, petite coupole
-    p.box(0.6, 0.2, 0.36, 0.42, 0.012, -0.05, PALE);
-    p.add(new THREE.CylinderGeometry(0.18, 0.18, 0.6, 14, 1, false, -Math.PI / 2, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.4, 1), 0.42, 0.212, -0.05, 0xd8d4cc);
-    p.add(new THREE.SphereGeometry(0.06, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0.42, 0.28, -0.05, 0xc8ccd2);
-    // l'emblème : un globe bleu au pied de la lame
-    p.sphere(0.05, x0, 0.25, z0 + D / 2 + 0.03, 0x5b9bd5, 1);
-    flags(7, 0.62, 0.5);
+    // l'esplanade dallée et sa bordure de gazon
+    p.box(1.7, 0.012, 1.0, 0, 0.004, 0.36, 0xd8d4cc);
+    for (let k = 0; k < 7; k++) p.box(1.7, 0.002, 0.004, 0, 0.017, -0.12 + k * 0.15, dark(0xd8d4cc, 0.9));
+    // la lame de verre du secrétariat : vitrage, meneaux, planchers, pignons de pierre, couronnement technique
+    const W = 0.6, H = age >= 5 ? 1.75 : 1.55, D = 0.2, x0 = -0.3, z0 = -0.5, GLASS = age >= 5 ? 0x9fd8e6 : 0x86b8cc;
+    p.box(W + 0.06, 0.05, D + 0.06, x0, 0.012, z0, 0xe6e2da);
+    p.box(W, H, D, x0, 0.06, z0, GLASS);
+    for (let k = 1; k < 10; k++) for (const s of [-1, 1]) p.box(0.005, H, 0.004, x0 - W / 2 + (k * W) / 10, 0.06, z0 + s * (D / 2 + 0.001), 0xe6eef2);
+    for (let f = 1; f < Math.floor(H / 0.075); f++) for (const s of [-1, 1]) p.box(W, 0.004, 0.004, x0, 0.06 + f * 0.075, z0 + s * (D / 2 + 0.002), dark(GLASS, 0.75));
+    for (const s of [-1, 1]) p.box(0.025, H, D + 0.012, x0 + s * (W / 2), 0.06, z0, 0xf0ece4);
+    p.box(W + 0.02, 0.06, D + 0.02, x0, 0.06 + H, z0, 0xf0ece4);
+    p.box(W * 0.6, 0.05, D * 0.6, x0, 0.12 + H, z0, 0xd8d4cc);
+    for (const s of [-1, 1]) p.cyl(0.004, 0.004, 0.1, 4, x0 + s * 0.12, 0.17 + H, z0, C.metal);
+    p.sphere(0.01, x0 + 0.12, 0.27 + H, z0, 0xff3a2a);
+    // la salle de l'assemblée : basse et longue, à toit courbe et petite coupole, son entrée vitrée
+    p.box(0.62, 0.2, 0.38, 0.45, 0.012, -0.32, PALE);
+    p.add(new THREE.CylinderGeometry(0.19, 0.19, 0.62, 16, 1, false, -Math.PI / 2, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.4, 1), 0.45, 0.212, -0.32, 0xd8d4cc);
+    p.add(new THREE.SphereGeometry(0.065, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0.45, 0.28, -0.32, 0xc8ccd2);
+    p.box(0.3, 0.12, 0.006, 0.45, 0.012, -0.128, 0x86b8cc);
+    for (let k = 0; k < 6; k++) p.box(0.004, 0.12, 0.008, 0.31 + k * 0.056, 0.012, -0.126, 0xe6eef2);
+    // le bassin et la fontaine de l'esplanade
+    p.box(0.5, 0.03, 0.24, 0.1, 0.012, 0.12, 0xe6e2da);
+    waterPool(p, 0.1, 0.042, 0.12, 0.1, 12);
+    p.box(0.46, 0.006, 0.2, 0.1, 0.038, 0.12, C.water);
+    for (let k = 0; k < 5; k++) p.cone(0.008, 0.05, 4, -0.08 + k * 0.09, 0.04, 0.12, 0xdff2fa);
+    // la sphère dans la sphère, et le revolver noué sur son socle
+    p.box(0.08, 0.06, 0.08, -0.62, 0.012, 0.3, 0x9a9aa0);
+    p.add(new THREE.IcosahedronGeometry(0.06, 1), -0.62, 0.13, 0.3, 0xc0a060);
+    p.box(0.06, 0.05, 0.06, 0.62, 0.012, 0.34, 0x5a5a60);
+    p.box(0.1, 0.03, 0.03, 0.62, 0.062, 0.34, 0x3a3a40); p.add(new THREE.TorusGeometry(0.022, 0.012, 5, 10), 0.66, 0.08, 0.34, 0x3a3a40);
+    // à l'âge futuriste : le globe holographique au-dessus du bassin
+    if (age >= 5) { p.add(new THREE.IcosahedronGeometry(0.08, 1), 0.1, 0.3, 0.12, 0x6ae4ff, 0, 'neon'); p.add(new THREE.TorusGeometry(0.1, 0.004, 3, 20).rotateX(Math.PI / 2), 0.1, 0.3, 0.12, 0x6ae4ff, 0, 'neon'); }
+    // l'arc des mâts aux couleurs des nations, devant l'esplanade
+    for (let k = 0; k < 9; k++) { const a = Math.PI * (0.15 + (k * 0.7) / 8); mast(Math.cos(a) * 0.8 * -1, 0.55 + Math.sin(a) * 0.3, 0.5, FLAGS[k], k); }
+    // des arbres, des bancs, des délégués et des visiteurs
+    for (const [x, z] of [[-0.82, -0.2], [-0.82, -0.62], [0.82, 0.05], [0.82, 0.32]] as [number, number][]) tree(p, x, z, 0.9);
+    bench(p, -0.4, 0.42, Math.PI); bench(p, 0.55, 0.0, Math.PI / 2);
+    figure(p, -0.1, 0.35, OURS, 0.4); figure(p, -0.02, 0.38, ALLY, -2.4, false, 0x222222); figure(p, 0.35, 0.4, OTHER, Math.PI, false, 0x8a6040);
+    figure(p, -0.4, 0.46, C.butter, Math.PI, true); figure(p, 0.62, 0.62, C.sky, 2.6);
+    for (const s of [-1, 1]) lampPost(p, s * 0.22, 0.86);
   }
 }
 

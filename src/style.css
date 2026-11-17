@@ -155,6 +155,18 @@ img.pic { display: block; flex: none; }
 #needsPanel > * { pointer-events: auto; }
 .hudPill { display: flex; align-items: center; min-height: 64px; padding: 6px 14px; border-radius: var(--hR); }
 #res { display: flex; align-items: center; gap: 2px; }
+/* les stocks défilent : quatre à la fois au plus (trois sur les écrans moyens), les flèches seulement s'il en reste de cachés */
+/* (le bandeau rétrécit plutôt que de déborder sur ses voisins : il montre alors moins de ressources) */
+#resPanel { min-width: 0; flex: 0 1 auto; }
+#needsBox { flex: none; }
+#resView { flex: 0 1 auto; min-width: 92px; max-width: 400px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+#resView::-webkit-scrollbar { display: none; }
+#resView .res { scroll-snap-align: start; flex: none; }
+#res { flex-wrap: nowrap !important; }
+.resNav { display: none; flex: none; align-items: center; justify-content: center; width: 24px; height: 40px; min-height: 0; min-width: 0; padding: 0; border: none; border-radius: 10px; background: transparent; box-shadow: none; color: var(--hInk); cursor: pointer; }
+#resPanel.scrolls .resNav { display: flex; }
+.resNav:hover:not(:disabled) { background: rgba(255, 255, 255, 0.7); }
+.resNav:disabled { opacity: 0.25; cursor: default; }
 .res { display: flex; align-items: center; gap: 7px; padding: 4px 8px; border-radius: 14px; color: var(--hInk); cursor: pointer; }
 .res:hover, .res.open { background: rgba(255, 255, 255, 0.7); }
 .rv { display: flex; flex-direction: column; line-height: 1.1; }
@@ -819,6 +831,7 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   .hudPill { padding: 5px 10px; }
   .res { padding: 4px 6px; gap: 6px; }
   .need { width: 47px; }
+  #resView { max-width: 310px; }
 }
 /* quand la place manque, la pilule des besoins passe à la ligne, centrée ; les stocks restent au milieu de la première */
 @media (max-width: 1439px) {
@@ -855,6 +868,8 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   .res img.pic, button.pop img.pic { width: 22px; height: 22px; }
   .rv b, .pn b { font-size: 14.5px; }
   .rv small, .res .rate, .pn small { font-size: 10.5px; }
+  #resView { max-width: 250px; }
+  .resNav { width: 20px; height: 34px; }
   .hsep { margin: 6px 3px; }
   .need { width: 40px; }
   .need img.pic { width: 22px; height: 22px; }

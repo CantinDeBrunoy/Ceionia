@@ -569,7 +569,7 @@ export class UI {
           </div>
         </div>
         <div id="needsPanel">
-          <div id="resPanel" class="panel hudPill"><div id="res"></div><span class="hsep"></span><button class="pop" id="pop" title="${tr('État des habitants')}" aria-label="${tr('État des habitants')}" aria-expanded="false"></button></div>
+          <div id="resPanel" class="panel hudPill"><button class="resNav" id="resPrev" title="${tr('Ressources précédentes')}" aria-label="${tr('Ressources précédentes')}">${ic('chevLeft', 16, 2.4)}</button><div id="resView"><div id="res"></div></div><button class="resNav" id="resNext" title="${tr('Ressources suivantes')}" aria-label="${tr('Ressources suivantes')}">${ic('chevRight', 16, 2.4)}</button><span class="hsep"></span><button class="pop" id="pop" title="${tr('État des habitants')}" aria-label="${tr('État des habitants')}" aria-expanded="false"></button></div>
           <div id="needsBox" class="panel hudPill"><div id="needs"></div></div>
         </div>
         <div id="hudR">
@@ -672,6 +672,17 @@ export class UI {
     root.appendChild(needInfo);
     for (const n of NEEDS) $('#n-' + n.k).onclick = () => { this.needOpen === n.k ? this.closeNeed() : this.openNeed(n.k); this.host.audio.sfxClick(); };
     $('#n-security').onclick = () => { this.needOpen === 'security' ? this.closeNeed() : this.openNeed('security'); this.host.audio.sfxClick(); };
+    // les stocks défilent dans une fenêtre de quelques ressources : les flèches avancent d'une ressource (demande de l'auteur,
+    // 17 nov. 2026 : sept stocks côte à côte faisaient déborder le bandeau sur le panneau des âges et sur l'horloge)
+    const view = $('#resView'), step = (d: number) => {
+      const item = view.querySelector<HTMLElement>('.res');
+      view.scrollBy({ left: d * (item ? item.offsetWidth + 2 : 90), behavior: 'smooth' });
+      this.host.audio.sfxClick();
+    };
+    $('#resPrev').onclick = () => step(-1);
+    $('#resNext').onclick = () => step(1);
+    view.addEventListener('scroll', () => this.syncResNav(), { passive: true });
+    addEventListener('resize', () => this.syncResNav());
     // fiche d'une ressource : un clic sur son stock (d'où elle vient, à quoi elle sert, quoi bâtir pour en avoir plus)
     $('#res').onclick = (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
@@ -1418,6 +1429,14 @@ export class UI {
   private popDay = -1;
   private popPrev = 0;
   private popDelta: number | null = null;
+  /** Les flèches des stocks : montrées s'il y a des ressources cachées, éteintes au bout */
+  private syncResNav() {
+    const v = $('#resView'), hidden = v.scrollWidth > v.clientWidth + 2;
+    $('#resPanel').classList.toggle('scrolls', hidden);
+    ($('#resPrev') as HTMLButtonElement).disabled = !hidden || v.scrollLeft <= 1;
+    ($('#resNext') as HTMLButtonElement).disabled = !hidden || v.scrollLeft + v.clientWidth >= v.scrollWidth - 2;
+  }
+
   private renderResources() {
     const w = this.host.world, day = this.host.expeditions.daily();
     const items: [Resource, string, string][] = [['wood', 'tree', tr('Bois')], ['stone', 'rock', tr('Pierre')], ['ore', 'pickaxe', tr('Minerai')]];
@@ -1441,6 +1460,7 @@ export class UI {
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
       ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${resPic(r, 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
       : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b>${r === 'gold' ? `<em class="rate">${tr('échange')}</em>` : `<em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em>`}</span></div>`).join('');
+    this.syncResNav();
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
