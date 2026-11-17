@@ -632,7 +632,14 @@ class Game implements UIHost {
         return w.hAt(x, z) + (w.veg[k] === VEG_FOREST ? 1.8 : b && b.kind !== 'gather' ? 1.3 : 0);
       },
       syncTrophies: () => { this.trophyT = 0; this.syncTrophies(); },
-      release: () => { this.follow(null); this.trainCam = null; this.incidentCam = null; this.hellFollow = false; },
+      release: () => {
+        this.follow(null); this.trainCam = null; this.incidentCam = null; this.hellFollow = false;
+        // l'outil en main se pose le temps de la cinématique (rendu à la fin, `resume`)
+        const t = this.tools;
+        this.trophyTool = t.tool !== 'none' ? { t: t.tool, k: t.kind } : null;
+        if (this.trophyTool) t.setTool('none');
+      },
+      resume: () => { const b = this.trophyTool; this.trophyTool = null; if (b && this.tools.tool === 'none' && this.mode === 'surface') this.tools.setTool(b.t, b.k); },
       fest: (x, z) => this.festAt(x, z),
     });
     this.expeditions.onNews = (m) => this.ui.toast(m, undefined, m.startsWith('⚔️') ? 'danger' : 'info');
@@ -1907,12 +1914,15 @@ class Game implements UIHost {
     this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp).filter((id) => !this.trophyStage.hidden(id)));
   }
 
+  /** l'outil que la cinématique d'un trophée a posé, rendu à sa fin */
+  private trophyTool: { t: ToolId; k: KindId } | null = null;
+
   /** Ce que le jeu montre ou fait, pour la cinématique d'un trophée (voir `cineCalm`, trophyCine.ts) */
   private trophyCalm(banner = true) {
     return cineCalm({
       loading: !!this.warming || !!document.getElementById('loadScreen'),
       away: this.mode !== 'surface' || this.isleCmd || this.fading || this.revealing || this.voyageStage.playing,
-      placing: this.tools.tool !== 'none' || !!this.railEdit || !!this.islePlace || this.command.active,
+      placing: this.tools.pressing || !!this.railEdit || !!this.islePlace || this.command.active,
       window: !!this.ui.root.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible || !!document.querySelector('#warAlert.show'),
       other: this.kingStage.playing || document.body.classList.contains('photo') || document.hidden,
       banner: !!document.querySelector('#banner.show'),

@@ -36,6 +36,8 @@ export interface TrophyStageHost {
   syncTrophies: () => void;
   /** la vue cesse de suivre quoi que ce soit (équipe, train, incident) */
   release: () => void;
+  /** la cinématique finie (ou passée) : l'outil posé par `release` revient en main */
+  resume?: () => void;
   /** le village fait la fête sur la place (en relance une si elle dure déjà) */
   fest: (x: number, z: number) => void;
 }
@@ -146,6 +148,7 @@ export class TrophyStage {
       if (skipped) h.cam.aim(c.from); else h.cam.jump(c.from, h.ground(c.from.x, c.from.z));
     }
     this.cur = null;
+    h.resume?.();
     e.after?.();
   }
 

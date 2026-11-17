@@ -36,7 +36,11 @@ export interface CineScene {
   loading: boolean;
   /** une autre vue que la surface (Enfers, sous terre, commandement de l'île), un fondu, une traversée, la découverte des îles */
   away: boolean;
-  /** un outil en main : pose de bâtiment, route, tracé de voie, ordres aux troupes */
+  /**
+   * un geste en cours (bouton enfoncé : pose, route, glissé), un tracé de voie, des ordres aux troupes. Un outil seulement en
+   * main ne compte pas : on bâtit presque sans arrêt, et la cinématique, repoussée puis oubliée, ne se jouait jamais (signalé
+   * trois fois pour le mammouth ; 17 nov. 2026). Elle pose l'outil le temps de passer, puis le rend (`release`, `resume`)
+   */
   placing: boolean;
   /** une fenêtre ouverte, une carte de choix, une alerte de guerre */
   window: boolean;

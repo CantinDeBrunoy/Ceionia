@@ -92,6 +92,8 @@ export class ToolController implements ToolInput {
   private overlayHeld = false;
   /** où le clic a commencé (un glissé n'est pas un clic) */
   private downAt: [number, number] | null = null;
+  /** un geste en cours : bouton enfoncé sur la carte (pose, tracé, glissé) */
+  get pressing() { return !!this.downAt; }
   private lastToast = 0;
   /** mode de tracé des routes ; en mode libre, le point A choisi (centre de sa case) et la route prévue jusqu'au pointeur */
   roadMode: RoadMode = 'free';
