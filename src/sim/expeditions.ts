@@ -904,7 +904,12 @@ export class Expeditions {
   }
 
   /** Le village fabrique une pièce après l'autre, plus vite avec un atelier */
-  private craftStep(dt: number) {
+  /**
+   * La fabrication de l'équipement avance de `dt` secondes. Appelée aussi, en temps réel (×1), quand le jeu est arrêté (pause,
+   * fenêtre ouverte, voir `Game.advance`) : on commande ses pièces dans la fenêtre des expéditions, qui arrête le jeu, et la
+   * fabrication semblait bloquée (retour de l'auteur, 17 nov. 2026)
+   */
+  craftStep(dt: number) {
     const s = this.world.exp;
     if (!s.craft.length) return;
     const g = GEAR_BY[s.craft[0]];

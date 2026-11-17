@@ -2518,6 +2518,8 @@ class Game implements UIHost {
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
     this.expeditions.update(gdt);
+    // le jeu arrêté (pause, fenêtre ouverte) : la fabrication de l'équipement continue, au pas du temps réel
+    if (gdt === 0) this.expeditions.craftStep(dt);
     // les jours tenus sur l'île du portail, défenses debout
     holdIsle(w, gdt, this.time.dayLen);
     // la guerre : la faction des Enfers, ses incursions sur l'île, la garnison
