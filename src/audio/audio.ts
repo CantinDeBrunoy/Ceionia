@@ -253,11 +253,23 @@ export class AudioEngine {
     this.nextPad = ctx.currentTime + 0.5;
   }
 
+  /**
+   * Les sons du jeu et les ambiances se taisent (la musique reste) : pendant le voyage des colons et les écrans de victoire,
+   * on entendait encore les feux d'artifice de la fête du village (retour de l'auteur, 17 nov. 2026)
+   */
+  hushed = false;
+  hush(on: boolean) {
+    if (on === this.hushed) return;
+    this.hushed = on;
+    this.applyVolumes();
+  }
+
   applyVolumes() {
     if (!this.ctx) return;
     this.musicG.gain.setTargetAtTime(this.muteMusic ? 0 : this.musicVol * 0.55 * VOL_SCALE.music, this.ctx.currentTime, 0.1);
-    this.sfxG.gain.setTargetAtTime(this.muteSfx ? 0 : this.sfxVol * VOL_SCALE.sfx, this.ctx.currentTime, 0.1);
-    this.ambG.gain.setTargetAtTime(this.muteSfx ? 0 : this.ambVol * VOL_SCALE.amb, this.ctx.currentTime, 0.1);
+    // (tus en fondu d'une demi-seconde environ)
+    this.sfxG.gain.setTargetAtTime(this.muteSfx || this.hushed ? 0 : this.sfxVol * VOL_SCALE.sfx, this.ctx.currentTime, this.hushed ? 0.15 : 0.1);
+    this.ambG.gain.setTargetAtTime(this.muteSfx || this.hushed ? 0 : this.ambVol * VOL_SCALE.amb, this.ctx.currentTime, this.hushed ? 0.15 : 0.1);
     this.syncMusic();
   }
 

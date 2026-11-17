@@ -2,6 +2,9 @@ import { registerDict } from '../index';
 
 /** Textes français -> anglais : expéditions (messages, comptes rendus) */
 registerDict('expeditions', {
+  '{icon} L’expédition « {title} » part en drone vers {dest}.': '{icon} The expedition “{title}” sets off by drone for {dest}.',
+  'En drone vers {dest}…': 'By drone to {dest}…',
+  'Retour au village en drone…': 'Back to the village by drone…',
   // la carte de choix : style, effet, pastilles
   'Prudent': 'Cautious',
   'Audacieux': 'Bold',

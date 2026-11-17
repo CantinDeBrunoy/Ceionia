@@ -5,7 +5,8 @@
  * module ne connaît ni le monde ni les habitants : il dit où est l'appareil à chaque instant du vol et où chacun s'assoit
  */
 
-export type AirKind = 'heli' | 'balloon';
+/** `drone` : le drone de passagers du droneport, à l'âge futuriste (l'héliport y devient droneport ; demande de l'auteur, 17 nov. 2026) */
+export type AirKind = 'heli' | 'balloon' | 'drone';
 
 /**
  * Où en est le voyage : l'équipe marche vers l'aire (`walk`), vole à l'aller (`out`), marche de l'atterrissage au lieu de travail
@@ -27,6 +28,7 @@ export interface AirTrip {
 /** Les appareils : vitesse de croisière (cases par seconde), durée du décollage et de l'atterrissage (s), hauteur de croisière, places à bord */
 export const AIR: Record<AirKind, { speed: number; lift: number; settle: number; cruise: number; seats: number }> = {
   heli: { speed: 3.2, lift: 3, settle: 3.2, cruise: 1.7, seats: 5 },
+  drone: { speed: 4, lift: 2.4, settle: 2.6, cruise: 1.6, seats: 5 },
   balloon: { speed: 0.9, lift: 7, settle: 6, cruise: 2.6, seats: 5 },
 };
 
@@ -66,7 +68,8 @@ export interface AirSeat { x: number; z: number; y: number; face: number; sit: b
  * du brûleur, debout, tournés vers l'extérieur
  */
 export function airSeats(kind: AirKind, n: number): AirSeat[] {
-  if (kind === 'heli') {
+  // (le drone a les deux mêmes bancs que l'hélicoptère, sous sa bulle)
+  if (kind === 'heli' || kind === 'drone') {
     const spots: [number, number][] = [[-0.075, -0.1], [0.075, -0.1], [0, -0.1], [-0.07, 0.01], [0.07, 0.01]];
     return Array.from({ length: n }, (_, i) => ({ x: spots[i % 5][0], z: spots[i % 5][1], y: HELI_SEAT, face: 0, sit: true }));
   }

@@ -46,7 +46,8 @@ it('le lancement part en navette vers le cosmodrome de l’île alliée, l’éq
     const m = MISSIONS.find((x) => x.choices.some((c) => c.scene === 'launch'))!;
     const a = ex.start(m, 0, 5);
     expect(a, ex.lastFail ?? 'refusée').not.toBeNull();
-    expect(a!.air?.kind).toBe('heli');
+    // (à l'âge futuriste, le drone de passagers du droneport)
+    expect(a!.air?.kind).toBe('drone');
     // les deux aires de l'hélicoptère sont dégagées : ni arbre, ni rocher, ni eau sous ses pales (il se posait dans la forêt)
     for (const [x, z] of [a!.air!.pad, a!.air!.land]) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       const i = w.ci(Math.floor(x) + dx, Math.floor(z) + dz);

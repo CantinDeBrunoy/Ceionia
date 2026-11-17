@@ -438,7 +438,7 @@ export class Expeditions {
     // le cosmodrome sur l'île de l'allié (archipel) : on n'y va pas à pied. La navette (l'hélicoptère) emmène l'équipe d'une
     // aire près du village à une aire au pied du cosmodrome (retour de l'auteur, 17 nov. 2026 : « aucun chemin praticable »)
     let hop: AirTrip | null = null;
-    if (!dest && c.dest === 'spaceport') { const h = this.spaceHop(base); if (h) { dest = h.dest; hop = h.air; kind = 'spaceport'; } }
+    if (!dest && c.dest === 'spaceport') { const h = this.spaceHop(base, age); if (h) { dest = h.dest; hop = h.air; kind = 'spaceport'; } }
     if (!dest || !kind) return null;
     // une fois la course automobile gagnée ET l'usine automobile bâtie, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval
     const motor = age >= 3 && this.world.exp.done.includes('motorcar') && this.has('carworks') && !c.troop;
@@ -488,7 +488,7 @@ export class Expeditions {
     } else {
       // elle part aussitôt, chacun de là où il est, sans se rassembler d'abord au village (à l'aire d'envol s'il faut voler)
       this.agents.partyGo(party, air ? air.pad[0] : dest[0], air ? air.pad[1] : dest[1]);
-      this.onNews?.(tr(!air ? '{icon} L’expédition « {title} » part vers {dest}.' : air.kind === 'heli' ? '{icon} L’expédition « {title} » part en hélicoptère vers {dest}.' : '{icon} L’expédition « {title} » part en montgolfière vers {dest}.', { icon: m.icon, title: m.title, dest: destName(c) }));
+      this.onNews?.(tr(!air ? '{icon} L’expédition « {title} » part vers {dest}.' : air.kind === 'heli' ? '{icon} L’expédition « {title} » part en hélicoptère vers {dest}.' : air.kind === 'drone' ? '{icon} L’expédition « {title} » part en drone vers {dest}.' : '{icon} L’expédition « {title} » part en montgolfière vers {dest}.', { icon: m.icon, title: m.title, dest: destName(c) }));
     }
     return a;
   }
@@ -634,9 +634,10 @@ export class Expeditions {
   /** L'appareil qui emmènerait l'équipe : l'hélicoptère de l'héliport (âge moderne) ou la montgolfière de l'aérodrome, avec ses deux aires ; null si le village n'en a pas */
   private airFor(kind: DestKind | null, age: number, base: [number, number], dest: [number, number]): AirTrip | null {
     if (kind !== 'mountain' && kind !== 'far') return null;
-    const air: AirKind | null = age >= 4 && this.has('heliport') ? 'heli' : age >= 3 && this.has('aerodrome') ? 'balloon' : null;
+    // (à l'âge futuriste, l'héliport est un droneport : un drone de passagers)
+    const air: AirKind | null = age >= 4 && this.has('heliport') ? (age >= 5 ? 'drone' : 'heli') : age >= 3 && this.has('aerodrome') ? 'balloon' : null;
     if (!air) return null;
-    const pad = this.padSide(base, air === 'heli' ? 'heliport' : 'aerodrome'), land = this.landing(dest, base);
+    const pad = this.padSide(base, air === 'balloon' ? 'aerodrome' : 'heliport'), land = this.landing(dest, base);
     return pad && land ? airTrip(air, pad, land) : null;
   }
 
@@ -925,9 +926,9 @@ export class Expeditions {
   status(a: ActiveExpedition) {
     return {
       gather: tr('Rassemblement au village…'),
-      out: tr(a.air ? (a.air.kind === 'heli' ? 'En hélicoptère vers {dest}…' : 'En montgolfière vers {dest}…') : 'En route vers {dest}…', { dest: destName(a.c) }),
+      out: tr(a.air ? (a.air.kind === 'heli' ? 'En hélicoptère vers {dest}…' : a.air.kind === 'drone' ? 'En drone vers {dest}…' : 'En montgolfière vers {dest}…') : 'En route vers {dest}…', { dest: destName(a.c) }),
       work: a.wait ? tr('Décision à prendre : {title}', { title: tr(a.wait.title).toLowerCase() }) : tr('Sur place, l’équipe {doing}…', { doing: a.c.doing ?? a.c.label.toLowerCase() }),
-      back: tr(a.air ? (a.air.kind === 'heli' ? 'Retour au village en hélicoptère…' : 'Retour au village en montgolfière…') : 'Retour au village…'),
+      back: tr(a.air ? (a.air.kind === 'heli' ? 'Retour au village en hélicoptère…' : a.air.kind === 'drone' ? 'Retour au village en drone…' : 'Retour au village en montgolfière…') : 'Retour au village…'),
       home: tr(a.ok ? 'De retour : le village fait la fête !' : 'De retour, bredouilles.'),
     }[a.phase];
   }
@@ -1096,11 +1097,12 @@ export class Expeditions {
    * village), une aire d'atterrissage d'où on le rejoint, et une aire d'envol près du village (l'héliport s'il y en a un,
    * sinon une case libre près du cœur du village). Null s'il n'y en a pas
    */
-  private spaceHop(base: [number, number]): { dest: [number, number]; air: AirTrip } | null {
+  private spaceHop(base: [number, number], age: number): { dest: [number, number]; air: AirTrip } | null {
     const dest = this.padSide(base, 'spaceport', false);
     if (!dest) return null;
     const land = this.landing(dest, base), pad = this.padSide(base, 'heliport') ?? this.nearBase(base);
-    return land && pad ? { dest, air: airTrip('heli', pad, land) } : null;
+    // (à l'âge futuriste, le drone de passagers plutôt que l'hélicoptère)
+    return land && pad ? { dest, air: airTrip(age >= 5 ? 'drone' : 'heli', pad, land) } : null;
   }
 
   /** Une case libre et plate près du cœur du village, d'où l'on y revient à pied (l'aire d'une navette sans héliport) */

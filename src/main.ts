@@ -2665,7 +2665,10 @@ class Game implements UIHost {
     if (this.uiTimer === 0.25) {
       this.homeBtn.set(this.awayFromHome());
       // la musique de la fin (chute du roi des Enfers, voyage des colons, écrans de victoire), des Enfers, sinon de l'âge
-      audio.music(this.kingStage.playing || uiRoot.querySelector('.overlay.voyage, .overlay.victory') ? 'end' : this.voyageStage.playing || document.querySelector('#loadScreen.voyage') ? 'voyage' : this.mode === 'hell' ? 'hell' : null);
+      // (le voyage des colons et les écrans de victoire : rien que la musique, plus les feux d'artifice de la fête)
+      const ending = !!uiRoot.querySelector('.overlay.voyage, .overlay.victory');
+      audio.hush(ending);
+      audio.music(this.kingStage.playing || ending ? 'end' : this.voyageStage.playing || document.querySelector('#loadScreen.voyage') ? 'voyage' : this.mode === 'hell' ? 'hell' : null);
     }
     // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }
