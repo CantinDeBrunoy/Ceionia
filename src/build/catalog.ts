@@ -9,7 +9,9 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   // le volet maritime : chantier naval, phare, halle aux poissons, ferme marine
   | 'shipyard' | 'lighthouse' | 'fishmarket' | 'offshore'
   // la diplomatie de l'archipel : le monument de la concorde (la paix des trois peuples) ; le comptoir chez l'allié (l'or)
-  | 'concord' | 'tradepost';
+  | 'concord' | 'tradepost'
+  // la guerre gagnée : l'obélisque, puis l'arc de triomphe ; la paix signée : l'ambassade, puis le siège des nations unies
+  | 'triumph' | 'embassy';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'war';
@@ -475,6 +477,22 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Débloqué par l’expédition « L’ambassade de la paix », sur la voie de la paix (archipel).',
     reqMission: 'truce',
   },
+  // la guerre des deux îles gagnée aux côtés de l'allié (demande de l'auteur, 17 nov. 2026) : proposé seulement alors (`kindOffered`)
+  triumph: {
+    id: 'triumph', size: 2, minAge: 2, icon: '🏛️', cat: 'life',
+    names: ['', '', 'Obélisque de la victoire', 'Arc de triomphe', 'Arc de triomphe', 'Arc de triomphe'],
+    desc: 'Le souvenir de la guerre gagnée aux côtés de notre allié : un obélisque au Médiéval, puis un arc de triomphe sous lequel passe l’avenue.',
+    joy: [0, 0, 8, 10, 12, 14], jobs: [0, 0, 2, 2, 2, 2],
+    perk: 'Débloqué par la victoire dans la guerre des deux îles, sur la voie de la guerre (archipel). Il évolue avec les âges.',
+  },
+  // la paix signée (« L'ambassade de la paix ») : l'ambassade, qui devient le siège des nations unies
+  embassy: {
+    id: 'embassy', size: 2, minAge: 2, icon: '🌐', cat: 'life',
+    names: ['', '', 'Ambassade', 'Palais des nations', 'Siège des Nations unies', 'Siège des Nations unies'],
+    desc: 'Les trois peuples réconciliés y parlent ensemble : une ambassade au Médiéval, le palais des nations à l’Industriel, puis le siège des Nations unies.',
+    joy: [0, 0, 6, 8, 10, 12], jobs: [0, 0, 4, 6, 8, 10],
+    perk: 'Débloqué par l’expédition « L’ambassade de la paix », sur la voie de la paix (archipel). Il évolue avec les âges.',
+  },
   // le comptoir : chez l'allié seulement (voir `tradepostWhy`, allyLand.ts) ; il ouvre l'échange contre de l'or (trade.ts)
   tradepost: {
     id: 'tradepost', size: 2, minAge: 2, icon: '💰', cat: 'prod',
@@ -520,7 +538,7 @@ export const GARRISONS: KindId[] = ['watchtower', 'barracks'];
 /** Les remparts : un pan de mur se trace en ligne, la porte se pose seule ; tous deux se raccordent à leurs voisins */
 export const isRampart = (k: KindId) => k === 'wall' || k === 'gate';
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -552,7 +570,7 @@ export const KIND_SUB: Record<KindId, string> = {
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
   waterpark: 'detente', funfair: 'detente', circus: 'detente', arena: 'detente', zoo: 'detente', alpine: 'detente', aerodrome: 'detente',
-  temple: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments', concord: 'monuments',
+  temple: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments', concord: 'monuments', triumph: 'monuments', embassy: 'monuments',
 };
 
 export interface AgeDef {
@@ -578,7 +596,7 @@ export const AGES: AgeDef[] = [
   { name: 'Antiquité', tagline: 'Maisons de tuiles, temples et agoras', reqPop: 12, reqKinds: { house: 4, farm: 1, well: 1, workshop: 1 } },
   { name: 'Médiéval', tagline: 'Colombages, églises et châteaux', reqPop: 30, reqKinds: { house: 8, temple: 1, workshop: 2, gather: 1 } },
   { name: 'Industriel', tagline: 'Briques, cheminées et gares', reqPop: 60, reqKinds: { house: 12, temple: 1, mill: 1, quarry: 1, landmark: 1, gather: 2, health: 1 }, reqOre: 12, reqGold: 20 },
-  { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2, school: 1 }, reqOre: 30, reqBrick: 40, reqGold: 50, reqLate: { refinery: 1, oilwell: 2 }, reqRail: true },
+  { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2, school: 1 }, reqOre: 30, reqGold: 50, reqLate: { refinery: 1, oilwell: 2 }, reqRail: true },
   { name: 'Futuriste', tagline: 'Arcologies, maglev et fusées', reqPop: 180, reqKinds: { house: 24, workshop: 3, school: 2, lab: 1, health: 1, gather: 4 }, reqOre: 50, reqBrick: 80, reqGold: 100 },
 ];
 
@@ -605,7 +623,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
   watchtower: 'tours de garde', barracks: 'casernes de la garnison', wall: 'remparts', gate: 'portes de la ville',
   shipyard: 'chantiers navals', lighthouse: 'phares', fishmarket: 'halles aux poissons', offshore: 'fermes marines',
-  concord: 'monuments de la concorde', tradepost: 'comptoirs',
+  concord: 'monuments de la concorde', tradepost: 'comptoirs', triumph: 'monuments de la victoire', embassy: 'ambassades',
 };
 
 /**

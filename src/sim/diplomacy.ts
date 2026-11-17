@@ -207,13 +207,15 @@ export function endgameOpen(w: World, age: number) {
 }
 
 /**
- * La carte paix ou guerre s'ouvre-t-elle d'elle-même ? Le dénouement ouvert (allié installé chez lui, Médiéval), jamais
- * encore montrée seule (`asked` : « Plus tard » ne la fait pas revenir en boucle), et toutes les autres conditions du passage
- * à l'Industriel remplies (`othersDone` : le conflit est la dernière qui manque, comme le grand choix pour le Médiéval).
- * Ensuite on la rouvre depuis la condition du panneau des âges, le conseil, ou l'onglet « Grands choix »
+ * La carte paix ou guerre s'ouvre-t-elle d'elle-même ? Comme le grand choix pour le Médiéval : au Médiéval, l'allié choisi,
+ * le conflit à régler, toutes les autres conditions du passage à l'Industriel remplies (`othersDone` : le conflit est la
+ * dernière qui manque), une fois par session (`shown` : « Plus tard » ne la fait pas revenir en boucle). Même sans port ni
+ * comptoir chez l'allié : la carte dit alors ce qui manque (demande de l'auteur, 17 nov. 2026 : à 13/14, rien ne
+ * s'ouvrait, et l'on ne savait pas quoi faire). Ensuite on la rouvre depuis la condition du panneau des âges, le conseil, ou
+ * l'onglet « Grands choix »
  */
-export function pathDue(w: World, age: number, othersDone: boolean) {
-  return othersDone && !w.diplo.asked && endgameOpen(w, age);
+export function pathDue(w: World, age: number, othersDone: boolean, shown = false) {
+  return othersDone && !shown && archipelagoOn(w) && !!w.diplo.ally && w.diplo.conflict === 'open' && age === ENDGAME_AGE && (w.diplo.path !== 'war' || w.diplo.battle === 'none');
 }
 
 /** Pourquoi la carte du dénouement ne s'ouvre pas encore (null : elle peut) */
@@ -345,6 +347,10 @@ export const DIPLO_KINDS: Partial<Record<KindId, string>> = { concord: 'truce' }
 
 /** Le bâtiment est-il proposé dans cette partie ? (le monument de la concorde : seulement sur la voie de la paix) */
 export function kindOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, k: KindId) {
+  // l'obélisque de la victoire : seulement la guerre gagnée (il n'a pas d'expédition qui l'ouvre, c'est la bataille)
+  if (k === 'triumph') return archipelagoOn(w) && w.diplo.conflict === 'won';
+  // l'ambassade : la paix signée (« L'ambassade de la paix » réussie ; une mission ne débloque qu'un bâtiment, le monument)
+  if (k === 'embassy') return archipelagoOn(w) && (w.diplo.conflict === 'peace' || w.exp.done.includes('truce'));
   const m = DIPLO_KINDS[k];
   if (!m) return true;
   return archipelagoOn(w) && (w.exp.done.includes(m) || w.diplo.path === 'peace');

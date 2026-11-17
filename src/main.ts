@@ -108,7 +108,7 @@ import { canExpand, expandWorld } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
 import type { ConflictWay } from './ui/ways';
-import { bindPostReady, pathDue, CONFLICT_LABEL, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, PEACE_CHAIN, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
+import { bindPostReady, pathDue, ENDGAME_AGE, CONFLICT_LABEL, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, PEACE_CHAIN, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
 import { RivalBattle, BattleGoal } from './sim/rivalBattle';
 import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
@@ -595,7 +595,7 @@ class Game implements UIHost {
       neither: () => { this.world.crossroads = true; this.ui.update(); this.saveNow(); },
     });
     this.diploChoice = new DiploChoice(uiRoot, {
-      diplo: () => this.world.diplo, click: () => audio.sfxClick(),
+      diplo: () => this.world.diplo, why: () => endgameWhy(this.world, this.sim.age), click: () => audio.sfxClick(), battle: () => { this.startRivalBattle(); },
       ally: (p) => {
         if (!chooseAlly(this.world.diplo, p)) return;
         this.ui.banner(tr('Une alliance !'), tr('{people} sont nos alliés', { people: peopleName(p).replace(/^./, (c) => c.toUpperCase()) }));
@@ -1159,9 +1159,10 @@ class Game implements UIHost {
     if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine) return;
     if (allyPending(w)) this.diploChoice.showAlly();
     else if (d.cine) this.playPeace();
-    else if (d.battle === 'ready' && battleReady(d, w.exp.clock)) this.startRivalBattle();
+    // (les éclaireurs revenus : la carte « Lancer l'assaut », une fois par session ; la bataille ne part plus d'elle-même)
+    else if (d.battle === 'ready' && battleReady(d, w.exp.clock) && !this.battleShown) { this.battleShown = true; this.popups.taken(); this.diploChoice.showBattle(); }
     else if (d.battle === 'lost' && battleReady(d, w.exp.clock) && !this.retrySaid) { this.retrySaid = true; this.ui.toast(tr('⚔️ Nos troupes se sont refaites chez notre allié : la bataille peut reprendre. Cliquez ici.'), () => this.startRivalBattle(), 'action'); }
-    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone())) { d.asked = true; this.popups.taken(); this.diploChoice.showPath(); }
+    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone(), this.pathShown)) { this.pathShown = d.asked = true; this.popups.taken(); this.diploChoice.showPath(); }
   }
 
   /**
@@ -1176,6 +1177,11 @@ class Game implements UIHost {
     this.allySeen = ally;
     if (ally) setTimeout(() => this.tutorial.chapter('arch'), 3200);
   }
+
+  /** La carte du dénouement s'est ouverte d'elle-même dans cette session (voir `pathDue`) */
+  private pathShown = false;
+  /** La carte « Lancer l'assaut » s'est ouverte d'elle-même dans cette session */
+  private battleShown = false;
 
   /** Les conditions du passage à l'âge suivant sont toutes remplies, sauf peut-être le conflit des deux îles */
   private othersDone() {
@@ -1366,6 +1372,8 @@ class Game implements UIHost {
       audio.sfxAgeUp();
       const c = this.villageCenter();
       if (c) this.festAt(c[0], c[1]);
+      // le monument de la victoire est à bâtir (rayon Vie, monuments)
+      setTimeout(() => this.ui.toast(tr('🏛️ Pour s’en souvenir : un obélisque de la victoire à bâtir. Il deviendra un arc de triomphe.'), undefined, 'notice'), 4500);
     } else {
       loseAllyBattle(w.diplo, w.exp.clock, this.time.dayLen);
       this.ui.banner(retreat ? tr('Retraite') : tr('Défaite'), tr('Nos troupes rembarquent : nouvel essai dans {n} jours', { n: RETRY_DAYS }));
@@ -1400,12 +1408,13 @@ class Game implements UIHost {
     const w = this.world, d = w.diplo;
     if (allyPending(w)) { this.diploChoice.showAlly(); return; }
     if (d.path === 'war' && d.battle !== 'none') {
-      if (battleReady(d, w.exp.clock)) this.startRivalBattle();
+      if (battleReady(d, w.exp.clock)) { if (d.battle === 'ready') this.diploChoice.showBattle(); else this.startRivalBattle(); }
       else this.ui.toast(tr('Nos troupes se refont chez notre allié : la bataille reprendra dans {n} jours.', { n: Math.max(1, Math.ceil((d.retry - w.exp.clock) / this.time.dayLen)) }));
       return;
     }
+    // (ce qui manque encore, le port et le comptoir chez l'allié : la carte le dit, ses deux voies grisées)
     const why = endgameWhy(w, this.sim.age);
-    if (why) { this.ui.toast(why); return; }
+    if (why && !(d.ally && d.conflict === 'open' && this.sim.age === ENDGAME_AGE)) { this.ui.toast(why); return; }
     this.diploChoice.showPath();
   }
 
@@ -1771,9 +1780,11 @@ class Game implements UIHost {
       const crowd = ag.recruit(Math.min(60, ag.available())) ?? [];
       // la route des colons : les cases que suivrait leur marche, du cœur du village au pas de tir (le tracé direct sans chemin)
       const cell = (p: number[]) => Math.min(N - 1, Math.max(0, Math.floor(p[1]))) * N + Math.min(N - 1, Math.max(0, Math.floor(p[0])));
-      const path = ag.findPath(cell(a.base), cell(a.dest)) ?? [];
-      const route: [number, number][] = [[a.base[0], a.base[1]], ...path.slice(0, -1).map((c): [number, number] => [(c % N) + 0.5, Math.floor(c / N) + 0.5]), [a.dest[0], a.dest[1]]];
-      const spots = this.parade.start(route, [a.base[0], a.base[1]], [a.dest[0], a.dest[1]], this.sim.age, crowd.length);
+      // (le cosmodrome sur l'île de l'allié : la foule accompagne les colons jusqu'à la navette)
+      const end: [number, number] = a.air ? a.air.pad : a.dest;
+      const path = ag.findPath(cell(a.base), cell(end)) ?? [];
+      const route: [number, number][] = [[a.base[0], a.base[1]], ...path.slice(0, -1).map((c): [number, number] => [(c % N) + 0.5, Math.floor(c / N) + 0.5]), [end[0], end[1]]];
+      const spots = this.parade.start(route, [a.base[0], a.base[1]], [end[0], end[1]], this.sim.age, crowd.length);
       f = this.farewell = { id: a.id, crowd, spots, sent: 0, rel: null, relAt: 0, voyage: false };
       this.festAt(a.base[0], a.base[1]);
       this.ui.info(`${a.m.icon} ${tr('Tout le village sort dire adieu aux colons !')}`);

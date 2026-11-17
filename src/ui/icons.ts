@@ -204,7 +204,7 @@ export const KIND_ICON: Record<KindId, string> = {
   arcology: 'arcology', vfarm: 'tower', fusion: 'atom', spaceport: 'rocket', research: 'qubit', maglev: 'maglev',
   watchtower: 'watchtower', barracks: 'shield', wall: 'wall', gate: 'gate',
   shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
-  concord: 'concord', tradepost: 'scales',
+  concord: 'concord', tradepost: 'scales', triumph: 'arch', embassy: 'dome',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */

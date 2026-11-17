@@ -110,10 +110,10 @@ describe('prix en briques', () => {
 });
 
 describe('passage d’âge : les briques', () => {
-  it('l’époque moderne et l’âge futuriste en réclament ; pas l’industriel ni avant', () => {
+  it('l’âge futuriste en réclame ; pas l’époque moderne (retirée le 17 nov. 2026, demande de l’auteur) ni avant', () => {
     expect(AGES[1].reqBrick).toBeUndefined();
     expect(AGES[3].reqBrick).toBeUndefined();
-    expect(AGES[4].reqBrick).toBe(40);
+    expect(AGES[4].reqBrick).toBeUndefined();
     expect(AGES[5].reqBrick).toBe(80);
   });
 
@@ -123,12 +123,14 @@ describe('passage d’âge : les briques', () => {
     sim.age = 2;
     expect(sim.ageProgress()!.items.some((i) => i.label.startsWith('briques'))).toBe(false);
     sim.age = 3;
+    expect(sim.ageProgress()!.items.some((i) => i.label.startsWith('briques'))).toBe(false);
+    sim.age = 4;
     const item = () => sim.ageProgress()!.items.find((i) => i.label.startsWith('briques'))!;
-    expect(item()).toMatchObject({ label: 'briques (briqueterie)', have: 0, need: 40 });
+    expect(item()).toMatchObject({ label: 'briques (briqueterie)', have: 0, need: 80 });
     expect(item().kind).toBeUndefined();
     w.brick = 25.9;
     expect(item().have).toBe(25);
-    w.brick = 40;
+    w.brick = 80;
     expect(item().have).toBeGreaterThanOrEqual(item().need);
     // la condition est un des éléments du passage : sans elle, on ne passe pas
     const others = sim.ageProgress()!.items.filter((i) => !i.label.startsWith('briques'));
@@ -137,7 +139,7 @@ describe('passage d’âge : les briques', () => {
     sim.pop = 1000;
     expect(sim.ready).toBe(false);
     w.unlimited = true;
-    expect(item().have).toBe(40);
+    expect(item().have).toBe(80);
     // une partie déjà plus avancée n'a pas à les refaire : seul l'âge suivant compte
     sim.age = 5;
     expect(sim.ageProgress()).toBeNull();

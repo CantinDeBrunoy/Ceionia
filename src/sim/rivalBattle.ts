@@ -239,9 +239,10 @@ export const BOATS = [9, 8, 8], BOAT_EVERY = 25, ALLY_LANDS = 45;
 export const COUNTER_T = 50, COUNTER_MAX = 80;
 /**
  * La porte principale : elle tient environ `GATE_T` secondes sous les coups de `GATE_MEN` de nos fantassins de l'âge (sa vie
- * suit leurs dégâts par seconde, à tous les âges) ; le bélier, les éclaireurs (porte faible) l'entament d'avance
+ * suit leurs dégâts par seconde, à tous les âges) ; le bélier, les éclaireurs (porte faible) l'entament d'avance.
+ * (260 s jusqu'au 17 nov. 2026 : l'auteur la trouvait « trop tanky », on piétinait devant)
  */
-export const GATE_T = 260, GATE_MEN = 10, RAM_K = 0.65, WEAK_GATE_K = 0.7;
+export const GATE_T = 120, GATE_MEN = 10, RAM_K = 0.65, WEAK_GATE_K = 0.7;
 /** Les vagues de renfort : leur temps dans l'assaut des remparts (s) */
 export const WAVE_AT = [20, 65];
 /** L'allié arrive en renfort à ce temps (s) de l'assaut des remparts, ou plus tôt si nos forces fondent de moitié */

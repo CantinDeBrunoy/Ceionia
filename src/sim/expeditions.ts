@@ -435,11 +435,15 @@ export class Expeditions {
       if (!dest && c.dest === 'cave' && kind === 'mountain') dest = this.findDest('mountain', base, true);
       if (!dest) kind = FALLBACK[kind];
     }
+    // le cosmodrome sur l'île de l'allié (archipel) : on n'y va pas à pied. La navette (l'hélicoptère) emmène l'équipe d'une
+    // aire près du village à une aire au pied du cosmodrome (retour de l'auteur, 17 nov. 2026 : « aucun chemin praticable »)
+    let hop: AirTrip | null = null;
+    if (!dest && c.dest === 'spaceport') { const h = this.spaceHop(base); if (h) { dest = h.dest; hop = h.air; kind = 'spaceport'; } }
     if (!dest || !kind) return null;
     // une fois la course automobile gagnée ET l'usine automobile bâtie, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval
     const motor = age >= 3 && this.world.exp.done.includes('motorcar') && this.has('carworks') && !c.troop;
     // la montagne et le bout du monde se gagnent en l'air quand le village a de quoi s'envoler : pas de chevaux, pas de voiture
-    const air = c.troop || sea || m.farewell || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest);
+    const air = hop ?? (c.troop || sea || m.farewell || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest));
     const mounts = motor || air ? 0 : this.mountsFor(c);
     const party = this.agents.recruit(this.need(c));
     if (!party) { this.lastFail = tr('Pas assez d’habitants prêts à partir à cet instant : réessayez dans un moment.'); return null; }
@@ -515,7 +519,8 @@ export class Expeditions {
       // les adieux durent un peu, le temps que le village acclame les colons
       if (a.phase === 'gather' && ((ag.partyDone(a.party) && a.t > (a.m.farewell ? 20 : 0)) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
-        ag.partyGo(a.party, a.dest[0], a.dest[1]);
+        // (les colons qui gagnent l'île de l'allié en navette : d'abord l'aire d'envol)
+        ag.partyGo(a.party, a.air ? a.air.pad[0] : a.dest[0], a.air ? a.air.pad[1] : a.dest[1]);
         this.onNews?.(tr('{icon} L’expédition « {title} » part vers {dest}.', { icon: a.m.icon, title: a.m.title, dest: destName(a.c) }));
       } else if (a.phase === 'out' && this.arrived(a, dt)) {
         a.phase = 'work'; a.t = 0;
@@ -1064,8 +1069,39 @@ export class Expeditions {
     return w.inCells(cx, cz) && [BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH].includes(w.biome[w.ci(cx, cz)]);
   }
 
-  /** Au pied du cosmodrome (ou de l'héliport, de l'aérodrome) : une case libre le long de son emprise, la plus proche du village, où l'on arrive à pied */
-  private padSide(base: [number, number], kind: KindId = 'spaceport'): [number, number] | null {
+  /**
+   * Le cosmodrome bâti sur l'île de l'allié, que l'on ne gagne pas à pied : le pied du pas de tir (sans chemin depuis le
+   * village), une aire d'atterrissage d'où on le rejoint, et une aire d'envol près du village (l'héliport s'il y en a un,
+   * sinon une case libre près du cœur du village). Null s'il n'y en a pas
+   */
+  private spaceHop(base: [number, number]): { dest: [number, number]; air: AirTrip } | null {
+    const dest = this.padSide(base, 'spaceport', false);
+    if (!dest) return null;
+    const land = this.landing(dest, base), pad = this.padSide(base, 'heliport') ?? this.nearBase(base);
+    return land && pad ? { dest, air: airTrip('heli', pad, land) } : null;
+  }
+
+  /** Une case libre et plate près du cœur du village, d'où l'on y revient à pied (l'aire d'une navette sans héliport) */
+  private nearBase(base: [number, number]): [number, number] | null {
+    const w = this.world, from = w.ci(Math.floor(base[0]), Math.floor(base[1])), cand: [number, number, number][] = [];
+    for (let r = 2; r <= 9; r++)
+      for (let k = 0; k < 16; k++) {
+        const ang = (k * Math.PI) / 8, x = base[0] + Math.cos(ang) * r, z = base[1] + Math.sin(ang) * r, cx = Math.floor(x), cz = Math.floor(z);
+        if (!w.inCells(cx, cz)) continue;
+        const i = w.ci(cx, cz);
+        if (w.occ[i] || w.lake[i] || w.decor[i] || w.road[i] || w.cellAvg(cx, cz) < 0.1 || w.cellSlope(cx, cz) > 0.4) continue;
+        cand.push([cx + 0.5, cz + 0.5, r + w.cellSlope(cx, cz)]);
+      }
+    cand.sort((p, q) => p[2] - q[2]);
+    for (const [x, z] of cand.slice(0, 20)) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
+    return null;
+  }
+
+  /**
+   * Au pied du cosmodrome (ou de l'héliport, de l'aérodrome) : une case libre le long de son emprise, la plus proche du
+   * village, où l'on arrive à pied (`walk` faux : sans regarder le chemin, pour la navette vers l'île de l'allié)
+   */
+  private padSide(base: [number, number], kind: KindId = 'spaceport', walk = true): [number, number] | null {
     const w = this.world, cand: [number, number, number][] = [];
     for (const b of w.buildings.values()) {
       if (b.kind !== kind) continue;
@@ -1079,6 +1115,7 @@ export class Expeditions {
         }
     }
     cand.sort((p, q) => p[2] - q[2]);
+    if (!walk) return cand.length ? [cand[0][0], cand[0][1]] : null;
     const from = w.ci(Math.floor(base[0]), Math.floor(base[1]));
     for (const [x, z] of cand.slice(0, 24)) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
     return null;

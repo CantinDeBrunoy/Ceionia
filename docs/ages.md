@@ -27,7 +27,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 | Antiquité | house 4, farm 1, well 1, workshop 1 | | | | herd, mammoth | |
 | Médiéval | house 8, temple 1, workshop 2, gather 1 | | | | seeds, kraken ; et le grand choix (voir plus bas) | |
 | Industriel | house 12, temple 1, mill 1, quarry 1, landmark 1, gather 2, health 1 | 12 | | 20 | mine, dragon, caravel | |
-| Moderne | house 18, mill 2, landmark 1, gather 3, farm 2, school 1 | 30 | 40 | 50 | railway, motorcar, oil | `reqLate` : refinery 1, oilwell 2 ; `reqRail` : une première ligne et deux gares reliées |
+| Moderne | house 18, mill 2, landmark 1, gather 3, farm 2, school 1 | 30 | | 50 | railway, motorcar, oil | `reqLate` : refinery 1, oilwell 2 ; `reqRail` : une première ligne et deux gares reliées |
 | Futuriste | house 24, workshop 3, school 2, lab 1, health 1, gather 4 | 50 | 80 | 100 | summit | |
 
 - Les expéditions obligatoires sont celles de `mandatoriesFor(age)` (`missions.ts`, `mandatory: true` : 11 en tout). L'âge 5 n'en a aucune. L'expédition du portail ne l'est plus : le grand choix du passage au Médiéval ouvre le portail (voir [grand-choix.md](grand-choix.md)).
@@ -57,8 +57,9 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - Autres verrous : `reqMission` (expédition réussie), `reqKind` (un autre bâtiment présent : l'usine automobile veut une raffinerie), tutoriel guidé, premier bâtiment obligé (la place du village).
 
 ### Affichage
-- `#agePanel` : nom et devise, barre `ratio`, « Vers X » et « n/m conditions » ; clic : la liste dépliée (chaque ligne cliquable : bâtir le genre, ou ouvrir l'expédition / la fiche de minerai, briques, rail). Bouton `#ageGo` quand `Sim.ready`.
-- Au dernier âge : « Dernier âge atteint », `ageProgress()` renvoie `null`, le conseil passe à la conquête de l'espace ([fin-de-partie.md](fin-de-partie.md)).
+- `#agePanel` : nom et devise, barre `ratio`, « Vers X » et « n/m conditions » ; clic : la liste dépliée (chaque ligne cliquable : bâtir le genre, ou ouvrir l'expédition / la fiche du minerai ou de l'or, le rail ; les briques prennent la briqueterie en main dans le rayon du bas, comme une condition de bâtiment, au lieu d'ouvrir leur fiche en haut : deux conduites pour la même sorte de condition, 17 nov. 2026). Bouton `#ageGo` quand `Sim.ready`.
+- Les briques ne sont plus demandées pour passer à l'époque moderne (décision de l'auteur, 17 nov. 2026) : seulement pour l'âge futuriste (80).
+- Au dernier âge : « Dernier âge atteint », `ageProgress()` renvoie `null`, le conseil passe à la conquête de l'espace ([fin-de-partie.md](fin-de-partie.md)). Le panneau des âges déplié montre « Pour finir le jeu » (`UI.endRoad`) : le cosmodrome, le premier vol, la Lune, la centrale à fusion, la colonie, cochés au fur et à mesure et cliquables ; « profitez de votre village » seulement la colonie fondée (avant, il s'affichait dès l'âge atteint).
 
 ## Fonctionnement dans le code
 - `ageProgress()` construit `items` à chaque appel (appelé par `ui.update`, `ready`, `computeMessage`, `advance` : pas de cache, rester léger).

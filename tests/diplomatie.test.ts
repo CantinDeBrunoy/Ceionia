@@ -113,18 +113,24 @@ describe('diplomatie : le dénouement (au Médiéval)', () => {
     expect(choosePath(w.diplo, 'peace')).toBe(false);
   });
 
-  it('la carte s’ouvre d’elle-même quand les autres conditions de l’Industriel sont remplies, une seule fois (« Plus tard » ne la fait pas revenir)', () => {
+  it('la carte s’ouvre d’elle-même quand les autres conditions de l’Industriel sont remplies, une fois par session, même sans le comptoir chez l’allié', () => {
     const w = allied();
     expect(pathDue(w, 2, false)).toBe(false);
     expect(pathDue(w, 2, true)).toBe(true);
+    // (à 13/14 sans port ni comptoir chez l'allié : elle s'ouvre aussi, et dit ce qui manque)
     bindPostReady(() => false);
-    expect(pathDue(w, 2, true)).toBe(false);
+    expect(pathDue(w, 2, true)).toBe(true);
+    expect(endgameWhy(w, 2)).not.toBeNull();
     bindPostReady(() => true);
-    // montrée une fois (puis « Plus tard ») : elle ne revient plus seule
-    w.diplo.asked = true;
-    expect(pathDue(w, 2, true)).toBe(false);
-    w.diplo.asked = false;
+    // montrée dans la session (puis « Plus tard ») : elle ne revient plus seule
+    expect(pathDue(w, 2, true, true)).toBe(false);
     expect(pathDue(w, 3, true)).toBe(false);
+    // la bataille engagée : c'est la bataille qui s'ouvre, pas la carte
+    w.diplo.path = 'war'; w.diplo.battle = 'ready';
+    expect(pathDue(w, 2, true)).toBe(false);
+    w.diplo.path = null; w.diplo.battle = 'none';
+    w.diplo.conflict = 'peace';
+    expect(pathDue(w, 2, true)).toBe(false);
   });
 
   it('le conflit réglé est une condition de l’Industriel, seulement avec l’archipel', () => {

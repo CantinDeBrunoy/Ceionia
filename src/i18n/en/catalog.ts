@@ -747,6 +747,18 @@ registerDict('catalog', {
   "Monument de la concorde": "Concord Monument",
   "Trois piliers, un par peuple, sous un même anneau : la paix signée entre notre village et les deux îles.": "Three pillars, one per people, under a single ring: the peace signed between our village and the two islands.",
   "monuments de la concorde": "concord monuments",
+  // la guerre gagnée : l'obélisque puis l'arc de triomphe ; la paix : l'ambassade puis le siège des Nations unies
+  "Obélisque de la victoire": "Victory Obelisk",
+  "Arc de triomphe": "Triumphal Arch",
+  "Le souvenir de la guerre gagnée aux côtés de notre allié : un obélisque au Médiéval, puis un arc de triomphe sous lequel passe l’avenue.": "The memory of the war won alongside our ally: an obelisk in the Middle Ages, then a triumphal arch with the avenue running beneath it.",
+  "Débloqué par la victoire dans la guerre des deux îles, sur la voie de la guerre (archipel). Il évolue avec les âges.": "Unlocked by victory in the war between the two islands, on the path of war (archipelago). It evolves with the ages.",
+  "monuments de la victoire": "victory monuments",
+  "Ambassade": "Embassy",
+  "Palais des nations": "Palace of Nations",
+  "Siège des Nations unies": "United Nations Headquarters",
+  "Les trois peuples réconciliés y parlent ensemble : une ambassade au Médiéval, le palais des nations à l’Industriel, puis le siège des Nations unies.": "The three reconciled peoples talk together here: an embassy in the Middle Ages, the Palace of Nations in the Industrial age, then the United Nations Headquarters.",
+  "Débloqué par l’expédition « L’ambassade de la paix », sur la voie de la paix (archipel). Il évolue avec les âges.": "Unlocked by the expedition “The Peace Embassy”, on the path of peace (archipelago). It evolves with the ages.",
+  "ambassades": "embassies",
   "Le cosmodrome se bâtit sur l’île de votre allié ({isle}).": "The spaceport is built on your ally’s island ({isle}).",
   // le cosmodrome chez l'allié
   "Le cosmodrome se bâtit sur l’île de votre allié : choisissez d’abord votre allié.": "The spaceport is built on your ally’s island: first choose your ally.",

@@ -1,7 +1,7 @@
 import { tr } from '../i18n';
 import { hudPic } from './pics';
 import type { People } from '../world/archipelago';
-import { DiploState, Path, isleName, peopleName, rivalOf } from '../sim/diplomacy';
+import { DiploState, Path, isleName, peopleName, rivalOf, type Intel } from '../sim/diplomacy';
 
 /**
  * Les cartes de la diplomatie de l'archipel, dans le style de la carte du choix du portail (parchemin bordé d'or, titre en
@@ -16,11 +16,11 @@ import { DiploState, Path, isleName, peopleName, rivalOf } from '../sim/diplomac
  */
 export class DiploChoice {
   private el: HTMLElement;
-  private mode: 'ally' | 'path' | 'tactic' = 'ally';
+  private mode: 'ally' | 'path' | 'tactic' | 'battle' = 'ally';
   /** le choix tactique en cours de la bataille (1 : les remparts ; 2 : l'assaut final) */
   private step: 1 | 2 = 1;
 
-  constructor(root: HTMLElement, private host: { diplo(): DiploState; click(): void; ally(p: People): void; path(p: Path): void; tactic?(c: string): void }) {
+  constructor(root: HTMLElement, private host: { diplo(): DiploState; why?(): string | null; click(): void; ally(p: People): void; path(p: Path): void; tactic?(c: string): void; battle?(): void }) {
     this.el = document.createElement('div');
     this.el.id = 'diploChoice';
     this.el.className = 'panel';
@@ -34,6 +34,7 @@ export class DiploChoice {
       if (b.dataset.tac) this.host.tactic?.(b.dataset.tac);
       else if (a === 'orient' || a === 'asie') this.host.ally(a);
       else if (a === 'peace' || a === 'war') this.host.path(a);
+      else if (a === 'battle') this.host.battle?.();
     });
     root.append(this.el);
   }
@@ -44,12 +45,18 @@ export class DiploChoice {
   showAlly() { this.mode = 'ally'; this.render(); this.el.style.display = ''; }
   /** La carte du dénouement */
   showPath() { this.mode = 'path'; this.render(); this.el.style.display = ''; }
+  /**
+   * Les éclaireurs sont revenus : ce qu'ils ont appris, et « Lancer l'assaut » (ou « Plus tard »). Avant, la bataille partait
+   * seule à leur retour, et l'on ne comprenait pas ce qui arrivait (demande de l'auteur, 17 nov. 2026)
+   */
+  showBattle() { this.mode = 'battle'; this.render(); this.el.style.display = ''; }
   /** Un choix tactique de la bataille de l'archipel (le jeu est en pause tant qu'il attend) */
   showTactic(step: 1 | 2) { this.mode = 'tactic'; this.step = step; this.render(); this.el.style.display = ''; }
 
   private render() {
     const d = this.host.diplo();
-    const choice = (a: string, cls: string, icon: string, title: string, sub: string, on = false) => `<button data-a="${a}" class="${cls}${on ? ' on' : ''}">${icon}<span><b>${title}</b><small>${sub}</small></span></button>`;
+    // (`off` : la voie ne se prend pas encore, la carte dit pourquoi)
+    const choice = (a: string, cls: string, icon: string, title: string, sub: string, on = false, off = false) => `<button data-a="${a}" class="${cls}${on ? ' on' : ''}"${off ? ' disabled' : ''}>${icon}<span><b>${title}</b><small>${sub}</small></span></button>`;
     if (this.mode === 'ally') {
       const card = (p: People) => choice(p, 'pcGo dcPeople', crest(p), cap(peopleName(p)), p === 'orient'
         ? tr('{isle} : dunes, palmiers et coupoles blanches ; marchands et navigateurs', { isle: cap(isleName(p)) })
@@ -73,13 +80,28 @@ export class DiploChoice {
         <small class="pcNote">${tr('La bataille attend votre choix.')}</small>`;
       return;
     }
-    const ally = d.ally ?? 'orient', rival = rivalOf(ally);
+    if (this.mode === 'battle') {
+      const ally = d.ally ?? 'orient', rival = rivalOf(ally);
+      const learnt = d.intel.map((i) => `<li>${INTEL[i]()}</li>`).join('');
+      this.el.innerHTML = `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rival, 64)}</div>
+        <h4>${tr('Les éclaireurs sont de retour')}</h4>
+        <p class="pcSub">${tr('La côte de {isle} est reconnue. Nos troupes et celles de {ally} sont prêtes à débarquer.', { isle: isleName(rival), ally: peopleName(ally) })}</p>
+        ${learnt ? `<ul class="dcIntel">${learnt}</ul>` : ''}
+        <div class="pcBtns dcCol">
+          ${choice('battle', 'pcGo', hudPic('militaire', 34), tr('Lancer l’assaut'), tr('le débarquement, puis la plage, le port, les remparts et le palais'))}
+          ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('préparer encore le village : la bataille attendra'))}
+        </div>
+        <small class="pcNote">${tr('Pour lancer l’assaut plus tard : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
+      return;
+    }
+    const ally = d.ally ?? 'orient', rival = rivalOf(ally), why = this.host.why?.() ?? null;
     this.el.innerHTML = `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rival, 64)}</div>
       <h4>${tr('Le conflit des deux îles')}</h4>
       <p class="pcSub">${tr('Nos alliés, {ally}, sont toujours en guerre contre {rival}. Que fera notre village ?', { ally: peopleName(ally), rival: peopleName(rival) })}</p>
       <div class="pcBtns dcCol">
-        ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('une ambassade, sans risque : un comptoir, un monument, une fête'), d.path === 'peace')}
-        ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('une expédition militaire, puis la bataille : butin et tribut d’or'), d.path === 'war')}
+        ${why ? `<p class="dcWhy">${why}</p>` : ''}
+        ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('une ambassade, sans risque : un comptoir, un monument, une fête'), d.path === 'peace', !!why)}
+        ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('une expédition militaire, puis la bataille : butin et tribut d’or'), d.path === 'war', !!why)}
         ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('rester au Médiéval et continuer à jouer'))}
       </div>
       <small class="pcNote">${tr('Il faut régler ce conflit pour passer à l’âge suivant. Pour y revenir : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
@@ -89,6 +111,14 @@ export class DiploChoice {
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Ce que les éclaireurs ont appris, en une ligne chacun (traduit à l'affichage) */
+const INTEL: Record<Intel, () => string> = {
+  scoutBeach: () => tr('🏖️ La plage de débarquement est repérée : moins de gardes pour nous accueillir.'),
+  scoutGarrison: () => tr('🛡️ La garnison est comptée : ses renforts sortiront plus tard.'),
+  scoutGate: () => tr('🚪 Une porte est mal gardée : elle cédera plus vite.'),
+  scoutChief: () => tr('👑 On sait où se tiendra le chef rival : il sera plus vite à terre.'),
+};
 
 /**
  * Le blason d'un peuple, dessiné : un écu turquoise et sable à coupole et croissant pour les Sablais, un écu rouge laqué à

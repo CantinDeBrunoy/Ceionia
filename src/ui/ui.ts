@@ -20,7 +20,7 @@ import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
 import { isleName, kindOffered, CONFLICT_LABEL } from '../sim/diplomacy';
-import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
+import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
@@ -301,7 +301,7 @@ const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string;
   wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Nature › Forêt).' },
   stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Nature › Rochers). La mine en donne aussi.' },
   ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; certaines expéditions en rapportent aussi.' },
-  brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’époque moderne et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
+  brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’âge futuriste et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
   crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
   fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage).', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 75 % de plus.' },
 };
@@ -708,7 +708,9 @@ export class UI {
       // une condition sans bâtiment : on montre comment l'obtenir
       const req = (e.target as HTMLElement).closest<HTMLElement>('[data-req]')?.dataset.req;
       if (req === 'ore') { this.openRes('ore'); return; }
-      if (req === 'brick') { this.openRes('brick'); return; }
+      // les briques : la briqueterie en main, dans le rayon du bas, comme une condition de bâtiment (la fiche des briques
+      // en haut, avant : deux conduites différentes pour la même sorte de condition)
+      if (req === 'brick') { if (this.host.sim.age >= KINDS.brickworks.minAge) this.pick('brickworks'); else this.openRes('brick'); return; }
       if (req === 'gold') { this.openRes('gold'); return; }
       if (req === 'exp') {
         const t = /[«“]\s*(.+?)\s*[»”]/.exec((e.target as HTMLElement).closest<HTMLElement>('[data-req]')!.textContent ?? '')?.[1], m = MISSIONS.find((x) => x.title === t);
@@ -1099,8 +1101,12 @@ export class UI {
     return d.minAge <= this.host.sim.age && d.reqMission && !this.host.world.sandbox ? () => this.gotoMission(d.reqMission!) : undefined;
   }
 
-  /** Ce qui manque à une mission, en boutons : un bâtiment à bâtir (sous son nom de l'âge), une expédition à réussir */
-  private needsHtml(m: Mission) {
+  /**
+   * Ce qui manque à une mission, en boutons : un bâtiment à bâtir (sous son nom de l'âge), une expédition à réussir.
+   * `fold` (la carte de la liste) : deux conditions, puis « + n autres » qui déplie le reste ; une mission qui demandait six
+   * bâtiments faisait une carte deux fois plus haute que ses voisines (retour de l'auteur, 17 nov. 2026)
+   */
+  private needsHtml(m: Mission, fold = false) {
     const h = this.host, age = h.sim.age, out: string[] = [];
     for (const id of m.requires?.missions ?? []) {
       if (h.expeditions.state.done.includes(id)) continue;
@@ -1111,7 +1117,8 @@ export class UI {
       if (h.expeditions.hasFor(k, m.requires!.kinds!)) continue;
       out.push(`<button class="go" data-kind="${k}">${ic('hammer', 14, 2)} ${tr('Bâtir « {name} »', { name: KINDS[k].names[Math.max(age, KINDS[k].minAge)] })}</button>`);
     }
-    return out.join('');
+    if (!fold || out.length <= 3) return out.join('');
+    return `${out.slice(0, 2).join('')}<button class="go goMore" data-more>${tr('+ {n} autres conditions', { n: out.length - 2 })}</button><span class="goRest" hidden>${out.slice(2).join('')}</span>`;
   }
 
   /** Sur la carte d'une mission : équipe, durée et risque (de tous ses choix) en pastilles, et ce qu'elle peut rapporter en icônes */
@@ -1427,7 +1434,7 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}${tr('/j')}`;
-    const use: Partial<Record<Resource, string>> = { wood: tr(' — pour bâtir les grands bâtiments'), stone: tr(' — pour bâtir les grands bâtiments'), ore: tr(' — pour passer les âges et s’équiper ; la mine en extrait chaque jour'), brick: tr(' — pour passer à l’époque moderne et bâtir gares, usines et raffineries'), crude: tr(' — la raffinerie en fait du carburant'), fuel: tr(' — pour les automobiles'), gold: tr(' — pour passer les âges ; cliquez pour échanger au comptoir des voisins') };
+    const use: Partial<Record<Resource, string>> = { wood: tr(' — pour bâtir les grands bâtiments'), stone: tr(' — pour bâtir les grands bâtiments'), ore: tr(' — pour passer les âges et s’équiper ; la mine en extrait chaque jour'), brick: tr(' — pour passer à l’âge futuriste et bâtir gares, usines et raffineries'), crude: tr(' — la raffinerie en fait du carburant'), fuel: tr(' — pour les automobiles'), gold: tr(' — pour passer les âges ; cliquez pour échanger au comptoir des voisins') };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'gold' ? '' : r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
@@ -1618,7 +1625,7 @@ export class UI {
     const sbReq = sb ? `<b>${tr('Changer d’âge : sans condition')}</b>${AGES.map((a, i) => `<button type="button" class="ageSet${i === sim.age ? ' now' : ''}" data-setage="${i}">${a.name}<small>${a.tagline}</small></button>`).join('')}` : null;
     if (sbReq !== null) { if ($('#ageReq').dataset.v !== sbReq) { $('#ageReq').innerHTML = sbReq; $('#ageReq').dataset.v = sbReq; } } else { delete $('#ageReq').dataset.v; $('#ageReq').innerHTML = ap
       ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
-      : tr('Dernier âge atteint : profitez de votre village !');}
+      : this.endRoad();}
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
       const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);
@@ -2059,7 +2066,7 @@ export class UI {
           <p class="mtext">${splitIntro(m.intro).head}</p>
           ${this.missionPills(m)}
           ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
-          ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m)}</p>` : ''}
+          ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m, true)}</p>` : ''}
           <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${SEND_ICON} ${label}</button>
         </div></div>`;
     };
@@ -2151,6 +2158,9 @@ export class UI {
     arsenal();
     // ce qui manque à une mission : un bâtiment se prend en main (la fenêtre se ferme), une expédition s'amène sous les yeux
     ov.addEventListener('click', (e) => {
+      // « + n autres conditions » : le reste se déplie à sa place
+      const more = (e.target as HTMLElement).closest<HTMLElement>('.go[data-more]');
+      if (more) { h.audio.sfxClick(); more.nextElementSibling?.removeAttribute('hidden'); more.remove(); return; }
       const go = (e.target as HTMLElement).closest<HTMLElement>('.go[data-kind], .go[data-goto]');
       if (!go) return;
       h.audio.sfxClick();
@@ -2449,6 +2459,21 @@ export class UI {
 
   /** l'état de la pause avant qu'une décision n'arrête le jeu (null : aucune décision ouverte) */
   private pausedFor: boolean | null = null;
+
+  /**
+   * Au dernier âge, le panneau des âges montre le chemin vers la fin du jeu : le cosmodrome, la centrale à fusion, puis les
+   * trois expéditions spatiales, dans l'ordre (un clic : bâtir, ou l'expédition). « Profitez de votre village » ne vient
+   * qu'une fois la colonie fondée (retour de l'auteur, 17 nov. 2026 : le message s'affichait alors qu'il restait des étapes)
+   */
+  private endRoad() {
+    const h = this.host, w = h.world;
+    if (w.missionDone(VICTORY)) return tr('Dernier âge atteint, la colonie fondée : profitez de votre village !');
+    const has = (k: KindId) => [...w.buildings.values()].some((b) => b.kind === k);
+    const row = (ok: boolean, attr: string, text: string) => `<span class="${ok ? 'ok' : ''} kind" ${attr}>${ok ? '✓' : '•'} ${text}</span>`;
+    const kind = (k: KindId) => row(has(k), `data-kind="${k}" title="${h.sim.whereOf(k)} ${tr('— cliquer pour le bâtir')}"`, tr('bâtir « {name} »', { name: KINDS[k].names[5] }));
+    const exp = (id: string) => { const m = MISSIONS.find((x) => x.id === id)!; return row(w.missionDone(id), `data-req="exp" title="${tr('Cliquer pour voir l’expédition')}"`, tr('expédition « {title} »', { title: tr(m.title) })); };
+    return `<b>${tr('Pour finir le jeu')}</b>${kind('spaceport')}${exp('rocket')}${exp('moon')}${kind('fusion')}${exp(VICTORY)}`;
+  }
 
   /**
    * Une fenêtre est ouverte (expéditions, paramètres, confirmation…) : le jeu s'arrête tant qu'elle l'est (demande de
