@@ -49,7 +49,8 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
   - Repli : un fichier illisible ou absent est noté (`missing`) et sauté ; une liste sans fichier rend la musique générative (en partie seulement : au menu, elle ne tourne pas). Pendant un morceau, la musique générative se tait (`update` ressort avant les notes et recale `nextNote`, `nextPad`).
   - Revenir à la musique générée, ou passer à celle composée pour le jeu : remplacer les fichiers et les noms de `MUSIC` (une liste vide = musique générée pour cette scène), ou `RECORDED_MUSIC = false` partout. Mettre à jour les crédits.
   - Vérifier sans écouter : `__game.audio.debugMusic()` (scène, âge, morceau, position, gain, fichiers manquants).
-  - Les morceaux (tous MP3 96 kbit/s stéréo, 44,1 kHz, ramenés à −20 LUFS intégrés et −2 dBTP au plus, 64 Mo en tout, 93 min) :
+  - Les morceaux (tous MP3 96 kbit/s stéréo, 44,1 kHz, ramenés à −20 LUFS intégrés et −2 dBTP au plus, 70 Mo en tout, 102 min) :
+  - **Morceau d'ouverture d'un âge** (`AGE_OPENERS`) : quand l'âge change en cours de partie (pas au chargement d'une partie déjà à cet âge : `ageKnown`), son morceau d'ouverture passe avant le tirage au hasard, une fois (`opener`, consommé par `playTrack`). Seul l'Industriel en a un.
 
 | Liste | Fichier | Morceau | Auteur | Licence |
 |---|---|---|---|---|
@@ -63,6 +64,7 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 | `age2` | `medieval-exploration` | « Medieval: Exploration » (3:56) | RandomMind, OpenGameArt | CC0 |
 | `age2` | `medieval-auberge` | « Medieval: The Old Tower Inn » (1:46) | RandomMind, OpenGameArt | CC0 |
 | `age2` | `medieval-conteur` | « Teller of the Tales » (3:32) | Kevin MacLeod | CC BY 4.0 |
+| `age3` | `industriel-toccata` | « Toccata and Fugue in D Minor » de Jean-Sébastien Bach (8:41), **joué en premier quand le village entre à l'Industriel** (`AGE_OPENERS`, demande de l'auteur, 17 nov. 2026 : clin d'œil à « Il était une fois l'homme ») | Kevin MacLeod | CC BY 4.0 |
 | `age3` | `industriel-gymnopedie` | « Gymnopedie No 1 » d'Erik Satie (3:07) | Kevin MacLeod | CC BY 4.0 |
 | `age3` | `industriel-morialta` | « Danse Morialta » (3:56) | Kevin MacLeod | CC BY 4.0 |
 | `age3` | `industriel-gymnopedie-3` | « Gymnopedie No 3 » d'Erik Satie (2:25) | Kevin MacLeod | CC BY 4.0 |

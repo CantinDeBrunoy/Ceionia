@@ -63,7 +63,7 @@ export const MUSIC: Record<string, string[]> = {
   age0: ['prehistoire-tribal', 'prehistoire-ancetres', 'prehistoire-oiseau-tonnerre'],
   age1: ['antiquite-temple', 'antiquite-harpe', 'antiquite-luth', 'antiquite-cuivres'],
   age2: ['medieval-exploration', 'medieval-auberge', 'medieval-conteur'],
-  age3: ['industriel-gymnopedie', 'industriel-morialta', 'industriel-gymnopedie-3', 'industriel-valse-givre', 'industriel-adieux'],
+  age3: ['industriel-toccata', 'industriel-gymnopedie', 'industriel-morialta', 'industriel-gymnopedie-3', 'industriel-valse-givre', 'industriel-adieux'],
   age4: ['moderne-the', 'moderne-fleuriste', 'moderne-barman', 'moderne-cafe-chats'],
   age5: ['futuriste-synthwave', 'futuriste-aout', 'futuriste-lifewave'],
   menu: ['menu'], hell: ['enfers-oppression', 'enfers-com-mecha', 'enfers-croisade', 'enfers-rituel'], end: ['fin'],
@@ -73,6 +73,12 @@ export const MUSIC: Record<string, string[]> = {
  * « Explorer le monde » joue celui de l'exploration, du Médiéval
  */
 const SCENE_TRACKS: Record<string, string[]> = { voyage: ['medieval-exploration'] };
+/**
+ * Le morceau qui ouvre un âge, joué en premier quand le village y entre en cours de partie (pas au chargement d'une partie
+ * déjà à cet âge) : la Toccata et fugue en ré mineur pour l'Industriel (demande de l'auteur, 17 nov. 2026 : « ça fait bien
+ * dans le thème, et ça fait une référence à Il était une fois l'homme »). Ensuite, la liste reprend au hasard
+ */
+export const AGE_OPENERS: Record<string, string> = { age3: 'industriel-toccata' };
 const RECORDED_MUSIC = true;
 /** durée du fondu enchaîné entre deux morceaux (s) */
 const MUSIC_FADE = 4;
@@ -163,6 +169,10 @@ export class AudioEngine {
   /** musique enregistrée : la scène imposée (sinon celle de l'âge), le morceau en cours, les fichiers introuvables */
   private scene: MusicScene | null = null;
   private ageKey = 'age0';
+  /** l'âge du village est connu (la première image le donne : ce n'est pas un passage d'âge) */
+  private ageKnown = false;
+  /** le morceau d'ouverture à jouer en premier, l'âge venant de changer (voir `AGE_OPENERS`) */
+  private opener: { key: string; name: string } | null = null;
   private track: Track | null = null;
   private missing = new Set<string>();
   /** dernier morceau joué par liste : le suivant en diffère */
@@ -277,7 +287,10 @@ export class AudioEngine {
     const ctx = this.ctx!, list = (MUSIC[key] ?? SCENE_TRACKS[key] ?? []).filter((n) => !this.missing.has(n));
     if (!list.length) { this.track = null; return; }
     const prev = this.lastTrack.get(key), pool = list.length > 1 ? list.filter((n) => n !== prev) : list;
-    const name = pool[Math.floor(Math.random() * pool.length)];
+    // (l'âge vient de changer : son morceau d'ouverture d'abord, une seule fois)
+    const open = this.opener?.key === key && list.includes(this.opener.name) ? this.opener.name : null;
+    if (this.opener?.key === key) this.opener = null;
+    const name = open ?? pool[Math.floor(Math.random() * pool.length)];
     this.lastTrack.set(key, name);
     const el = new Audio();
     el.preload = 'auto';
@@ -414,7 +427,12 @@ export class AudioEngine {
 
     // musique : l'enregistrement de l'âge (ou de la scène) s'il y en a un, sinon la musique générée
     const ageKey = `age${Math.min(s.age, 5)}`;
-    if (ageKey !== this.ageKey) { this.ageKey = ageKey; this.syncMusic(); }
+    if (ageKey !== this.ageKey) {
+      const o = this.ageKnown ? AGE_OPENERS[ageKey] : undefined;
+      this.opener = o ? { key: ageKey, name: o } : null;
+      this.ageKey = ageKey; this.syncMusic();
+    }
+    this.ageKnown = true;
     if (this.track) { this.nextNote = this.nextPad = T + 0.5; return; }
     const scale = SCALES[Math.min(s.age, 4)];
     const root = ROOTS[s.season] - (night > 0.6 ? 12 : 0);

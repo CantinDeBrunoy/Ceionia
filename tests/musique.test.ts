@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'fs';
-import { MUSIC, AudioEngine, soundSettings } from '../src/audio/audio';
+import { MUSIC, AGE_OPENERS, AudioEngine, soundSettings } from '../src/audio/audio';
 
 describe('musique allumée par défaut', () => {
   it('le moteur démarre musique et sons allumés', () => {
@@ -32,6 +32,11 @@ describe('musique enregistrée', () => {
 
   it('chaque morceau a son fichier dans public/sons/musique', () => {
     for (const name of new Set(Object.values(MUSIC).flat())) expect(existsSync(`public/sons/musique/${name}.mp3`), name).toBe(true);
+  });
+
+  it('l’Industriel s’ouvre sur la Toccata ; un morceau d’ouverture est dans la liste de son âge', () => {
+    expect(AGE_OPENERS.age3).toBe('industriel-toccata');
+    for (const [key, name] of Object.entries(AGE_OPENERS)) expect(MUSIC[key], key).toContain(name);
   });
 
   it('un morceau n’appartient qu’à une liste', () => {
