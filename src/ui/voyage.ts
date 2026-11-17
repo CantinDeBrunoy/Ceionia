@@ -63,6 +63,7 @@ export class VoyageFilm {
     el.innerHTML = `${VOYAGE_PLATE}<video class="vyFilm" muted playsinline preload="auto" disablepictureinpicture aria-hidden="true">
         <source src="./voyage/traversee.webm" type="video/webm"><source src="./voyage/traversee.mp4" type="video/mp4"></video>
       <div class="kc-bar t"></div><div class="kc-bar b"></div><div class="kc-cap"><b></b><small></small></div>
+      <button class="vyGo" type="button" hidden>▶ ${tr('Continuer la traversée')}</button>
       <button class="kc-skip vySkip" type="button">${KINGDOM_TEXT.skip}</button><div class="ldBar"><i></i></div><p class="ldStep" hidden></p>`;
     this.video = el.querySelector('video')!;
     this.cap = el.querySelector('.kc-cap b')!;
@@ -88,7 +89,16 @@ export class VoyageFilm {
       };
       v.addEventListener('error', fail);
       v.querySelectorAll('source')[1]?.addEventListener('error', fail);
-      void v.play().catch(() => { /* lecture refusée : la brume reste */ });
+      // Repris après le rechargement, sans geste du joueur depuis : le navigateur refuse le son (la musique ne repartait
+      // qu'au premier clic, qui passait le film : le joueur voyait le début rejoué, muet). Le film attend donc, arrêté sur son
+      // image, un clic sur « Continuer la traversée » : ce geste relance le film et la musique ensemble (17 nov. 2026)
+      const go = el.querySelector<HTMLButtonElement>('.vyGo')!;
+      if (start > 0 && !navigator.userActivation?.isActive && !navigator.userActivation?.hasBeenActive) {
+        go.hidden = false;
+        go.addEventListener('pointerdown', (e) => e.stopPropagation());
+        go.onclick = (e) => { e.stopPropagation(); go.hidden = true; void v.play().catch(() => { /* lecture refusée : la brume reste */ }); };
+      } else void v.play().catch(() => { /* lecture refusée : la brume reste */ });
+      this.whenDone(() => { go.hidden = true; });
     }
     v.addEventListener('timeupdate', () => this.paint());
     this.paint();

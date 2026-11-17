@@ -80,6 +80,41 @@ class Boat {
 const line = (a: P, b: P): P[] => resample([a, b], 0.5);
 
 /**
+ * La route d'un navire du survol entre deux points : la ligne droite si elle reste sur l'eau à une case de toute terre,
+ * sinon le chemin sur l'eau entre ces points ramenés au plus près dans l'eau libre ; null s'il n'y en a pas (le navire
+ * n'est pas posé). Avant, des lignes droites tirées sans regarder la carte passaient parfois à travers un îlot de l'archipel
+ * (retour de l'auteur, 17 nov. 2026 : « notre bateau passe dans l'île verte du milieu »)
+ */
+export function shipLane(w: World, a: P, b: P, nav = SHALLOW): P[] | null {
+  const ok = (p: P) => nearestWater(w, p[0], p[1], nav, 1, 0) !== null, s = line(a, b);
+  if (s.every(ok)) return s;
+  const a2 = ok(a) ? a : nearestWater(w, a[0], a[1], nav, 1, 8), b2 = ok(b) ? b : nearestWater(w, b[0], b[1], nav, 1, 8);
+  if (!a2 || !b2) return null;
+  const p = waterPath(w, a2, b2, nav);
+  return p && p.length > 1 ? p : null;
+}
+
+/**
+ * Les routes des deux flottes face à face au milieu du bras de mer (`s.battle`) : trois navires par peuple, qui s'avancent
+ * de 3,5 cases l'un vers l'autre ; `face` : le cap de la flotte. Un navire sans route sur l'eau n'est pas posé
+ */
+export function fleetLanes(w: World, s: NavalSites): { people: People; i: number; face: number; lane: P[] }[] {
+  const [bx, bz] = s.battle, [ox, oz] = s.ports.orient, [ax, az] = s.ports.asie, l = Math.hypot(ax - ox, az - oz) || 1;
+  const ux = (ax - ox) / l, uz = (az - oz) / l, px = -uz, pz = ux, out: { people: People; i: number; face: number; lane: P[] }[] = [];
+  for (const people of ['orient', 'asie'] as People[]) {
+    const side = people === 'orient' ? -1 : 1, face = Math.atan2(-side * ux, -side * uz);
+    for (let i = 0; i < 3; i++) {
+      const lat = (i - 1) * 3.2, back = i === 1 ? 0 : 1.6;
+      const a: P = [bx + side * ux * (7.5 + back) + px * lat, bz + side * uz * (7.5 + back) + pz * lat];
+      const b: P = [bx + side * ux * (4 + back) + px * lat, bz + side * uz * (4 + back) + pz * lat];
+      const lane = shipLane(w, a, b);
+      if (lane) out.push({ people, i, face, lane });
+    }
+  }
+  return out;
+}
+
+/**
  * Le chemin du navire de l'horizon : il part de l'eau libre au large de l'île principale (dégagée sur 3 cases, reliée au
  * large) et file vers le milieu des deux îles rivales en suivant l'eau. Avant, un trait droit traversait parfois un îlot de
  * l'archipel : le premier plan en direct montrait des palmiers, et le navire caché dedans (signalé par l'auteur en ligne)
@@ -89,11 +124,11 @@ export function horizonPath(w: World, mid: P): P[] {
   const d = Math.hypot(mid[0] - c[0], mid[1] - c[1]) || 1, u: P = [(mid[0] - c[0]) / d, (mid[1] - c[1]) / d];
   const sea = openSea(w, DEEP), at = (k: number): P => [c[0] + u[0] * k, c[1] + u[1] * k];
   const from = nearestWater(w, ...at(f.n * 0.62), DEEP, 3, 40, sea) ?? nearestWater(w, ...at(f.n * 0.62), DEEP, 1, 40, sea);
-  if (!from) return line(at(f.n * 0.62), at(f.n * 0.62 + 40));
+  if (!from) { const a = at(f.n * 0.62); return shipLane(w, a, at(f.n * 0.62 + 40), DEEP) ?? [a, a]; }
   const goal = nearestWater(w, from[0] + u[0] * 40, from[1] + u[1] * 40, DEEP, 2, 30, sea) ?? nearestWater(w, mid[0], mid[1], DEEP, 1, 30, sea);
   const path = goal ? waterPath(w, from, goal, DEEP) : null;
   // (au plus une quarantaine de cases : le plan ne dure que 5 s)
-  return path && path.length > 4 ? path.slice(0, 90) : line(from, [from[0] + u[0] * 40, from[1] + u[1] * 40]);
+  return path && path.length > 4 ? path.slice(0, 90) : (shipLane(w, from, [from[0] + u[0] * 40, from[1] + u[1] * 40], DEEP) ?? [from, from]).slice(0, 90);
 }
 
 /** Les plans que le survol prépare sous la brume, une image chacun, avant de se lever (maillages, ombres, impostures) */
@@ -238,7 +273,8 @@ export class VoyageStage {
     const [qx, qz] = plan.points.port, from = nearestWater(w, qx, qz, SHALLOW, 1, 14);
     if (!from) return;
     const to: P = s?.ports[people] ?? [qx + Math.cos(plan.seaAng) * 16, qz + Math.sin(plan.seaAng) * 16];
-    const path = waterPath(w, from, to, SHALLOW) ?? line(from, to);
+    const path = waterPath(w, from, to, SHALLOW) ?? shipLane(w, from, to);
+    if (!path) return;
     for (let i = 0; i < 2; i++) {
       const b = this.boat(warshipModel(warshipKind(people, age, i), people).body, path, 1.3, 2, i * 1.6);
       b.root.userData = { people, port: true };
@@ -249,18 +285,10 @@ export class VoyageStage {
   private fleets(age: number) {
     const s = this.sites;
     if (!s) return;
-    const [bx, bz] = s.battle, [ox, oz] = s.ports.orient, [ax, az] = s.ports.asie, l = Math.hypot(ax - ox, az - oz) || 1;
-    const ux = (ax - ox) / l, uz = (az - oz) / l, px = -uz, pz = ux;
-    for (const people of ['orient', 'asie'] as People[]) {
-      const side = people === 'orient' ? -1 : 1, face = Math.atan2(-side * ux, -side * uz);
-      for (let i = 0; i < 3; i++) {
-        const lat = (i - 1) * 3.2, back = i === 1 ? 0 : 1.6;
-        const a: P = [bx + side * ux * (7.5 + back) + px * lat, bz + side * uz * (7.5 + back) + pz * lat];
-        const b: P = [bx + side * ux * (4 + back) + px * lat, bz + side * uz * (4 + back) + pz * lat];
-        const boat = this.boat(warshipModel(warshipKind(people, age, i), people).body, line(a, b), 0.26, 2.1, 0, false);
-        boat.root.userData = { fleet: true, face };
-        boat.heading = face;
-      }
+    for (const f of fleetLanes(this.host.world, s)) {
+      const boat = this.boat(warshipModel(warshipKind(f.people, age, f.i), f.people).body, f.lane, 0.26, 2.1, 0, false);
+      boat.root.userData = { fleet: true, face: f.face };
+      boat.heading = f.face;
     }
   }
 

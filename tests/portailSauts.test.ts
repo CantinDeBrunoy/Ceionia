@@ -48,7 +48,9 @@ function maxStep(seed: number, ci: number) {
     for (const id of a.party) {
       const g = v.agents.agents.find((x) => x.id === id)!, p = prev.get(id);
       // (sauf à son apparition : il sort de chez lui, ou d'une cachette)
-      if (p && !g.hidden && !p[2]) worst = Math.max(worst, Math.hypot(g.x - p[0], g.z - p[1]));
+      // (à bord, le pas se compte par rapport au bateau qui l'emporte : la galère file vite, `Ride.move`)
+      const mv = (g as unknown as { ride?: { move?: [number, number] } }).ride?.move ?? [0, 0];
+      if (p && !g.hidden && !p[2]) worst = Math.max(worst, Math.hypot(g.x - p[0] - mv[0], g.z - p[1] - mv[1]));
       prev.set(id, [g.x, g.z, g.hidden]);
     }
   }

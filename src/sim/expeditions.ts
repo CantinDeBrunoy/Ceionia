@@ -973,7 +973,8 @@ export class Expeditions {
           continue;
         }
         // devant une grotte ou une faille : au bord de son emprise (une vraie grotte plutôt qu'une faille)
-        else if (kind === 'cave') { const e = d > 6 ? w.outpostEntrance(x, z, 1) : -1; ok = e >= 0; extra = ok && w.veg[e] !== VEG_CAVE ? 10 : 0; }
+        // (et à son niveau : une grotte au fond d'un ravin ou en haut d'une falaise, vue du bord, n'est pas une grotte où l'on entre)
+        else if (kind === 'cave') { const e = d > 6 ? w.outpostEntrance(x, z, 1) : -1; ok = e >= 0; extra = !ok ? 0 : (w.veg[e] !== VEG_CAVE ? 10 : 0) + (Math.abs(w.cellAvg(e % N, Math.floor(e / N)) - h) > 0.35 ? 25 : 0); }
         else ok = slope < 0.8 && d > 24 && !w.road[k] && w.veg[k] !== VEG_FIELD && w.veg[k] !== VEG_GARDEN;
         if (ok) (kind === 'cave' || !town[k] ? outside : cand).push([x + 0.5, z + 0.5, Math.abs(d - ideal) + extra + sand + this.rnd() * 5]);
       }

@@ -441,6 +441,9 @@ export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty
   });
 }
 
+/** Les cartes de choix qui arrêtent le jeu tant qu'elles sont montrées (voir `UI.menuOpen`) */
+const CHOICE_CARDS = ['worldChoice', 'portalChoice', 'diploChoice'];
+
 /** Fenêtre du jeu : titre, contenu, bouton de fermeture ; se ferme aussi d'un clic à côté */
 /** `sticky` : une fenêtre qu'on ne peut pas écarter (ni croix, ni clic à côté, ni Échap) : seule sa propre réponse la ferme */
 function modal(root: HTMLElement, cls: string, title: string, body: string, onClose?: () => void, sticky = false): { ov: HTMLElement; close: () => void } {
@@ -2446,6 +2449,17 @@ export class UI {
 
   /** l'état de la pause avant qu'une décision n'arrête le jeu (null : aucune décision ouverte) */
   private pausedFor: boolean | null = null;
+
+  /**
+   * Une fenêtre est ouverte (expéditions, paramètres, confirmation…) : le jeu s'arrête tant qu'elle l'est (demande de
+   * l'auteur, 17 nov. 2026). Sans toucher à `time.paused` : la fenêtre fermée, le jeu repart comme il était.
+   * Les écrans de victoire (`.victory`) ne comptent pas : la fête derrière doit continuer
+   */
+  menuOpen(): boolean {
+    if (this.root.querySelector('.overlay:not(.victory):not(#menu):not([hidden])')) return true;
+    // les grandes cartes de choix (le grand choix, le portail, l'allié, la paix ou la guerre) : montrées ou cachées par `display`
+    return CHOICE_CARDS.some((id) => { const el = document.getElementById(id); return !!el && el.style.display !== 'none'; });
+  }
 
   /** Ferme la fenêtre du dessus (Échap) ; false s'il n'y en avait pas */
   closeTop(): boolean {

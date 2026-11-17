@@ -6,7 +6,7 @@ import { GEN } from '../src/world/continent';
 import { expandWorld } from '../src/world/expand';
 import { VOY_ACT2, VOY_CAPTIONS, VOY_DIP, VOY_FILM, VOY_LIFT, VOY_WAIT, VOY_CONTACT, actTotal, voyCaptionAt, voyFilmCaptionAt, voyShotAt, voyVeilAt } from '../src/voyageCine';
 import { resumeAt } from '../src/ui/voyage';
-import { horizonPath } from '../src/voyageStage';
+import { horizonPath, fleetLanes } from '../src/voyageStage';
 import { navalSites, SHALLOW } from '../src/sim/navalConflict';
 import { MUSIC } from '../src/audio/audio';
 import { tr, setLang } from '../src/i18n';
@@ -112,6 +112,25 @@ describe('la cinématique « Explorer le monde » : le navire de l’horizon', (
         const path = horizonPath(w, s.battle);
         expect(path.length, `graine ${seed}`).toBeGreaterThan(20);
         for (const [x, z] of path) expect(w.cellAvg(Math.floor(x), Math.floor(z)), `graine ${seed} (${x.toFixed(0)}, ${z.toFixed(0)})`).toBeLessThan(SHALLOW);
+      } finally { setMapSize(192); }
+    }
+  });
+});
+
+describe('la cinématique « Explorer le monde » : les deux flottes', () => {
+  it('chaque navire s’avance sur l’eau, jamais à travers l’îlot du bras de mer (graine 4 : trois lignes droites y passaient)', () => {
+    for (const seed of [4, 2026]) {
+      setMapSize(192);
+      const w0 = new World();
+      newWorld(w0, 3, seed, GEN);
+      const big = expandWorld(JSON.parse(JSON.stringify(w0.toJSON())), w0.mapId, w0.seed);
+      setMapSize(big.n);
+      try {
+        const w = new World();
+        w.fromJSON(big);
+        const lanes = fleetLanes(w, navalSites(w)!);
+        expect(lanes.length, `graine ${seed}`).toBeGreaterThanOrEqual(4);
+        for (const f of lanes) for (const [x, z] of f.lane) expect(w.cellAvg(Math.floor(x), Math.floor(z)), `graine ${seed} (${x.toFixed(0)}, ${z.toFixed(0)})`).toBeLessThan(SHALLOW);
       } finally { setMapSize(192); }
     }
   });

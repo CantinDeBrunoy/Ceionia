@@ -57,9 +57,10 @@ it('l’équipe monte à bord et redescend au quai : ni eau profonde, ni bond, n
         if (a.wait) v.ex.decide(a, 0);
         v.view.update(0.05);
         for (const id of a.party) {
-          const g = v.agents.agents.find((x) => x.id === id) as unknown as { x: number; z: number; ride: unknown; hidden: boolean; state: string } | undefined;
+          const g = v.agents.agents.find((x) => x.id === id) as unknown as { x: number; z: number; ride: { move?: [number, number] } | null; hidden: boolean; state: string } | undefined;
           if (!g || g.hidden) { last.delete(id); continue; }
-          const p = last.get(id), moved = p ? Math.hypot(g.x - p[0], g.z - p[1]) : 1;
+          // (à bord, le pas se compte par rapport au bateau qui l'emporte, `Ride.move`)
+          const mv = g.ride?.move ?? [0, 0], p = last.get(id), moved = p ? Math.hypot(g.x - p[0] - mv[0], g.z - p[1] - mv[1]) : 1;
           if (p && moved > 0.25) jumps++;
           last.set(id, [g.x, g.z]);
           if (g.ride) continue;

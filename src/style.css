@@ -785,6 +785,9 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
 #voyCine .kc-cap small, #loadScreen.voyage .kc-cap small { font-size: clamp(14px, 2vw, 20px); font-weight: 700; letter-spacing: 0.03em; color: #f2e6c6; }
 #voyCine .kc-skip, #loadScreen.voyage .kc-skip { position: absolute; right: 16px; bottom: calc(7vh + 12px); z-index: 3; padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 10, 20, 0.55); color: #f4ecd8; font: inherit; font-weight: 700; cursor: pointer; opacity: 0.8; }
 #voyCine .kc-skip:hover, #loadScreen.voyage .kc-skip:hover { opacity: 1; background: rgba(40, 30, 20, 0.8); }
+/* le film repris après le rechargement attend ce clic (le son ne repart qu'avec un geste du joueur) */
+#loadScreen.voyage .vyGo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4; padding: 14px 28px; border-radius: 12px; border: 2px solid #e8c04a; background: rgba(20, 16, 10, 0.72); color: #f8ecc8; font: inherit; font-size: 1.15rem; font-weight: 800; letter-spacing: 0.02em; cursor: pointer; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+#loadScreen.voyage .vyGo:hover { background: rgba(60, 44, 20, 0.85); }
 /* l'écran d'attente : la brume pleine, le navire en ombre qui tangue, des nappes qui passent ; l'avancée en filet doré */
 #loadScreen.voyage { padding: 0; background: #dfe7e8; }
 #loadScreen.voyage::before { content: none; }

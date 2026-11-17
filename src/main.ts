@@ -2408,7 +2408,8 @@ class Game implements UIHost {
     stepWind(this.elapsed, this.env.rainK);
     const w = this.world;
 
-    const gdt = this.time.update(dt);
+    // une fenêtre ouverte arrête le jeu, comme la pause (voir UI.menuOpen)
+    const gdt = this.ui?.menuOpen() ? 0 : this.time.update(dt);
     const uv = this.mode === 'under' ? this.underView : null;
     const hv = this.mode === 'hell' ? this.hellMode : null;
     this.cam.update(dt, uv ? (x, z) => uv.groundY(x, z) : hv ? (x, z) => hv.view.groundY(x, z) : (x, z) => w.hAt(x, z));

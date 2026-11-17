@@ -216,6 +216,8 @@ interface Monster {
 const DUEL_GAP = 1.6;
 /** Hauteur des pieds des hommes d'armes debout dans la galère, en part de celle d'un rameur assis */
 const WAR_STAND = 0.5;
+/** Le dénivelé le plus fort (en hauteur de terrain) entre la troupe et l'antre du dragon ou la bête : au-delà, l'antre est posé au niveau de la troupe */
+const LAIR_STEP = 0.35;
 /** Avancement du travail où le mégalodon bondit hors de l'eau (le dernier bond retombe avant l'issue du combat) */
 const MEGA_BREACH = [0.4, 0.56, 0.7];
 // le bond : durée (s), vitesse horizontale (par seconde), profondeur de départ et hauteur de l'arc au-dessus de l'eau
@@ -975,6 +977,8 @@ export class ExpeditionScene {
   /** sur l'île du portail, l'équipe recule vers la plage (l'arche gronde) : de combien */
   private isleBack = 0;
   private stroke = 0;
+  /** Le cap de chaque embarcation, qui tourne en douceur (elle pivotait d'un coup au demi-tour, l'équipage restait en arrière) */
+  private yaws = new Map<THREE.Object3D, number>();
   /** la faune marine autour de la barque (dauphins, baleine, raies, bancs de poissons) */
   private swimmers: Swimmer[] = [];
   /** les harpons lancés sur le monstre, et le monstre (mégalodon ou kraken) de la chasse en mer */
@@ -3150,7 +3154,7 @@ export class ExpeditionScene {
 
   /** Les torches faiblissent : les flammes baissent ; les bonnes torches flambent haut, ou l'on ressort refaire des torches au feu */
   private stageDark(s: Staging, a: ActiveExpedition) {
-    let fire = false, lt = 0;
+    let fire = false, cairn = false, lt = 0;
     s.own.push({ dispose: () => { this.torchTo = 1; } });
     // elles baissent d'un coup (on le voit pendant que le jeu attend la décision)
     this.torchTo = 0.3;
@@ -3161,7 +3165,15 @@ export class ExpeditionScene {
       else if (s.pick === 1) {
         // le courant d'air : il sort de la grotte en soufflant feuilles et poussière
         this.torchTo = s.after < 5 ? 0.3 : 1;
-        if (this.mouth && s.after < 8 && (lt -= dt) <= 0) { lt = 0.12; const [mx, mz] = this.mouth.at, [hx, hz] = this.mouth.heap; this.leaf(mx, this.world.surfaceAt(mx, mz) + 0.12, mz, (hx - mx) * 0.6, (hz - mz) * 0.6); }
+        // (sans bouche de grotte, devant une faille : il souffle depuis le point de travail vers le campement) ; un petit tas de
+        // pierres marque la fente d'où il sort, celle qu'on va suivre
+        const [mx, mz] = this.mouth?.at ?? this.focus;
+        if (!cairn) { cairn = true; const [px, pz] = this.near(mx + 0.25, mz + 0.15, mx, mz); this.sPut(s, pebbleGeo(), px, pz, 0).scale.set(1.2, 0.8, 1.2); }
+        if (s.after < 8 && (lt -= dt) <= 0) {
+          lt = 0.12;
+          const [hx, hz] = this.mouth?.heap ?? this.teamAt(a);
+          this.leaf(mx, this.world.surfaceAt(mx, mz) + 0.12, mz, (hx - mx) * 0.6 || 0.3, (hz - mz) * 0.6);
+        }
       } else {
         this.torchTo = s.after < 6 ? 0.15 : 1;
         if (!fire && this.mouth) { fire = true; const [hx, hz] = this.mouth.heap, [x, z] = this.near(hx + 0.22, hz + 0.1, hx, hz); this.sPut(s, fireGeo(), x, z, 0); this.sFlame(s, x, z, 0.8); }
@@ -4729,8 +4741,13 @@ export class ExpeditionScene {
     return out;
   }
 
-  /** Une place à bord : la barque des éclaireurs, qui file vite, emporte son équipage (voir `Agents.ride`) */
-  private seat(id: number, r: Ride) { this.agents.ride(id, this.scout ? { ...r, fixed: true } : r); }
+  /**
+   * Une place à bord : le bateau emporte son équipage (`move` : son déplacement depuis l'image d'avant, voir `Agents.ride`),
+   * seul l'écart qui reste se glisse ; la barque des éclaireurs, qui file vite, l'emporte tout entier (`fixed`).
+   * Sans cela, au départ et au retour vers la rive (la galère de chasse file alors bien plus vite que la glissade),
+   * l'équipage traînait derrière, sur l'eau (retour de l'auteur, 17 nov. 2026)
+   */
+  private seat(id: number, r: Ride, move?: [number, number]) { this.agents.ride(id, this.scout ? { ...r, fixed: true } : move ? { ...r, move } : r); }
 
   /**
    * Une embarcation entre la rive (`home`) et le large (`out`), à `u` du trajet (`back` : elle rentre), qui tangue, et son
@@ -4750,8 +4767,15 @@ export class ExpeditionScene {
       if (this.depth(px + nd.x, pz + nd.z) !== null) { px += nd.x; pz += nd.z; }
     }
     // dans les rapides, elle tangue et roule bien plus fort
-    const rough = this.rough, heading = dir + (back ? Math.PI : 0) + Math.sin(t * 0.4) * 0.15 * calm + Math.sin(t * 3.1) * 0.2 * rough + (main ? nd.yaw : 0);
+    // (au demi-tour, elle vire en un peu plus d'une seconde au lieu de pivoter d'un coup)
+    const aim = dir + (back ? Math.PI : 0), was = this.yaws.get(obj) ?? aim;
+    const turn = Math.atan2(Math.sin(aim - was), Math.cos(aim - was)), yaw = was + Math.sign(turn) * Math.min(Math.abs(turn), dt * 2.4);
+    this.yaws.set(obj, yaw);
+    const rough = this.rough, heading = yaw + Math.sin(t * 0.4) * 0.15 * calm + Math.sin(t * 3.1) * 0.2 * rough + (main ? nd.yaw : 0);
     const y = level + 0.005 + Math.sin(t * 1.7) * 0.006 + Math.abs(Math.sin(t * 4.3)) * 0.02 * rough + (main ? nd.lift : 0);
+    // (son déplacement depuis l'image d'avant : l'équipage le suit, voir `seat`)
+    const prev = obj.position.x || obj.position.z ? [px - obj.position.x, pz - obj.position.z] as [number, number] : undefined;
+    const move = prev && Math.hypot(prev[0], prev[1]) < 2 ? prev : undefined;
     obj.position.set(px, y, pz);
     obj.rotation.set(Math.sin(t * 1.3) * (0.03 * calm + 0.12 * rough), heading, Math.sin(t * 1.1 + rough * 2) * (0.04 * calm + 0.18 * rough));
     // le bateau à vapeur fume par sa cheminée
@@ -4760,20 +4784,22 @@ export class ExpeditionScene {
     riders.forEach((id, i) => {
       // les hommes d'armes de la galère, répartis le long du bordage, face au monstre dès qu'il paraît ; sinon deux à bord :
       // le pêcheur à l'arrière
-      const lz = (war ? 0.16 - i * 0.12 : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading), side = war ? (i % 2 ? -0.035 : 0.035) * sc : 0;
+      // (sur la galère, deux par deux, un à chaque bord, les rangs serrés pour que tous tiennent dans la coque)
+      const rows = Math.ceil(riders.length / 2), gap = rows > 1 ? Math.min(0.12, 0.34 / (rows - 1)) : 0;
+      const lz = (war ? ((rows - 1) / 2 - Math.floor(i / 2)) * gap : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading), side = war ? (i % 2 ? -0.04 : 0.04) * sc : 0;
       if (this.story === 'dive' && i === 1 && u > 0.97) {
         // le plongeur se met à l'eau, masque au ras de l'eau, à côté de la barque
-        this.seat(id, { x: px + cz * 0.2, z: pz - sx * 0.2, y: y - 0.13, heading: heading + Math.PI / 2 });
+        this.seat(id, { x: px + cz * 0.2, z: pz - sx * 0.2, y: y - 0.13, heading: heading + Math.PI / 2 }, move);
         return;
       }
       const rx = px + sx * lz + cz * side, rz = pz + cz * lz - sx * side;
       // à la rame, chacun tourne le dos à la proue et tire sur son aviron ; un geste demandé par l'imprévu (harpon levé,
       // acclamations) passe avant le reste
-      if (main && this.rowing) { this.seat(id, { x: rx, z: rz, y: y + seat, heading: heading + Math.PI, act: 'work' }); return; }
+      if (main && this.rowing) { this.seat(id, { x: rx, z: rz, y: y + seat, heading: heading + Math.PI, act: 'work' }, move); return; }
       const face = war ? (mon && !back ? Math.atan2(mon.x - rx, mon.z - rz) : heading + (i % 2 ? -1 : 1) * Math.PI / 2) : heading + (i ? Math.PI / 2 : 0);
-      if (main && this.crewAct) { this.seat(id, { x: rx, z: rz, y: y + seat * (this.crewAct === 'sit' ? 1 : WAR_STAND), heading: this.crewFace ?? face, act: this.crewAct }); return; }
+      if (main && this.crewAct) { this.seat(id, { x: rx, z: rz, y: y + seat * (this.crewAct === 'sit' ? 1 : WAR_STAND), heading: this.crewFace ?? face, act: this.crewAct }, move); return; }
       // (au combat, les hommes d'armes se dressent, harpon au poing, et frappent)
-      this.seat(id, war && mon && !back ? { x: rx, z: rz, y: y + seat * WAR_STAND, heading: face, act: 'work' } : { x: rx, z: rz, y: y + seat, heading: face });
+      this.seat(id, war && mon && !back ? { x: rx, z: rz, y: y + seat * WAR_STAND, heading: face, act: 'work' } : { x: rx, z: rz, y: y + seat, heading: face }, move);
     });
     // les avirons qui plongent : une gerbe de chaque bord, en cadence
     if (main && this.rowing && riders.length) {
@@ -5167,13 +5193,28 @@ export class ExpeditionScene {
   private dragonLair(a: ActiveExpedition, cx: number, cz: number) {
     const w = this.world, y = (x: number, z: number) => w.surfaceAt(x, z);
     let mx = cx, mz = cz, real = false;
+    // l'antre, la bête et la troupe sur le même replat : à plus de `LAIR_STEP` de dénivelé, la vraie grotte (en contrebas d'une
+    // falaise, ou au-dessus) laisse la place à l'amas de rochers, posé au niveau de l'équipe (retour de l'auteur, 17 nov. 2026 :
+    // le dragon juché sur une crête, la grotte au fond du ravin, la troupe sur le plateau)
+    const hT = w.hAt(cx, cz), gap = (x: number, z: number, fx: number, fz: number) => Math.max(Math.abs(w.hAt(x, z) - hT), Math.abs(w.hAt(x + fx * 1.05, z + fz * 1.05) - hT));
     const e = w.outpostEntrance(Math.floor(cx), Math.floor(cz), 1);
     if (e >= 0 && w.veg[e] === VEG_CAVE) {
       const x = e % N, z = Math.floor(e / N), ang = Math.atan2(cx - x - 0.5, cz - z - 0.5);
-      mx = x + 0.5 + Math.sin(ang) * 0.6; mz = z + 0.5 + Math.cos(ang) * 0.6; real = true;
-    } else {
-      const [ux, uz] = this.uphill(cx, cz);
-      [mx, mz] = this.near(cx + ux * 0.9, cz + uz * 0.9, cx, cz);
+      mx = x + 0.5 + Math.sin(ang) * 0.6; mz = z + 0.5 + Math.cos(ang) * 0.6;
+      const f = Math.atan2(cx - mx, cz - mz);
+      real = gap(mx, mz, Math.sin(f), Math.cos(f)) <= LAIR_STEP;
+    }
+    if (!real) {
+      // au pied de la pente de préférence, mais sur le replat de l'équipe : de tous les côtés, le plus plat d'abord
+      const [ux, uz] = this.uphill(cx, cz), up = Math.atan2(ux, uz);
+      let best = Infinity;
+      for (let i = 0; i < 16; i++) for (const r of [0.9, 1.3]) {
+        const ang = up + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (Math.PI / 8), [px, pz] = this.near(cx + Math.sin(ang) * r, cz + Math.cos(ang) * r, cx, cz);
+        if (Math.hypot(px - cx, pz - cz) < 0.5) continue;
+        const f = Math.atan2(cx - px, cz - pz), sc = gap(px, pz, Math.sin(f), Math.cos(f)) * 4 + Math.ceil(i / 2) * 0.05;
+        if (sc < best) { best = sc; mx = px; mz = pz; }
+      }
+      if (best === Infinity) [mx, mz] = this.near(cx + ux * 0.9, cz + uz * 0.9, cx, cz);
     }
     const face = Math.atan2(cx - mx, cz - mz), fx = Math.sin(face), fz = Math.cos(face);
     if (!real) this.put(caveMouthGeo(), mx, mz, face).scale.setScalar(1.7);
