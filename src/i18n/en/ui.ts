@@ -369,6 +369,7 @@ registerDict('ui', {
   'Choisissez d’abord votre allié : le comptoir se bâtit chez lui': 'Choose your ally first: the trading post is built at their place',
   // la carte paix ou guerre : « Plus tard » ; le conflit dans l'onglet « Grands choix »
   "Plus tard": "Later",
+  "⚖️ Dernière étape vers l’Industriel : le conflit des deux îles. {why}": "⚖️ Last step towards the Industrial age: the conflict between the two islands. {why}",
   "Ressources précédentes": "Previous resources",
   "Ressources suivantes": "Next resources",
   "Dernier âge atteint, la colonie fondée : profitez de votre village !": "Last age reached, the colony founded: enjoy your village!",

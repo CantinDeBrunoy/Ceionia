@@ -10,7 +10,10 @@ describe('variantes de décor des choix', () => {
     expect(of('galleon')).toEqual([null, 'diver']);
     const dragon = MISSIONS.find((m) => m.id === 'dragon')!.choices;
     expect(dragon.filter((c) => c.variant === 'smoke').map((c) => c.scene)).toEqual(['dragon']);
+    // les pourparlers de la paix : par l'île alliée, sur la petite île, à bord (voir `tripSetup`)
+    expect(of('envoys')).toEqual(['ally', null]);
+    expect(of('truce')).toEqual(['islet', 'ship']);
     const all = MISSIONS.flatMap((m) => m.choices).filter((c) => c.variant);
-    expect(all).toHaveLength(4);
+    expect(all).toHaveLength(7);
   });
 });

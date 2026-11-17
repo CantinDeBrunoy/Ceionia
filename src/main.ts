@@ -1169,7 +1169,14 @@ class Game implements UIHost {
     // (les éclaireurs revenus : la carte « Lancer l'assaut », une fois par session ; la bataille ne part plus d'elle-même)
     else if (d.battle === 'ready' && battleReady(d, w.exp.clock) && !this.battleShown) { this.battleShown = true; this.popups.taken(); this.diploChoice.showBattle(); }
     else if (d.battle === 'lost' && battleReady(d, w.exp.clock) && !this.retrySaid) { this.retrySaid = true; this.ui.toast(tr('⚔️ Nos troupes se sont refaites chez notre allié : la bataille peut reprendre. Cliquez ici.'), () => this.startRivalBattle(), 'action'); }
-    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone(), this.pathShown)) { this.pathShown = d.asked = true; this.popups.taken(); this.diploChoice.showPath(); }
+    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone(), this.pathShown)) {
+      this.pathShown = d.asked = true;
+      // pas encore installé chez l'allié : pas de carte aux voies grisées (l'auteur la trouvait « pas normale » à ce stade),
+      // un message qui dit quoi faire, et la carte viendra une fois le port et le comptoir bâtis (une fois par session)
+      const why = endgameWhy(w, this.sim.age);
+      if (why) { this.pathShown = false; if (!this.pathTold) { this.pathTold = true; this.ui.toast(tr('⚖️ Dernière étape vers l’Industriel : le conflit des deux îles. {why}', { why }), () => this.goAlly(), 'action'); } }
+      else { this.popups.taken(); this.diploChoice.showPath(); }
+    }
   }
 
   /**
@@ -1187,6 +1194,8 @@ class Game implements UIHost {
 
   /** La carte du dénouement s'est ouverte d'elle-même dans cette session (voir `pathDue`) */
   private pathShown = false;
+  /** le message « installez-vous chez l'allié » a été dit dans cette session */
+  private pathTold = false;
   /** La carte « Lancer l'assaut » s'est ouverte d'elle-même dans cette session */
   private battleShown = false;
 

@@ -5,7 +5,7 @@ import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummar
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
-import { missionOffered, missionWhy, tributePerDay } from './diplomacy';
+import { missionOffered, missionWhy, tributePerDay, isleOf, rivalOf } from './diplomacy';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { recover } from './trade';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
@@ -244,6 +244,13 @@ const PER_TEAM = 30, MAX_TEAMS = 4;
 /** Sans réponse du joueur, l'équipe tranche d'elle-même au bout de ce temps (secondes de jeu) */
 const AUTO_DECIDE = 90;
 /** Une équipe encore en chemin au bout de ce temps (secondes de jeu) se met au travail là où elle est : elle est bloquée */
+/**
+ * Les pourparlers de la paix de l'archipel vont vraiment sur les îles (retour de l'auteur, 17 nov. 2026 : « ne vont pas sur
+ * l'île ») : en part du travail, la traversée (`TRIP_OUT`), la marche jusqu'au lieu de la rencontre (`TRIP_MEET`), le départ
+ * (`TRIP_LEAVE`), le rembarquement (`TRIP_BOARD`), le retour au quai (`TRIP_HOME`). `TRIP_SAIL` : l'allure du bateau (cases/s)
+ */
+export const PEACE_TRIPS = new Set(['envoys', 'truce']);
+export const TRIP_OUT = 0.3, TRIP_MEET = 0.38, TRIP_LEAVE = 0.66, TRIP_BOARD = 0.72, TRIP_HOME = 0.93, TRIP_SAIL = 4;
 const OUT_MAX = 480;
 /** Pièces en attente de fabrication, au plus */
 const MAX_CRAFT = 6;
@@ -417,7 +424,8 @@ export class Expeditions {
     this.lastFail = null;
     // un aller simple vers l'île rivale (les éclaireurs) : une côte sur la mer reliée au large, pas une lagune fermée d'où la
     // barque ne sortirait pas
-    const outer = c.oneWay && sea ? openWater(this.world) : null;
+    // (les pourparlers de la paix aussi : ils traversent jusqu'aux îles)
+    const outer = (c.oneWay || PEACE_TRIPS.has(m.id)) && sea ? openWater(this.world) : null;
     while (kind && !dest) {
       const monster = sea && kind === 'river' && OPEN_SEA.has(c.scene);
       // la chasse au monstre des mers se fait en haute mer : une côte d'où l'on gagne une vaste étendue d'eau profonde, sans
@@ -463,6 +471,8 @@ export class Expeditions {
     // la galère du portail traverse à l'allure d'une galère : loin de l'île, le travail s'allonge d'autant (sinon elle
     // filait d'une rive à l'autre en quelques secondes, et l'on croyait l'équipe téléportée)
     if (c.scene === 'portal') a.extra = Math.max(a.extra, this.portalCrossing(dest) / (PORTAL_SAIL * PORTAL_RETURN) - c.work);
+    // les pourparlers de la paix traversent jusqu'aux îles (voir `TRIP_OUT`) : le travail s'allonge avec la traversée
+    if (PEACE_TRIPS.has(m.id)) a.extra = Math.max(a.extra, this.peaceCrossing(dest, c) / (TRIP_SAIL * TRIP_OUT) - c.work);
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval (tous en selle, ou tous à pied) ; on part en selle
     const kits = party.map((): Kit => ({}));
     for (const g of ['plasma', 'assault', 'rifle', 'crossbow', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
@@ -1095,6 +1105,22 @@ export class Expeditions {
   private warm([x, z]: [number, number]) {
     const w = this.world, cx = Math.floor(x), cz = Math.floor(z);
     return w.inCells(cx, cz) && [BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH].includes(w.biome[w.ci(cx, cz)]);
+  }
+
+  /**
+   * La traversée d'un pourparler de la paix, en cases, à vol d'oiseau majoré des détours : jusqu'à l'île rivale (les émissaires,
+   * par l'île alliée s'ils y passent), jusqu'à la plus proche des petites îles (la tente), ou jusqu'au milieu du bras de mer
+   */
+  private peaceCrossing(dest: [number, number], c: Choice) {
+    const w = this.world, ally = w.diplo.ally;
+    if (!ally || !w.isles) return 0;
+    const rv = isleOf(w, rivalOf(ally))?.village, al = isleOf(w, ally)?.village, d = (p: { x: number; z: number }, q: { x: number; z: number }) => Math.hypot(p.x - q.x, p.z - q.z);
+    const from = { x: dest[0], z: dest[1] };
+    if (!rv || !al) return 0;
+    let L = c.variant === 'ally' ? d(from, al) + d(al, rv) : d(from, rv);
+    if (c.variant === 'ship') L = d(from, { x: (rv.x + al.x) / 2, z: (rv.z + al.z) / 2 });
+    if (c.variant === 'islet') L = Math.min(...w.isles.small.map((q) => d(from, q)), L);
+    return L * 1.25;
   }
 
   /**

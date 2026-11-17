@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents, type Act, type Ride } from '../sim/agents';
-import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntSpot } from '../sim/expeditions';
+import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntSpot, PEACE_TRIPS, TRIP_OUT, TRIP_MEET, TRIP_LEAVE, TRIP_BOARD, TRIP_HOME } from '../sim/expeditions';
 import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { makeFolk, folkStep, Folk, FolkPose, FolkRole } from './folk';
@@ -938,7 +938,7 @@ export class ExpeditionScene {
   /** l'île du portail : où l'équipe débarque, et le portail qu'elle va réveiller */
   private isle: { land: [number, number]; gate: [number, number] } | null = null;
   /** les éclaireurs : la route de la barque sur l'eau (jusqu'au mouillage de la plage rivale), puis la marche sur l'île */
-  private scout: { route: [number, number][]; len: number[]; walk: [number, number][]; post: [number, number]; walls: [number, number] } | null = null;
+  private scout: { route: [number, number][]; len: number[]; walk: [number, number][]; post: [number, number]; walls: [number, number]; trip?: { kind: 'envoy' | 'islet' | 'ship'; props: THREE.Object3D[] } } | null = null;
   /** les îles flottantes (scène `isles`) : l'archipel, que l'équipe visite à pied */
   private float: FloatIsles | null = null;
   /**
@@ -3796,6 +3796,8 @@ export class ExpeditionScene {
     }
     // les éclaireurs : une route sur l'eau jusqu'à la plage de l'île rivale (voir `scoutTrip`)
     else if (this.story === 'scout' && this.scoutTrip(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
+    // les pourparlers de la paix : une route sur l'eau jusqu'aux îles, et retour (voir `tripSetup`)
+    else if (PEACE_TRIPS.has(a.m.id) && this.tripSetup(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
     else if (this.offshore) {
       let best = 0;
@@ -4529,7 +4531,7 @@ export class ExpeditionScene {
     const boarding = !this.salv && [...bt.riders, ...(this.escort?.riders ?? [])].some((id) => !this.aboard.has(id));
     if (this.moor || boarding) this.idle += dt;
     else this.boatK = this.workK <= this.boatK ? this.workK : Math.min(this.workK, this.boatK + dt * 0.02 + (this.workK - this.boatK) * Math.min(1, dt * 0.6));
-    if (this.scout) { this.stepScout(dt, boarding); return; }
+    if (this.scout) { if (this.scout.trip) this.stepTrip(dt, boarding); else this.stepScout(dt, boarding); return; }
     if (this.offshore) {
       // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
       // (la galère de la chasse reste sur place jusqu'à ce que le monstre soit mort ou enfui, voir `FATE_AT`)
@@ -4626,6 +4628,193 @@ export class ExpeditionScene {
     this.scout = { route, len, walk, post, walls };
     void a;
     return true;
+  }
+
+  /**
+   * Une route sur l'eau du point (wx, wz) jusqu'à l'eau la plus proche de (tx, tz), à `reach` cases au plus : le plus court
+   * chemin sur les cases où un bateau flotte, allégé d'un point sur quatre ; null s'il n'y en a pas
+   */
+  private waterRoute(wx: number, wz: number, tx: number, tz: number, reach: number): [number, number][] | null {
+    const w = this.world, wet = (x: number, z: number) => w.inCells(x, z) && this.depth(x + 0.5, z + 0.5) !== null;
+    let start = -1, sd = Infinity;
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      const x = Math.floor(wx) + dx, z = Math.floor(wz) + dz, d = Math.hypot(x + 0.5 - wx, z + 0.5 - wz);
+      if (d < sd && wet(x, z)) { sd = d; start = z * N + x; }
+    }
+    if (start < 0) return null;
+    const from = new Int32Array(N * N).fill(-1), q = [start];
+    from[start] = start;
+    for (let i = 0; i < q.length; i++) {
+      const c = q[i], x = c % N, z = (c / N) | 0;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = x + dx, nz = z + dz, k = nz * N + nx;
+        if (nx < 0 || nz < 0 || nx >= N || nz >= N || from[k] >= 0 || !wet(nx, nz)) continue;
+        if (dx && dz && (!wet(x + dx, z) || !wet(x, z + dz))) continue;
+        from[k] = c; q.push(k);
+      }
+    }
+    let goal = -1, gd = Infinity;
+    for (let dz = -reach; dz <= reach; dz++) for (let dx = -reach; dx <= reach; dx++) {
+      const x = Math.floor(tx) + dx, z = Math.floor(tz) + dz, d = Math.hypot(dx, dz);
+      if (d < gd && w.inCells(x, z) && from[z * N + x] >= 0) { gd = d; goal = z * N + x; }
+    }
+    if (goal < 0) return null;
+    const cells: number[] = [];
+    for (let c = goal; c !== start; c = from[c]) cells.push(c);
+    cells.push(start);
+    cells.reverse();
+    const route: [number, number][] = [[wx, wz]];
+    for (let i = 4; i < cells.length - 1; i += 4) route.push([(cells[i] % N) + 0.5, ((cells[i] / N) | 0) + 0.5]);
+    route.push([(goal % N) + 0.5, ((goal / N) | 0) + 0.5]);
+    return route;
+  }
+
+  /** Un point de terre ferme sur le segment (a → b), le plus près de `k` (part de a à b) qui convienne */
+  private dryOn(a: [number, number], b: [number, number], ks: number[]): [number, number] | null {
+    for (const k of ks) { const p: [number, number] = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]; if (this.dry(p[0], p[1])) return p; }
+    return null;
+  }
+
+  /**
+   * Les pourparlers de la paix (« Les émissaires », « L'ambassade de la paix ») vont vraiment sur les îles, et en reviennent
+   * (retour de l'auteur, 17 nov. 2026 : « ne vont pas sur l'île »). La route sur l'eau, puis :
+   * - les émissaires débarquent sur la plage rivale (par l'île alliée, `variant: 'ally'`) et montent jusque devant la porte
+   *   de la ville, où une délégation les reçoit (le chef, deux gardes, une table dressée) ;
+   * - la petite île (`islet`) : on accoste la plus proche des petites îles, où les deux chefs attendent sous une tente
+   *   blanche, autour d'une table ronde, leurs deux voiliers mouillés à la plage ;
+   * - à bord (`ship`) : le bateau s'arrête au milieu du bras de mer, les voiliers des deux chefs viennent se ranger de part
+   *   et d'autre d'un radeau où l'on signe, puis repartent.
+   * Faux s'il n'y a pas de route (la scène reste alors un simple voyage)
+   */
+  private tripSetup(a: ActiveExpedition, wx: number, wz: number) {
+    const w = this.world, ally = w.diplo.ally;
+    if (!ally || !w.isles) return false;
+    const plans = townPlans(w), rival = plans.find((p) => p.people !== ally), friend = plans.find((p) => p.people === ally);
+    if (!rival || !friend) return false;
+    const v = a.c.variant, level = this.water!.level;
+    let route: [number, number][] | null = null, kind: 'envoy' | 'islet' | 'ship' = 'envoy', meet: [number, number] = [wx, wz], face: [number, number] = [wx, wz];
+    if (a.m.id === 'envoys') {
+      const [px, pz] = rival.points.plage;
+      // (par l'île alliée : on longe sa plage d'abord)
+      const first = v === 'ally' ? this.waterRoute(wx, wz, friend.points.plage[0], friend.points.plage[1], SCOUT_REACH) : null;
+      const from = first ? first[first.length - 1] : ([wx, wz] as [number, number]);
+      const second = this.waterRoute(from[0], from[1], px, pz, SCOUT_REACH);
+      if (!second) return false;
+      route = first ? [...first, ...second.slice(1)] : second;
+      const gate: [number, number] = rival.points.portes[0] ?? [rival.x, rival.z];
+      face = gate;
+      meet = this.dryOn([px, pz], gate, [0.75, 0.7, 0.8, 0.6, 0.85, 0.5]) ?? [px, pz];
+    } else if (v === 'islet') {
+      kind = 'islet';
+      const mid: [number, number] = [(rival.x + friend.x) / 2, (rival.z + friend.z) / 2];
+      const isle = [...w.isles.small].sort((p, q) => Math.hypot(p.x - mid[0], p.z - mid[1]) - Math.hypot(q.x - mid[0], q.z - mid[1]))[0];
+      if (!isle) return false;
+      route = this.waterRoute(wx, wz, isle.x, isle.z, Math.ceil(isle.r) + 8);
+      if (!route) return false;
+      const end = route[route.length - 1], shore = this.dockOf(end);
+      face = [isle.x, isle.z];
+      meet = this.dryOn(shore, [isle.x, isle.z], [0.12, 0.1, 0.16, 0.08, 0.2, 0.06]) ?? shore;
+    } else {
+      kind = 'ship';
+      const mid: [number, number] = [(rival.x + friend.x) / 2, (rival.z + friend.z) / 2];
+      route = this.waterRoute(wx, wz, mid[0], mid[1], 40);
+      if (!route) return false;
+      meet = route[route.length - 1];
+      face = mid;
+    }
+    const len = [0];
+    for (let i = 1; i < route.length; i++) len.push(len[i - 1] + Math.hypot(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1]));
+    const end = route[route.length - 1];
+    const ashore: [number, number] = kind === 'ship' ? end : this.dockOf(end);
+    const walk: [number, number][] = kind === 'ship' ? [end, end] : [ashore, meet];
+    // ceux qui les reçoivent, et le décor de la rencontre
+    const props: THREE.Object3D[] = [];
+    const ang = Math.atan2(face[0] - meet[0], face[1] - meet[1]), fx = Math.sin(ang), fz = Math.cos(ang), sx = Math.cos(ang), sz = -Math.sin(ang);
+    const host = (role: FolkRole, x: number, z: number, y: number | null, look: number) => {
+      const n = this.npc(role, a.age, x, z, look, 'idle');
+      if (y !== null) n.folk.root.position.y = y;
+      props.push(n.folk.root);
+    };
+    const prop = (g: THREE.BufferGeometry, x: number, z: number, ry: number, y: number | null = null, s = 1) => {
+      const m = this.put(g, x, z, ry);
+      if (y !== null) m.position.y = y;
+      m.scale.setScalar(s);
+      props.push(m);
+      return m;
+    };
+    if (kind === 'envoy') {
+      // la délégation rivale, à quelques pas devant la porte, face aux émissaires ; une table dressée entre eux
+      const hx = meet[0] + fx * 1.1, hz = meet[1] + fz * 1.1, back = ang + Math.PI;
+      host('sage', hx, hz, null, back);
+      host('villager', hx + sx * 0.45, hz + sz * 0.45, null, back);
+      host('villager', hx - sx * 0.45, hz - sz * 0.45, null, back);
+      prop(tableGeo(false), meet[0] + fx * 0.55, meet[1] + fz * 0.55, ang + Math.PI / 2);
+      prop(potsGeo(), meet[0] + fx * 0.55 + sx * 0.12, meet[1] + fz * 0.55 + sz * 0.12, 0, null, 0.6);
+    } else if (kind === 'islet') {
+      // la tente blanche, la table ronde, les deux chefs ; leurs voiliers mouillés à la plage
+      prop(tentGeoC(0xf4f0e6), meet[0] + fx * 0.9, meet[1] + fz * 0.9, ang + Math.PI / 2, null, 1.6);
+      prop(tableGeo(true), meet[0] + fx * 0.25, meet[1] + fz * 0.25, 0);
+      host('sage', meet[0] + fx * 0.45 + sx * 0.25, meet[1] + fz * 0.45 + sz * 0.25, null, ang + Math.PI);
+      host('scholar', meet[0] + fx * 0.45 - sx * 0.25, meet[1] + fz * 0.45 - sz * 0.25, null, ang + Math.PI);
+      for (const s of [-1, 1]) {
+        const bx = end[0] + sx * s * 1.1, bz = end[1] + sz * s * 1.1;
+        if (this.depth(bx, bz) === null) continue;
+        prop(boatGeo('sail'), bx, bz, ang + Math.PI, level + 0.005);
+      }
+    } else {
+      // au milieu du bras de mer : le radeau de la signature et sa table, les voiliers des deux chefs de part et d'autre
+      const rx = end[0] + sx * 0.6, rz = end[1] + sz * 0.6;
+      prop(deckGeo(false), rx, rz, ang, level - 0.01, 1.4);
+      prop(tableGeo(true), rx, rz, 0, level + 0.01);
+      host('sage', rx + fx * 0.12, rz + fz * 0.12, level + 0.02, ang + Math.PI);
+      host('scholar', rx - fx * 0.12, rz - fz * 0.12, level + 0.02, ang);
+      for (const s of [1, 2.1]) {
+        const bx = end[0] + sx * s * 1.1 + fx * (s > 1.5 ? 0.6 : -0.6), bz = end[1] + sz * s * 1.1 + fz * (s > 1.5 ? 0.6 : -0.6);
+        prop(boatGeo('sail'), bx, bz, ang + (s > 1.5 ? Math.PI : 0), level + 0.005);
+      }
+    }
+    for (const o of props) o.visible = false;
+    this.scout = { route, len, walk, post: meet, walls: face, trip: { kind, props } };
+    return true;
+  }
+
+  /**
+   * Un pourparler de la paix : le bateau suit sa route jusqu'à l'île (la vue le suit), l'équipe débarque et marche jusqu'au lieu
+   * de la rencontre, y reste face à ses hôtes, revient à bord ; le bateau refait la route en sens inverse et l'équipe redescend
+   * au quai. À bord (`ship`), personne ne débarque : les hôtes viennent au bateau
+   */
+  private stepTrip(dt: number, boarding: boolean) {
+    const bt = this.boat!, sc = this.scout!, tr = sc.trip!, w = this.world;
+    if (!this.moor && !boarding) this.boatK = this.workK <= this.boatK ? this.workK : Math.min(this.workK, this.boatK + dt * 0.02 + (this.workK - this.boatK) * Math.min(1, dt * 0.6));
+    const k = this.boatK, total = sc.len[sc.len.length - 1];
+    const back = k >= TRIP_BOARD, f = k < TRIP_OUT ? smooth(k / TRIP_OUT) : back ? 1 - smooth(Math.min(1, (k - TRIP_BOARD) / (TRIP_HOME - TRIP_BOARD))) : 1, d = f * total;
+    let i = 1;
+    while (i < sc.len.length - 1 && sc.len[i] < d) i++;
+    const seg = Math.max(0.001, sc.len[i] - sc.len[i - 1]), u = Math.min(1, Math.max(0, (d - sc.len[i - 1]) / seg));
+    // les hôtes paraissent quand on approche, et s'en vont quand on repart
+    const there = k >= TRIP_OUT * 0.8 && k < TRIP_BOARD + 0.06;
+    for (const o of tr.props) o.visible = tr.kind === 'ship' ? there : k >= TRIP_OUT * 0.5;
+    const ashore = tr.kind !== 'ship' && k >= TRIP_OUT && k < TRIP_BOARD;
+    const docked = k >= TRIP_HOME || this.workK >= 0.985;
+    const crew = ashore ? [] : this.embark(bt.riders, bt.home, docked);
+    const [px, pz] = this.sail(bt.obj, sc.route[i - 1], sc.route[i], bt.y, u, back, dt, crew, false, 0);
+    this.focus = [px, pz];
+    if (!ashore) {
+      // à bord, au milieu du bras de mer : debout, tournés vers le radeau, le temps de la signature
+      if (tr.kind === 'ship' && k >= TRIP_OUT && k < TRIP_BOARD && !this.crewAct) { this.crewAct = 'cheer'; this.crewFace = Math.atan2(sc.walls[0] - px, sc.walls[1] - pz); }
+      return;
+    }
+    const t = k < TRIP_MEET ? smooth((k - TRIP_OUT) / (TRIP_MEET - TRIP_OUT)) : k < TRIP_LEAVE ? 1 : 1 - smooth((k - TRIP_LEAVE) / (TRIP_BOARD - TRIP_LEAVE));
+    const [ax, az] = sc.walk[0], [mx, mz] = sc.walk[sc.walk.length - 1], n = bt.riders.length;
+    const hx = sc.walls[0] - mx, hz = sc.walls[1] - mz, hl = Math.max(0.01, Math.hypot(hx, hz));
+    const going = k < TRIP_MEET, leaving = k >= TRIP_LEAVE;
+    bt.riders.forEach((id, j) => {
+      const off = (j - (n - 1) / 2) * 0.3, s = smooth(Math.max(0, Math.min(1, t * 1.15 - j * 0.05)));
+      const x = ax + (mx - ax) * s - (hz / hl) * off * s, z = az + (mz - az) * s + (hx / hl) * off * s;
+      const heading = going ? Math.atan2(mx - ax, mz - az) : leaving ? Math.atan2(ax - mx, az - mz) : Math.atan2(hx, hz);
+      this.agents.ride(id, { x, z, y: w.surfaceAt(x, z), heading, act: this.crewAct ?? (going || leaving ? 'stroll' : k > TRIP_LEAVE - 0.05 ? 'cheer' : null) });
+    });
+    this.focus = [(mx * 2 + sc.walls[0]) / 3, (mz * 2 + sc.walls[1]) / 3];
   }
 
   /**

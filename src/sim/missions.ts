@@ -113,7 +113,7 @@ export interface Choice {
    * au bord des cratères (retransmission) ; `warp`, le saut à travers l'espace (grand voyage de la colonie) ; `diver`, le
    * scaphandrier qui descend à l'épave ; `smoke`, le grand feu devant la grotte du dragon
    */
-  variant?: 'craters' | 'warp' | 'diver' | 'smoke';
+  variant?: 'craters' | 'warp' | 'diver' | 'smoke' | 'ally' | 'islet' | 'ship';
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -610,7 +610,7 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Passer d’abord chez notre allié', text: 'On rassure l’allié, puis on traverse chez le rival.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'porte des paroles de paix d’une île à l’autre', party: 3, work: 30, risk: 0, carry: 'sacks',
+        dest: 'river', sea: true, scene: 'voyage', variant: 'ally', doing: 'porte des paroles de paix d’une île à l’autre', party: 3, work: 30, risk: 0, carry: 'sacks',
         win: [{ t: 'diplo', act: 'post' }, joy(1, 4)], lose: [],
         winText: 'Notre allié a donné sa bénédiction, et son rival a écouté. En gage, il ouvre à nos marchands un comptoir sur son île. Reste à réunir les deux chefs.',
         loseText: 'Les émissaires sont rentrés sans réponse.',
@@ -631,14 +631,14 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Réunir les chefs sur une petite île', text: 'Terrain neutre : une tente, une table et trois chaises.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'réunit les chefs des deux îles sous une tente', party: 4, work: 40, risk: 0, carry: 'guests',
+        dest: 'river', sea: true, scene: 'voyage', variant: 'islet', doing: 'réunit les chefs des deux îles sous une tente', party: 4, work: 40, risk: 0, carry: 'guests',
         win: [{ t: 'diplo', act: 'truce' }, { t: 'diplo', act: 'feast' }, joy(3), food(3, 6)], lose: [],
         winText: 'Sous la tente, les deux chefs ont signé la paix, et notre village en est le témoin. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.',
         loseText: 'Les chefs ne sont pas venus.',
       },
       {
         label: 'Signer à bord de notre navire', text: 'Au milieu du bras de mer, sous notre pavillon.',
-        dest: 'river', sea: true, scene: 'voyage', doing: 'accueille les chefs des deux îles à son bord', party: 4, work: 32, risk: 0, carry: 'guests',
+        dest: 'river', sea: true, scene: 'voyage', variant: 'ship', doing: 'accueille les chefs des deux îles à son bord', party: 4, work: 32, risk: 0, carry: 'guests',
         win: [{ t: 'diplo', act: 'truce' }, { t: 'diplo', act: 'feast' }, joy(4), jobs(1, 6)], lose: [],
         winText: 'À notre bord, au milieu du bras de mer, les deux chefs ont signé la paix. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.',
         loseText: 'Les chefs ne sont pas venus.',
