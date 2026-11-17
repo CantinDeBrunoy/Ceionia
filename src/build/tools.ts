@@ -51,6 +51,8 @@ export interface ToolHost {
   audio: AudioEngine;
   getAge(): number;
   toast(msg: string): void;
+  /** un geste sur la carte refusé : la raison, bien en vue sous le curseur (à défaut, un message) */
+  refuse?(msg: string): void;
   changed(): void;
   /** un clic sur le portail des Enfers (hors bâtiment) : on y passe */
   openPortal?(): void;
@@ -321,11 +323,11 @@ export class ToolController implements ToolInput {
     const b = this.selectedBuilding(), w = this.h.world;
     if (!b) return;
     const cost = priceIn(w, to, this.h.getAge());
-    if (cost && !canPay(w, cost)) { this.h.toast(shortLabel(w, cost)); return; }
+    if (cost && !canPay(w, cost)) { this.deny(shortLabel(w, cost)); return; }
     this.beginStroke();
     const pre = this.pre;
     const nb = w.upgrade(b.id, to);
-    if (!nb) { this.pre = null; this.h.toast(tr('Pas assez de place libre autour pour {name} ({size} × {size}, sans route ni bâtiment derrière).', { name: KINDS[to].names[Math.max(b.age, KINDS[to].minAge)].toLowerCase(), size: KINDS[to].size })); return; }
+    if (!nb) { this.pre = null; this.deny(tr('Pas assez de place libre autour pour {name} ({size} × {size}, sans route ni bâtiment derrière).', { name: KINDS[to].names[Math.max(b.age, KINDS[to].minAge)].toLowerCase(), size: KINDS[to].size })); return; }
     this.pre = pre;
     this.mark();
     this.endStroke();
@@ -428,11 +430,11 @@ export class ToolController implements ToolInput {
       return;
     }
     // archipel : les autres îles ne se bâtissent ni ne se transforment, sauf celle de l'allié hors de sa ville (voir `World.playable`)
-    { const why = this.h.world.playWhy(Math.floor(this.hit.x), Math.floor(this.hit.z)); if (why) { this.pressed = false; this.h.toast(why); return; } }
+    { const why = this.h.world.playWhy(Math.floor(this.hit.x), Math.floor(this.hit.z)); if (why) { this.pressed = false; this.deny(why); return; } }
     this.beginStroke();
     if (t === 'volcano') {
       // le volcan se pose d'un seul clic, à l'écart des bâtiments
-      if (this.reliefBlocked()) this.h.toast(tr(this.radius > 3 ? 'Trop près des bâtiments : un volcan se pose à l’écart du village, ou réduisez la taille du pinceau (il fait la largeur du volcan).' : 'Trop près des bâtiments : un volcan se pose à l’écart du village.'));
+      if (this.reliefBlocked()) this.deny(tr(this.radius > 3 ? 'Trop près des bâtiments : un volcan se pose à l’écart du village, ou réduisez la taille du pinceau (il fait la largeur du volcan).' : 'Trop près des bâtiments : un volcan se pose à l’écart du village.'));
       else if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) {
         this.mark(); this.h.audio.sfxPlace();
         // on ne savait pas comment s'en défaire : on le dit dès la pose
@@ -442,7 +444,7 @@ export class ToolController implements ToolInput {
       this.ctx.target = this.hit.y;
       // falaise : Maj enfoncée, le gradin se creuse au lieu de se dresser
       this.ctx.dig = !!e.shift;
-      if (this.reliefBlocked()) this.h.toast(tr('Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).'));
+      if (this.reliefBlocked()) this.deny(tr('Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).'));
     }
     else if (t === 'biome') this.applyBiome();
     else if (VEG_TOOLS.includes(t)) this.applyVeg();
@@ -564,7 +566,7 @@ export class ToolController implements ToolInput {
     if (SINGLE_TOOLS.includes(this.tool)) {
       // une grotte en deux clics : le premier fixe sa case, le second le côté de son ouverture (vers la souris) ; un second
       // clic sur la case même la laisse s'ouvrir vers le bas de la pente, comme celles de la carte
-      const refuse = () => this.h.toast(tr('Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.'));
+      const refuse = () => this.deny(tr('Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.'));
       const an = this.anchor;
       if (!an || an.kind !== 'cave') {
         const cx = Math.floor(hit.x), cz = Math.floor(hit.z);
@@ -622,7 +624,7 @@ export class ToolController implements ToolInput {
     // rien de creusé là où l'on a cliqué (et ce n'est pas déjà un ravin) : on dit pourquoi
     const k = w.inCells(Math.floor(hit.x), Math.floor(hit.z)) ? w.ci(Math.floor(hit.x), Math.floor(hit.z)) : -1;
     if (first && k >= 0 && !w.rift[k] && performance.now() - this.lastToast > 1500) {
-      this.h.toast(tr('Une faille se creuse dans la terre ferme, à l’écart des bâtiments, des routes, de l’eau et des grottes.'));
+      this.deny(tr('Une faille se creuse dans la terre ferme, à l’écart des bâtiments, des routes, de l’eau et des grottes.'));
       this.lastToast = performance.now();
     }
   }
@@ -671,7 +673,7 @@ export class ToolController implements ToolInput {
     const c = this.cell(), w = this.h.world;
     if (!c || !w.inCells(c.x, c.z)) return;
     if (!this.freeFrom) {
-      if (!w.road[w.ci(c.x, c.z)] && !w.canRoad(c.x, c.z)) { this.h.toast(tr('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.')); return; }
+      if (!w.road[w.ci(c.x, c.z)] && !w.canRoad(c.x, c.z)) { this.deny(tr('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.')); return; }
       this.freeFrom = [c.x + 0.5, c.z + 0.5];
       this.freeDrag = [e.x, e.y];
       this.h.audio.sfxClick();
@@ -687,7 +689,7 @@ export class ToolController implements ToolInput {
     const c = this.cell(), A = this.freeFrom;
     if (!c || !A || (Math.floor(A[0]) === c.x && Math.floor(A[1]) === c.z)) return;
     const plan = planRoad(this.h.world, A[0], A[1], c.x + 0.5, c.z + 0.5);
-    if (plan.why) { this.h.toast(plan.why); return; }
+    if (plan.why) { this.deny(plan.why); return; }
     if (!this.pre) this.beginStroke();
     this.mark();
     this.h.world.addCurve(plan.pts);
@@ -745,7 +747,7 @@ export class ToolController implements ToolInput {
     if (!c || !w.inCells(c.x, c.z)) return;
     if (!this.freeFrom) {
       const here = w.buildingAt(c.x, c.z);
-      if (!(here && (here.kind === 'wall' || here.kind === 'gate' || here.kind === 'watchtower')) && w.canPlace('wall', c.x, c.z) !== null) { this.h.toast(tr('Un rempart part d’une case libre (ou d’un pan déjà posé) : pas d’une route, d’un bâtiment ni de l’eau.')); return; }
+      if (!(here && (here.kind === 'wall' || here.kind === 'gate' || here.kind === 'watchtower')) && w.canPlace('wall', c.x, c.z) !== null) { this.deny(tr('Un rempart part d’une case libre (ou d’un pan déjà posé) : pas d’une route, d’un bâtiment ni de l’eau.')); return; }
       this.freeFrom = [c.x + 0.5, c.z + 0.5];
       this.freeDrag = [e.x, e.y];
       this.h.audio.sfxClick();
@@ -761,9 +763,9 @@ export class ToolController implements ToolInput {
     const c = this.cell(), A = this.freeFrom, w = this.h.world;
     if (!c || !A || (Math.floor(A[0]) === c.x && Math.floor(A[1]) === c.z)) return;
     const t = traceRampart(w, A, [c.x + 0.5, c.z + 0.5]);
-    if (t.why) { this.h.toast(t.why); return; }
+    if (t.why) { this.deny(t.why); return; }
     const cost = rampartCost(w, t, this.h.getAge());
-    if (cost && !canPay(w, cost)) { this.h.toast(shortLabel(w, cost)); return; }
+    if (cost && !canPay(w, cost)) { this.deny(shortLabel(w, cost)); return; }
     if (!this.pre) this.beginStroke();
     this.mark();
     const r = layRampart(w, t, this.h.getAge());
@@ -938,6 +940,11 @@ export class ToolController implements ToolInput {
     return Math.hypot(dx, dz) < 0.7 ? null : Math.round(Math.atan2(dx, dz) * 100) / 100;
   }
 
+  /** Un geste refusé sur la carte : la raison sous le curseur, en rouge, avec un son (voir `ToolHost.refuse`) */
+  private deny(msg: string) {
+    if (this.h.refuse) this.h.refuse(msg); else this.h.toast(msg);
+  }
+
   private tryPlace() {
     const hit = this.hit;
     if (!hit) return;
@@ -949,8 +956,8 @@ export class ToolController implements ToolInput {
     const cost = this.moveOrigin ? null : priceIn(w, this.kind, this.h.getAge());
     const where = w.canPlace(this.kind, o.x, o.z), reason = where ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
     if (reason) {
-      const now = performance.now();
-      if (now - this.lastToast > 1200) { this.h.toast(tr(reason)); this.lastToast = now; }
+      // (chaque clic refusé le redit sous le curseur : la bulle se remet à trembler)
+      this.deny(tr(reason));
       // (l'endroit fixé ne tient plus, le village a changé entre les deux clics : on le libère)
       if (an) { this.anchor = null; this.refreshVisuals(); this.h.changed(); }
       return;

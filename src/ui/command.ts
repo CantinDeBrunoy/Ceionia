@@ -58,6 +58,8 @@ export interface CommandHost {
   paused(): boolean;
   togglePause(): void;
   toast(m: string): void;
+  /** un geste refusé (poser, déplacer, envoyer…) : la raison sous le curseur, en rouge (à défaut, un message) */
+  refuse?(m: string): void;
   click(): void;
   /** quitter le commandement de l'île (la vue reste) */
   leaveIsle(): void;
@@ -415,13 +417,15 @@ export class CommandUI implements ToolInput {
     return w ? [w.site.x, w.site.z] : [Math.floor(p[0]) + 0.5, Math.floor(p[1]) + 0.5];
   }
 
+  /** Un geste refusé : la raison sous le curseur (voir `CommandHost.refuse`) */
+  private deny(m: string) { if (this.host.refuse) this.host.refuse(m); else this.host.toast(m); }
+
   /** Pose le mur tracé de A au point `p` */
   private placeWall(p: [number, number]) {
     const kind = this.placing;
     if (!kind) return;
     const msg = this.wall.build(this.host.war, kind, p);
-    if (msg.startsWith(BASE_DEFS[kind].icon)) this.host.click();
-    this.host.toast(msg);
+    if (msg.startsWith(BASE_DEFS[kind].icon)) { this.host.click(); this.host.toast(msg); } else this.deny(msg);
     this.ghostAt(p);
     this.render();
   }
@@ -431,8 +435,7 @@ export class CommandUI implements ToolInput {
     const p = this.lastP;
     if (this.placing !== 'palisade' || !this.wall.a || !p) { this.host.toast(tr('Porte : commencez un mur (clic au point A), puis G au point voulu ; ou choisissez « Porte » et survolez un pan.')); return; }
     const msg = this.wall.buildWithGate(this.host.war, p);
-    if (msg.startsWith(`${BASE_DEFS.gate.icon} `)) this.host.click();
-    this.host.toast(msg);
+    if (msg.startsWith(`${BASE_DEFS.gate.icon} `)) { this.host.click(); this.host.toast(msg); } else this.deny(msg);
     this.ghostAt(p);
     this.render();
   }
@@ -492,7 +495,7 @@ export class CommandUI implements ToolInput {
       const it = b.hell.buildings.get(this.moving);
       if (!it || it.down) { this.moving = null; this.theater?.ghost?.(null); this.render(); return; }
       const why = b.relocate(it, p[0], p[1]);
-      if (why) { this.host.toast(why); return; }
+      if (why) { this.deny(why); return; }
       this.host.click();
       this.host.toast(tr('{icon} {name} : déplacé.', name(it.kind)));
       this.moving = null; this.moveAt.cell = '';
@@ -501,10 +504,10 @@ export class CommandUI implements ToolInput {
       return;
     }
     const it = b.at(p[0], p[1]);
-    if (!it) { this.host.toast(tr('Cliquez un bâtiment de votre base.')); return; }
+    if (!it) { this.deny(tr('Cliquez un bâtiment de votre base.')); return; }
     if (this.tool === 'move') {
       const why = it.kind === 'camp' ? tr('Le camp de base ne se déplace pas : c’est le cœur de la base.') : null;
-      if (why) { this.host.toast(why); return; }
+      if (why) { this.deny(why); return; }
       this.moving = it.id; this.moveAt.cell = '';
       this.host.click();
       this.host.toast(tr('{icon} {name} : cliquez sa nouvelle place (Échap : le laisser où il est).', name(it.kind)));
@@ -514,7 +517,7 @@ export class CommandUI implements ToolInput {
       if (this.razeAsk?.id === it.id && now - this.razeAsk.t < 4000) {
         const why = b.demolish(it);
         this.razeAsk = null;
-        if (why) this.host.toast(why);
+        if (why) this.deny(why);
         else { this.host.click(); this.host.toast(tr('{icon} {name} : démoli.', name(it.kind))); this.theater?.ghost?.(null); }
       } else {
         this.razeAsk = { id: it.id, t: now };
@@ -551,7 +554,7 @@ export class CommandUI implements ToolInput {
     if (!p) return;
     const [px, pz] = kind === 'gate' ? this.gateSpot(p) : p;
     const r = this.host.war.buildBase(kind, px, pz);
-    if (typeof r === 'string') { this.host.toast(r); return; }
+    if (typeof r === 'string') { this.deny(r); return; }
     this.host.click();
     this.host.toast(kind === 'camp' ? tr('{icon} {name} : c’est posé ! La base peut s’étendre autour (cercle vert).', { icon: BASE_DEFS[kind].icon, name: BASE_DEFS[kind].name }) : tr('{icon} {name} : c’est posé.', { icon: BASE_DEFS[kind].icon, name: BASE_DEFS[kind].name }));
     // palissades, portes et braseros s'enchaînent ; le reste se pose une fois
@@ -621,7 +624,7 @@ export class CommandUI implements ToolInput {
     const us = this.units().filter((u) => this.cmd.selected.has(u.id));
     if (!us.length) return 0;
     const closed = t.kind === 'isle' ? this.host.war.hellWhy() : null;
-    if (closed) { this.host.toast(closed); return 0; }
+    if (closed) { this.deny(closed); return 0; }
     this.host.war.sendThroughPortal(us);
     this.host.click();
     this.host.toast(t.kind === 'isle' ? tr('{n} en route vers le portail des Enfers.', { n: nplural(us.length, 'soldat', 'soldats') }) : tr('{n} en route pour rentrer sur l’île.', { n: nplural(us.length, 'soldat', 'soldats') }));
@@ -707,7 +710,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'retreat') this.retreat();
     else if (a === 'attack') { if (this.cmd.selected.size) this.cmd.armed = this.cmd.armed ? null : 'attack'; }
     else if (a === 'tab:build' || a === 'tab:rec') { if (this.theater.kind === 'isle') this.isleTab = a === 'tab:rec' ? 'rec' : 'build'; else this.menuTab = a === 'tab:rec' ? 'rec' : 'build'; this.barKey = ''; this.render(); return; }
-    else if (a.startsWith('ibuild:')) { const k = a.slice(7), why = this.host.defenseLock(k); if (why) this.host.toast(why); else { this.host.buildDefense(k); return; } }
+    else if (a.startsWith('ibuild:')) { const k = a.slice(7), why = this.host.defenseLock(k); if (why) this.deny(why); else { this.host.buildDefense(k); return; } }
     else if (a === 'pause') this.host.togglePause();
     else if (a === 'help') { this.helpOpen = !this.helpOpen; this.helpAt = performance.now(); }
     else if (a === 'goal') { this.centerGoal(); return; }
@@ -716,8 +719,8 @@ export class CommandUI implements ToolInput {
     else if (a === 'portal') {
       // (le bouton n'est que sur l'île)
       const us = this.units().filter((u) => this.cmd.selected.has(u.id));
-      if (w.hellWhy()) this.host.toast(w.hellWhy()!);
-      else if (!us.length) this.host.toast(tr('Choisissez d’abord des troupes (clic, ou glisser pour un cadre).'));
+      if (w.hellWhy()) this.deny(w.hellWhy()!);
+      else if (!us.length) this.deny(tr('Choisissez d’abord des troupes (clic, ou glisser pour un cadre).'));
       else { w.sendThroughPortal(us); this.host.toast(tr('{n} en route vers le portail des Enfers.', { n: nplural(us.length, 'soldat', 'soldats') })); }
     }
     else if (a.startsWith('rec:')) this.recruitOrCraft(a.slice(4) as TroopKind);
@@ -725,7 +728,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'garrison') { const n = w.callGarrison(); this.host.toast(n > 1 ? tr('🌀 {n} troupes de l’île passent le portail : elles arrivent au seuil des Enfers.', { n }) : n ? tr('🌀 1 troupe de l’île passe le portail : elle arrive au seuil des Enfers.') : tr('Aucune troupe valide sur l’île.')); }
     else if (a === 'pveChoice') { this.host.openPortalChoice(); return; }
     else if (a === 'fight') w.startInvasion();
-    else if (a === 'wave') { const why = w.callWhy(); if (why) this.host.toast(why); else { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la vague arrive !')); } }
+    else if (a === 'wave') { const why = w.callWhy(); if (why) this.deny(why); else { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la vague arrive !')); } }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
     else if (a.startsWith('tool:')) { this.host.click(); this.setTool(a.slice(5) as BaseTool); return; }
     else if (a.startsWith('rech:')) { this.recruitHell(a.slice(5) as TroopKind); if (this.placing) { this.render(); return; } }
@@ -933,8 +936,17 @@ export class CommandUI implements ToolInput {
         const list = item(this.host.defenseCount('watchtower') > 0, tower, 'ibuild:watchtower', tr('Poser : {name}', { name: tower })) + item(this.host.defenseCount('barracks') > 0, barracks, 'ibuild:barracks', tr('Poser : {name}', { name: barracks })) + item(g >= need, tr('{n} / {m} soldats', { n: Math.min(g, need), m: need }), 'tab:rec', tr('Recruter des soldats'));
         return box('prep', true, '⚠', head(tr('Invasion à venir')) + (k > 1 ? tail(tr('elle reprend à la vague {k}/{m}', { k, m })) : '') + `<span class="twks">${list}</span>`);
       }
-      // l'invasion repoussée : c'est fini, plus rien ne vient
-      if (w.active && w.pve === 'on' && w.inv === 'done' && f) return box('calm', false, '🛡', head(tr('L’île est sûre')) + tail(tr('invasion repoussée, plus aucune attaque')));
+      // plus d'invasion (retour de l'auteur, 17 nov. 2026) : les démons affrontés, les Enfers sont ouverts. Tant qu'on n'y est pas
+      // allé, ce qu'il faut pour y mener des troupes (la caserne de l'île, des soldats), en pastilles qui mènent à l'action
+      if (w.active && w.pve === 'on' && w.inv === 'done' && f) {
+        if (!w.visited && !w.portalOut) {
+          const item = (ok: boolean, s: string, act: string, tip: string) => ok ? `<span class="twk ok">✓ ${s}</span>` : `<button class="twk go" data-a="${act}" title="${esc(tip)}">${s}</button>`;
+          const barracks = this.host.defenseInfo('barracks').name, g = w.garrison() + w.army.troops.filter((t) => t.where === 'hell').length;
+          const list = item(this.host.defenseCount('barracks') > 0, barracks, 'ibuild:barracks', tr('Poser : {name}', { name: barracks })) + item(g > 0, tr('Des soldats'), 'tab:rec', tr('Recruter des soldats'));
+          return box('prep', false, '🌀', head(tr('Vers les Enfers')) + `<span class="twks">${list}</span>`);
+        }
+        return box('calm', false, '🌀', head(tr('Les Enfers sont ouverts')) + tail(tr('envoyez-y vos troupes par le portail')));
+      }
       return '';
     }
     // une vague arrive : la première 10 s après « Affronter », les suivantes INVASION_GAP s après la précédente (le cor les avance)

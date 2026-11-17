@@ -331,6 +331,27 @@ button.pop:hover { background: rgba(255, 255, 255, 0.7); }
 #cursorHint { position: fixed; left: 0; top: 0; z-index: 30; display: none; pointer-events: none; padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 800; color: #fff; background: #2a62d6; box-shadow: 0 4px 14px rgba(15, 27, 45, 0.35); white-space: nowrap; }
 #cursorHint.show { display: block; }
 #cursorHint.b { background: #1f9d55; }
+/* le jeu en pause (voir `UI.syncPause`) : un bandeau au milieu du haut, et les bords de l'écran assombris */
+#pauseVeil { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0; transition: opacity 0.25s; box-shadow: inset 0 0 0 4px rgba(246, 195, 90, 0.75), inset 0 0 140px 30px rgba(20, 24, 40, 0.55); }
+#pauseVeil.on { opacity: 1; }
+#pauseBar { position: fixed; left: 50%; top: 40%; z-index: 32; translate: -50% 0; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 14px; border-radius: 16px; font-size: 18px; white-space: nowrap; animation: pbIn 0.25s ease; }
+#pauseBar[hidden] { display: none; }
+#pauseBar .pbIco { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; animation: pbBeat 1.6s ease-in-out infinite; }
+#pauseBar b { font-family: Fraunces, Georgia, serif; font-size: 20px; letter-spacing: 0.01em; }
+#pauseBar button { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 14px; font-weight: 800; }
+#pauseBar kbd { margin-left: 4px; padding: 1px 6px; border-radius: 6px; font: 600 11px system-ui, sans-serif; background: rgba(0, 0, 0, 0.12); }
+@keyframes pbIn { from { opacity: 0; translate: -50% -10px; } }
+@keyframes pbBeat { 0%, 100% { box-shadow: 0 0 0 0 rgba(246, 195, 90, 0.6); } 50% { box-shadow: 0 0 0 8px rgba(246, 195, 90, 0); } }
+@media (max-width: 720px) { #pauseBar { top: auto; bottom: 150px; gap: 8px; font-size: 15px; } #pauseBar b { font-size: 16px; } #pauseBar kbd { display: none; } }
+/* « Menu principal » toujours en vue au pied des onglets des paramètres */
+#ui > .overlay > .cePop .setTabs .setMenu { margin-top: 18px; color: #7a3b1c; }
+/* un geste refusé sur la carte : la raison sous le curseur, rouge, qui tremble (voir `UI.refuse`) */
+#cursorDeny { position: fixed; left: 0; top: 0; z-index: 31; display: none; align-items: center; gap: 8px; max-width: min(380px, calc(100vw - 16px)); pointer-events: none; padding: 7px 14px 7px 8px; border-radius: 14px; font-size: 14px; font-weight: 800; line-height: 1.3; color: #fff; background: #c8322a; border: 2px solid #ffd2c8; box-shadow: 0 6px 20px rgba(80, 10, 0, 0.45); }
+#cursorDeny.show { display: flex; animation: cdShake 0.42s ease, cdFade 2.6s ease forwards; }
+#cursorDeny .cdX { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #fff; color: #c8322a; font-size: 14px; font-weight: 900; }
+@keyframes cdShake { 0%, 100% { translate: 0 0; } 20% { translate: -6px 0; } 40% { translate: 5px 0; } 60% { translate: -3px 0; } 80% { translate: 2px 0; } }
+@keyframes cdFade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #cursorDeny.show { animation: cdFade 2.6s ease forwards; } }
 /* groupes de lecture : un titre au-dessus de chaque série de vignettes */
 #items .grp { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; padding-left: 10px; border-left: 1.5px solid rgba(40, 50, 70, 0.1); }
 #items .grp:first-child { padding-left: 0; border-left: none; }

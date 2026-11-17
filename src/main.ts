@@ -548,6 +548,7 @@ class Game implements UIHost {
       wetCell: (k) => this.streams.covers(k),
       getAge: () => this.sim.age,
       toast: (m) => this.ui.toast(m),
+      refuse: (m) => this.ui.refuse(m),
       changed: () => { this.propsDirty = true; this.ui?.refreshTools(); },
       erupt: (cell) => this.erupt(cell),
       openPortal: () => { if (this.war.ensure()) void this.enterHell(); },
@@ -568,7 +569,7 @@ class Game implements UIHost {
       zoneName: () => (this.mode === 'hell' && this.hellMode ? this.hellMode.zoneName(this.cam.target.z) : null),
       age: () => this.sim.age, pop: () => this.sim.pop,
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
-      toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
+      toast: (m) => this.ui.toast(m), refuse: (m) => this.ui.refuse(m), click: () => audio.sfxClick(),
       // (« Retourner au village », ou Échap : la vue retourne au village, l'interface de l'île se range d'elle-même)
       leaveIsle: () => this.goHome(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(), openPortalChoice: () => this.openPortalChoice(),
       defenseInfo: (k) => { const d = KINDS[k as KindId], a = Math.max(this.sim.age, d.minAge); return { name: d.names[a], icon: d.icon, desc: d.desc }; },
@@ -721,7 +722,7 @@ class Game implements UIHost {
     this.tutorial.setChapters(chapters(this.tutorial, this.ui, {
       root: uiRoot, age: () => this.sim.age,
       isle: () => isleDefenses(this.world), village: () => this.villageDefenses(),
-      army: () => this.war.army.troops.length + this.war.army.queue.length, need: () => this.war.invasionNeed(), pve: () => this.war.pve === 'on',
+      army: () => this.war.army.troops.length + this.war.army.queue.length, sent: () => this.war.army.troops.filter((t) => t.where === 'hell').length + this.war.crossing.size, pve: () => this.war.pve === 'on',
       theater: () => { const k = this.command.theater?.kind ?? null; return k === 'rival' ? null : k; }, mode: () => this.mode, atIsle: () => this.lookingAtIsle(),
       selected: () => this.command.cmd.selected.size, lastOrder: () => this.command.cmd.lastOrder,
       commandIsle: () => this.commandIsle(),
@@ -1020,15 +1021,15 @@ class Game implements UIHost {
   private isleBrief() {
     if (this.isleSaid || this.tutorial.active) return;
     this.isleSaid = true;
-    this.ui.toast(tr('⚔️ Bâtissez ici, sur l’île du portail (pas au village) : « {tower} » et « {barracks} », puis recrutez une garnison.', { tower: this.sim.nameOf('watchtower'), barracks: this.sim.nameOf('barracks') }), undefined, 'action');
+    this.ui.toast(tr('⚔️ Bâtissez ici, sur l’île du portail (pas au village) : « {barracks} », puis recrutez des soldats et menez-les aux Enfers.', { barracks: this.sim.nameOf('barracks') }), undefined, 'action');
   }
 
   /** Une tour de garde ou une caserne posée au village quand l'île n'en a pas : elle ne garde pas le portail, on le dit */
   private defenseWhere(b: Building) {
-    if ((b.kind !== 'watchtower' && b.kind !== 'barracks') || this.war.pve !== 'on' || this.world.onPortalIsland(b.x, b.z) || this.tutorial.chapterOn === 'pve') return;
-    const d = isleDefenses(this.world);
-    if (b.kind === 'watchtower' ? d.towers : d.barracks) return;
-    this.ui.toast(tr('« {name} » est au village : contre les démons, il en faut sur l’île du portail. Cliquez ici pour y aller.', { name: this.sim.nameOf(b.kind) }), () => this.commandIsle(), 'action');
+    // (plus d'invasion : la tour de garde de l'île ne sert plus, seule la caserne y mène les recrues au portail)
+    if (b.kind !== 'barracks' || this.war.pve !== 'on' || this.world.onPortalIsland(b.x, b.z) || this.tutorial.chapterOn === 'pve') return;
+    if (isleDefenses(this.world).barracks) return;
+    this.ui.toast(tr('« {name} » est au village : pour mener des soldats aux Enfers, il en faut une sur l’île du portail. Cliquez ici pour y aller.', { name: this.sim.nameOf(b.kind) }), () => this.commandIsle(), 'action');
   }
 
   /** Tours de garde et casernes du village (hors de l'île du portail) */

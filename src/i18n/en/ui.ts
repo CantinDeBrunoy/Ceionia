@@ -222,6 +222,7 @@ registerDict('ui', {
   'Pas maintenant': 'Not now',
   'rester sur mon île': 'stay on my island',
   'Ouvrir le portail de l’île au large ?': 'Open the portal on the offshore island?',
+  'Des démons rôdent de l’autre côté. Pour les affronter, bâtissez une caserne sur l’île du portail, puis recrutez des soldats et passez le portail.': 'Demons lurk on the other side. To face them, build barracks on the portal island, then recruit soldiers and go through the portal.',
   'Des démons rôdent de l’autre côté. Pour les affronter, bâtissez une tour de garde et une caserne sur l’île du portail, puis recrutez une garnison.': 'Demons lurk on the other side. To face them, build a watchtower and a barracks on the portal island, then recruit a garrison.',
   'Ouvrir le portail': 'Open the portal',
   'Grands choix': 'Big choices',

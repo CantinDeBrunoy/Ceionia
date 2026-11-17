@@ -19,26 +19,21 @@ export const CHAPTER_TEXT = {
     goIsle: 'Aller sur l’île',
     command: 'Commander la garnison',
     defenses: {
-      title: 'Les défenses de l’île',
-      text: 'Les démons sortent du portail : bâtissez {tower} et {barracks} sur son île, pas au village.',
-      tasks: ['{tower} sur l’île', '{barracks} sur l’île'],
-      village: 'Au village, elle ne garde pas le portail : il la faut sur l’île.',
+      title: 'La caserne de l’île',
+      text: 'Vos soldats partent de l’île du portail : bâtissez {barracks} sur son île, pas au village.',
+      tasks: ['{barracks} sur l’île'],
+      village: 'Au village, elle ne mène pas au portail : il la faut sur l’île.',
     },
     recruit: {
       title: 'La garnison',
       text: 'Recrutez des soldats à la caserne de l’île, dans l’onglet « Recruter » de « Ma garnison ».',
       tasks: ['Recruter un soldat'],
     },
-    orders: {
-      title: 'Vos ordres',
-      text: 'Choisissez vos soldats (un clic, ou « Tous »), puis faites un clic droit là où ils doivent aller.',
-      tasks: ['Choisir des soldats', 'Les envoyer d’un clic droit'],
+    send: {
+      title: 'Aux Enfers',
+      text: 'Choisissez vos soldats (« Tous »), puis « Envoyer aux Enfers » : ils passent le portail.',
+      tasks: ['Choisir des soldats', 'Les envoyer aux Enfers'],
       wait: 'Vos recrues arrivent bientôt sur l’île.',
-    },
-    invasion: {
-      title: 'L’invasion',
-      text: 'Avec {n} soldats sur l’île, « Affronter » lance l’invasion : repoussez-la pour ouvrir les Enfers.',
-      tasks: [] as string[],
     },
   },
   arch: {
@@ -113,8 +108,8 @@ export interface ChapterHost {
   village(): { towers: number; barracks: number };
   /** soldats de l'armée et recrues en route */
   army(): number;
-  /** soldats qu'il faut sur l'île pour que l'invasion soit prête */
-  need(): number;
+  /** soldats envoyés aux Enfers : déjà passés, ou en marche vers le portail */
+  sent(): number;
   /** le joueur affronte les démons (faux : portail refermé) */
   pve(): boolean;
   /** où l'on commande (l'île, les Enfers, rien) et le monde à l'écran */
@@ -145,7 +140,7 @@ const step = (id: string, t: StepText, s: Omit<Step, 'id' | 't'>): Step => ({ id
 export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<ChapterId, Chapter> {
   const P = CHAPTER_TEXT.pve, E = CHAPTER_TEXT.hell, q = (s: string) => h.root.querySelector(s);
   const name = (k: 'watchtower' | 'barracks') => tr('« {name} »', { name: KINDS[k].names[Math.max(h.age(), KINDS[k].minAge)] });
-  const names = (s: string) => fmt(s, { tower: name('watchtower'), barracks: name('barracks'), n: h.need() });
+  const names = (s: string) => fmt(s, { barracks: name('barracks') });
   /** un bouton de la barre des troupes */
   const bar = (a: string) => q(`#troopBar [data-a="${a}"]`);
   /** l'onglet du menu de l'île, s'il n'est pas déjà ouvert */
@@ -169,17 +164,17 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
       begin: () => (village = h.village()),
       text: () => names(P.defenses.text),
       tasks: () => P.defenses.tasks.map(names),
-      check: () => { const d = h.isle(); return [d.towers > 0, d.barracks > 0]; },
+      check: () => [h.isle().barracks > 0],
       // au commandement de l'île : l'onglet Bâtir puis la tuile ; la vue sur l'île : l'outil de construction du village
       anchor: () => {
-        const d = h.isle(), k = !d.towers ? 'watchtower' : !d.barracks ? 'barracks' : null;
+        const k = !h.isle().barracks ? 'barracks' : null;
         if (!k) return null;
         if (isle()) return tab('build') ?? bar(`ibuild:${k}`);
         if (!h.atIsle()) return null;
         return ui.tab !== 'build' ? q('#modes [data-t="build"]') : ui.cat !== 'war' ? q('#subcats [data-c="war"]') : q(`#items [data-kind="${k}"]`);
       },
       // posée au village pendant l'étape : elle ne compte pas
-      note: () => { const d = h.isle(), v = h.village(); return (!d.towers && v.towers > village.towers) || (!d.barracks && v.barracks > village.barracks) ? P.defenses.village : ''; },
+      note: () => (!h.isle().barracks && h.village().barracks > village.barracks ? P.defenses.village : ''),
       act: goIsle,
     }),
     step('pveRecruit', P.recruit, {
@@ -188,17 +183,12 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
       anchor: () => (isle() ? tab('rec') ?? q('#troopBar .trb.go[data-a^="rec:"]') ?? q('#troopBar [data-a^="rec:"]') : null),
       act: command,
     }),
-    step('pveOrders', P.orders, {
-      begin: () => (order = h.lastOrder()),
-      check: () => [h.selected() > 0, !!h.lastOrder() && h.lastOrder() !== order],
-      anchor: () => (isle() && !h.selected() ? q('#troopBar .tall') ?? q('#troopBar .tcard') : null),
-      note: () => (isle() && !q('#troopBar .tcard') ? P.orders.wait : ''),
+    // (plus d'invasion à repousser : les soldats recrutés passent tout de suite le portail)
+    step('pveSend', P.send, {
+      check: () => { const n = h.sent(); return [h.selected() > 0 || n > 0, n > 0]; },
+      anchor: () => (isle() ? (!h.selected() ? q('#troopBar .tall') ?? q('#troopBar .tcard') : bar('portal')) : null),
+      note: () => (isle() && !q('#troopBar .tcard') && !h.sent() ? P.send.wait : ''),
       act: command,
-    }),
-    step('pveInvasion', P.invasion, {
-      read: true, check: () => [],
-      text: () => names(P.invasion.text),
-      anchor: () => (isle() ? q('#troopBar .tstate .wst.hot') : null),
     }),
   ];
 

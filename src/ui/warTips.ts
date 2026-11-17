@@ -35,9 +35,9 @@ export interface WarTipState {
 }
 
 export const WAR_TIP_TEXT: Record<WarTipId, string> = {
-  isle: '🗼 Portail ouvert ! Posez une tour de garde et une caserne sur son île. Cliquez pour y aller.',
-  garrison: '⚔️ Vos soldats gardent l’île. Cliquez pour les commander.',
-  orders: '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. 🎺 : vague suivante. « ? » : aide.',
+  isle: '🗼 Portail ouvert ! Posez une caserne sur son île pour y recruter. Cliquez pour y aller.',
+  garrison: '⚔️ Vos soldats sont sur l’île : menez-les aux Enfers. Cliquez pour les commander.',
+  orders: '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. « ? » : aide.',
   hell: '🔥 Les Enfers (facultatif) : abattez les forteresses ; chaque âge ouvre une zone. 🌀 Île : retour.',
   ageLock: '🔒 Les démons d’après sont trop forts : montez d’âge pour ouvrir la zone suivante.',
   base: '🏕️ Zone conquise ! Posez un camp de base (rangée « Base »), puis caserne et infirmerie.',
@@ -53,7 +53,7 @@ const ORDER: WarTipId[] = ['kingdom', 'base', 'hell', 'ageLock', 'orders', 'garr
 
 /** Le moment de chaque aide */
 const WHEN: Record<WarTipId, (s: WarTipState) => boolean> = {
-  isle: (s) => s.pve !== false && s.portalOpen && (s.towers === 0 || s.barracks === 0) && s.commanding === null,
+  isle: (s) => s.pve !== false && s.portalOpen && s.barracks === 0 && s.commanding === null,
   garrison: (s) => s.pve !== false && s.portalOpen && s.isleTroops > 0 && s.commanding === null,
   orders: (s) => s.commanding === 'isle',
   hell: (s) => s.commanding === 'hell',

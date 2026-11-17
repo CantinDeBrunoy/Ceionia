@@ -12,6 +12,9 @@ import { War } from '../src/sim/war';
 import { isleSecured } from '../src/world/portal';
 import { Sim } from '../src/sim/sim';
 
+// (l'invasion en trois vagues, retirée du jeu, reste éprouvée ici : voir `War.waves`)
+War.wavesDefault = true;
+
 /** Une simulation des Enfers sans démons ni bâtiments (on y pose ceux du test) */
 const emptyHell = () => {
   const h = new Hell(new HellMap(1));

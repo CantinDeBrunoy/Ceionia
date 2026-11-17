@@ -10,6 +10,9 @@ import { TroopKind, troopStats } from '../src/sim/army';
 import { sumPower } from '../src/sim/hellBalance';
 import type { Difficulty } from '../src/sim/difficulty';
 
+// (l'invasion en trois vagues, retirée du jeu, reste éprouvée ici : voir `War.waves`)
+War.wavesDefault = true;
+
 /**
  * L'invasion du portail : annoncée une fois (tour + caserne + garnison), trois vagues de plus en plus grosses à repousser
  * avant d'ouvrir les Enfers ; ensuite, plus aucune vague
@@ -558,5 +561,35 @@ describe('l’invasion est gagnable, et grosse', () => {
     expect(p[0]).toBeLessThan(p[1]);
     expect(p[1]).toBeLessThan(p[2]);
     expect(INVASION_WAVES).toBe(3);
+  });
+});
+
+describe('plus d’invasion : on va directement aux Enfers (retour de l’auteur, 17 nov. 2026)', () => {
+  it('les démons affrontés, les Enfers sont ouverts tout de suite, et aucune vague ne vient jamais', () => {
+    War.wavesDefault = false;
+    try {
+      const war = pveWar(island(0, 1));
+      expect(war.waves).toBe(false);
+      enlist(war, 3);
+      tick(war, 1);
+      expect(war.inv).toBe('done');
+      expect(war.hellWhy()).toBeNull();
+      // sans tour de garde ni attente : le guidage mène tout de suite aux Enfers
+      expect(war.guideStep(0)).toBe('select');
+      tick(war, 120);
+      expect(said(war, 'invasion') + said(war, 'invasionStart') + said(war, 'raid')).toBe(0);
+      expect(war.nextWaveIn()).toBeNull();
+      expect(war.isle!.raid).toBeFalsy();
+      // refermé puis rouvert : toujours ouverts, toujours sans vague
+      war.closePortal(); tick(war, 1);
+      expect(war.hellWhy()).not.toBeNull();
+      war.acceptPve(); tick(war, 1);
+      expect(war.hellWhy()).toBeNull();
+      // une partie sauvegardée en attendant l'invasion (`wait`) l'a faite au chargement
+      const back = new War(war.world);
+      back.load({ ...war.save(), invasion: 'wait' });
+      tick(back, 1);
+      expect(back.inv).toBe('done');
+    } finally { War.wavesDefault = true; }
   });
 });

@@ -13,6 +13,9 @@ import { emptyStock } from '../src/sim/gear';
 import { RAID_LIMIT } from '../src/sim/isleBattle';
 import { HellBase, CAMP_MARGIN } from '../src/sim/hellBase';
 
+// (l'invasion en trois vagues, retirée du jeu, reste éprouvée ici : voir `War.waves`)
+War.wavesDefault = true;
+
 /**
  * Le volet militaire joué de bout en bout : les blocages et les petits défauts relevés en jouant (accès aux Enfers, retour
  * des troupes à la chute du royaume…)

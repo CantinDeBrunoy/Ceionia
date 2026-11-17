@@ -19,26 +19,25 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   que si l'état disait « en cours » : un joueur qui l'avait fini ou passé une fois ne le revoyait plus, l'interrupteur étant
   rangé dans les options de l'accueil. La ligne « Tutoriel » de Paramètres › Divers (`settingsHtml`) le reprend en cours de partie.
 - **Nouvelle partie** : la suite principale repart de la première étape et le temps est en pause jusqu'au feu de camp.
-- **La suite principale** (14 étapes, dans `Tutorial` › constructeur) :
+- **La suite principale** (10 étapes, dans `Tutorial` › constructeur ; 14 jusqu'au 17 nov. 2026, l'auteur la trouvait longue) :
   1. `welcome` « Bienvenue ! » (à lire)
   2. `camera` « Regardez autour de vous » : souris, et clavier (voir plus bas)
-  3. `fire`, 4. `habitat`, 5. `food`, 6. `wood`, 7. `stone` : poser feu de camp, maison et puits, séchoir, bûcheron, pierrier
-  8. `resources` « Les ressources » : la barre `#res` et à quoi servent bois, pierre, minerai (à lire)
-  9. `road` : prendre l'outil Route et tracer une route
-  10. `needs` : ouvrir la fiche d'un besoin
-  11. `time` : pause et vitesse
-  12. `ages` : ouvrir les conditions de l'âge suivant (à lire)
-  13. `gear` « L'équipement » (à lire) : ouvrir l'onglet Équipement des expéditions et fabriquer la pièce de la mission
+  3. `fire`, 4. `habitat` : poser feu de camp, puis maison et puits
+  5. `food` « La production » : séchoir, bûcheron et pierrier, dans la même étape (une tâche chacun)
+  6. `road` : prendre l'outil Route et tracer une route
+  7. `time` : pause et vitesse
+  8. `ages` : ouvrir les conditions de l'âge suivant (à lire)
+  9. `gear` « L'équipement » (à lire) : ouvrir l'onglet Équipement des expéditions et fabriquer la pièce de la mission
       que montre l'étape suivante (`tutoGear` : contre le premier danger de « La grande cueillette » en forêt, une lance à la
       Préhistoire) ; l'équipe emporte le meilleur de la réserve. Sans pièce possible, n'importe quelle pièce compte.
-  14. `expeditions` : ouvrir les expéditions (la fenêtre restée sur l'onglet Équipement : l'onglet des missions) et lancer
+  10. `expeditions` : ouvrir les expéditions (la fenêtre restée sur l'onglet Équipement : l'onglet des missions) et lancer
       une mission ; pas de suivi à l'œil, l'étape passe dès le départ. Pièce encore en fabrication, fenêtre de départ
       ouverte : une ligne invite à l'attendre.
-- **Reprise** : une partie s'enregistre avec l'identifiant de l'étape (`id`). Arrêtée sur `gear`, elle reprend sur `gear`
+- **Reprise** : une partie s'enregistre avec l'identifiant de l'étape (`id`). Arrêtée sur une étape retirée le 17 nov. 2026 (`MERGED` de `stepIndex`) : `wood` et `stone` reprennent à `food`, `resources` à `road`, `needs` à `time`. Arrêtée sur `gear`, elle reprend sur `gear`
   puis `expeditions` ; arrêtée sur `expeditions` (avant que l'équipement passe devant), elle reprend sur `expeditions`.
   Arrêtée sur `incidents`, l'ancienne 15e étape (retirée), le tutoriel compte pour fini (`retired`).
-- **Verrous de construction** (`GATE`) : pendant les étapes 1 à 7, on ne bâtit que ce que le tutoriel a déjà fait poser
-  (`welcome`, `camera`, `fire` : la place ; puis maison et puits ; puis séchoir ; bûcheron ; pierrier). Le reste dit « Le
+- **Verrous de construction** (`GATE`) : pendant les étapes 1 à 5, on ne bâtit que ce que le tutoriel a déjà fait poser
+  (`welcome`, `camera`, `fire` : la place ; puis maison et puits ; puis séchoir, bûcheron et pierrier). Le reste dit « Le
   tutoriel vous le fera bâtir un peu plus tard. ». Le verrou saute dès que le village compte un bâtiment hors de `GUIDED`,
   et quand le tutoriel est fini ou mis de côté. Pas de verrou pendant un chapitre.
 - **Clavier de la caméra** : le jeu lit les touches physiques (`camera.ts` : W A S D, Q E). La bulle suit les contrôles choisis
@@ -46,13 +45,14 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   (`layoutKeys` : Z Q S D et A / E en AZERTY, W A S D et Q / E en QWERTY) ; à la souris, la phrase du bord de l'écran et du
   glissé (`camera.mouse`). `viewKeys` (lettres lues de `getLayoutMap`) reste pour les tests. Au doigt, la phrase tactile seule.
 - **Fin** : « Terminer » à la dernière étape. Le temps encore en pause repart à vitesse ×1. Le tutoriel reste dans les réglages (« Recommencer »).
-- **Chapitre « Affronter les démons »** (`pve`, 4 étapes), lancé par le bouton « Affronter les démons » de la carte du
+- **Chapitre « Affronter les démons »** (`pve`, 3 étapes depuis le 17 nov. 2026 : plus d'invasion, plus de tour de garde), lancé par le bouton « Affronter les démons » de la carte du
   portail. La vue va alors au commandement de l'île, menu ouvert sur « Bâtir » :
-  1. `pveDefenses` : poser une tour de garde et une caserne **sur l'île**. Une défense posée au village pendant l'étape
+  1. `pveDefenses` « La caserne de l'île » : poser une caserne **sur l'île**. Une caserne posée au village pendant l'étape
      ne compte pas, et une ligne le dit. Hors de l'île, la bulle propose « Aller sur l'île ».
   2. `pveRecruit` : recruter un soldat (onglet « Recruter » de « Ma garnison »).
-  3. `pveOrders` : choisir des soldats (« Tous ») et donner un ordre d'un clic droit.
-  4. `pveInvasion` (à lire) : avec assez de soldats, « Affronter » lance l'invasion, qui ouvre les Enfers.
+  3. `pveSend` « Aux Enfers » : choisir des soldats (« Tous »), puis « Envoyer aux Enfers » (`sent` de l'hôte : soldats
+     passés ou en marche vers l'arche). Remplace « Vos ordres » et « L'invasion » ; un chapitre enregistré plus loin reprend
+     à sa dernière étape.
 - **Chapitre « Les Enfers »** (`hell`, 4 étapes), à la première entrée dans les Enfers :
   1. `hellGoal` : le marqueur à l'écran montre le prochain bastion ; cliquer l'objectif au bout de la frise (il centre la vue).
   2. `hellPick` : choisir des troupes (sans troupe : « Renforts » fait venir la garnison).

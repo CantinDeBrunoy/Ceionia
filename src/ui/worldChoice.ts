@@ -80,7 +80,7 @@ export class WorldChoice {
     if (way === 'hell') return `<img class="pcDio" src="./ui/portail.webp" alt="" draggable="false">
       <h4>${tr('Les Enfers')}</h4>
       <p class="pcSub">${tr('Ouvrir le portail de l’île au large ?')}</p>
-      <div class="pcHow"><p>${tr('Des démons rôdent de l’autre côté. Pour les affronter, bâtissez une tour de garde et une caserne sur l’île du portail, puis recrutez une garnison.')}</p></div>
+      <div class="pcHow"><p>${tr('Des démons rôdent de l’autre côté. Pour les affronter, bâtissez une caserne sur l’île du portail, puis recrutez des soldats et passez le portail.')}</p></div>
       <div class="pcBtns">${choice('hell', 'pcGo', 'militaire', tr('Ouvrir le portail'), tr('invasions, Enfers, royaume'))}${later}</div>`;
     return `<img class="pcDio" src="./expeditions/dio-caravel.webp" alt="" draggable="false">
       <h4>${tr('Explorer le monde ?')}</h4>

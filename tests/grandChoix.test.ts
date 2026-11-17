@@ -91,7 +91,7 @@ describe('le grand choix : une partie', () => {
     expect(crossroadsDue(w, 1, 'open', 'open', true)).toBe(true);
   });
 
-  it('« Les Enfers » : le portail s’ouvre sans expédition, les démons sont à affronter d’emblée (pas de seconde carte)', () => {
+  it('« Les Enfers » : le portail s’ouvre sans expédition, les Enfers aussi (plus d’invasion à repousser, pas de seconde carte)', () => {
     const w = village(), war = new War(w);
     w.crossroads = true;
     w.portalWoken = true;
@@ -104,7 +104,8 @@ describe('le grand choix : une partie', () => {
     expect(war.choiceSeen).toBe(true);
     war.update(0.1, 2);
     expect(war.pve).toBe('on');
-    expect(war.inv).toBe('wait');
+    expect(war.inv).toBe('done');
+    expect(war.hellWhy()).toBeNull();
     expect(ways(w, war)).toEqual({ hell: 'taken', world: 'open' });
     // sauvegardé, rechargé : le portail reste ouvert, le choix aussi
     const back = reload(w);
@@ -112,14 +113,14 @@ describe('le grand choix : une partie', () => {
     expect(back.crossroads).toBe(true);
   });
 
-  it('une ancienne sauvegarde du Médiéval sans état d’invasion : prendre les Enfers lance l’invasion au début (pas « faite »)', () => {
+  it('une ancienne sauvegarde du Médiéval sans état d’invasion : prendre les Enfers les ouvre', () => {
     const w = village(), war = new War(w);
     // (une partie d'avant l'invasion en trois vagues : `War.save` sans `invasion` ni `pve`)
     war.load({ army: { troops: [], queue: [] } });
     w.portalWoken = true;
     war.wake();
     war.update(0.1, 3);
-    expect(war.inv).toBe('wait');
+    expect(war.inv).toBe('done');
     expect(war.pve).toBe('on');
   });
 

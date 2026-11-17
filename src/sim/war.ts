@@ -114,6 +114,12 @@ export class War {
   troopOf = new Map<number, Troop>();
   /** unités en marche vers le portail pour le passer (vers les Enfers, ou vers l'île) */
   crossing = new Set<number>();
+  /**
+   * L'invasion en trois vagues, retirée du jeu le 17 nov. 2026 (« enlever les 3 vagues, on va directement en enfer ») : les
+   * démons affrontés, les Enfers sont ouverts d'emblée. Son code reste, rallumé par les essais de l'invasion (`wavesDefault`)
+   */
+  static wavesDefault = false;
+  waves = War.wavesDefault;
   /** nouvelles à afficher */
   news: WarNews[] = [];
   /** ce qui s'est passé au combat, à faire voir par les vues (vidé par elles ; borné quand on ne regarde pas) */
@@ -349,6 +355,10 @@ export class War {
     f.armyPower = this.power(age);
     if (this.legacyInv) this.readLegacyInvasion(age);
     if (this.legacyPve) this.readLegacyPve();
+    // plus d'invasion (retour de l'auteur, 17 nov. 2026 : « enlever les 3 vagues, on va directement en enfer ») : les démons
+    // affrontés, l'invasion compte pour faite et les Enfers sont ouverts. (Une vague d'une ancienne partie, sauvegardée en plein
+    // combat, se joue jusqu'au bout.)
+    if (!this.waves && this.pve === 'on' && this.inv !== 'done' && this.inv !== 'raid') this.inv = 'done';
     // ses trois vagues déjà repoussées (ou le royaume tombé) : l'invasion est faite, quoi qu'en dise l'état
     if (this.inv !== 'done' && (f.victory || (this.inv !== 'raid' && f.raidsRepelled >= INVASION_WAVES))) this.inv = 'done';
     // l'invasion faite, l'île est sûre (une partie d'avant les trois vagues aussi, quel qu'ait été son compte)
@@ -416,7 +426,8 @@ export class War {
     if (out) {
       const sec = f.endRaid(out === 'repelled', f.time);
       isle.endRaid();
-      const inv = this.inv === 'raid', last = f.raidsRepelled >= INVASION_WAVES;
+      // (plus d'invasion en trois vagues : une vague d'une ancienne partie, repoussée, la finit)
+      const inv = this.inv === 'raid', last = !this.waves || f.raidsRepelled >= INVASION_WAVES;
       // (une vague de l'invasion perdue : on se prépare, elle sera ré-annoncée ; repoussée : la suivante dans INVASION_GAP s,
       // ou, la dernière, les Enfers s'ouvrent et plus rien ne vient)
       if (inv) this.inv = out !== 'repelled' ? 'wait' : last ? 'done' : 'coming';

@@ -161,6 +161,7 @@ registerDict('menu', {
   'Quitter': 'Quit',
   'Recommencer cette carte': 'Restart this map',
   'Menu principal': 'Main menu',
+  'Jeu en pause': 'Game paused', 'Reprendre': 'Resume', 'La partie est enregistrée : vous la retrouverez dans « Continuer »': 'Your game is saved: you will find it under “Continue”',
   'Partie sauvegardée': 'Game saved',
 
   // ---- crédits

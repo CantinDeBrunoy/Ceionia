@@ -66,34 +66,14 @@ export const TUTO_TEXT = {
       tasks: [] as string[],
     },
     food: {
-      title: 'De quoi manger',
-      text: 'Posez de quoi nourrir le village, au rayon « Production ».',
-      tasks: [] as string[],
-    },
-    wood: {
-      title: 'Le bois',
-      text: 'Posez un bûcheron près des arbres, dans la zone verte.',
-      tasks: [] as string[],
-    },
-    stone: {
-      title: 'La pierre',
-      text: 'Posez un pierrier près des rochers, dans la zone verte.',
-      tasks: [] as string[],
-    },
-    resources: {
-      title: 'Les ressources',
-      text: 'Vos réserves s’affichent ici : bois et pierre paient les grands bâtiments, le minerai le passage des âges.',
+      title: 'La production',
+      text: 'Au rayon « Production » : de quoi manger, un bûcheron près des arbres et un pierrier près des rochers (zone verte).',
       tasks: [] as string[],
     },
     road: {
       title: 'Les routes',
       text: 'Prenez l’outil Route {road} puis cliquez un point A et un point B pour les relier.',
       tasks: ['Prendre l’outil Route', 'Tracer une route'],
-    },
-    needs: {
-      title: 'Les besoins',
-      text: 'Chaque jauge en haut est un besoin : cliquez sur une icône pour savoir quoi bâtir.',
-      tasks: ['Ouvrir la fiche d’un besoin'],
     },
     time: {
       title: 'Le temps',
@@ -258,9 +238,15 @@ export function startsOn(saved: TutoState | null, fresh: boolean): boolean {
   return fresh ? !saved?.off : saved?.on ?? false;
 }
 
+/**
+ * Les étapes retirées pour raccourcir le tutoriel (17 nov. 2026) : un état arrêté sur l'une d'elles reprend à celle qui la
+ * remplace (le bois et la pierre se posent avec la nourriture, la lecture des ressources et la fiche des besoins disparaissent)
+ */
+const MERGED: Record<string, string> = { wood: 'food', stone: 'food', resources: 'road', needs: 'time' };
+
 /** L'étape où reprendre la suite principale (`ids` : ses étapes dans l'ordre) */
 export function stepIndex(s: TutoState, ids: readonly string[]): number {
-  const id = s.id ?? LEGACY[s.step];
+  const id0 = s.id ?? LEGACY[s.step], id = id0 ? MERGED[id0] ?? id0 : id0;
   const i = id ? ids.indexOf(id) : -1;
   return i >= 0 ? i : Math.min(s.step, ids.length - 1);
 }
@@ -337,9 +323,7 @@ const coarse = () => window.matchMedia('(pointer: coarse)').matches;
 const GATE: Partial<Record<StepId, KindId[]>> = {
   welcome: ['gather'], camera: ['gather'], fire: ['gather'],
   habitat: ['gather', 'house', 'well'],
-  food: ['gather', 'house', 'well', 'farm'],
-  wood: ['gather', 'house', 'well', 'farm', 'lumber'],
-  stone: ['gather', 'house', 'well', 'farm', 'lumber', 'quarry'],
+  food: ['gather', 'house', 'well', 'farm', 'lumber', 'quarry'],
 };
 /** les bâtiments que le tutoriel fait poser : un village qui en compte d'autres n'est plus un village neuf */
 const GUIDED = new Set<string>(['gather', 'house', 'well', 'farm', 'lumber', 'quarry']);
@@ -422,11 +406,8 @@ export class Tutorial {
       },
       make('fire', ['gather']),
       make('habitat', ['house', 'well']),
-      make('food', ['farm']),
-      make('wood', ['lumber']),
-      make('stone', ['quarry']),
-      // le bûcheron et le pierrier posés, leur production paraît dans la barre des ressources
-      { id: 'resources', anchor: () => q('#res'), check: () => [], read: true },
+      // (un temps trois étapes, puis « Les ressources » à lire : le tutoriel était trop long, retour de l'auteur du 17 nov. 2026)
+      make('food', ['farm', 'lumber', 'quarry']),
       {
         id: 'road', anchor: () => q('#quickL [data-tool="road"]'),
         begin: () => { this.base.roads = roads(); this.roadTool = false; },
@@ -438,12 +419,6 @@ export class Tutorial {
           if (!on && !this.roadTool) this.base.roads = n;
           return [on || this.roadTool, this.roadTool && n > this.base.roads!];
         },
-      },
-      {
-        // la fiche ouverte (d'un besoin ou des habitants) : la bulle se met à côté, sans la cacher ni l'entourer
-        id: 'needs', anchor: () => [q('#needInfo'), q('#census')].find((x) => !(x as HTMLElement).hidden) ?? q('#needs'),
-        bare: (a) => a.id === 'needInfo' || a.id === 'census',
-        check: () => [!(q('#needInfo') as HTMLElement).hidden || !(q('#census') as HTMLElement).hidden],
       },
       {
         id: 'time', anchor: () => q('#timePanel'),
@@ -562,6 +537,8 @@ export class Tutorial {
   private get cur(): Step { return this.ch ? this.chapters[this.ch]!.steps[this.ci] : this.steps[this.i]; }
 
   /** La bulle guide en ce moment (un chapitre qui attend ailleurs ne compte pas : conseils et aides reprennent) */
+  /** une partie neuve : la suite principale tient le temps arrêté jusqu'au feu de camp (le bandeau « Jeu en pause » se tait) */
+  get holdsPause() { return this.on && this.guiding && !this.ch && ['welcome', 'camera', 'fire'].includes(this.steps[this.i]?.id); }
   get active() { return this.on && !(this.ch && this.chapters[this.ch]!.away?.()); }
 
   /** Le chapitre en cours (null : aucun) */
@@ -632,7 +609,7 @@ export class Tutorial {
       return;
     }
     // une étape de pose terminée : l'outil rentre (sinon le prochain clic, sur « Suivant » ou à côté, poserait un bâtiment de trop)
-    if (['fire', 'habitat', 'food', 'wood', 'stone'].includes(this.steps[this.i]?.id) && this.host.tools.tool === 'build') this.host.tools.setTool('none');
+    if (['fire', 'habitat', 'food'].includes(this.steps[this.i]?.id) && this.host.tools.tool === 'build') this.host.tools.setTool('none');
     // le feu de camp posé, le temps repart (il était arrêté le temps de regarder autour de soi)
     if (this.steps[this.i]?.id === 'fire' && this.host.time.paused) this.host.time.paused = false;
     if (this.i >= this.steps.length - 1) { this.finish(); return; }

@@ -6,7 +6,7 @@ import { i18nEntries, setLang } from '../src/i18n';
 import '../src/i18n/en';
 
 /** les étapes de la suite principale, dans l'ordre du jeu (voir `Tutorial`) */
-const IDS = ['welcome', 'camera', 'fire', 'habitat', 'food', 'wood', 'stone', 'resources', 'road', 'needs', 'time', 'ages', 'gear', 'expeditions'];
+const IDS = ['welcome', 'camera', 'fire', 'habitat', 'food', 'road', 'time', 'ages', 'gear', 'expeditions'];
 
 describe('tutoriel : l’état enregistré', () => {
   it('lit les anciens états (on, step) et les nouveaux, refuse le reste', () => {
@@ -45,20 +45,23 @@ describe('tutoriel : l’état enregistré', () => {
     expect(retired(null)).toBeNull();
   });
 
-  it('reprend à la bonne étape malgré l’étape « Les ressources » ajoutée', () => {
-    // un ancien état à « Les routes » (8e étape d'alors) reprend aux routes, pas aux ressources
+  it('reprend à la bonne étape, même arrêté sur une étape retirée depuis', () => {
+    // un ancien état sans identifiant : le numéro d'avant « Les ressources »
     expect(IDS[stepIndex({ on: true, step: 7 }, IDS)]).toBe('road');
     expect(IDS[stepIndex({ on: true, step: 12 }, IDS)]).toBe('gear');
-    expect(IDS[stepIndex({ on: true, step: 6 }, IDS)]).toBe('stone');
-    // un nouvel état garde l'identifiant de l'étape
-    expect(IDS[stepIndex({ on: true, step: 99, id: 'resources' }, IDS)]).toBe('resources');
+    // le bois et la pierre se posent avec la nourriture ; les ressources et les besoins ne se lisent plus
+    expect(IDS[stepIndex({ on: true, step: 6 }, IDS)]).toBe('food');
+    expect(IDS[stepIndex({ on: true, step: 99, id: 'wood' }, IDS)]).toBe('food');
+    expect(IDS[stepIndex({ on: true, step: 99, id: 'resources' }, IDS)]).toBe('road');
+    expect(IDS[stepIndex({ on: true, step: 99, id: 'needs' }, IDS)]).toBe('time');
+    // un état récent garde l'identifiant de l'étape
+    expect(IDS[stepIndex({ on: true, step: 99, id: 'ages' }, IDS)]).toBe('ages');
     expect(stepIndex({ on: true, step: 99, id: 'inconnue' }, IDS)).toBe(IDS.length - 1);
   });
 
-  it('la suite principale du jeu a ces étapes, « Les ressources » après les premières constructions', () => {
+  it('la suite principale est courte : dix étapes (le 17 nov. 2026, elle en avait quatorze)', () => {
     expect(Object.keys(TUTO_TEXT.steps)).toEqual(IDS);
-    expect(IDS.indexOf('resources')).toBeGreaterThan(IDS.indexOf('stone'));
-    expect(IDS.indexOf('resources')).toBeLessThan(IDS.indexOf('needs'));
+    expect(IDS.length).toBe(10);
   });
 });
 
@@ -103,17 +106,17 @@ describe('tutoriel : les chapitres', () => {
 
   it('chaque étape tient en une phrase courte', () => {
     const all = chapterTexts();
-    expect(all.length).toBe(12);
+    expect(all.length).toBe(11);
     for (const st of all) {
       expect(st.text.length, st.title).toBeLessThan(120);
       expect(st.text.replace(/«[^»]*»/g, '').slice(0, -1).includes('. '), st.title).toBe(false);
     }
   });
 
-  it('le chapitre de l’île dit d’abord de bâtir les défenses sur l’île, pas au village', () => {
+  it('le chapitre de l’île dit d’abord de bâtir la caserne sur l’île, pas au village ; puis d’envoyer les soldats aux Enfers', () => {
     const first = CHAPTER_TEXT.pve.defenses.text;
-    expect(first).toMatch(/\{tower\}/);
     expect(first).toMatch(/\{barracks\}/);
+    expect(CHAPTER_TEXT.pve.send.text).toMatch(/Envoyer aux Enfers/);
     expect(first).toMatch(/sur son île, pas au village/);
   });
 
@@ -147,9 +150,9 @@ describe('tutoriel : les nouveaux textes ont leur anglais', () => {
     const fr = [
       ...chapterTexts().flatMap((s) => [s.title, s.text, ...s.tasks]),
       CHAPTER_TEXT.pve.title, CHAPTER_TEXT.pve.goIsle, CHAPTER_TEXT.pve.command, CHAPTER_TEXT.hell.title,
-      CHAPTER_TEXT.pve.defenses.village, CHAPTER_TEXT.pve.orders.wait, CHAPTER_TEXT.hell.pick.none,
+      CHAPTER_TEXT.pve.defenses.village, CHAPTER_TEXT.pve.send.wait, CHAPTER_TEXT.hell.pick.none,
       CHAPTER_TEXT.arch.title, CHAPTER_TEXT.arch.goAlly, CHAPTER_TEXT.arch.gold.how, CHAPTER_TEXT.arch.arrow, CHAPTER_TEXT.arch.arrowBack,
-      TUTO_TEXT.steps.resources.title, TUTO_TEXT.steps.resources.text, TUTO_TEXT.skipChapter,
+      TUTO_TEXT.steps.food.title, TUTO_TEXT.steps.food.text, TUTO_TEXT.skipChapter,
     ];
     expect(fr.filter((s) => !en.has(s))).toEqual([]);
     setLang('en', false);

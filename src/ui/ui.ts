@@ -629,7 +629,10 @@ export class UI {
         </div>
       </footer>
       <div id="notifPanel" class="panel" hidden></div>
+      <div id="pauseVeil" aria-hidden="true"></div>
+      <div id="pauseBar" class="panel" role="status" hidden><span class="pbIco">${ic('pause', 22, 2.4)}</span><b>${tr('Jeu en pause')}</b><button id="pbPlay" class="active">${ic('play', 16, 2.4)} ${tr('Reprendre')}<kbd>${tr('Espace')}</kbd></button><button id="pbMenu" title="${tr('La partie est enregistrée : vous la retrouverez dans « Continuer »')}">${ic('house', 16)} ${tr('Menu principal')}</button></div>
       <div id="cursorHint"></div>
+      <div id="cursorDeny" role="alert"><span class="cdX" aria-hidden="true">✕</span><span class="cdT"></span></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
       <div id="photoBar" class="panel"><button id="pCap">${ic('camera', 18)} ${tr('Capturer')}</button><button id="pExit">${tr('Quitter')}</button></div>
     `;
@@ -745,6 +748,8 @@ export class UI {
     $('#helpBtn').onclick = () => { this.help = !this.help; setHelpOn(this.help); this.host.audio.sfxClick(); this.renderMessage(); };
     $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageChoice) { this.host.audio.sfxClick(); this.host.openCrossroads?.(); } else if (this.host.sim.messageConflict) { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
+    $('#pbPlay').onclick = () => { host.time.paused = false; host.audio.sfxClick(); this.syncPause(); };
+    $('#pbMenu').onclick = () => host.toMenu();
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info(tr('Le brouillard se lève.')); };
     $('#bSpeed').onclick = () => {
       const seq = [1, 2, 4, 8];
@@ -1505,6 +1510,41 @@ export class UI {
   }
 
   /**
+   * Le jeu arrêté par le joueur : un bandeau « Jeu en pause » au milieu du haut de l'écran, avec « Reprendre » et « Menu
+   * principal », et un voile qui assombrit les bords (retours de l'auteur, 17 nov. 2026 : la pause ne se voyait pas, le retour
+   * au menu non plus, rangé dans Paramètres › Partie). Pas pendant une fenêtre (elle arrête le jeu d'elle-même), une
+   * cinématique, ni le début d'une partie neuve que le tutoriel tient en pause
+   */
+  private syncPause() {
+    const on = this.host.time.paused && !this.menuOpen() && !document.body.classList.contains('cinematic') && !this.tutorial?.holdsPause;
+    const bar = $('#pauseBar');
+    if (bar.hidden === on) { bar.hidden = !on; $('#pauseVeil').classList.toggle('on', on); }
+  }
+
+  /**
+   * Un geste refusé sur la carte (poser ici, tracer là…) : la raison dans une bulle rouge sous le curseur, qui tremble, avec un
+   * son ; elle s'efface seule. Retour de l'auteur (17 nov. 2026) : le message « pas possible » passait inaperçu, rangé dans la
+   * colonne des messages. Il reste dans la cloche. Au doigt (pas de curseur), la bulle se met au milieu de l'écran
+   */
+  private denyTimer = 0;
+  refuse(msg: string) {
+    const el = $('#cursorDeny'), touch = window.matchMedia('(pointer: coarse)').matches;
+    el.querySelector('.cdT')!.textContent = msg;
+    const [x, y] = !touch && this.cursorXY ? this.cursorXY : [innerWidth / 2, innerHeight * 0.42];
+    // (près du bord droit ou du bas, la bulle passe de l'autre côté du curseur)
+    el.classList.remove('show'); el.style.left = '0px'; el.style.top = '0px';
+    void el.offsetWidth;
+    el.classList.add('show');
+    const r = el.getBoundingClientRect();
+    el.style.left = `${Math.max(8, Math.min(innerWidth - r.width - 8, x + 16))}px`;
+    el.style.top = `${y + 22 + r.height > innerHeight - 8 ? y - r.height - 14 : y + 22}px`;
+    this.host.audio.sfxDeny();
+    clearTimeout(this.denyTimer);
+    this.denyTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
+    this.toast(msg, undefined, 'info');
+  }
+
+  /**
    * Message au joueur, par la file des notifications (voir `notifs.ts`) : `level` dit s'il mérite un message à l'écran (action,
    * danger, geste du joueur) ou seulement une ligne dans la cloche (info) ; sans niveau, il est deviné d'après le texte.
    * Avec `act`, un clic dessus y mène.
@@ -1676,6 +1716,7 @@ export class UI {
     const clock = `${sp}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${tr('{season}, jour {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small></span>`;
     // le contenu ne change que si l'heure, la saison ou la météo changent (on évite de recréer les icônes à chaque mise à jour)
     if ($('#clock').dataset.v !== clock) { $('#clock').innerHTML = clock; $('#clock').dataset.v = clock; }
+    this.syncPause();
     if ($('#bPause').dataset.p !== String(time.paused)) { $('#bPause').innerHTML = ic(time.paused ? 'play' : 'pause', 20, 2.2); $('#bPause').dataset.p = String(time.paused); $('#bPause').classList.toggle('on', time.paused); }
     if ($('#bSpeed').dataset.v !== String(time.speed)) { $('#bSpeed').innerHTML = `${ic('fastForward', 20, 2)}<small>×${time.speed}</small>`; $('#bSpeed').dataset.v = String(time.speed); $('#bSpeed').classList.toggle('on', time.speed > 1); }
     // le bouton du brouillard ne paraît que lorsqu'il y en a
@@ -2594,7 +2635,7 @@ export class UI {
     const forced = DIFF_TEXT.resForced[h.world.difficulty];
     // la DA des fenêtres peintes de l'accueil (menuPop) : coque crème et dorée, le choix en cours en or
     const { ov, close } = menuPop(this.root, 'settings', 'options', tr('Paramètres'), `<div class="setWrap">
-      <nav class="setTabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 18, 2)}${l}</button>`).join('')}</nav>
+      <nav class="setTabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 18, 2)}${l}</button>`).join('')}<button class="setMenu" id="gMenu2">${ic('house', 18)}${tr('Menu principal')}</button></nav>
       <div class="setPane">
       <section data-sec="time">${head('time')}
         <div class="row"><label>${tr('Vitesse')}</label><button data-sp="0">${ic('pause', 16, 2.2)} ${tr('Pause')}</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button><button data-sp="8">×8</button></div>
@@ -2652,6 +2693,7 @@ export class UI {
     bindLangPicker(ov);
     const q = <T extends HTMLElement>(s: string) => $(s, ov) as T;
     q('#gCredits').onclick = () => showCredits(this.root);
+    q('#gMenu2').onclick = () => h.toMenu();
     ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
       ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((s) => (s.hidden = s.dataset.sec !== b.dataset.tab));

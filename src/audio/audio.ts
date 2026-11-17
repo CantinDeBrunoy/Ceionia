@@ -660,6 +660,13 @@ export class AudioEngine {
     if (!this.ctx) return;
     this.tone(660, this.ctx.currentTime, 0.07, 'sine', 0.12, this.sfxG, 0, 0.003);
   }
+  /** Un geste refusé (poser ici n'est pas possible) : deux notes graves qui descendent, brèves */
+  sfxDeny() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.tone(220, t, 0.09, 'square', 0.07, this.sfxG, 1200, 0.003);
+    this.tone(165, t + 0.09, 0.14, 'square', 0.07, this.sfxG, 1000, 0.003);
+  }
   /** Éruption : détonation sourde, grondement continu et explosions au fil des salves (durée en secondes) */
   sfxEruption(dur: number) {
     if (!this.ctx) return;
