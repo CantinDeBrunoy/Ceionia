@@ -76,11 +76,12 @@ export function droneGeo() {
   // la bulle : une coupole de verre portée par deux arceaux, ouverte sur les côtés ; le toit et ses capteurs
   for (const z of [-0.16, 0.2]) p.add(new THREE.TorusGeometry(0.15, 0.008, 4, 14, Math.PI), 0, 0.08, z, shell);
   p.add(new THREE.SphereGeometry(0.15, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.55, 1.15), 0, 0.15, 0.13, 0x9fd8e6);
-  p.box(0.3, 0.012, 0.36, 0, 0.23, 0.02, shell);
-  // (le liseré lumineux tout autour du toit)
-  for (const sz of [-1, 1]) p.box(0.304, 0.008, 0.008, 0, 0.234, 0.02 + sz * 0.18, trim, 0, true);
-  for (const sx of [-1, 1]) p.box(0.008, 0.008, 0.36, sx * 0.152, 0.234, 0.02, trim, 0, true);
-  p.cyl(0.03, 0.035, 0.03, 8, 0, 0.242, -0.06, steel); p.sphere(0.012, 0, 0.28, -0.06, 0xff3a2a);
+  // pas de toit plat (une dalle trop lourde au-dessus de la bulle, retour de l'auteur) : un moyeu central fuselé, porté par
+  // l'arceau arrière, d'où partent les quatre bras ; son anneau lumineux, son capteur et son feu
+  p.cyl(0.07, 0.085, 0.035, 12, 0, 0.2, -0.02, shell);
+  p.add(new THREE.SphereGeometry(0.07, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.45, 1), 0, 0.235, -0.02, shell);
+  p.add(new THREE.TorusGeometry(0.086, 0.005, 3, 18).rotateX(Math.PI / 2), 0, 0.22, -0.02, trim, 0, true);
+  p.cyl(0.004, 0.004, 0.05, 4, 0, 0.255, -0.02, steel); p.sphere(0.01, 0, 0.31, -0.02, 0xff3a2a);
   // les quatre bras et leurs carénages (les pales sont à part, voir `fanGeo`)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const x = sx * 0.3, z = sz * 0.26;
