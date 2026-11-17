@@ -61,13 +61,14 @@ export class LoadingScreen {
   /** le film de la traversée (mode `voyage`) */
   readonly film: VoyageFilm | null = null;
 
-  constructor(root: HTMLElement, voyage = false) {
+  /** `hold` (la traversée, avant le rechargement) : la brume seule, le film attend la page d'après */
+  constructor(root: HTMLElement, voyage = false, hold = false) {
     const el = (this.el = document.createElement('div'));
     el.id = 'loadScreen';
     el.setAttribute('role', 'status');
     if (voyage) {
       el.className = 'voyage';
-      this.film = new VoyageFilm(el);
+      this.film = new VoyageFilm(el, hold);
       this.label = el.querySelector('.ldStep')!;
       this.bar = el.querySelector('.ldBar i')!;
       root.appendChild(el);

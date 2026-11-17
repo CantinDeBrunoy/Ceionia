@@ -1532,10 +1532,9 @@ class Game implements UIHost {
     w.crossroads = true;
     this.revealing = true;
     clearFilmMark();
-    const film = new LoadingScreen(app, true).film!;
-    // (le film doit jouer avant le long calcul : au plus 2 s d'attente si la vidéo tarde, puis un peu de film à l'écran)
-    const started = Promise.race([film.started(), new Promise<void>((r) => setTimeout(r, 2000))]);
-    void started.then(() => new Promise<void>((r) => setTimeout(r, 1200))).then(async () => {
+    // (la brume seule avant le rechargement : le film joue une fois, en entier, sur la page d'après ; voir `VoyageFilm`)
+    const film = new LoadingScreen(app, true, true).film!;
+    void new Promise<void>((r) => setTimeout(r, 700)).then(async () => {
       await painted();
       const save = this.buildSave();
       this.running = false;

@@ -27,8 +27,9 @@ export const VOY_FILM = {
 };
 
 /** Le survol en direct (secondes) : l'horizon, les deux îles, les deux flottes, le retour (≈ 30 s) */
+// (sans le plan de l'horizon, une caravelle en pleine mer : il redisait le film, et le joueur voyait trois fois la même
+// scène de suite, retour de l'auteur, 17 nov. 2026 ; le plan reste dans `VoyageStage.place` s'il revient)
 export const VOY_ACT2: readonly VoyPlan[] = [
-  { id: 'horizon', dur: 5 },
   { id: 'orient', dur: 7 },
   { id: 'asie', dur: 7 },
   { id: 'fleets', dur: 7 },

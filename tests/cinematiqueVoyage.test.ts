@@ -45,14 +45,14 @@ describe('la cinématique « Explorer le monde » : le film', () => {
 });
 
 describe('la cinématique « Explorer le monde » : le survol en direct', () => {
-  it('l’horizon, les deux îles, les flottes et le retour (≈ 30 s)', () => {
-    expect(VOY_ACT2.map((p) => p.id)).toEqual(['horizon', 'orient', 'asie', 'fleets', 'home']);
-    expect(actTotal(VOY_ACT2)).toBeGreaterThan(25);
+  it('les deux îles, les flottes et le retour (≈ 25 s ; plus l’horizon, qui redisait le film)', () => {
+    expect(VOY_ACT2.map((p) => p.id)).toEqual(['orient', 'asie', 'fleets', 'home']);
+    expect(actTotal(VOY_ACT2)).toBeGreaterThan(22);
     expect(actTotal(VOY_ACT2)).toBeLessThan(40);
   });
 
   it('les plans s’enchaînent sans trou ; rien après la fin', () => {
-    expect(voyShotAt(VOY_ACT2, 0)!.shot).toBe('horizon');
+    expect(voyShotAt(VOY_ACT2, 0)!.shot).toBe('orient');
     let t0 = 0;
     for (const p of VOY_ACT2) {
       const mid = voyShotAt(VOY_ACT2, t0 + p.dur / 2)!;
@@ -64,9 +64,9 @@ describe('la cinématique « Explorer le monde » : le survol en direct', () => 
   });
 
   it('chaque plan du récit a son bandeau, court, qui apparaît et s’efface en douceur', () => {
-    for (const id of ['horizon', 'orient', 'asie', 'fleets'] as const) expect(VOY_CAPTIONS.some((c) => c.shot === id)).toBe(true);
+    for (const id of ['orient', 'asie', 'fleets'] as const) expect(VOY_CAPTIONS.some((c) => c.shot === id)).toBe(true);
     for (const c of VOY_CAPTIONS) expect(c.text.length).toBeLessThanOrEqual(40);
-    const c = VOY_CAPTIONS.find((x) => x.shot === 'orient')!, at = VOY_ACT2[0].dur + c.at;
+    const c = VOY_CAPTIONS.find((x) => x.shot === 'asie')!, at = VOY_ACT2[0].dur + c.at;
     expect(voyCaptionAt(VOY_ACT2, at - 0.1)).toBeNull();
     expect(voyCaptionAt(VOY_ACT2, at + 0.3)!.alpha).toBeCloseTo(0.5, 5);
     expect(voyCaptionAt(VOY_ACT2, at + 2)!.text).toBe(c.text);

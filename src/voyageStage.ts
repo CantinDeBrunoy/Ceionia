@@ -132,7 +132,7 @@ export function horizonPath(w: World, mid: P): P[] {
 }
 
 /** Les plans que le survol prépare sous la brume, une image chacun, avant de se lever (maillages, ombres, impostures) */
-const PRIME: { shot: VoyShot; k: number }[] = [{ shot: 'orient', k: 0.5 }, { shot: 'asie', k: 0.5 }, { shot: 'fleets', k: 0.5 }, { shot: 'horizon', k: 0 }];
+const PRIME: { shot: VoyShot; k: number }[] = [{ shot: 'asie', k: 0.5 }, { shot: 'fleets', k: 0.5 }, { shot: 'orient', k: 0 }];
 
 /**
  * La mise en scène du survol en direct de la cinématique « Explorer le monde » (partition dans `voyageCine.ts`, le film dans
