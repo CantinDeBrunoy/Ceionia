@@ -5,7 +5,7 @@ import { caveLit } from './caveLight';
 import { CombatFx } from './combatFx';
 import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
 import { peopleRole } from './peopleSoldiers';
-import { makeRider, rideStep, armorStep, Rider } from './riders';
+import { makeRider, rideStep, Rider } from './riders';
 import { makeHoverTank, hoverStep, makeEscort, escortStep, escortFire, Escort } from './futureTroops';
 
 /**
@@ -247,9 +247,6 @@ export class BattleLayer {
       if (t.r?.hover) {
         // char antigrav : il flotte et tangue, recul des canons à plasma à chaque tir, le bouclier scintille quand il est touché
         hoverStep(t.r, this.uTime, u.moving ? 1 : 0, u.state === 'attack' ? -0.03 : -0.06, dead ? 0 : Math.max(0, 1 - (this.uTime - (this.shotAt.get(u.id) ?? -9)) / 0.3), dead ? 0 : u.hurt < 0.4 ? 1 - u.hurt / 0.4 : 0);
-      } else if (t.r?.turret) {
-        // blindé (char) : chenilles, recul du canon juste après chaque tir
-        armorStep(t.r, u.moving ? u.walk * 1.4 : this.uTime * 2, dead ? 0 : u.moving ? 1 : 0, u.state === 'attack' ? -0.05 : -0.1, Math.max(0, 1 - (this.uTime - (this.shotAt.get(u.id) ?? -9)) / 0.3));
       } else if (t.r) {
         // galop à la marche (calé sur la distance parcourue), lance couchée à la charge, coups à l'attaque
         rideStep(t.r, u.moving ? u.walk * 1.4 : this.uTime * 2, dead ? 0 : u.moving ? 1 : 0, dead ? 'rest' : u.state === 'attack' ? 'fight' : u.moving ? 'charge' : 'rest');

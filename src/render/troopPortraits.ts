@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeSoldier, soldierStep } from './soldiers';
-import { makeRider, rideStep, armorStep } from './riders';
+import { makeRider, rideStep } from './riders';
 import { makeHoverTank, hoverStep } from './futureTroops';
 import { troopLook } from './battleUnits';
 import { mats } from './materials';
@@ -116,7 +116,6 @@ function model(kind: TroopKind, age: number): THREE.Object3D[] {
   if (look.mount) {
     const r = look.mount === 'hover' ? makeHoverTank(0) : makeRider(look.era, 0);
     if (r.hover) hoverStep(r, 0.4, 0, -0.06, 0, 0);
-    else if (r.turret) armorStep(r, 0, 0, -0.1, 0);
     else rideStep(r, 0, 0, 'rest');
     return [r.root];
   }
