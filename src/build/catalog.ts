@@ -668,6 +668,8 @@ export interface Building {
   age: number;
   /** resté en 1 × 1 (ancienne partie, pas la place de grandir) : il grandira s'il en trouve, ou si on le déplace */
   small?: boolean;
+  /** pan de rempart : tour forcée (vrai) ou simple pan forcé (faux) ; absent, la tour vient seule aux bouts et aux angles */
+  tower?: boolean;
 }
 
 /**

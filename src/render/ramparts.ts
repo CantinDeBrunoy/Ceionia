@@ -85,6 +85,16 @@ export const WALK: Walkway[] = [
 export const TOWER_R = [0.25, 0.25, 0.263, 0.25, 0.15, 0.15];
 /** Dans le masque d'un rempart, les bits << TOWER_SHIFT disent qu'une tour de garde est le voisin de ce côté */
 export const TOWER_SHIFT = 4;
+/** Dans le masque d'un pan, le choix du joueur : une tour même en ligne droite, ou un simple pilier même au bout ou à l'angle */
+export const NODE_TOWER = 1 << 8, NODE_PLAIN = 1 << 9;
+
+/** Le nœud d'un pan, choix du joueur compris (`mask` complet, bits NODE_TOWER et NODE_PLAIN) */
+export function rampartNode(mask: number): NodeKind {
+  const k = nodeKind(mask & 15 ? mask & 15 : WALL_E | WALL_W);
+  if (mask & NODE_PLAIN) return 'straight';
+  if (mask & NODE_TOWER && k === 'straight') return 'corner';
+  return k;
+}
 
 /**
  * Le raccord d'un bras à une tour de garde voisine : le mur continue au-delà du bord de la case jusqu'à la face de la tour (les
@@ -328,7 +338,7 @@ export const rampartAge = (age: number) => Math.max(1, Math.min(5, age));
  */
 export function rampartWall(p: Parts, age: number, mask: number, kit: DefKit) {
   const a = rampartAge(age), m = mask & 15 ? mask & 15 : WALL_E | WALL_W, towers = (mask >> TOWER_SHIFT) & 15;
-  NODES[a](p, kit, nodeKind(m));
+  NODES[a](p, kit, rampartNode(mask));
   for (const [bit] of DIRS) {
     if (!(m & bit)) continue;
     const sub = new Parts();

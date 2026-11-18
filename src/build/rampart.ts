@@ -2,7 +2,7 @@ import { World } from '../world/world';
 import { Building, KINDS, isRampart } from './catalog';
 import { wallLine, Cell } from '../ui/wallPlan';
 import { WALL_N, WALL_E, WALL_S, WALL_W } from '../render/hellBase';
-import { TOWER_SHIFT } from '../render/ramparts';
+import { TOWER_SHIFT, NODE_TOWER, NODE_PLAIN, rampartNode } from '../render/ramparts';
 import { Cost, canPay, pay, priceIn } from '../sim/economy';
 import { tr } from '../i18n';
 
@@ -34,7 +34,21 @@ export function rampartMask(w: World, b: Building): number {
   }
   // (les tours de garde voisines, à part : le mur vient se souder à leur face)
   const tower = (x: Building | undefined) => !!x && x.kind === 'watchtower';
-  return m | (((tower(n) ? WALL_N : 0) | (tower(e) ? WALL_E : 0) | (tower(s) ? WALL_S : 0) | (tower(o) ? WALL_W : 0)) << TOWER_SHIFT);
+  // (et le choix du joueur pour un pan : tour ou simple pilier)
+  const node = b.kind !== 'wall' || b.tower === undefined ? 0 : b.tower ? NODE_TOWER : NODE_PLAIN;
+  return m | node | (((tower(n) ? WALL_N : 0) | (tower(e) ? WALL_E : 0) | (tower(s) ? WALL_S : 0) | (tower(o) ? WALL_W : 0)) << TOWER_SHIFT);
+}
+
+/** Le pan porte-t-il une tour (choix du joueur, sinon aux bouts, aux angles et aux carrefours) ? */
+export const rampartTower = (w: World, b: Building) => rampartNode(rampartMask(w, b)) !== 'straight';
+
+/**
+ * Le choix du joueur qui fait passer un pan de tour à simple pan, ou l'inverse : undefined (rendu au tracé) si le tracé
+ * donne déjà ce résultat
+ */
+export function toggledTower(w: World, b: Building): boolean | undefined {
+  const want = !rampartTower(w, b), auto = rampartNode(rampartMask(w, { ...b, tower: undefined })) !== 'straight';
+  return want === auto ? undefined : want;
 }
 
 /** Le tracé d'un mur de `a` à `b` : ses cases (centres), et pour chacune si un pan s'y pose (ou s'il y en a déjà un) */

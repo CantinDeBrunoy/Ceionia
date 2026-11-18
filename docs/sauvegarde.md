@@ -77,7 +77,7 @@ Le préfixe `village-lowpoly` est l'ancien nom du jeu : **ne pas le renommer** (
 - Une pièce d'équipement retirée de `gear` sans passer par `away` (une nouvelle façon d'emporter de l'équipement) serait perdue à un rechargement : toujours la noter dans `away` et l'en retirer au retour.
 - **Taille de carte** : une partie garde la sienne (`world.n`, relue avant de bâtir le monde : `playSize` dans `main.ts` › `start`). Agrandir la carte des nouvelles parties, c'est changer `MapDef.size` et ajouter la taille à `MapDef.sizes` sans retirer les anciennes. Les cartes de 48 et 96 d'autrefois restent refusées.
 - Les `id` de bâtiment ne sont pas stables d'une sauvegarde à l'autre : ne jamais en garder un dans un champ sauvegardé sans le convertir en rang (voir `lines`).
-- Les paires et tuples sont positionnels : ajouter une valeur **à la fin** d'un tuple (comme le 7e élément `small` des bâtiments), jamais au milieu.
+- Les paires et tuples sont positionnels : ajouter une valeur **à la fin** d'un tuple (comme le 7e élément `small` des bâtiments, puis le 8e, tour ou simple pan d'un rempart, voir [remparts.md](remparts.md)), jamais au milieu.
 - Quota : le `localStorage` fait environ 5 Mo ; la sauvegarde d'un grand village approche-t-elle de cette limite ? À vérifier.
 - La pause est sauvée telle qu'elle est : une sauvegarde prise pendant une pause passagère (cinématique, voyage) se recharge en pause.
 - `ceionia.aides` : un seul défaut, lu par `helpOn` (absente = aides éteintes). Le bouton des conseils et les bulles militaires disent donc toujours la même chose ; les bulles militaires ne paraissent qu'aides allumées.

@@ -1516,6 +1516,16 @@ export class World {
     for (const n of this.buildings.values()) if (n.x >= b.x - 2 && n.x <= b.x + s + 1 && n.z >= b.z - 2 && n.z <= b.z + s + 1) for (const l of this.listeners) l.onChange(n);
   }
 
+  /** Force la tour d'un pan de rempart (vrai), le simple pan (faux), ou rend le choix au tracé (undefined) */
+  setRampartTower(id: number, tower: boolean | undefined) {
+    const b = this.buildings.get(id);
+    if (!b) return;
+    if (tower === undefined) delete b.tower;
+    else b.tower = tower;
+    this.version++;
+    for (const l of this.listeners) l.onChange(b);
+  }
+
   /**
    * Transforme un bâtiment en un autre sur place (amélioration) : s'il est plus grand, son emprise s'étend sur l'une des places
    * qui contiennent l'ancienne, de préférence vers l'arrière (la façade reste sur la rue) ; il garde son orientation et son
@@ -1807,7 +1817,13 @@ export class World {
       ...(this.decorDone ? { decor: 1 } : {}),
       // le cap des grottes tournées à la pose (case, angle en centièmes de radian), seulement celles qui existent encore
       ...(this.caveYaw.size ? { caveYaw: [...this.caveYaw].filter(([k]) => this.veg[k] === VEG_CAVE).flatMap(([k, a]) => [k, Math.round(a * 100)]) } : {}),
-      buildings: [...this.buildings.values()].map((b) => (b.small ? [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age, 1] : [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age])),
+      // (7e case, pour un pan de rempart : 1 tour forcée, 2 simple pan forcé)
+      buildings: [...this.buildings.values()].map((b) => {
+        const r: (string | number)[] = [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age];
+        if (b.small || b.tower !== undefined) r.push(b.small ? 1 : 0);
+        if (b.tower !== undefined) r.push(b.tower ? 1 : 2);
+        return r;
+      }),
       nextId: this.nextId,
       plaza3: PLAZA3,
       torches: [...this.torches],
@@ -1908,7 +1924,7 @@ export class World {
     for (const r of d.buildings ?? []) {
       ids.push(KINDS[r[0] as KindId] ? id : -1);
       if (!KINDS[r[0] as KindId]) continue;
-      buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0, ...(r[6] ? { small: true } : {}) });
+      buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0, ...(r[6] ? { small: true } : {}), ...(r[7] === 1 ? { tower: true } : r[7] === 2 ? { tower: false } : {}) });
     }
     // le château devenait la gare à l'âge industriel : ceux qui servent d'arrêt à une ligne deviennent la gare centrale, les
     // autres redeviennent des châteaux

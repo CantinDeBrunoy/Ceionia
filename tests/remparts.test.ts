@@ -4,8 +4,8 @@ import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { getModel } from '../src/render/models';
 import { KINDS, DEFENSES, hasDoor, type KindId } from '../src/build/catalog';
-import { traceRampart, layRampart, rampartCost, rampartMask, RAMPART_MAX } from '../src/build/rampart';
-import { nodeKind, TOWER_SHIFT, TOWER_R } from '../src/render/ramparts';
+import { traceRampart, layRampart, rampartCost, rampartMask, RAMPART_MAX, rampartTower, toggledTower } from '../src/build/rampart';
+import { nodeKind, rampartNode, NODE_TOWER, TOWER_SHIFT, TOWER_R } from '../src/render/ramparts';
 import { WALL_N, WALL_E, WALL_S, WALL_W, gateAlongX } from '../src/render/hellBase';
 import { isleOrigins } from '../src/build/zones';
 import { costOf } from '../src/sim/economy';
@@ -185,6 +185,39 @@ describe('remparts : le tracé libre', () => {
     const h = w.place('gate', sx + 6, sz + 3, 0, false, 1, false);
     w.setRoad(sx + 5, sz + 3, true); w.setRoad(sx + 7, sz + 3, true);
     expect(gateAlongX(rampartMask(w, h))).toBe(false);
+  });
+
+  it('le joueur fait d’un pan une tour ou un simple pan ; le choix est sauvé, et rendu au tracé quand il revient au même', () => {
+    const { w, sx, sz } = setup();
+    const a = w.place('wall', sx, sz, 0, false, 1, false);
+    const b = w.place('wall', sx + 1, sz, 0, false, 1, false);
+    w.place('wall', sx + 1, sz + 1, 0, false, 1, false);
+    // b est un angle : une tour d'office ; la bascule en fait un simple pilier
+    expect(rampartTower(w, b)).toBe(true);
+    expect(toggledTower(w, b)).toBe(false);
+    w.setRampartTower(b.id, toggledTower(w, b));
+    expect(rampartNode(rampartMask(w, b))).toBe('straight');
+    // revenir à la tour : le choix est rendu au tracé (plus de champ)
+    w.setRampartTower(b.id, toggledTower(w, b));
+    expect(b.tower).toBeUndefined();
+    expect(rampartTower(w, b)).toBe(true);
+    // un pan en ligne droite devient une tour, les modèles diffèrent
+    const c = w.place('wall', sx - 1, sz, 0, false, 1, false);
+    expect(rampartTower(w, a)).toBe(false);
+    const plain = getModel('wall', 2, { v: 0, L: false, R: false, F: false, mask: rampartMask(w, a) }).body.getAttribute('position').count;
+    w.setRampartTower(a.id, toggledTower(w, a));
+    expect(a.tower).toBe(true);
+    expect(rampartMask(w, a) & NODE_TOWER).toBe(NODE_TOWER);
+    expect(getModel('wall', 2, { v: 0, L: false, R: false, F: false, mask: rampartMask(w, a) }).body.getAttribute('position').count).toBeGreaterThan(plain);
+    w.setRampartTower(b.id, false);
+    // sauvé puis relu ; une sauvegarde ancienne (sans la 8e case) se relit sans choix
+    const d = JSON.parse(JSON.stringify(w.toJSON()));
+    const w2 = new World(); w2.fromJSON(d);
+    const at = (x: number, z: number) => w2.buildingAt(x, z)!;
+    expect(at(sx, sz).tower).toBe(true);
+    expect(at(sx + 1, sz).tower).toBe(false);
+    expect(at(c.x, c.z).tower).toBeUndefined();
+    expect(at(sx + 1, sz + 1).tower).toBeUndefined();
   });
 });
 
