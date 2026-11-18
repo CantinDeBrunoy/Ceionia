@@ -506,8 +506,9 @@ export class Traffic {
       if (!ok) continue;
       this.boats.push({ home: p, x: mx, z: mz, tx: mx, tz: mz, heading: Math.atan2(f[0], f[1]), wait: 2 + Math.random() * 4, mx, mz, seed: Math.random() * 10 });
     }
-    // voiliers au large à partir du Moyen Âge
-    const nSails = age >= 2 ? MAX_SAILS : 0;
+    // voiliers au large à partir du Moyen Âge, deux par port ou chantier naval : sans port, pas de voile
+    const ports = [...w.buildings.values()].filter((b) => b.kind === 'harbor' || b.kind === 'shipyard').length;
+    const nSails = age >= 2 ? Math.min(MAX_SAILS, ports * 2) : 0;
     this.sails = this.sails.filter((s) => w.seaAt(s.x, s.z, -0.6)).slice(0, nSails);
     for (let tries = 0; this.sails.length < nSails && tries < 200; tries++) {
       const x = 2 + Math.random() * (N - 4), z = 2 + Math.random() * (N - 4);

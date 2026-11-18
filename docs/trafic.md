@@ -18,7 +18,7 @@ Ce sont des décors animés : ils ne produisent rien, ne coûtent rien et ne son
 - Voie de droite : décalage `LANE = 0.15` à l'axe ; les piétons marchent plus loin, sur le trottoir (`SIDEWALK = 0.37`, voir [habitants.md](habitants.md)). Ils s'arrêtent la nuit (`day = hour > 6 && hour < 21`).
 - Le rond-point : `avoid` = îlots (`roads.islands`) contournés si une autre route existe.
 
-**Barques** : une par ponton `pier` qui donne sur la mer ou une rivière (au plus `MAX_BOATS = 16`), amarrée côté eau, le pêcheur rame vers un coin d'eau voisin (1,5 à 6,5 cases), pêche, revient. La nuit, elle rentre au ponton. **Voiliers** : 5 (`MAX_SAILS`) au large, dès l'âge 2.
+**Barques** : une par ponton `pier` qui donne sur la mer ou une rivière (au plus `MAX_BOATS = 16`), amarrée côté eau, le pêcheur rame vers un coin d'eau voisin (1,5 à 6,5 cases), pêche, revient. La nuit, elle rentre au ponton. **Voiliers** : au large dès l'âge 2, deux par port (`harbor`) ou chantier naval (`shipyard`), au plus 5 (`MAX_SAILS`) ; sans port ni chantier, aucun.
 
 **Navires des ports** (`Transports`) : un navire par `harbor` d'âge 2 au moins ; il appareille, suit l'eau jusqu'au bord de la carte (`shipRoute`), rapetisse à l'horizon, revient s'amarrer. Grand port 3 × 3 : navire ×2. Le vapeur fume par sa cheminée (`funnel`).
 **Avions** : un par `airport` dès l'âge 4 (global) ; plan de vol fixe (`flightPlan`) : poste, roulage, décollage, tour du pays, atterrissage, retour. Ne dépend pas de `motor`.
