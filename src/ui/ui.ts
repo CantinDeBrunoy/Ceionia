@@ -631,7 +631,7 @@ export class UI {
       </footer>
       <div id="notifPanel" class="panel" hidden></div>
       <div id="pauseVeil" aria-hidden="true"></div>
-      <div id="pauseBar" class="panel" role="status" hidden><span class="pbIco">${ic('pause', 22, 2.4)}</span><b>${tr('Jeu en pause')}</b><button id="pbPlay" class="active">${ic('play', 16, 2.4)} ${tr('Reprendre')}<kbd>${tr('Espace')}</kbd></button><button id="pbMenu" title="${tr('La partie est enregistrée : vous la retrouverez dans « Continuer »')}">${ic('house', 16)} ${tr('Menu principal')}</button></div>
+      <button id="pauseBar" type="button" aria-live="polite" hidden>${hudPic('sablier', 50)}<b>${tr('Jeu en pause')}</b><small><span class="pbKey">${tr('Espace ou clic pour reprendre')}</span><span class="pbTouch">${tr('Touchez pour reprendre')}</span></small></button>
       <div id="cursorHint"></div>
       <div id="cursorDeny" role="alert"><span class="cdX" aria-hidden="true">✕</span><span class="cdT"></span></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
@@ -749,8 +749,7 @@ export class UI {
     $('#helpBtn').onclick = () => { this.help = !this.help; setHelpOn(this.help); this.host.audio.sfxClick(); this.renderMessage(); };
     $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageChoice) { this.host.audio.sfxClick(); this.host.openCrossroads?.(); } else if (this.host.sim.messageConflict) { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
-    $('#pbPlay').onclick = () => { host.time.paused = false; host.audio.sfxClick(); this.syncPause(); };
-    $('#pbMenu').onclick = () => host.toMenu();
+    $('#pauseBar').onclick = () => { host.time.paused = false; host.audio.sfxClick(); this.syncPause(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info(tr('Le brouillard se lève.')); };
     $('#bSpeed').onclick = () => {
       const seq = [1, 2, 4, 8];
@@ -1515,15 +1514,26 @@ export class UI {
   }
 
   /**
-   * Le jeu arrêté par le joueur : un bandeau « Jeu en pause » au milieu du haut de l'écran, avec « Reprendre » et « Menu
-   * principal », et un voile qui assombrit les bords (retours de l'auteur, 17 nov. 2026 : la pause ne se voyait pas, le retour
-   * au menu non plus, rangé dans Paramètres › Partie). Pas pendant une fenêtre (elle arrête le jeu d'elle-même), une
-   * cinématique, ni le début d'une partie neuve que le tutoriel tient en pause
+   * Le jeu arrêté par le joueur : « Jeu en pause » en lettres gravées, sans boîte, posé au-dessus de la barre de construction
+   * (un clic reprend), et un voile léger sur les bords. Retours de l'auteur : la pause ne se voyait pas (17 nov. 2026), puis
+   * le bandeau au milieu, son bouton « Menu principal » et le cadre doré étaient trop envahissants (19 nov. 2026). Pas pendant
+   * une fenêtre (elle arrête le jeu d'elle-même), une cinématique, ni le début d'une partie neuve que le tutoriel tient en pause
    */
   private syncPause() {
     const on = this.host.time.paused && !this.menuOpen() && !document.body.classList.contains('cinematic') && !this.tutorial?.holdsPause;
     const bar = $('#pauseBar');
     if (bar.hidden === on) { bar.hidden = !on; $('#pauseVeil').classList.toggle('on', on); }
+    if (!on) return;
+    // au-dessus de la barre de construction, de ses onglets (qui dépassent par le haut) et de la fiche de l'outil quand elle passe
+    // sous le titre (au téléphone, elle est au milieu) ; leur hauteur varie, d'où le calcul
+    const cx = window.innerWidth / 2;
+    let top = Infinity;
+    for (const id of ['dockMain', 'subcats', 'info']) {
+      const r = document.getElementById(id)?.getBoundingClientRect();
+      if (r && r.height > 0 && r.left < cx + 130 && r.right > cx - 130) top = Math.min(top, r.top);
+    }
+    const bottom = top < Infinity ? Math.round(window.innerHeight - top + 18) : 150;
+    if (bar.dataset.b !== String(bottom)) { bar.style.bottom = bottom + 'px'; bar.dataset.b = String(bottom); }
   }
 
   /**
