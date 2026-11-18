@@ -42,6 +42,8 @@ const SHADOW_DIST = 70, SMALL_DIST = 110;
  * moins d'arbres lointains
  */
 const THIN_DIST = 420, THIN_MIN = 0.5;
+/** Déplacement de la vue (cases) ou de la brume au-delà duquel la visibilité des tuiles est revue ; au pire, toutes les `VIEW_EVERY` images */
+const VIEW_MOVE = 2, VIEW_EVERY = 30;
 /** Temps de reconstruction des tuiles en attente, par image (ms) */
 const BUDGET_MS = 5;
 
@@ -627,7 +629,16 @@ export class VegView {
       for (const k of w.lifeCells) this.enqueue(Math.floor(Math.floor(k / N) / CH) * NC + Math.floor((k % N) / CH), false);
       w.lifeCells.clear();
     }
+    // ce qu'on voit de chaque tuile ne change que si la vue s'est déplacée, si la brume ou la qualité ont bougé, ou si une
+    // tuile vient d'être refaite : le revoir à chaque image coûtait 0,7 ms sur la carte de 384 (au pire, une fois toutes
+    // les `VIEW_EVERY` images)
+    const busy = !!this.current || this.queue.length > 0;
     this.flush(BUDGET_MS);
+    const v = this.viewed;
+    const same = !busy && ++v.age < VIEW_EVERY && v.lod === this.lodDist && Math.abs(v.fog - this.fogFar) < VIEW_MOVE
+      && Math.abs(cam.x - v.x) + Math.abs(cam.y - v.y) + Math.abs(cam.z - v.z) < VIEW_MOVE;
+    if (same) return;
+    v.age = 0; v.lod = this.lodDist; v.fog = this.fogFar; v.x = cam.x; v.y = cam.y; v.z = cam.z;
     for (let ch = 0; ch < NC * NC; ch++) {
       const x = ((ch % NC) + 0.5) * CH, z = (Math.floor(ch / NC) + 0.5) * CH;
       const d = Math.hypot(cam.x - x, cam.y - 1, cam.z - z), dist = Math.max(0, d - CH * 0.6);
@@ -637,6 +648,9 @@ export class VegView {
       for (const l of this.layers) l.view(ch, dist, this.lodDist, gone);
     }
   }
+
+  /** la vue pour laquelle la visibilité des tuiles a été réglée (voir `update`) */
+  private viewed = { x: 0, y: -999, z: 0, lod: 0, fog: 0, age: 0 };
 
   /**
    * Avance les reconstructions en attente : `budget` ms au plus par appel (une grande tuile se fait en plusieurs fois, ligne

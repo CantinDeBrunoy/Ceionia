@@ -321,7 +321,7 @@ class Game implements UIHost {
   private eveningReady = -1;
   /** carte des ombres : position et orientation de la caméra à la dernière image, images depuis sa dernière mise à jour */
   private shadowPos = new THREE.Vector3();
-  private shadowQ = new THREE.Quaternion();
+  private shadowExt = 0;
   private shadowN = 0;
   /** version des lanternes des voies déjà données aux halos */
   private railLightsV = -1;
@@ -2411,8 +2411,11 @@ class Game implements UIHost {
     const scene = hell ? hell.scene : under ? this.underView!.scene : this.scene;
     // la carte des ombres ne se refait qu'une image sur deux (sur trois en qualité réduite) quand la vue ne bouge pas : seuls
     // les passants et les véhicules y bougent ; dès que la caméra se déplace, elle suit à chaque image
-    const c = this.cam.camera, moved = c.position.distanceToSquared(this.shadowPos) > 1e-6 || 1 - Math.abs(c.quaternion.dot(this.shadowQ)) > 1e-9;
-    this.shadowPos.copy(c.position); this.shadowQ.copy(c.quaternion);
+    // (« bouge » : le cadre des ombres, qui suit le point visé et le zoom (`Environment.update`), pas l'orientation de la vue.
+    // Tourner la vue ne change rien aux ombres : les refaire alors à chaque image coûtait 1,2 ms de script et autant de
+    // carte graphique)
+    const sun = this.env.sun, moved = sun.target.position.distanceToSquared(this.shadowPos) > 1e-6 || sun.shadow.camera.right !== this.shadowExt;
+    this.shadowPos.copy(sun.target.position); this.shadowExt = sun.shadow.camera.right;
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = moved || !!under || ++this.shadowN % this.gfx.shadowEvery === 0;
     if (!this.glow || !this.gfx.glow) { renderer.render(scene, this.cam.camera); return; }
