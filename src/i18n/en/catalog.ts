@@ -495,6 +495,7 @@ registerDict('catalog', {
   'Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.': 'A cave goes on solid ground, away from buildings, roads and other entrances.',
   'On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.': 'You can’t lay a road here: a building, a slope that is too steep or water that is too deep is in the way.',
   'Les grands bâtiments se démolissent un à un : un clic dessus (Ctrl+Z annule).': 'Large buildings are demolished one at a time: click on one (Ctrl+Z undoes).',
+  'Démolition : {cost} rendus.': 'Demolished: {cost} returned.',
   'Cliquez pour reposer le bâtiment (Échap pour annuler).': 'Click to put the building back down (Esc to cancel).',
   'La voie ne passe pas entre {a} et {b} (en rouge) : déplacez ou retirez le point de passage.': 'The track can’t pass between {a} and {b} (in red): move or remove the waypoint.',
   'Aucun emplacement pour « {name} » : {need}.': 'No spot for “{name}”: {need}.',
