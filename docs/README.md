@@ -14,7 +14,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [rendu-modeles.md](rendu-modeles.md) : comment un bâtiment devient un modèle 3D selon l'âge, instanciation, niveaux de détail, matériaux, réglages graphiques.
 - [interface.md](interface.md) : HUD, menus, onglets et rayons de construction, fiches, notifications, réglages.
 - [traduction.md](traduction.md) : `tr`, `localize`, fichiers anglais (voir aussi `src/i18n/README.md`).
-- [chargement-performances.md](chargement-performances.md) : écran de chargement, préparation des shaders, coûts connus.
+- [chargement-performances.md](chargement-performances.md) : écran de chargement, préparation des shaders, coûts connus, régime normal (mesures, ce qui est fait, ce qui reste).
 - [audio.md](audio.md) : musique (morceaux enregistrés par âge, menu, Enfers, fin ; musique générative en repli), ambiances, bruitages de proximité (forge, bêtes, foule, volcan…), effets, réglages de volume.
 
 ### Le monde

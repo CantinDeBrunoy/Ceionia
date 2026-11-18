@@ -1647,7 +1647,6 @@ export class Agents {
       d.rotation.z = a.state === 'doing' ? Math.sin(a.phase) * 0.8 : 0.1;
       d.scale.set(ts, ts, ts);
       d.updateMatrix();
-      d.matrix.multiply(new THREE.Matrix4().makeTranslation(0, 0, 0));
       this.tool.setMatrixAt(n, d.matrix);
       n++;
     }

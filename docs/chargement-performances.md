@@ -1,7 +1,7 @@
 # Chargement et performances
 
-> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir, `ageToPrep` et `prepAge`), `src/render/agePrep.ts` (`AgePrep`, l'âge suivant préparé au repos), `src/render/thumbs.ts` (`prepare`), `src/render/buildings.ts` (`prepareAge`), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/style.css` (`#loadScreen`), `src/ui/preload.ts` (`preloadPics`, `whenIdle`), `src/ui/minimap.ts` (`shownW`)
-> Tests : `tests/chargement.test.ts`, `tests/qualite.test.ts`
+> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir, `ageToPrep` et `prepAge`), `src/render/agePrep.ts` (`AgePrep`, l'âge suivant préparé au repos), `src/render/thumbs.ts` (`prepare`), `src/render/buildings.ts` (`prepareAge`), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/render/still.ts` (branches immobiles), `src/render/snow.ts` (`setSnowMap`), `src/render/terrainView.ts` (`stepRecolor`), `src/style.css` (`#loadScreen`), `src/ui/preload.ts` (`preloadPics`, `whenIdle`), `src/ui/minimap.ts` (`shownW`)
+> Tests : `tests/chargement.test.ts`, `tests/qualite.test.ts`, `tests/saisons.test.ts` (balayage du sol), `tests/glaceBiomes.test.ts` (carte de neige)
 > Voir aussi : [architecture.md](architecture.md), [rendu-modeles.md](rendu-modeles.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [traduction.md](traduction.md)
 
 ## En bref
@@ -142,7 +142,51 @@ Ce qui reste :
 - Le passage : `g.sim.age = 2; g.world.ageBase = { ...g.sim.counts }; g.sim.onAgeUp(2)`.
 - Le détail par image : envelopper `g.frame` et les méthodes des vues (`thumbs.pump`, `buildings.refresh`, `roads.step`, `fauna.update`…) d'un chronomètre. Le profileur (`Profiler.start`) fige lui-même une image de 300 à 400 ms à son départ : le lancer quelques secondes avant.
 
+## Le régime normal
+Mesure du 18 nov. 2026 : Chrome sans fenêtre, Ryzen 5 5600, RTX 3060, Direct3D 11, 1 600 × 900, build de production, qualité « haute ». Carte de 384, village de test de 260 bâtiments à l'âge Moderne (`tools/bench/page.js` › `setup`), vue moyenne (distance 34). Plan complet, chiffres par village et par vue, et suite prévue : `.claude/plan-perfs.md`.
+
+Ce que la mesure a montré :
+- **Le goulot est le script, pas la carte graphique** : 13,4 ms de script par image en médiane, 10 à 13 ms de carte graphique.
+- **La taille du village ne compte presque pas** : 25 ou 260 bâtiments, même coût à 1 ms près. C'est le monde (végétation, faune, sol) qui coûte.
+- **Les saccades venaient des saisons** : toutes les 2 s, la carte de neige recalculée (25 ms) ; toutes les 4 s, le sol reteinté par bandes (8 ms par image pendant une seconde). 287 images sur 1 247 au-dessus de 20 ms.
+- **Baisser la qualité ne soulage pas le script** : processeur bridé ×4, 9 à 11 images par seconde à toutes les qualités.
+
+| Sur 24 s, vue fixe | Avant | Après |
+| --- | --- | --- |
+| Images au-dessus de 20 ms | 287 sur 1 247 | 60 sur 1 385 |
+| Images au-dessus de 33 ms | 25 | 2 |
+| Script, 95e centile | 26,1 ms | 19,7 ms |
+| Script, 99e centile | 39,9 ms | 23,5 ms |
+| Passage de saison (`refreshSeason`) | 23,5 ms toutes les 2 s | 1,2 ms |
+| Bande de reteinte du sol | 7,6 ms, 384 images | 1,6 ms, 743 images |
+| Matrices de la scène | 2,0 ms | 1,2 ms |
+| Ombres, vue en rotation | 2,5 ms et 770 appels | 1,3 ms et 562 appels |
+
+La machine était plus chargée pendant les mesures « après » : la médiane (13,4 puis 12,5 ms) sous-estime le gain. Les lignes par poste sont fiables.
+
+Ce qui est fait :
+- **Carte de neige** (`snow.ts` › `setSnowMap`) : refaite seulement si une case a changé de biome.
+- **Teintes du sol** (`terrainView.ts` › `stepRecolor`, `update(…, tint)`) : une bande de saison ne refait plus ce qui ne dépend que du monde ; 2 ms par image au plus (`RECOLOR_MS`) ; un balayage tous les 6 pas de saison (`GROUND_STEP`, `main.ts`).
+- **Matrices** (`still.ts`) : la végétation et les bêtes témoins sont des branches immobiles.
+- **Tuiles de végétation** (`VegView.update`) : visibilité revue seulement quand la vue bouge.
+- **Ombres** (`renderer_render`) : refaites à chaque image seulement quand leur cadre bouge, plus quand la vue tourne.
+- **Petites mises à jour** : son 20 fois par seconde (`AUDIO_STEP`), drapeaux lointains figés (`SWAY_FAR`, `buildings.ts`), fumées vides sans envoi (`Puffs.update`).
+
+Ce qui reste, par ordre de gain (voir le plan) : les triangles de la végétation (11 millions sur 13), la faune qui parcourt toute la carte (1,7 à 2,8 ms), les matrices des bâtiments (0,4 ms), la falaise du bord refaite d'un coup à la fin d'un balayage (une image de 12 à 17 ms toutes les 12 s), des leviers de script pour la qualité « Auto ».
+
+### Mesurer le régime normal
+- Même montage que pour les à-coups (Chrome sans fenêtre, son coupé). Qualité fixée (`setQuality('high')`) : « Auto » changerait les réglages en cours de mesure.
+- Lancer une carte de 384 : en développement `?n=384&seed=11`. En production, une nouvelle partie démarre en 192.
+- **Piège** : à partir de l'âge 2, la carte du grand choix s'ouvre toute seule (`worldChoice.show`) et arrête la simulation (`ui.menuOpen()`). Les coûts de la saison, des habitants et du trafic tombent alors à zéro sans prévenir. Neutraliser `show` et vérifier `menuOpen()` après chaque mesure.
+- **Piège** : `tools/bench/page.js` cache l'interface (`body.photo`) et lit `g.gardens.group` et `g.life.group`, qui n'existent plus (`counts`, `ablate`).
+- Mesurer image par image, pas seulement en moyenne : les pointes de saison ne pèsent que 0,3 ms en moyenne et figent pourtant une image toutes les 2 s. Compter les images au-dessus de 20 et de 33 ms sur 24 s (deux balayages du sol).
+- Le temps de script varie de ±2 ms selon la charge de la machine. Comparer les postes un par un (chronos autour de `refreshSeason`, `stepRecolor`, `scene.updateMatrixWorld`, `shadowMap.render`), ou alterner les deux versions.
+- `scene.updateMatrixWorld` : three passe toujours `force = true` aux enfants (une matrice automatique marque son objet à chaque image). Un objet à `matrixWorldAutoUpdate = false` est quand même parcouru : pour sortir une branche du calcul, `still`.
+- En boucle serrée, les matrices de toute la scène prennent 0,6 ms ; dans une vraie image, 2,3 ms (mémoire froide). Chronométrer dans la boucle du jeu.
+
 ## Pièges et invariants
+- Un calcul fait à chaque pas de saison (toutes les 2 s) tombe d'un bloc sur une image : au-delà de 2 ms, l'étaler ou le garder en cache. Ce qui ne dépend que du monde (biomes, relief) ne se refait pas avec la saison.
+- Un objet ajouté sous `VegView.group` ou `Fauna.samples` ailleurs qu'à l'origine ne s'affichera pas à sa place sans `refresh` (`still.ts`).
 - Créer maillages et matériaux au démarrage, cachés au besoin (`visible = false`, `count = 0`), plutôt qu'à leur première apparition : tout ce qui est dans la scène se compile au chargement, même caché.
 - `setColorAt` crée `instanceColor` au premier appel, et le shader change. Appeler `setColorAt(0, blanc)` à la création (faune, éruption, particules, feuilles).
 - Une lumière se crée éteinte (intensité 0) dès le départ. Changer le nombre de lumières visibles recompile tous les matériaux de la scène.

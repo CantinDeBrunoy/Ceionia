@@ -53,6 +53,8 @@ export class Puffs {
 
   update(dt: number) {
     const d = this.dummy, m = this.mesh;
+    // aucune bouffée, et rien d'affiché : pas de tampons à renvoyer à la carte graphique
+    if (!this.list.length && m.count === 0) return;
     let n = 0;
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];

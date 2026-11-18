@@ -66,11 +66,11 @@ Transitions :
 
 Ordre (surface, simplifié) :
 1. `adapt(temps brut)` (qualité « Auto »), `stepWind`, `time.update`, `cam.update(dt, hauteur du sol du mode)`, tremblement de caméra (éruption, secousse, cris du roi : `kingStage.shake`), `tools.update`.
-2. Reconstructions limitées en fréquence : relief (`terrainTimer` 0,06 s), routes, bâtiments, végétation, halos (`propsTimer` 0,12 s), repousse de la lave (toutes les 2 s de jeu), teinte de la lave (0,25 s), saison (`refreshSeason`, clé = `seasonT × 120`), `roads.step`, `terrain.stepRecolor`.
+2. Reconstructions limitées en fréquence : relief (`terrainTimer` 0,06 s), routes, bâtiments, végétation, halos (`propsTimer` 0,12 s), repousse de la lave (toutes les 2 s de jeu), teinte de la lave (0,25 s), saison (`refreshSeason`, clé = `seasonT × 120`), `roads.step`, `terrain.stepRecolor` (teintes du sol : 2 ms par image au plus, un balayage tous les 6 pas de saison).
 3. `env.update`, `atmosphere.update` (pas aux Enfers ni sous terre), `sim.update(gdt, dt)`, éruptions, incendies, `wakeVolcano`, messages des incendies, urgences et pertes (`world.losses`).
 4. Habitants (`agents.update`), patrouilles, sentinelles, `expeditions.update`, `stepWar` (guerre, alertes, île, `kingStage.update`), `stepFarewell`, `stepKingCrowd`, `railway.update`, `expView.update`, fêtes, enclos.
 5. Suivi par la caméra d'une équipe d'expédition (`following`), puis **selon le mode** : Enfers (`command.frame`, `hellMode.update`), souterrain (`uv.update`), sinon animation de la surface (bâtiments, faune, eau, vie, trafic, portail, contamination, rails, halos, végétation). La surface n'est donc **pas animée** pendant qu'on est aux Enfers, mais la simulation (étapes 3 et 4) continue.
-6. `audio.update`, minuterie de l'interface (toutes les 0,25 s : `ui.update`, `tutorial.update`, `command.render`, `warTips.update`, bouton « Retourner au village »), trophées (0,5 s), **sauvegarde automatique toutes les 15 s**, `renderer_render` (ombres une image sur `gfx.shadowEvery` si la vue est immobile ; halo `Glow` la nuit ou aux Enfers).
+6. `audio.update` (20 fois par seconde), minuterie de l'interface (toutes les 0,25 s : `ui.update`, `tutorial.update`, `command.render`, `warTips.update`, bouton « Retourner au village »), trophées (0,5 s), **sauvegarde automatique toutes les 15 s**, `renderer_render` (ombres une image sur `gfx.shadowEvery` si leur cadre est immobile ; halo `Glow` la nuit ou aux Enfers).
 
 ### Temps de jeu (`GameTime`)
 - `hour` (0–24, départ 9), `days`, `seasonT` (0 à 4 : 0 printemps, 1 été, 2 automne, 3 hiver ; départ 0,15), `speed` (1), `paused`.

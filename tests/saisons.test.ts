@@ -70,10 +70,15 @@ describe('saisons', () => {
     time.setSeason(1);
     computeSeason(time, pal);
     // le jeu redemande les teintes toutes les trois images : le balayage ne doit pas repartir du haut à chaque fois
-    for (let f = 0; f < 60; f++) {
-      if (f % 3 === 0) terrain.recolor(pal);
+    // (le nombre de lignes par image suit un budget de temps : on va au bout du balayage, qui doit finir)
+    let frames = 0;
+    for (let f = 0; f < 60 || (terrain.sweeping && f < 5000); f++) {
+      if (f < 60 && f % 3 === 0) terrain.recolor(pal);
       terrain.stepRecolor();
+      frames = f;
     }
+    expect(terrain.sweeping).toBe(false);
+    expect(frames).toBeLessThan(5000);
     const got = colors();
     terrain.update(pal);
     const want = colors();

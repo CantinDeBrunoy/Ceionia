@@ -147,6 +147,9 @@ export function targetAge(b: Pick<Building, 'kind'>, worldAge: number) { return 
 
 const easeOutBack =(t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
+/** Distance (cases, plus deux fois celle de la vue) au-delà de laquelle les pièces qui flottent au vent ne sont plus animées */
+const SWAY_FAR = 60;
+
 export class BuildingView implements WorldListener {
   group = new THREE.Group();
   entries = new Map<number, Entry>();
@@ -486,15 +489,20 @@ export class BuildingView implements WorldListener {
 
   private swayT = 0;
 
-  update(dt: number, worldAge: number) {
+  /** `view` : point visé et distance de la vue ; au-delà de `SWAY_FAR`, drapeaux, enseignes et linge ne sont plus animés (trop petits pour qu'on le voie) */
+  update(dt: number, worldAge: number, view?: { x: number; z: number; dist: number }) {
     // drapeaux, enseignes et linge flottent, plus fort quand le vent forcit ; les cloches branlent à leur rythme
     this.swayT += dt;
     CROWD.time.value += dt;
     const gust = 0.55 + wind.speed * 0.9;
     // les manèges tournent sans fin, à leur vitesse
-    for (const e of this.entries.values()) for (const sw of e.sways) {
-      sw.mesh.quaternion.setFromAxisAngle(sw.axis, sw.spin ? this.swayT * sw.spin * 6.28 + sw.phase : (Math.sin(this.swayT * sw.freq * 6.28 + sw.phase) + (sw.steady ? 0 : Math.sin(this.swayT * sw.freq * 11.3 + sw.phase * 2) * 0.3)) * sw.amp * (sw.steady ? 1 : gust));
-      if (sw.inst >= 0) { sw.mesh.updateWorldMatrix(true, false); this.swayBatch.setMatrix(sw.inst, sw.mesh.matrixWorld); }
+    const far = view ? SWAY_FAR + view.dist * 2 : Infinity;
+    for (const e of this.entries.values()) {
+      if (!e.sways.length || (view && Math.abs(e.b.x - view.x) + Math.abs(e.b.z - view.z) > far)) continue;
+      for (const sw of e.sways) {
+        sw.mesh.quaternion.setFromAxisAngle(sw.axis, sw.spin ? this.swayT * sw.spin * 6.28 + sw.phase : (Math.sin(this.swayT * sw.freq * 6.28 + sw.phase) + (sw.steady ? 0 : Math.sin(this.swayT * sw.freq * 11.3 + sw.phase * 2) * 0.3)) * sw.amp * (sw.steady ? 1 : gust));
+        if (sw.inst >= 0) { sw.mesh.updateWorldMatrix(true, false); this.swayBatch.setMatrix(sw.inst, sw.mesh.matrixWorld); }
+      }
     }
     // les ailes et les pales tournent, chaque moulin à son rythme (les éoliennes plus vite quand le vent forcit) ; les
     // éoliennes et les roues de pompage se tournent lentement face au vent, le rotor du côté d'où il vient

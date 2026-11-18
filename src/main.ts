@@ -144,6 +144,8 @@ const VILLAGE_DIST = 30;
 /** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
 const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
+/** Secondes entre deux réglages de l'ambiance sonore */
+const AUDIO_STEP = 0.05;
 /** Pas de saison (120 par saison) entre deux balayages des teintes du sol : un toutes les 12 s à vitesse normale */
 const GROUND_STEP = 6;
 
@@ -322,6 +324,8 @@ class Game implements UIHost {
   /** carte des ombres : position et orientation de la caméra à la dernière image, images depuis sa dernière mise à jour */
   private shadowPos = new THREE.Vector3();
   private shadowExt = 0;
+  /** temps écoulé depuis le dernier réglage de l'ambiance sonore (voir `AUDIO_STEP`) */
+  private audioT = 1;
   private shadowN = 0;
   /** version des lanternes des voies déjà données aux halos */
   private railLightsV = -1;
@@ -2605,7 +2609,7 @@ class Game implements UIHost {
       uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
     }
     else {
-      this.buildings.update(dt, this.sim.age);
+      this.buildings.update(dt, this.sim.age, { x: this.cam.target.x, z: this.cam.target.z, dist: this.cam.dist });
       // (pendant la cinématique « Explorer le monde », pas de bêtes appelées près de la vue : leur recensement coûtait
       // 200 à 300 ms toutes les 3 s au-dessus de la mer, d'où les à-coups du survol)
       this.fauna.quiet = this.voyageStage.playing;
@@ -2673,12 +2677,17 @@ class Game implements UIHost {
       this.veg.fogFar = this.env.fog.far;
       this.veg.update(dt, this.cam.camera.position);
     }
-    audio.update(dt, {
-      age: this.sim.age, season: this.time.season, daylight: this.env.daylight,
-      rain: this.env.rainK, snow: this.env.weatherKind === 'snow' ? this.env.weatherK : 0, fog: this.env.weatherKind === 'fog' ? this.env.weatherK : 0,
-      pop: this.sim.pop, camDist: this.cam.dist, under: uv || hv ? 1 : 0, hell: !!hv,
-      ...this.ambience(),
-    });
+    // l'ambiance sonore se règle 20 fois par seconde : ses volumes glissent sur 0,4 s et ses notes se posent d'avance ; à
+    // chaque image, onze volumes réglés et le relevé des abords de la vue (`ambience`) coûtaient 0,3 à 0,7 ms
+    if ((this.audioT += dt) >= AUDIO_STEP) {
+      audio.update(this.audioT, {
+        age: this.sim.age, season: this.time.season, daylight: this.env.daylight,
+        rain: this.env.rainK, snow: this.env.weatherKind === 'snow' ? this.env.weatherK : 0, fog: this.env.weatherKind === 'fog' ? this.env.weatherK : 0,
+        pop: this.sim.pop, camDist: this.cam.dist, under: uv || hv ? 1 : 0, hell: !!hv,
+        ...this.ambience(),
+      });
+      this.audioT = 0;
+    }
     if ((this.spotT -= dt) <= 0) { this.spotT = 0.25; this.syncSpots(!uv && !hv); }
 
     this.uiTimer -= dt;

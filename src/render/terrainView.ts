@@ -634,6 +634,8 @@ ${BLIGHT_GLSL}
   }
 
   /** Avance d'une bande la mise à jour des teintes de saison ; la falaise du bord suit à chaque tour de la carte */
+  /** un balayage des teintes de saison est en cours */
+  get sweeping() { return this.sweep >= 0; }
   /** coût d'une ligne du balayage de saison (ms, moyenne glissante) */
   private rowMs = 0.5;
   /** volcans du dernier passage complet (voir `update`, `tint`) */
