@@ -331,18 +331,21 @@ button.pop:hover { background: rgba(255, 255, 255, 0.7); }
 #cursorHint { position: fixed; left: 0; top: 0; z-index: 30; display: none; pointer-events: none; padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 800; color: #fff; background: #2a62d6; box-shadow: 0 4px 14px rgba(15, 27, 45, 0.35); white-space: nowrap; }
 #cursorHint.show { display: block; }
 #cursorHint.b { background: #1f9d55; }
-/* le jeu en pause (voir `UI.syncPause`) : un bandeau au milieu du haut, et les bords de l'écran assombris */
-#pauseVeil { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0; transition: opacity 0.25s; box-shadow: inset 0 0 0 4px rgba(246, 195, 90, 0.75), inset 0 0 140px 30px rgba(20, 24, 40, 0.55); }
+/* le jeu en pause (voir `UI.syncPause`) : « Jeu en pause » gravé comme le titre de l'accueil, sans boîte, au-dessus de la
+   barre de construction (le bas est placé par le code), une ombre douce derrière pour le lire ; les bords à peine assombris */
+#pauseVeil { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0; transition: opacity 0.25s; box-shadow: inset 0 0 180px 30px rgba(20, 24, 40, 0.22); }
 #pauseVeil.on { opacity: 1; }
-#pauseBar { position: fixed; left: 50%; top: 40%; z-index: 32; translate: -50% 0; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 14px; border-radius: 16px; font-size: 18px; white-space: nowrap; animation: pbIn 0.25s ease; }
+#pauseBar { position: fixed; left: 50%; bottom: 150px; z-index: 32; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; white-space: nowrap; animation: pbIn 0.25s ease; }
 #pauseBar[hidden] { display: none; }
-#pauseBar .pbIco { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; animation: pbBeat 1.6s ease-in-out infinite; }
-#pauseBar b { font-family: Fraunces, Georgia, serif; font-size: 20px; letter-spacing: 0.01em; }
-#pauseBar button { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 14px; font-weight: 800; }
-#pauseBar kbd { margin-left: 4px; padding: 1px 6px; border-radius: 6px; font: 600 11px system-ui, sans-serif; background: rgba(0, 0, 0, 0.12); }
-@keyframes pbIn { from { opacity: 0; translate: -50% -10px; } }
-@keyframes pbBeat { 0%, 100% { box-shadow: 0 0 0 0 rgba(246, 195, 90, 0.6); } 50% { box-shadow: 0 0 0 8px rgba(246, 195, 90, 0); } }
-@media (max-width: 720px) { #pauseBar { top: auto; bottom: 150px; gap: 8px; font-size: 15px; } #pauseBar b { font-size: 16px; } #pauseBar kbd { display: none; } }
+#pauseBar:hover, #pauseBar:active { background: none; transform: none; }
+#pauseBar::before { content: ''; position: absolute; z-index: -1; left: 50%; top: 50%; width: 560px; height: 150px; translate: -50% -50%; border-radius: 50%; background: radial-gradient(closest-side, rgba(30, 26, 40, 0.34), rgba(30, 26, 40, 0)); pointer-events: none; }
+#pauseBar img.pic { position: absolute; right: calc(100% + 10px); top: -4px; width: 50px; height: 50px; filter: drop-shadow(0 3px 4px rgba(40, 25, 10, 0.45)); }
+#pauseBar b { position: relative; font-family: Fraunces, Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 36px; font-weight: 700; line-height: 1; color: #fdf7ec; text-shadow: 2px 3px 0 #a88a6a, 0 6px 20px rgba(30, 30, 60, 0.45); }
+#pauseBar small { font-size: 13px; font-weight: 700; color: #fdf7ec; text-shadow: 0 1px 3px rgba(20, 20, 40, 0.7); }
+#pauseBar .pbTouch { display: none; }
+@media (pointer: coarse) { #pauseBar .pbKey { display: none; } #pauseBar .pbTouch { display: inline; } }
+@keyframes pbIn { from { opacity: 0; } }
+@media (max-width: 720px) { #pauseBar b { font-size: 26px; } #pauseBar img.pic { width: 38px; height: 38px; top: -4px; } #pauseBar::before { width: 380px; height: 110px; } }
 /* « Menu principal » toujours en vue au pied des onglets des paramètres */
 #ui > .overlay > .cePop .setTabs .setMenu { margin-top: 18px; color: #7a3b1c; }
 /* « Sauvegarder » puis « Sauvegarder et quitter » : le premier garde la marge, le second le suit de près */
