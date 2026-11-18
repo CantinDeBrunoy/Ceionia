@@ -40,6 +40,12 @@ const LOD_DIST = 48, DETAIL_DIST = 70;
  * cimes, d'où se compte la distance quand la vue surplombe la tuile
  */
 const TREE_DETAIL = 16, TREE_TOP = 3;
+/**
+ * Grand lointain : au-delà (distance vraie, passé la portée des ombres), les arbres prennent une troisième version, à
+ * `FAR_KEEP` de leurs triangles. À cette distance un arbre fait une vingtaine de pixels de haut. Les cimes facettées du
+ * jeu (une teinte par facette) n'avaient pas de version simplifiée du tout : elles en ont une ici
+ */
+const FAR_DETAIL = 72, FAR_KEEP = 0.42;
 /** Au-delà, une tuile ne projette plus d'ombre ; les petits décors (rochers) disparaissent */
 const SHADOW_DIST = 70, SMALL_DIST = 110;
 /**
@@ -141,11 +147,14 @@ class Layer {
   private near: THREE.InstancedMesh[][] = [];
   private far: THREE.InstancedMesh[][] = [];
   private lodGeo: THREE.BufferGeometry[] | null = null;
+  /** version du grand lointain (voir `FAR_DETAIL`) : null par partie quand elle n'en a pas */
+  private far2: THREE.InstancedMesh[][] = [];
+  private lod2Geo: (THREE.BufferGeometry | null)[] | null = null;
 
   private reachR = -1;
 
   constructor(private group: THREE.Group, readonly parts: Part[], readonly o: LayerOpts = {}) {
-    for (let i = 0; i < NC * NC; i++) { this.m.push(new Float32Array(64)); this.c.push(new Float32Array(12)); this.near.push([]); this.far.push([]); }
+    for (let i = 0; i < NC * NC; i++) { this.m.push(new Float32Array(64)); this.c.push(new Float32Array(12)); this.near.push([]); this.far.push([]); this.far2.push([]); }
   }
 
   /** Portée de ses parties autour du pied, à l'échelle 1 (rayon de la cime d'un arbre, quelle que soit sa rotation) */
@@ -196,6 +205,7 @@ class Layer {
       ic.setUsage(THREE.DynamicDrawUsage);
       near = this.near[ch] = this.parts.map((p) => this.make(p.geo, p.mat, im, ic));
       if (this.lodGeo) this.far[ch] = this.parts.map((p, i) => this.make(this.lodGeo![i], p.mat, im, ic));
+      if (this.lod2Geo) this.far2[ch] = this.parts.map((p, i) => this.make(this.lod2Geo![i] ?? this.lodGeo![i], p.mat, im, ic));
     }
     if (!near.length) return;
     const im = near[0].instanceMatrix, ic = near[0].instanceColor!;
@@ -209,15 +219,15 @@ class Layer {
       (ic.array as Float32Array).set(this.c[ch].subarray(0, n * 3));
     }
     im.needsUpdate = ic.needsUpdate = true;
-    for (const mesh of near.concat(this.far[ch])) {
+    for (const mesh of near.concat(this.far[ch], this.far2[ch])) {
       mesh.count = n;
       mesh.computeBoundingSphere();
     }
   }
 
   private dispose(ch: number) {
-    for (const mesh of this.near[ch].concat(this.far[ch])) { this.group.remove(mesh); mesh.dispose(); }
-    this.near[ch] = []; this.far[ch] = [];
+    for (const mesh of this.near[ch].concat(this.far[ch], this.far2[ch])) { this.group.remove(mesh); mesh.dispose(); }
+    this.near[ch] = []; this.far[ch] = []; this.far2[ch] = [];
   }
 
   /** Remplace la géométrie d'une partie (allégée), aussi dans les tuiles déjà construites */
@@ -235,6 +245,24 @@ class Layer {
       this.far[ch] = this.parts.map((p, i) => {
         const mesh = this.make(geos[i], p.mat, near[0].instanceMatrix, near[0].instanceColor!);
         mesh.count = near[0].count;
+        mesh.computeBoundingSphere();
+        return mesh;
+      });
+    }
+  }
+
+  /** Version du grand lointain des parties (null : la partie garde sa version simplifiée), aussi dans les tuiles déjà construites */
+  setLod2(geos: (THREE.BufferGeometry | null)[]) {
+    if (!this.lodGeo) return;
+    this.lod2Geo = geos;
+    for (let ch = 0; ch < NC * NC; ch++) {
+      const near = this.near[ch];
+      if (!near.length) continue;
+      this.far2[ch] = this.parts.map((p, i) => {
+        const mesh = this.make(geos[i] ?? this.lodGeo![i], p.mat, near[0].instanceMatrix, near[0].instanceColor!);
+        mesh.count = near[0].count;
+        mesh.castShadow = false;
+        mesh.visible = false;
         mesh.computeBoundingSphere();
         return mesh;
       });
@@ -260,7 +288,10 @@ class Layer {
     for (const m of this.near[ch]) { m.visible = has && !hide && !far; m.castShadow = shadow && !lod; }
     // très loin : une part des arbres seulement (voir THIN_DIST)
     const keep = far && dist > THIN_DIST ? Math.max(THIN_MIN, THIN_DIST / dist) : 1, count = Math.ceil(this.n[ch] * keep);
-    for (const m of this.far[ch]) { m.visible = has && !hide && (far || shadow); m.castShadow = shadow; m.layers.mask = far ? 1 | (1 << SHADOW_LAYER) : 1 << SHADOW_LAYER; m.count = count; }
+    // grand lointain, passé la portée des ombres : une version plus légère encore, si la couche en a une
+    const far2 = far && !shadow && this.far2[ch].length > 0 && near > FAR_DETAIL * k;
+    for (const m of this.far[ch]) { m.visible = has && !hide && ((far && !far2) || shadow); m.castShadow = shadow; m.layers.mask = far ? 1 | (1 << SHADOW_LAYER) : 1 << SHADOW_LAYER; m.count = count; }
+    for (const m of this.far2[ch]) { m.visible = has && !hide && far2; m.castShadow = false; m.count = count; }
   }
 }
 
@@ -548,6 +579,30 @@ export class VegView {
       flat.computeVertexNormals();
       return flat;
     };
+    // cimes facettées (une teinte par facette) : les sommets ne se rejoignent que par leur place ; chaque triangle gardé
+    // reprend la teinte de la facette d'origine la plus proche
+    const simplifyFaces = async (geo: THREE.BufferGeometry, keep: number) => {
+      const src = new THREE.BufferGeometry();
+      src.setAttribute('position', geo.attributes.position);
+      const merged = mergeVertices(src, 1e-3);
+      const flat = (await mod.modify(merged, Math.floor(merged.attributes.position.count * (1 - keep)))).toNonIndexed();
+      const col = geo.attributes.color, sp = geo.attributes.position, fp = flat.attributes.position;
+      if (col) {
+        const out = new Float32Array(fp.count * 3);
+        for (let t = 0; t < fp.count; t += 3) {
+          const cx = (fp.getX(t) + fp.getX(t + 1) + fp.getX(t + 2)) / 3, cy = (fp.getY(t) + fp.getY(t + 1) + fp.getY(t + 2)) / 3, cz = (fp.getZ(t) + fp.getZ(t + 1) + fp.getZ(t + 2)) / 3;
+          let best = 0, bd = Infinity;
+          for (let u = 0; u < sp.count; u += 3) {
+            const d = ((sp.getX(u) + sp.getX(u + 1) + sp.getX(u + 2)) / 3 - cx) ** 2 + ((sp.getY(u) + sp.getY(u + 1) + sp.getY(u + 2)) / 3 - cy) ** 2 + ((sp.getZ(u) + sp.getZ(u + 1) + sp.getZ(u + 2)) / 3 - cz) ** 2;
+            if (d < bd) { bd = d; best = u; }
+          }
+          for (let v = 0; v < 3; v++) { out[(t + v) * 3] = col.getX(best); out[(t + v) * 3 + 1] = col.getY(best); out[(t + v) * 3 + 2] = col.getZ(best); }
+        }
+        flat.setAttribute('color', new THREE.BufferAttribute(out, 3));
+      }
+      flat.computeVertexNormals();
+      return flat;
+    };
     for (const l of this.layers) {
       if (!l.o.lod) continue;
       try {
@@ -558,6 +613,17 @@ export class VegView {
           geos.push(await simplify(l.parts[i].geo, 0.28));
         }
         l.setLod(geos);
+        // grand lointain : pas pour les menus détails (déjà masqués à cette distance) ni les parties de quelques triangles
+        if (!l.o.detail) {
+          const far: (THREE.BufferGeometry | null)[] = [];
+          for (const [i, p] of l.parts.entries()) {
+            const tris = p.geo.attributes.position.count / 3, lodTris = geos[i].attributes.position.count / 3;
+            far.push(lodTris < 60 ? null : lodTris < tris * 0.9 ? await simplify(geos[i], FAR_KEEP) : await simplifyFaces(p.geo, FAR_KEEP));
+          }
+          if (far.some((g) => g)) l.setLod2(far);
+        }
+        // (les nouvelles versions paraissent à la prochaine revue des tuiles : tout de suite)
+        this.viewed.age = VIEW_EVERY;
       } catch (e) {
         console.warn('Arbres simplifiés indisponibles', e);
         return;
