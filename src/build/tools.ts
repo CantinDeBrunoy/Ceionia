@@ -4,7 +4,7 @@ import { World, N, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, Snapshot } from '
 import { sculpt, raiseVolcano, removeVolcano, SculptTool, SculptCtx, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
-import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize } from './catalog';
+import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize, isRampart } from './catalog';
 import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin, doorCells, doorSide, orientable, sideToward } from './placement';
@@ -17,7 +17,7 @@ import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
 import { isStart, startRefusal, START_KIND } from './startLock';
-import { traceRampart, layRampart, rampartCost, RampartTrace } from './rampart';
+import { traceRampart, layRampart, rampartCost, RampartTrace, rampartMask, toggledTower } from './rampart';
 import { costLabel } from '../sim/economy';
 import { tr } from '../i18n';
 
@@ -313,6 +313,19 @@ export class ToolController implements ToolInput {
     this.mark();
     this.endStroke();
     this.h.world.rotateBuilding(b.id, b.rot + 1);
+    this.h.audio.sfxClick();
+    this.refreshVisuals();
+    this.h.changed();
+  }
+
+  /** Fait passer le pan de rempart sélectionné de tour à simple pan, ou l'inverse (annulable, gratuit) */
+  toggleSelectedTower() {
+    const b = this.selectedBuilding();
+    if (!b || b.kind !== 'wall') return;
+    this.beginStroke();
+    this.mark();
+    this.endStroke();
+    this.h.world.setRampartTower(b.id, toggledTower(this.h.world, b));
     this.h.audio.sfxClick();
     this.refreshVisuals();
     this.h.changed();
@@ -1089,10 +1102,12 @@ export class ToolController implements ToolInput {
       if (!w.inCells(o.x, o.z)) return;
       const reason = w.canPlace(kind, o.x, o.z);
       const age = this.h.getAge();
-      const key = `${kind}|${age}`;
+      // un rempart : l'aperçu prend le masque qu'aurait la pièce posée ici (la porte se tourne dans l'axe du mur ou de la rue)
+      const mask = isRampart(kind) ? rampartMask(w, { kind, x: o.x, z: o.z } as Building) : undefined;
+      const key = `${kind}|${age}|${mask ?? ''}`;
       if (key !== this.ghostKey) {
         this.ghostKey = key;
-        const m = getModel(kind, age, { v: 0, L: false, R: false, F: true });
+        const m = getModel(kind, age, { v: 0, L: false, R: false, F: true, mask });
         this.ghostBody.geometry = m.body;
         if (m.glow) { this.ghostGlow.geometry = m.glow; this.ghostGlow.visible = true; } else this.ghostGlow.visible = false;
         const off = kind === 'lamp' ? 0.32 : 0;
@@ -1107,7 +1122,7 @@ export class ToolController implements ToolInput {
       const tracing = this.tracingWall && this.freeFrom;
       if (!tracing) this.placeWhy = this.placedAt === cellKey && reason === tr('Emplacement occupé') ? null : this.tracingWall && this.hitBuilding && (this.hitBuilding.kind === 'wall' || this.hitBuilding.kind === 'gate') ? null : why0;
       setGhostValid(tracing ? !this.placeWhy : !why0);
-      const rot = an ? this.anchorRot() : this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
+      const rot = mask !== undefined ? 0 : an ? this.anchorRot() : this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);
       this.ghost.rotation.y = rot * Math.PI / 2;

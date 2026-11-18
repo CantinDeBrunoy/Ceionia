@@ -412,7 +412,8 @@ export class BuildingView implements WorldListener {
         e.group.add(e.plinth);
       }
     }
-    e.group.rotation.y = b.rot * Math.PI / 2;
+    // un rempart s'oriente par son masque (le modèle se tourne lui-même) : sa rotation de bâtiment, prise face à la route, l'annulerait
+    e.group.rotation.y = isRampart(b.kind) ? 0 : b.rot * Math.PI / 2;
     e.moved = true;
     const off = b.kind === 'lamp' ? 0.32 : 0;
     if (!m.vane?.whole) {
