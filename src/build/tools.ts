@@ -1,3 +1,4 @@
+import { strokeRoad } from './roadLine';
 import * as THREE from 'three';
 import { World, N, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, Snapshot } from '../world/world';
 import { sculpt, raiseVolcano, removeVolcano, SculptTool, SculptCtx, brushOnBuilding, volcanoRadius } from '../world/terraform';
@@ -82,6 +83,8 @@ export class ToolController implements ToolInput {
   private strokeChanged = false;
   private ctx: SculptCtx = { target: 0 };
   private lastRoad: { x: number; z: number } | null = null;
+  /** cases posées par le trait de route en cours (mode « Ligne ») */
+  private roadStroke = new Set<number>();
   private vegTimer = 0;
   private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean } | null = null;
   /** bâtiment choisi d'un clic avec l'outil « Voir » : sa fiche s'affiche, on peut le déplacer, le tourner, le démolir */
@@ -663,18 +666,9 @@ export class ToolController implements ToolInput {
     const c = this.cell();
     if (!c) return;
     const w = this.h.world;
-    const from = this.lastRoad ?? c;
-    // Bresenham
-    let x0 = from.x, z0 = from.z;
-    const dx = Math.abs(c.x - x0), dz = Math.abs(c.z - z0), sx = x0 < c.x ? 1 : -1, sz = z0 < c.z ? 1 : -1;
-    let err = dx - dz;
-    for (let i = 0; i < 200; i++) {
-      if (w.setRoad(x0, z0, true)) this.mark();
-      if (x0 === c.x && z0 === c.z) break;
-      const e2 = 2 * err;
-      if (e2 > -dz) { err -= dz; x0 += sx; }
-      if (e2 < dx) { err += dx; z0 += sz; }
-    }
+    if (!this.lastRoad) this.roadStroke.clear();
+    // (sans carré de 2 × 2 dans un même trait, et sans pas en diagonale qui couperait le dessin : voir `strokeRoad`)
+    if (strokeRoad(w, this.lastRoad ?? c, c, this.roadStroke)) this.mark();
     this.lastRoad = c;
     if (this.strokeChanged) this.h.audio.sfxClick();
   }

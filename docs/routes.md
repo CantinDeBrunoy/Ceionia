@@ -1,7 +1,7 @@
 # Routes
 
 > Fichiers : `src/build/freeRoad.ts` (route libre, A*), `src/build/autoroads.ts` (chemins d'accès automatiques), `src/build/tools.ts` (outil Route, mode ligne), `src/world/world.ts` (`canRoad`, `setRoad`, `addCurve`, `curveCells`), `src/world/curves.ts` (courbes, rastérisation), `src/world/crossings.ts` (ponts), `src/render/roads.ts` (`RoadView`, tout le dessin), `src/sim/agents.ts` (`sidewalkAt`), `src/render/traffic.ts` (voie des véhicules)
-> Tests : `tests/autoroads.test.ts`, `tests/curves.test.ts`, `tests/franchissements.test.ts`, `tests/trottoirs.test.ts`, `tests/neigeRoutes.test.ts`, `tests/rivage.test.ts`
+> Tests : `tests/routeLigne.test.ts`, `tests/autoroads.test.ts`, `tests/curves.test.ts`, `tests/franchissements.test.ts`, `tests/trottoirs.test.ts`, `tests/neigeRoutes.test.ts`, `tests/rivage.test.ts`
 > Voir aussi : [placement-construction.md](placement-construction.md), [eau-rivieres.md](eau-rivieres.md), [habitants.md](habitants.md), [trafic.md](trafic.md), [chemin-de-fer.md](chemin-de-fer.md), [remparts.md](remparts.md)
 
 ## En bref
@@ -10,7 +10,10 @@ Une route est une case de `World.road` (0 ou 1). Le joueur en trace de deux faç
 ## Règles du jeu
 **Poser une case** (`World.canRoad`) : pas sur un bâtiment ni sur une grotte ou une faille ; sur l'eau, un pont est permis sur un lac et sur la mer jusqu'à `cellAvg > -1,7` (pas au large) ; sur terre, pente de la case `cellSlope < 1,3`. Une route efface la végétation de la case (`setRoad`).
 
-**Route en ligne** (mode « Ligne ») : on glisse, une case posée par case traversée (Bresenham, 200 cases au plus par événement, `applyRoad`). Chaque case refusée est sautée en silence.
+**Route en ligne** (mode « Ligne ») : on glisse, une case posée par case traversée (Bresenham, 200 cases au plus par événement, `applyRoad` → `strokeRoad`, `src/build/roadLine.ts`). Chaque case refusée est sautée en silence. Deux règles depuis le 19 nov. 2026 (l'auteur trouvait une route tracée à la main « bizarre », large et bosselée) :
+- un pas en diagonale passe d'abord par une case de côté (la plus proche du trait) : deux cases qui ne se touchent que par un coin se dessinaient en deux morceaux ;
+- une case n'est pas posée si elle fermait un carré de 2 × 2 cases de route dont deux autres au moins sont du même trait (`roadStroke`, vidé à chaque trait) : une main qui tremble en posait à la suite, et le dessin fait de chaque carré une place pavée. Un carré voulu se fait en deux traits côte à côte.
+Une diagonale en mode « Ligne » est donc un escalier ; le mode « Libre » trace une vraie courbe.
 
 **Route libre** (mode « Libre », mode par défaut, `roadMode = 'free'`) : un clic au point A, un clic au point B, ou un glissé de A à B (relâcher à plus de 12 px de l'appui). Un ruban vert (rouge si refusé) montre la courbe prévue, avec une flèche au bout. Un clic sur A, ou Échap, oublie A. Une fois la route posée, l'outil est quitté (`setTool('none')`). R, l'outil étant déjà en main, bascule entre les deux modes (`main.ts`).
 - Longueur : `FREE_MAX = 80` cases à vol d'oiseau (« Trop loin »).
