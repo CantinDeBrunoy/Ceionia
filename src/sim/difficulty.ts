@@ -57,18 +57,20 @@ export interface DifficultyRules {
   newOnly: boolean;
   /** l'équipement des expéditions se paie aussi en bois et en pierre (false : seules les pièces de métal, en minerai) */
   gearPrice: boolean;
+  /** part du prix d'un bâtiment rendue quand on le démolit (1 : tout, 0,5 : la moitié) */
+  refund: number;
 }
 
 /** La table des difficultés : c'est ici qu'on les règle */
 export const DIFFICULTY: Record<Difficulty, DifficultyRules> = {
-  sandbox: { unlimited: true, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false },
-  easy: { unlimited: null, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false },
+  sandbox: { unlimited: true, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false, refund: 0 },
+  easy: { unlimited: null, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false, refund: 1 },
   normal: {
     unlimited: false,
     price: { wood: 5, woodAge: 3, stone: 3, stoneAge: 3, penStone: 1, penStoneAge: 1 },
     startWood: 50, startStone: 40,
     foodK: 1.25, famine: 0.004, growK: 0.75, recoverK: 0.5, recoverT: 100, riskK: 1.25,
-    newOnly: true, gearPrice: true,
+    newOnly: true, gearPrice: true, refund: 0.5,
   },
 };
 

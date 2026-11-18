@@ -61,6 +61,29 @@ export function priceIn(w: World, kind: KindId, age: number): Cost | null {
   return costOf(kind, age, w.difficulty, owned);
 }
 
+/**
+ * Ce que rend la démolition d'un bâtiment : une part (`refund` de la difficulté : tout en Facile, la moitié en Normal) de
+ * son prix à son âge, arrondie vers le bas ; rien en ressources illimitées. Le premier producteur, offert en Normal, ne
+ * rend rien (`owned` compte les autres du même genre)
+ */
+export function refundOf(w: World, b: { id: number; kind: KindId; age: number }): Cost | null {
+  const k = rulesOf(w.difficulty).refund;
+  if (w.unlimited || !k) return null;
+  let owned = 0;
+  if (PRODUCERS.includes(b.kind)) for (const o of w.buildings.values()) if (o.kind === b.kind && o.id !== b.id) owned++;
+  const c = costOf(b.kind, b.age, w.difficulty, owned);
+  if (!c) return null;
+  const r = { wood: Math.floor(c.wood * k), stone: Math.floor(c.stone * k), ...(c.brick ? { brick: Math.floor(c.brick * k) } : {}) };
+  return r.wood || r.stone || r.brick ? r : null;
+}
+
+/** Rend au village ce que rapporte une démolition (voir `refundOf`) ; le prix rendu, ou null */
+export function refund(w: World, b: { id: number; kind: KindId; age: number }): Cost | null {
+  const r = refundOf(w, b);
+  if (r) { w.wood += r.wood; w.stone += r.stone; w.brick += r.brick ?? 0; }
+  return r;
+}
+
 export const canPay = (w: World, c: Cost | null) => !c || (w.wood >= c.wood && w.stone >= c.stone && w.brick >= (c.brick ?? 0));
 
 export function pay(w: World, c: Cost | null) {

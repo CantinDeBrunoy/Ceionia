@@ -10,7 +10,7 @@ import { facingRoadRot, footprintOrigin, doorCells, doorSide, orientable, sideTo
 import { autoRoad, unlayAccess } from './autoroads';
 import { planRoad, RoadPlan } from './freeRoad';
 import { sampleCurve } from '../world/curves';
-import { priceIn, canPay, pay, shortLabel } from '../sim/economy';
+import { priceIn, canPay, pay, shortLabel, refund, Cost } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
@@ -343,9 +343,23 @@ export class ToolController implements ToolInput {
     this.beginStroke();
     this.mark();
     this.endStroke();
+    this.refunded(refund(this.h.world, b));
     this.h.world.removeBuilding(b.id);
     this.h.audio.sfxDestroy();
     this.select(null);
+  }
+
+  /** Ce que les démolitions du geste en cours ont rendu, dit en une fois quand on lâche le bouton */
+  private strokeBack: Cost | null = null;
+  private addBack(r: Cost | null) {
+    if (!r) return;
+    const t = this.strokeBack ??= { wood: 0, stone: 0, brick: 0 };
+    t.wood += r.wood; t.stone += r.stone; t.brick = (t.brick ?? 0) + (r.brick ?? 0);
+  }
+
+  /** Dit ce que la démolition a rendu (rien à dire si elle n'a rien rendu) */
+  private refunded(c: Cost | null) {
+    if (c && (c.wood || c.stone || c.brick)) this.h.toast(tr('Démolition : {cost} rendus.', { cost: costLabel(c) }));
   }
 
   // ---------- historique ----------
@@ -359,7 +373,7 @@ export class ToolController implements ToolInput {
       this.h.changed();
     }
   }
-  private endStroke() { this.pre = null; this.lastRoad = null; this.lastRift = null; }
+  private endStroke() { this.pre = null; this.lastRoad = null; this.lastRift = null; this.refunded(this.strokeBack); this.strokeBack = null; }
 
   // ---------- Entrées ----------
   private pickAt(e: PointerInfo) {
@@ -834,7 +848,7 @@ export class ToolController implements ToolInput {
     const b = this.hitBuilding;
     if (b) {
       // (plus de double confirmation : Ctrl+Z annule)
-      this.mark(); w.removeBuilding(b.id); this.h.audio.sfxDestroy();
+      this.mark(); this.addBack(refund(w, b)); w.removeBuilding(b.id); this.h.audio.sfxDestroy();
       if (!disc) return;
     }
     if (disc) { this.bulldozeDisc(this.hit!.x, this.hit!.z, this.radius); return; }
@@ -864,7 +878,7 @@ export class ToolController implements ToolInput {
         const k = w.ci(cx, cz), b = w.buildingAt(cx, cz);
         if (b) {
           if (sizeOf(b) >= 2) { big = true; continue; }
-          this.mark(); w.removeBuilding(b.id); any = true;
+          this.mark(); this.addBack(refund(w, b)); w.removeBuilding(b.id); any = true;
           continue;
         }
         if (w.road[k]) { this.mark(); w.setRoad(cx, cz, false); any = true; }
