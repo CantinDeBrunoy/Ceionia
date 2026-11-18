@@ -144,6 +144,8 @@ const VILLAGE_DIST = 30;
 /** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
 const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
+/** Pas de saison (120 par saison) entre deux balayages des teintes du sol : un toutes les 12 s à vitesse normale */
+const GROUND_STEP = 6;
 
 /** ancienne durée de saison par défaut (s) : les sauvegardes qui l'ont gardée passent à la nouvelle (240 s, 50 % de plus) */
 const OLD_SEASON_LEN = 160;
@@ -2384,7 +2386,8 @@ class Game implements UIHost {
       // n'y bougent que d'un soixantième de saison)
       // en accéléré, un balayage tous les deux soixantièmes passerait son temps à recommencer (à ×4, sans arrêt) : on espace
       // les balayages d'autant, la teinte change par pas un peu plus grands
-      if (force || Math.abs(key - this.groundKey) >= 2 * Math.max(1, this.time.speed)) {
+      // (un balayage tous les `GROUND_STEP` pas : il dure quelques secondes, à 2 ms par image, et ne doit pas s'enchaîner)
+      if (force || Math.abs(key - this.groundKey) >= GROUND_STEP * Math.max(1, this.time.speed)) {
         this.groundKey = key;
         if (force) this.terrain.update(this.season); else this.terrain.recolor(this.season);
       }

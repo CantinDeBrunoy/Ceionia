@@ -59,6 +59,8 @@ const MAX_HALOS = 8;
 const MAX_CAVES = 24;
 /** Lignes de cases reteintes par image quand la saison change */
 const RECOLOR_ROWS = 6;
+/** Temps que le balayage de saison se donne par image (ms) : le nombre de lignes de la bande s'y règle */
+const RECOLOR_MS = 2;
 /** Neige que retient chaque biome (tempéré, taïga, désert, tropical, marais) : la table unique de `world.ts` */
 export const SNOWY = BIOME_SNOW;
 /** Nombre de biomes */
@@ -632,13 +634,19 @@ ${BLIGHT_GLSL}
   }
 
   /** Avance d'une bande la mise à jour des teintes de saison ; la falaise du bord suit à chaque tour de la carte */
+  /** coût d'une ligne du balayage de saison (ms, moyenne glissante) */
+  private rowMs = 0.5;
   /** volcans du dernier passage complet (voir `update`, `tint`) */
   private volcanoes: VolcanoFrame[] | null = null;
 
   stepRecolor() {
     if (this.sweep < 0 || !this.sweepPal) return;
-    const z0 = this.sweep, z1 = Math.min(N - 1, z0 + Math.min(RECOLOR_ROWS, this.sweepLeft) - 1);
+    // autant de lignes que le budget de temps le permet, d'après ce qu'a coûté la bande d'avant (au plus `RECOLOR_ROWS`)
+    const rows = Math.max(1, Math.min(RECOLOR_ROWS, Math.floor(RECOLOR_MS / this.rowMs)));
+    const z0 = this.sweep, z1 = Math.min(N - 1, z0 + Math.min(rows, this.sweepLeft) - 1);
+    const t0 = performance.now();
     this.update(this.sweepPal, [0, z0, N - 1, z1], true, true);
+    this.rowMs += ((performance.now() - t0) / (z1 - z0 + 1) - this.rowMs) * 0.3;
     this.sweepLeft -= z1 - z0 + 1;
     this.sweep = z1 >= N - 1 ? 0 : z1 + 1;
     if (z1 >= N - 1 || this.sweepLeft <= 0) this.updateSkirt(this.sweepPal);
@@ -948,7 +956,9 @@ ${BLIGHT_GLSL}
     for (const a of sent) {
       const attr = a as THREE.BufferAttribute;
       const per = 6 * attr.itemSize;
-      if (!full) for (let cz = sz0; cz <= sz1; cz++) attr.addUpdateRange((cz * C + sx0) * per, (sx1 - sx0 + 1) * per);
+      // (une bande sur toute la largeur est d'un seul tenant : un seul envoi au lieu d'un par rangée)
+      if (!full && sx0 === 0 && sx1 === C - 1) attr.addUpdateRange(sz0 * C * per, (sz1 - sz0 + 1) * C * per);
+      else if (!full) for (let cz = sz0; cz <= sz1; cz++) attr.addUpdateRange((cz * C + sx0) * per, (sx1 - sx0 + 1) * per);
       attr.needsUpdate = true;
     }
     // falaise du bord : si la zone le touche (la bande de saison la refait une fois finie)
