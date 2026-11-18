@@ -170,9 +170,10 @@ Ce qui est fait :
 - **Matrices** (`still.ts`) : la végétation et les bêtes témoins sont des branches immobiles.
 - **Tuiles de végétation** (`VegView.update`) : visibilité revue seulement quand la vue bouge.
 - **Ombres** (`renderer_render`) : refaites à chaque image seulement quand leur cadre bouge, plus quand la vue tourne.
+- **Arbres** (`vegetation.ts` › `TREE_DETAIL`) : la version détaillée seulement à moins de 16 cases de la vue. De 13,3 à 9,1 millions de triangles par image en vue moyenne (14,5 à 8,5 en rotation), sans différence visible.
 - **Petites mises à jour** : son 20 fois par seconde (`AUDIO_STEP`), drapeaux lointains figés (`SWAY_FAR`, `buildings.ts`), fumées vides sans envoi (`Puffs.update`).
 
-Ce qui reste, par ordre de gain (voir le plan) : les triangles de la végétation (11 millions sur 13), la faune qui parcourt toute la carte (1,7 à 2,8 ms), les matrices des bâtiments (0,4 ms), la falaise du bord refaite d'un coup à la fin d'un balayage (une image de 12 à 17 ms toutes les 12 s), des leviers de script pour la qualité « Auto ».
+Ce qui reste, par ordre de gain (voir le plan) : les triangles qui restent à la végétation (7 millions sur 9 : petits décors sans version simplifiée, herbe) et ses appels de dessin, la faune qui parcourt toute la carte (1,7 à 2,8 ms), les matrices des bâtiments (0,4 ms), la falaise du bord refaite d'un coup à la fin d'un balayage (une image de 12 à 17 ms toutes les 12 s), des leviers de script pour la qualité « Auto ».
 
 ### Mesurer le régime normal
 - Même montage que pour les à-coups (Chrome sans fenêtre, son coupé). Qualité fixée (`setQuality('high')`) : « Auto » changerait les réglages en cours de mesure.

@@ -33,6 +33,13 @@ export let NC = Math.ceil(N / CH);
 export function syncChunks() { CH = N > 256 ? 48 : N > 128 ? 32 : 16; NC = Math.ceil(N / CH); }
 /** Distance caméra → tuile au-delà de laquelle les arbres passent en version simplifiée, et les menus détails disparaissent */
 const LOD_DIST = 48, DETAIL_DIST = 70;
+/**
+ * Distance vraie de la vue à une tuile en deçà de laquelle ses arbres gardent leur version détaillée (3 100 triangles
+ * contre 900). Captures côte à côte à 8, 14 et 34 de distance : les deux versions ne se distinguent pas, alors que la
+ * détaillée, dessinée jusqu'à `LOD_DIST`, pesait 5 des 13 millions de triangles d'une image. `TREE_TOP` : hauteur des
+ * cimes, d'où se compte la distance quand la vue surplombe la tuile
+ */
+const TREE_DETAIL = 16, TREE_TOP = 3;
 /** Au-delà, une tuile ne projette plus d'ombre ; les petits décors (rochers) disparaissent */
 const SHADOW_DIST = 70, SMALL_DIST = 110;
 /**
@@ -234,13 +241,18 @@ class Layer {
     }
   }
 
-  /** Visibilité d'une tuile selon sa distance à la caméra ; `gone` : toute la tuile est noyée dans la brume (rien n'est dessiné) */
-  view(ch: number, dist: number, lodDist = LOD_DIST, gone = false) {
+  /**
+   * Visibilité d'une tuile selon sa distance à la caméra ; `gone` : toute la tuile est noyée dans la brume (rien n'est
+   * dessiné). `dist` : distance approchée (centre moins la demi-diagonale), qui règle ombres et menus détails ; `near` :
+   * distance vraie au pavé de la tuile, qui choisit entre l'arbre détaillé et l'arbre simplifié
+   */
+  view(ch: number, dist: number, lodDist = LOD_DIST, gone = false, near = dist) {
     const has = this.n[ch] > 0 && !gone;
     // en qualité réduite (lodDist plus court), menus détails et ombres s'arrêtent plus près, dans la même proportion
     const k = lodDist / LOD_DIST;
     const hide = (this.o.detail && dist > DETAIL_DIST * k) || (this.o.small && dist > SMALL_DIST);
-    const lod = !!this.far[ch].length, far = lod && dist > lodDist;
+    // (`near` : distance vraie de la vue à la tuile ; les arbres détaillés ne servent qu'à moins de `TREE_DETAIL`)
+    const lod = !!this.far[ch].length, far = lod && near > TREE_DETAIL * k;
     // les ombres des tuiles lointaines, à peine visibles, doubleraient les appels de dessin
     const shadow = this.o.shadow !== false && dist < SHADOW_DIST * k;
     // de près, l'ombre portée vient de la version simplifiée, rangée sur le calque des seules ombres : trois fois moins
@@ -645,7 +657,10 @@ export class VegView {
       // (point de la tuile le plus proche : centre moins sa demi-diagonale, et une marge pour les grands arbres ; la brume suit
       // la profondeur dans l'axe de la vue, qui ne vaut qu'environ 0,8 fois la distance dans les coins de l'écran)
       const gone = (d - CH * 0.71 - 4) * 0.78 > this.fogFar;
-      for (const l of this.layers) l.view(ch, dist, this.lodDist, gone);
+      // distance vraie au pavé de la tuile (nulle au-dessus d'elle, à hauteur des cimes)
+      const bx = Math.max(0, Math.abs(cam.x - x) - CH / 2), bz = Math.max(0, Math.abs(cam.z - z) - CH / 2);
+      const near = Math.hypot(bx, Math.max(0, cam.y - TREE_TOP), bz);
+      for (const l of this.layers) l.view(ch, dist, this.lodDist, gone, near);
     }
   }
 
