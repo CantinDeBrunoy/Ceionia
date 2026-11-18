@@ -49,17 +49,30 @@ export function snowMapData(n: number, snowy: (k: number) => number) {
   return d;
 }
 
-/** Neige et froid de chaque case, d'après son biome : à refaire quand la carte change */
+/** ce que chaque case retenait de neige au dernier calcul de la carte */
+let lastSnowy: Float32Array | null = null;
+
+/**
+ * Neige et froid de chaque case, d'après son biome. Appelée à chaque pas de saison : la carte (trois flous sur toute la
+ * carte, 25 ms sur celle de 384) n'est refaite que si une case a changé ; rend true si elle l'a été
+ */
 export function setSnowMap(n: number, snowy: (k: number) => number) {
+  const src = new Float32Array(n * n);
+  for (let k = 0; k < n * n; k++) src[k] = snowy(k);
+  let same = !!map && map.image.width === n && lastSnowy?.length === src.length;
+  for (let k = 0; same && k < src.length; k++) if (src[k] !== lastSnowy![k]) same = false;
+  if (same) return false;
+  lastSnowy = src;
   if (!map || map.image.width !== n) {
     map?.dispose();
     map = new THREE.DataTexture(new Uint8Array(n * n * 2), n, n, THREE.RGFormat);
     map.magFilter = map.minFilter = THREE.LinearFilter;
     SNOW_MAP.value = map;
   }
-  (map.image.data as Uint8Array).set(snowMapData(n, snowy));
+  (map.image.data as Uint8Array).set(snowMapData(n, (k) => src[k]));
   map.needsUpdate = true;
   SNOW_SIZE.value = n;
+  return true;
 }
 
 /**

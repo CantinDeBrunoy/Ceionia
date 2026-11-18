@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { snowMapData, ICE_ERODE } from '../src/render/snow';
+import { snowMapData, setSnowMap, ICE_ERODE } from '../src/render/snow';
 import { SNOWY } from '../src/render/terrainView';
 import { BIOME_TEMPERATE, BIOME_DESERT, BIOME_TROPICAL } from '../src/world/world';
 
@@ -37,5 +37,17 @@ describe('glace de l\'eau selon le biome', () => {
     // et la glace s'arrête avant le désert
     expect(cold(d, 23, 10)).toBeLessThan(0.3);
     expect(cold(d, 24 - ICE_ERODE - 3, 10)).toBeGreaterThan(0.9);
+  });
+});
+
+describe('carte de neige', () => {
+  it('ne se refait que si une case a changé', () => {
+    const b = new Uint8Array(n * n);
+    const snowy = (k: number) => SNOWY[b[k]];
+    expect(setSnowMap(n, snowy)).toBe(true);
+    expect(setSnowMap(n, snowy)).toBe(false);
+    b[5] = 2;
+    expect(setSnowMap(n, snowy)).toBe(true);
+    expect(setSnowMap(n, snowy)).toBe(false);
   });
 });

@@ -632,10 +632,13 @@ ${BLIGHT_GLSL}
   }
 
   /** Avance d'une bande la mise à jour des teintes de saison ; la falaise du bord suit à chaque tour de la carte */
+  /** volcans du dernier passage complet (voir `update`, `tint`) */
+  private volcanoes: VolcanoFrame[] | null = null;
+
   stepRecolor() {
     if (this.sweep < 0 || !this.sweepPal) return;
     const z0 = this.sweep, z1 = Math.min(N - 1, z0 + Math.min(RECOLOR_ROWS, this.sweepLeft) - 1);
-    this.update(this.sweepPal, [0, z0, N - 1, z1], true);
+    this.update(this.sweepPal, [0, z0, N - 1, z1], true, true);
     this.sweepLeft -= z1 - z0 + 1;
     this.sweep = z1 >= N - 1 ? 0 : z1 + 1;
     if (z1 >= N - 1 || this.sweepLeft <= 0) this.updateSkirt(this.sweepPal);
@@ -644,9 +647,12 @@ ${BLIGHT_GLSL}
 
   /**
    * Reconstruit géométrie et couleurs ; `rect` (cases, bornes incluses) limite le travail à la zone retouchée,
-   * `colorsOnly` aux seules teintes (saison) : sur une grande carte, tout refaire à chaque coup de pinceau serait trop lent
+   * `colorsOnly` aux seules teintes (saison) : sur une grande carte, tout refaire à chaque coup de pinceau serait trop lent.
+   * `tint` (avec `colorsOnly`) : seule la palette de saison a changé, pas le monde. Ce qui ne dépend que du monde est gardé
+   * tel quel (grottes et volcans, part des biomes, texture du relief, zones de végétation et d'emprise) : une bande du
+   * balayage de saison coûtait 8 ms sur la carte de 384, dont plus de la moitié à les refaire
    */
-  update(pal: GroundPalette, rect: [number, number, number, number] | null = null, colorsOnly = false) {
+  update(pal: GroundPalette, rect: [number, number, number, number] | null = null, colorsOnly = false, tint = false) {
     const w = this.world;
     if (!colorsOnly) w.updateVis(rect);
     // sous-sommets à recalculer : ceux dont le relief a changé (plus un, pour les normales), ou les lignes à reteinter
@@ -665,31 +671,35 @@ ${BLIGHT_GLSL}
 
     // grottes : tunnel à ouvrir dans le relief ; volcans : hauteur du pied et du bord du cratère, pour teinter le cône selon l'altitude
     let nCaves = 0;
-    const volcanoes: VolcanoFrame[] = [];
-    for (let k = 0; k < N * N; k++) {
+    tint = tint && colorsOnly && !!this.volcanoes;
+    const volcanoes: VolcanoFrame[] = tint ? this.volcanoes! : [];
+    this.volcanoes = volcanoes;
+    if (!tint) for (let k = 0; k < N * N; k++) {
       const t = w.veg[k], cx = k % N, cz = Math.floor(k / N);
       if (t === VEG_CAVE && nCaves < MAX_CAVES) { const f = w.caveFrame(cx, cz); this.caveU.uCaves.value[nCaves++].set(f.x, f.y, f.z, f.yaw); }
       else if (t === VEG_VOLCANO) volcanoes.push(w.volcanoFrame(cx, cz));
     }
     // lueur des lacs de lave sur les parois
     let nLava = 0;
-    for (const v of volcanoes) {
+    if (!tint) for (const v of volcanoes) {
       if (nLava >= MAX_LAVA_GLOW) break;
       const p = w.lavaPool(Math.floor(v.x), Math.floor(v.z));
       this.lavaU.uLava.value[nLava++].set(p.x, p.level, p.z, Math.max(...p.reach));
     }
-    this.lavaU.uLavaN.value = nLava;
+    if (!tint) {
+      this.lavaU.uLavaN.value = nLava;
 
-    // relief et marais pour l'eau
-    this.caveU.uCaveN.value = nCaves;
-    this.blurBiomes(x0, z0, x1, z1);
-    const hd = this.heightTex.image.data as Uint16Array;
-    for (let z = z0; z <= z1; z++)
-      for (let i = z * VS + x0; i <= z * VS + x1; i++) {
-        hd[i * 2] = THREE.DataUtils.toHalfFloat(vis[i]);
-        hd[i * 2 + 1] = THREE.DataUtils.toHalfFloat(w.ravine[i] > 0.02 ? -1 : this.vbw[i * NB + BIOME_MARSH]);
-      }
-    this.heightTex.needsUpdate = true;
+      // relief et marais pour l'eau
+      this.caveU.uCaveN.value = nCaves;
+      this.blurBiomes(x0, z0, x1, z1);
+      const hd = this.heightTex.image.data as Uint16Array;
+      for (let z = z0; z <= z1; z++)
+        for (let i = z * VS + x0; i <= z * VS + x1; i++) {
+          hd[i * 2] = THREE.DataUtils.toHalfFloat(vis[i]);
+          hd[i * 2 + 1] = THREE.DataUtils.toHalfFloat(w.ravine[i] > 0.02 ? -1 : this.vbw[i * NB + BIOME_MARSH]);
+        }
+      this.heightTex.needsUpdate = true;
+    }
 
     // normales lissées (différences centrées)
     if (!colorsOnly) for (let z = z0; z <= z1; z++)
@@ -703,13 +713,13 @@ ${BLIGHT_GLSL}
 
     // les abords des ports : leur emprise et deux cases tout autour (le talus du terre-plein), hors de l'eau
     const quayNear = new Set<number>();
-    for (const b of w.buildings.values()) {
+    if (!tint) for (const b of w.buildings.values()) {
       if (b.kind !== 'harbor') continue;
       const s = b.small ? 2 : 3;
       for (let cz = b.z - 2; cz < b.z + s + 2; cz++) for (let cx = b.x - 2; cx < b.x + s + 2; cx++) if (w.inCells(cx, cz) && (w.occ[w.ci(cx, cz)] === b.id || w.cellAvg(cx, cz) > 0.05)) quayNear.add(w.ci(cx, cz));
     }
     // zones : part des cases qui touchent chaque sous-sommet (1 au centre d'une case, ½ sur un bord)
-    for (let z = z0; z <= z1; z++) {
+    if (!tint) for (let z = z0; z <= z1; z++) {
       const cz1 = Math.min(N - 1, Math.floor(z / VR)), cz0 = z % VR === 0 ? cz1 - (z === VS - 1 ? 0 : 1) : cz1;
       for (let x = x0; x <= x1; x++) {
         const cx1 = Math.min(N - 1, Math.floor(x / VR)), cx0 = x % VR === 0 ? cx1 - (x === VS - 1 ? 0 : 1) : cx1;

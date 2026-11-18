@@ -2389,7 +2389,7 @@ class Game implements UIHost {
         if (force) this.terrain.update(this.season); else this.terrain.recolor(this.season);
       }
       this.seasonKey = key;
-      // neige sur les toits selon le biome (la carte a pu changer)
+      // neige sur les toits selon le biome (la carte a pu changer : refaite seulement dans ce cas, voir `setSnowMap`)
       const w = this.world;
       setSnowMap(N, (k) => SNOWY[w.biome[k]] ?? 1);
       this.veg.applySeason(this.season);
