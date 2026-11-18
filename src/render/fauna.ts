@@ -1,6 +1,7 @@
 import { penHerds, HerdKind } from '../sim/missions';
 import { claimArrival } from './pens';
 import * as THREE from 'three';
+import { still, refresh } from './still';
 import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO, VEG_CAVE, VEG_FOREST } from '../world/world';
 import { KINDS, sizeOf } from '../build/catalog';
 import { hash2, mulberry32, wrapAngle } from '../core/rng';
@@ -764,7 +765,7 @@ export class Fauna {
   /** silhouettes figées des bêtes articulées lointaines, dessinées par lots */
   readonly impostors = new Impostors();
   /** un exemplaire caché de chaque bête articulée, pour préparer ses shaders au chargement (voir `bakeSilhouettes`) */
-  readonly samples = new THREE.Group();
+  readonly samples = still(new THREE.Group());
 
   constructor(private world: World, private veg: { perches: number[][]; flowers: number[][] }) {
     this.group.add(this.impostors.group);
@@ -837,6 +838,8 @@ export class Fauna {
         }
       }
     }
+    // (branche immobile : ses matrices se font ici, une fois)
+    refresh(this.samples);
   }
 
   // ---------- Population ----------

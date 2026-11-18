@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { still } from './still';
 import {
   World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
   BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, BIOME_SNOW, SNOW_LINE, LavaPool, seaMargin, marginFloor, marginOff,
@@ -268,7 +269,8 @@ interface Leafy {
 
 /** Végétation instanciée : forêts par biome, blé, prairies, marais, déserts et fonds marins (les jardins : GardenView) */
 export class VegView {
-  group = new THREE.Group();
+  /** (branche immobile : toutes les tuiles sont posées à l'origine, leurs arbres rangés par instance ; voir `still`) */
+  group = still(new THREE.Group());
   /** distance à partir de laquelle les arbres passent en version simplifiée (qualité graphique) */
   lodDist = LOD_DIST;
   /**
