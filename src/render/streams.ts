@@ -12,6 +12,27 @@ interface Lake { level: number; cells: number[]; outlet: number }
 interface Spray { x: number; y: number; z: number; k: number }
 
 const MAX_TORRENTS = (n: number) => Math.round(n / 16);
+/** part des creux de montagne qui deviennent des lacs (les autres restent des vallons secs) */
+const LAKE_CHANCE = 0.35;
+
+/** Douglas-Peucker : retire les points à moins de `tol` de la corde (les marches de la grille) */
+function simplify(p: [number, number][], tol: number): [number, number][] {
+  if (p.length < 3) return p;
+  const keep = new Uint8Array(p.length);
+  keep[0] = keep[p.length - 1] = 1;
+  const stack: [number, number][] = [[0, p.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    const [ax, az] = p[a], dx = p[b][0] - ax, dz = p[b][1] - az, len = Math.hypot(dx, dz) || 1;
+    let far = -1, fd = tol;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((p[i][0] - ax) * dz - (p[i][1] - az) * dx) / len;
+      if (d > fd) { fd = d; far = i; }
+    }
+    if (far >= 0) { keep[far] = 1; stack.push([a, far], [far, b]); }
+  }
+  return p.filter((_, i) => keep[i]);
+}
 const LAKE_SHALLOW = new THREE.Color(0x7fc8cf), LAKE_DEEP = new THREE.Color(0x2f6f93);
 const MIST = new THREE.Color(0xf4f8fa);
 
@@ -161,10 +182,10 @@ export class Streams {
       if (inLake[i] !== -1 || filled[i] - vis[i] < 0.03) continue;
       const cells: number[] = [i], level = filled[i];
       inLake[i] = -2;
-      let deep = 0, blocked = false, trees = 0;
+      let deep = 0, blocked = false, trees = 0, bottom = i;
       for (let q = 0; q < cells.length; q++) {
         const c = cells[q], x = c % VS;
-        deep = Math.max(deep, level - vis[c]);
+        if (level - vis[c] > deep) { deep = level - vis[c]; bottom = c; }
         const k = Math.min(N - 1, Math.floor(c / VS / VR)) * N + Math.min(N - 1, Math.floor(x / VR));
         // pas d'eau sur un bâtiment, une route, un champ ; une cuvette boisée reste un vallon (pas d'arbres noyés)
         if (w.occ[k] || w.veg[k] === VEG_FIELD || w.veg[k] === VEG_GARDEN) blocked = true;
@@ -173,6 +194,8 @@ export class Streams {
           if (j >= 0 && j < VS * VS && inLake[j] === -1 && filled[j] - vis[j] >= 0.03) { inLake[j] = -2; cells.push(j); }
       }
       if (blocked || trees > cells.length * 0.04 || cells.length < 16 || deep < 0.35 || level < 2.5) continue;
+      // tous les creux ne se remplissent pas : un sur trois environ, tiré sur la case du point le plus bas (stable d'un calcul à l'autre)
+      if (hash2(Math.floor((bottom % VS) / VR), Math.floor(bottom / VS / VR), 47) > LAKE_CHANCE) continue;
       // déversoir : là où le plan d'eau trouve une pente pour s'écouler
       const way = this.flatPath(cells[0]), outlet = way ? way[way.length - 1] : -1;
       for (const c of cells) inLake[c] = lakes.length;
@@ -329,9 +352,16 @@ export class Streams {
     // trop court, ou perdu dans un creux sans eau
     const end = pts[pts.length - 1];
     if (pts.length < 10 || (w.hAt(end[0], end[1]) > SEA + 0.05 && inLake[i] < 0 && pts.length < 24)) return null;
-    // lissage (Chaikin) puis rééchantillonnage régulier
-    let p = pts;
-    for (let it = 0; it < 2; it++) {
+    // marches de la grille effacées, segments longs recoupés (un virage s'arrondit sur une case environ),
+    // puis lissage (Chaikin) et rééchantillonnage régulier
+    let p: [number, number][] = [];
+    const s = simplify(pts, 0.3);
+    for (let a = 0; a < s.length - 1; a++) {
+      const [x0, z0] = s[a], [x1, z1] = s[a + 1], cut = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 3);
+      for (let t = 0; t < cut; t++) p.push([x0 + ((x1 - x0) * t) / cut, z0 + ((z1 - z0) * t) / cut]);
+    }
+    p.push(s[s.length - 1]);
+    for (let it = 0; it < 4; it++) {
       const q: [number, number][] = [p[0]];
       for (let a = 0; a < p.length - 1; a++) {
         const [x0, z0] = p[a], [x1, z1] = p[a + 1];
