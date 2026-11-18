@@ -85,7 +85,7 @@ import { PortalView } from './render/portal';
 import { BlightView } from './render/blight';
 import { isleBlight } from './world/blight';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
-import { holdIsle, isleDefenses, nearIsle, villageBarracks } from './world/portal';
+import { isleDefenses, nearIsle, villageBarracks } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
 import { NavalConflict } from './render/navalConflict';
 import type { ConflictState } from './sim/navalConflict';
@@ -2539,8 +2539,6 @@ class Game implements UIHost {
     this.expeditions.update(gdt);
     // le jeu arrêté (pause, fenêtre ouverte) : la fabrication de l'équipement continue, au pas du temps réel
     if (gdt === 0) this.expeditions.craftStep(dt);
-    // les jours tenus sur l'île du portail, défenses debout
-    holdIsle(w, gdt, this.time.dayLen);
     // la guerre : la faction des Enfers, ses incursions sur l'île, la garnison
     this.stepWar(dt, gdt);
     this.stepDiplo();
@@ -2558,6 +2556,7 @@ class Game implements UIHost {
     // la caméra accompagne l'équipe
     const followed = this.following === null ? null : this.expeditions.active.find((e) => e.id === this.following);
     if (!followed) this.following = null;
+    // (sous terre, plus aucune équipe à suivre : aucune mission n'y descend)
     else if (!uv) {
       const pos = this.agents.partyPositions(followed.party), focus = followed.phase === 'work' ? this.expView.focusOf(followed.id) : null;
       if (pos.length || focus) {
@@ -2586,9 +2585,6 @@ class Game implements UIHost {
         } else this.followVel = [0, 0];
         this.cam.follow(x, z, arrived ? 6.5 : undefined, lift);
       }
-    } else {
-      const p = uv.troopAt(followed.id);
-      if (p) this.cam.follow(p[0], p[1]);
     }
     // la surface ne s'anime que lorsqu'on la regarde
     if (hv) {
@@ -2599,8 +2595,6 @@ class Game implements UIHost {
     }
     if (hv) { hv.view.units.age = this.sim.age; hv.view.age = this.sim.age; hv.update(dt, this.war.hellFx, this.cam.camera, this.cam.target, this.cam.dist); }
     else if (uv) {
-      // (aucune troupe ne parcourt plus les galeries : aucune mission ne descend sous terre)
-      uv.setTroops([], dt);
       uv.age = this.sim.age;
       uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
     }

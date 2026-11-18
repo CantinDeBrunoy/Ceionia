@@ -55,7 +55,7 @@ export function isleRadius(p: PortalSite, seed: number, a: number) {
  */
 export function addPortalIsland(w: World, seed: number): PortalSite | null {
   w.portal = null;
-  w.isleGuard = { waves: 0, days: 0 };
+  w.isleGuard = { waves: 0 };
   const n = w.n, rnd = mulberry32(seed * 31 + 9001);
   let R = lerp(ISLE_R[0], ISLE_R[1], rnd());
   const dl = landDistance(w), M = Math.ceil(ISLE_R[1]) + 3;
@@ -152,14 +152,12 @@ function carveStrait(w: World, dl: Float32Array, M: number, C: number, seed: num
 }
 
 /**
- * Sécuriser l'île : l'étape obligatoire du volet militaire pour quitter l'Antiquité (les expéditions dans les Enfers, elles,
- * restent facultatives). Il faut le portail ouvert, au moins une tour de garde et une caserne debout sur l'île, puis repousser
- * `waves` vagues de démons (les jours tenus, `days`, ne sont plus qu'un relevé). `waves` vaut `SECURE_WAVES` (sim/hell) : les
- * vagues de l'invasion. Plus exigée pour changer d'âge
+ * L'île sécurisée : le portail ouvert, au moins une tour de garde et une caserne debout sur l'île, et `waves` vagues de démons
+ * repoussées (`waves` vaut `INVASION_WAVES`, sim/hell). Plus une condition d'âge. Les vagues sont éteintes (`War.waves`) : l'invasion
+ * comptée pour faite (les démons affrontés) ou le royaume tombé, `isleGuard.waves` monte d'un coup à `waves` (`War.update`,
+ * `claimKingdom`). La contamination (`blight.ts`) et les étapes de l'île (`isleSteps`) le lisent encore
  */
-export const ISLE_SECURE = { waves: 3, days: 6 };
-/** L'âge que la sécurisation de l'île ouvre : le Moyen Âge (on la demande pour quitter l'Antiquité) */
-export const ISLE_AGE = 2;
+export const ISLE_SECURE = { waves: 3 };
 
 /**
  * L'interface de l'île (ruban d'attaque, « Ma garnison ») s'affiche quand la vue s'approche de l'île : seuils en cases au-delà
@@ -198,14 +196,6 @@ export function isleManned(w: World) {
   if (!w.portalOpen) return false;
   const d = isleDefenses(w);
   return d.towers >= 1 && d.barracks >= 1;
-}
-
-/**
- * Le temps passe sur l'île : chaque jour de jeu où elle a ses défenses compte comme un jour tenu (`dt` en secondes de jeu,
- * `dayLen` : durée d'un jour). Les vagues repoussées s'ajoutent à part (`repelWave`), quand les démons attaqueront
- */
-export function holdIsle(w: World, dt: number, dayLen: number) {
-  if (dt > 0 && dayLen > 0 && isleManned(w)) w.isleGuard.days += dt / dayLen;
 }
 
 /** Une vague de démons repoussée sur l'île du portail (l'IA des Enfers l'appellera) */

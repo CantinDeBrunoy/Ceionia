@@ -43,51 +43,6 @@ export function oreVeins(u: Underground, mined: Set<number>): { k: number; ore: 
   return out;
 }
 
-/** Étape du parcours d'une troupe armée : marche (de case en case du chemin), halte au filon, combat contre une embuscade */
-export interface TroopLeg { from: number; to: number; kind: 'walk' | 'mine' | 'fight'; /** début de l'étape, en temps de parcours */ t0: number }
-export interface TroopRoute { cells: number[]; legs: TroopLeg[]; total: number }
-/** Durée d'une halte au filon et d'un combat, comptée comme une longueur de chemin (cases) */
-export const MINE_HALT = 6, FIGHT_HALT = 20;
-
-/**
- * Parcours d'une troupe armée : de la case où elle descend, de filon en filon (halte à chacun), puis jusqu'au front où elle
- * plante ses lanternes ; elle s'arrête pour combattre à chaque case d'embuscade. Le jeu (issue des combats) et la vue
- * souterraine (où est la troupe) le calculent de la même façon
- */
-export function troopRoute(u: Underground, entry: number, targets: number[], front: number, ambush: number[] = []): TroopRoute {
-  const cells = [entry], legs: TroopLeg[] = [], fights = new Set(ambush);
-  let at = entry, t = 0;
-  const push = (from: number, to: number, kind: TroopLeg['kind']) => {
-    if (kind === 'walk' && to === from) return;
-    legs.push({ from, to, kind, t0: t });
-    t += kind === 'walk' ? to - from : kind === 'mine' ? MINE_HALT : FIGHT_HALT;
-  };
-  const go = (to: number) => {
-    const r = u.route(at, to);
-    if (!r) return;
-    let from = cells.length - 1;
-    for (let i = 1; i < r.length; i++) {
-      cells.push(r[i]);
-      if (fights.delete(r[i])) { push(from, cells.length - 1, 'walk'); push(cells.length - 1, cells.length - 1, 'fight'); from = cells.length - 1; }
-    }
-    push(from, cells.length - 1, 'walk');
-    push(cells.length - 1, cells.length - 1, 'mine');
-    at = to;
-  };
-  for (const v of targets) go(v);
-  if (front >= 0 && front !== at) go(front);
-  return { cells, legs, total: t };
-}
-
-/** Où en est la troupe au temps de parcours `s` : position sur le chemin (en cases, fractionnaire) et étape en cours */
-export function routeAt(r: TroopRoute, s: number): { pos: number; leg: TroopLeg | null } {
-  for (const l of r.legs) {
-    const d = l.kind === 'walk' ? l.to - l.from : l.kind === 'mine' ? MINE_HALT : FIGHT_HALT;
-    if (s <= l.t0 + d) return { pos: l.kind === 'walk' ? l.from + Math.max(0, s - l.t0) : l.to, leg: l };
-  }
-  return { pos: r.legs.length ? r.legs[r.legs.length - 1].to : 0, leg: null };
-}
-
 /** Champ d'ouverture adouci : roche pleine en dessous de ROCK_ISO, sol de galerie au-dessus de FLOOR_ISO, falaise entre les deux */
 export const ROCK_ISO = 0.12, FLOOR_ISO = 0.42;
 

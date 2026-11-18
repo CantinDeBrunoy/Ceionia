@@ -42,7 +42,7 @@ export const SECURED_K = 0.65;
 /** Le plancher monte d'autant par âge au-delà de l'Antiquité */
 export const AGE_FLOOR = 0.75;
 
-/** Montée du niveau : 0,4 à la première vague, 1 à la sixième */
+/** Montée du niveau : 0,5 à la première vague, 1 à la cinquième */
 export const ramp = (level: number) => Math.min(1, RAMP_START + RAMP_STEP * Math.max(0, level - 1));
 
 /** Puissance d'une vague « d'après l'armée » : sous-linéaire, pour qu'une armée plus forte garde de la marge */

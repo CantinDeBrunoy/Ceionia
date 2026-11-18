@@ -120,8 +120,8 @@ const copyLine = (l: RailLine): RailLine => ({ ...l, stops: [...l.stops], ...(l.
  * l'île, en cases
  */
 export interface PortalSite { x: number; z: number; r: number }
-/** La garde de l'île du portail : vagues de démons repoussées, jours tenus (voir `World.isleGuard`) */
-export interface IsleGuard { waves: number; days: number }
+/** La garde de l'île du portail : vagues de démons repoussées (voir `World.isleGuard`) */
+export interface IsleGuard { waves: number }
 
 /** Case d'une route en courbe : les courbes qui y passent, et le point de leur ligne le plus proche du centre de la case */
 export interface CurveCell { ids: number[]; at: [number, number] }
@@ -400,7 +400,7 @@ export class World {
    * La garde de l'île du portail (sauvegardée) : vagues de démons repoussées, jours tenus avec ses défenses debout ; l'île est
    * sécurisée (`isleSecured`, voir `portal.ts`) quand l'un ou l'autre suffit : la condition d'âge s'y branchera
    */
-  isleGuard: IsleGuard = { waves: 0, days: 0 };
+  isleGuard: IsleGuard = { waves: 0 };
   /** la guerre contre les Enfers (armée, faction, vague en cours), sauvegardée telle quelle (voir `sim/war.ts`) */
   war: unknown = null;
 
@@ -1834,7 +1834,7 @@ export class World {
         return { c: l.color, s: kept.map((i) => order.get(l.stops[i])!), ...(via ? { v: via } : {}), ...(l.freight ? { f: 1 } : {}) };
       }),
       portal: this.portal,
-      isleGuard: { waves: this.isleGuard.waves, days: Math.round(this.isleGuard.days * 100) / 100 },
+      isleGuard: { waves: this.isleGuard.waves },
       ...(this.portalWoken ? { portalWoken: true } : {}),
       ...(this.war ? { war: this.war } : {}),
       // routes en courbe (au centième) ; celles dont il ne reste aucune case de route s'oublient
@@ -1981,8 +1981,9 @@ export class World {
     }
     // une partie d'avant l'île du portail n'en a pas : elle se joue sans
     this.portal = readPortal(d.portal, N);
+    // (une ancienne sauvegarde a aussi `days`, les jours tenus, que rien ne lisait : ignoré)
     const g = d.isleGuard ?? {};
-    this.isleGuard = { waves: Math.max(0, Math.floor(+g.waves || 0)), days: Math.max(0, +g.days || 0) };
+    this.isleGuard = { waves: Math.max(0, Math.floor(+g.waves || 0)) };
     this.portalWoken = d.portalWoken === true;
     this.war = d.war && typeof d.war === 'object' ? d.war : null;
     this.curves = [];

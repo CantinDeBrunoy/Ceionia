@@ -187,7 +187,7 @@ describe('comptes rendus des expéditions', () => {
     expect('wins' in s).toBe(false);
     // une équipe ne descend jamais sous terre
     const v = village(2), a = v.ex.start(mission('mine'), 1, 2)!;
-    expect(a.entry).toBe(-1);
+    expect('entry' in a).toBe(false);
     expect('ambush' in a).toBe(false);
   });
 

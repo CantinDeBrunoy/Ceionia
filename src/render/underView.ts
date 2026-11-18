@@ -1,11 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { World, N, VR, VS } from '../world/world';
-import { troopRoute, routeAt, TroopRoute, FIGHT_HALT } from '../world/underground';
 import { Underground, Entrance, UWALL, ROCK_ISO, FLOOR_ISO, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA, POOL_WATER, POOL_LAVA, POOL_Y, ORE_KINDS, oreVeins } from '../world/underground';
-import { bakeStatic, StaticModel, HUMAN_K } from './assets';
-import { makeRider, rideStep, Rider, makeArmor, armorStep, makeDrone, droneStep, Drone } from './riders';
-import { makeSoldier, soldierStep, Soldier, SoldierMode } from './soldiers';
+import { bakeStatic, StaticModel } from './assets';
+import { makeSoldier, soldierStep, Soldier } from './soldiers';
 import { rockShapes } from './treeShapes';
 import { groundDetailTexture } from './textures';
 import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight';
@@ -36,36 +34,6 @@ const ORES: { col: THREE.Color; glow: boolean }[] = [
   [0x2c2c30, false], [0xd8b28c, false], [0xf5cf45, false], [0xe3352d, true], [0x2f58d4, false], [0x5ef0e4, true], [0x36d468, true],
 ].map(([c, glow]) => ({ col: new THREE.Color(c as number), glow: glow as boolean }));
 
-/** Troupe d'une expédition armée, telle que le jeu la décrit : descendue par `entry`, elle va de filon en filon, puis pousse jusqu'à `front` */
-export interface Troop {
-  /** `scouts` : les éclaireurs du repérage, torche au poing, sans armes ni escorte */
-  id: number; kind: 'cavalry' | 'armor' | 'miners' | 'scouts'; n: number; entry: number; targets: number[]; front: number; progress: number; age: number;
-  /** la troupe est à l'arrêt (une attente choisie) ; un éclaireur parti devant : où il en est de son aller-retour (0 … 1) */
-  halt?: boolean; scout?: number;
-  /** embuscades sur son chemin : case, créatures, nombre, moment (temps de parcours) et issue */
-  ambush: { cell: number; kind: MobKind; n: number; t0: number; result: 'clean' | 'hurt' | 'rout' | null }[];
-}
-/**
- * un membre de la troupe : soldat, gendarme ou mineur à pied (`soldier`), ou cavalier de l'époque, cheval compris (`rider`) ;
- * dans la colonne blindée moderne, sa place en marche (recul derrière la tête, écart sur le côté), où il est (il y glisse) et
- * son cap ; pour un blindé, sa tourelle pointée, le recul de son arme et la rafale en cours
- */
-interface TroopMember {
-  rider: Rider | null; soldier: Soldier | null;
-  slot?: [number, number]; x?: number; z?: number; h?: number; aim?: number; recoil?: number; burst?: number; burstT?: number;
-}
-/** Colonne blindée moderne : ses drones, la lumière de chaque projecteur (blindés, puis drones), l'éclair des coups de canon */
-interface Column { drones: Drone[]; lamps: Source[]; flash: Source; dustT: number; battery: [number, number][] }
-interface TroopShow {
-  route: TroopRoute; path: [number, number][]; members: TroopMember[]; light: Source; scareT: number;
-  /** créatures de chaque embuscade, et embuscades terminées */
-  foes: Map<number, Mob[]>; over: Set<number>;
-  /** temps avant le prochain coup de chaque membre (et la riposte de chaque créature) */
-  cool: number[]; foeCool: Map<Mob, number>;
-  modern?: Column;
-}
-/** Angle ramené entre -π et π */
-const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 /** Bassins : remontés d'une case autour pour que la rive coupe la pente du sol */
 const MAX_TORCHES = 400;
 /** Torches des galeries tenues : une par bloc de TORCH_GRID × TORCH_GRID cases */
@@ -74,8 +42,6 @@ const TORCH_GRID = 4;
 const HELD_FLOOR = [0.78, 0.64, 0.45];
 /** Lanternes des galeries tenues : une par bloc de CLAIM_GRID × CLAIM_GRID cases, au plus MAX_CLAIM */
 const CLAIM_GRID = 5, MAX_CLAIM = 900;
-/** Jusqu'où l'éclaireur envoyé devant s'avance dans la galerie avant de revenir (en cases) */
-const SCOUT_AHEAD = 3.5;
 /** Hauteur des colonnes de jour sous les entrées */
 const SHAFT_H = 4;
 /** Temps entre deux choix des sources de lumière les plus proches */
@@ -133,8 +99,6 @@ export class UnderView {
   /** filons de minerai : case du souterrain → maillage, instances et sorte de minerai */
   private veins = new Map<number, { mesh: string; idx: number[]; ore: number }>();
   private minedN = -1;
-  /** troupes des expéditions armées en train de parcourir les galeries */
-  private troops = new Map<number, TroopShow>();
   private oreMeshes: Record<string, THREE.InstancedMesh> = {};
   private sources: Source[] = [];
   private torchSources: Source[] = [];
@@ -945,381 +909,6 @@ export class UnderView {
     }
   }
 
-  // ---------- Troupes armées ----------
-
-  /** Les troupes en expédition sous terre, à chaque image : elles marchent de filon en filon, torche au poing */
-  setTroops(list: Troop[], dt: number) {
-    const live = new Set<number>();
-    for (const t of list) {
-      live.add(t.id);
-      let s = this.troops.get(t.id) ?? null;
-      if (!s) { s = this.makeTroop(t); if (!s) continue; this.troops.set(t.id, s); }
-      this.moveTroop(s, t, dt);
-    }
-    for (const [id, s] of this.troops) if (!live.has(id)) {
-      for (const m of s.members) this.scene.remove((m.rider ?? m.soldier)!.root);
-      for (const d of s.modern?.drones ?? []) this.scene.remove(d.root);
-      for (const fs of s.foes.values()) for (const f of fs) this.mobs.kill(f);
-      this.troops.delete(id);
-    }
-  }
-
-  private makeTroop(t: Troop): TroopShow | null {
-    // le même parcours que celui du jeu : filons, front, haltes de combat aux embuscades
-    const route = troopRoute(this.under, t.entry, t.targets, t.front, t.ambush.map((m) => m.cell));
-    const path = route.cells.map((k): [number, number] => [(k % N) + 0.5, Math.floor(k / N) + 0.5]);
-    if (path.length < 2) return null;
-    // l'époque moderne : la colonne blindée pour la charge des blindés (la section d'infanterie et les mineurs vont à pied)
-    if (t.age >= 4 && t.kind === 'cavalry') return this.makeColumn(t, route, path);
-    // soldats de l'époque (légionnaires, chevaliers, fantassins napoléoniens, militaires), cavaliers montés, ou mineurs de
-    // l'époque et leur garde
-    const members: TroopMember[] = [];
-    // les éclaireurs du repérage : des habitants en tenue de mineur, chacun sa torche, sans escorte
-    if (t.kind === 'scouts') {
-      for (let i = 0; i < t.n; i++) { const soldier = makeSoldier(t.age, t.id + i, true, 'miner'); this.scene.add(soldier.root); members.push({ rider: null, soldier }); }
-      const light: Source = { x: path[0][0], y: 0, z: path[0][1], r: 4, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(1.8), flicker: 0.3 };
-      return { route, path, members, light, scareT: 0, foes: new Map(), over: new Set(), cool: members.map(() => 1), foeCool: new Map() };
-    }
-    // l'escorte qui accompagne l'équipe, à pied : une ligne de soldats (fusiliers dès l'âge industriel) ; seule la charge est
-    // montée (les hommes d'armes et les mineurs partent sans chevaux)
-    const escort = t.kind === 'armor' ? (t.age >= 3 ? 7 : 4) : t.kind === 'cavalry' ? (t.age >= 3 ? 4 : 2) : 2;
-    // l'équipe de mineurs part avec des gendarmes (sergents du guet au Moyen Âge) ; les autres avec la troupe
-    const police = t.kind === 'miners';
-    for (let i = 0; i < escort; i++) { const soldier = makeSoldier(t.age, t.id + 11 + i, false, police ? 'gendarme' : 'soldier'); this.scene.add(soldier.root); members.push({ rider: null, soldier }); }
-    for (let i = 0; i < t.n; i++) {
-      // la cavalerie : cavaliers de l'époque sur leurs chevaux, comme les jouteurs des jardins
-      if (t.kind === 'cavalry' && i < 3) {
-        const rider = makeRider(t.age, t.id + i);
-        this.scene.add(rider.root);
-        members.push({ rider, soldier: null });
-        continue;
-      }
-      if (t.kind !== 'miners' || i === 0) {
-        const soldier = makeSoldier(t.age, t.id + i, i === 0, police ? 'gendarme' : 'soldier');
-        this.scene.add(soldier.root);
-        members.push({ rider: null, soldier });
-        continue;
-      }
-      // les mineurs de l'époque, pic en main (et leur lampe)
-      const soldier = makeSoldier(t.age, t.id + i, false, 'miner');
-      this.scene.add(soldier.root);
-      members.push({ rider: null, soldier });
-    }
-    if (!members.length) return null;
-    const light: Source = { x: path[0][0], y: 0, z: path[0][1], r: 5, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(2), flicker: 0.25 };
-    // le chef (torche, fanion) marche en tête : on le met en premier
-    const lead = members.findIndex((m, i) => i >= escort && !!m.soldier);
-    if (lead > 0) members.unshift(...members.splice(lead, 1));
-    // les fusiliers tirent par salves : tous ensemble
-    return { route, path, members, light, scareT: 0, foes: new Map(), over: new Set(), cool: members.map((m, i) => (m.soldier?.arms[0].userData.hold === 'rifle' ? 1.2 : 0.4 + i * 0.23)), foeCool: new Map() };
-  }
-
-  /**
-   * Colonne blindée de l'époque moderne, la plus impressionnante (et la plus chère) : pour la charge des blindés, deux chars de
-   * bataille en tête, deux transports de troupes, un char en serre-file, la section à pied en deux files sur leurs flancs et
-   * deux drones au-dessus (sans la charge, ses deux transports au milieu de ses deux files et un drone). Chaque blindé et
-   * chaque drone braque son projecteur devant lui
-   */
-  private makeColumn(t: Troop, route: TroopRoute, path: [number, number][]): TroopShow {
-    const charge = t.kind === 'cavalry', members: TroopMember[] = [];
-    const add = (m: TroopMember) => { this.scene.add((m.rider ?? m.soldier)!.root); members.push(m); };
-    // les blindés, en file au milieu de la galerie
-    const kinds: ('mbt' | 'apc')[] = charge ? ['mbt', 'mbt', 'apc', 'apc', 'mbt'] : ['apc', 'apc'];
-    kinds.forEach((k, i) => add({ rider: makeArmor(k, t.id + i), soldier: null, slot: [charge ? i * 0.74 : 0.6 + i * 1.0, 0], aim: 0, recoil: 0, burst: 0, burstT: 0 }));
-    // la section à pied, deux files au pas : le long des transports pour la charge, de bout en bout pour la section
-    const foot = charge ? 10 : t.n + 7, from = charge ? 1.2 : 0;
-    for (let i = 0; i < foot; i++) add({ rider: null, soldier: makeSoldier(t.age, t.id + 11 + i, false, 'soldier'), slot: [from + Math.floor(i / 2) * 0.3, (i % 2 ? 1 : -1) * 0.27] });
-    const drones = Array.from({ length: charge ? 2 : 1 }, () => { const d = makeDrone(); this.scene.add(d.root); return d; });
-    const white = (k: number) => new THREE.Color(0.82, 0.9, 1).multiplyScalar(k);
-    const at = { x: path[0][0], y: 0, z: path[0][1], flicker: 0 };
-    const lamps: Source[] = [...kinds.map(() => ({ ...at, r: 4.4, c: white(1.05) })), ...drones.map(() => ({ ...at, r: 3.2, c: white(0.85) }))];
-    // au combat, les blindés s'arrêtent en batterie derrière la ligne des fantassins
-    const battery: [number, number][] = charge ? [[0.95, -0.24], [0.95, 0.24], [1.65, -0.24], [1.65, 0.24], [2.35, 0]] : [[0.95, -0.22], [0.95, 0.22]];
-    return {
-      route, path, members, light: { ...at, r: 5, c: white(1.2) }, scareT: 0, foes: new Map(), over: new Set(), cool: members.map((m, i) => (m.rider ? 1 + i * 0.45 : 1.2)), foeCool: new Map(),
-      modern: { drones, lamps, flash: { ...at, r: 3.6, c: new THREE.Color(0, 0, 0) }, dustT: 0, battery },
-    };
-  }
-
-  /**
-   * La colonne blindée, à chaque image : en route, les blindés roulent en file, la section marche au pas sur leurs flancs, un
-   * drone éclaire devant et l'autre veille au-dessus ; au combat, la section se déploie en ligne et tire par salves (balles
-   * traçantes), les blindés s'arrêtent en batterie derrière elle, tournent leurs tourelles vers les créatures et font feu (coup
-   * de canon, obus qui éclate, rafales du canon-mitrailleur), les drones tournent au-dessus ; au filon, les projecteurs se
-   * braquent sur la paroi pendant qu'on l'abat
-   */
-  private moveColumn(s: TroopShow, t: Troop, dt: number) {
-    const c = s.modern!, now = this.uTime.value, ease = 1 - Math.exp(-dt * 5);
-    const time = t.progress * s.route.total, { pos, leg } = routeAt(s.route, time);
-    const mining = leg?.kind === 'mine', fighting = leg?.kind === 'fight';
-    const lead = this.along(s.path, pos);
-    this.ambushes(s, t, time, lead, dt);
-    const live = fighting ? [...s.foes.values()].flat().filter((f) => f.alive && f.dying < 0) : [];
-    const nearest = (x: number, z: number, r: number) => live.reduce<Mob | null>((b, f) => (Math.hypot(f.x - x, f.z - z) < (b ? Math.hypot(b.x - x, b.z - z) : r) ? f : b), null);
-    // les fusils tirent par salves : quand l'un est prêt, toute la ligne tire
-    const nf = s.members.filter((m) => m.soldier).length;
-    if (fighting && s.cool.some((v, i) => s.members[i].soldier && v <= 0)) s.cool.forEach((v, i) => { if (s.members[i].soldier && v < 0.3) s.cool[i] = Math.min(v, 0); });
-    c.flash.c.multiplyScalar(Math.exp(-dt * 18));
-    // à l'arrêt (une attente, un éclaireur parti devant) : la colonne ne roule plus
-    const ahead = t.scout !== undefined && t.scout >= 0 ? t.scout : -1, still = !fighting && !mining && (!!t.halt || ahead >= 0);
-    const dust = (c.dustT -= dt) <= 0 && !fighting && !mining && !still;
-    if (dust) c.dustT = 0.3;
-    let vi = 0, si = 0;
-    s.members.forEach((m, i) => {
-      // où il doit être : sa place dans la colonne, en batterie (blindés) ou en ligne (fantassins) au combat, autour du filon
-      let tx: number, tz: number, th: number, act: SoldierMode = 'walk';
-      const v = m.rider ? vi++ : -1, j = m.soldier ? si++ : -1;
-      if (m.rider) {
-        const [back, side] = fighting ? c.battery[v] : m.slot!, p = this.along(s.path, pos - back);
-        tx = p[0] + Math.cos(p[2]) * side; tz = p[1] - Math.sin(p[2]) * side;
-        th = fighting ? Math.atan2(lead[0] - tx, lead[1] - tz) : p[2];
-      } else if (fighting) {
-        // sur deux rangs de six au plus, en travers de la galerie, en retrait de la tête ; le second en quinconce
-        const rank = Math.floor(j / 6), inRank = Math.min(6, nf - rank * 6), k = (j % 6) - (inRank - 1) / 2 + (rank % 2) * 0.5, back = 0.4 + rank * 0.17;
-        tx = lead[0] - Math.sin(lead[2]) * back + Math.cos(lead[2]) * k * 0.15;
-        tz = lead[1] - Math.cos(lead[2]) * back - Math.sin(lead[2]) * k * 0.15;
-        th = lead[2]; act = 'fight';
-      } else if (mining) {
-        // quatre frappent la paroi, les autres montent la garde en cercle, face au noir
-        const near = j < 4, a = near ? j * 1.57 + 0.4 : ((j - 4) / Math.max(1, nf - 4)) * Math.PI * 2, r = near ? 0.26 : 0.62;
-        tx = lead[0] + Math.sin(a) * r; tz = lead[1] + Math.cos(a) * r;
-        th = near ? Math.atan2(lead[0] - tx, lead[1] - tz) : a; act = near ? 'fight' : 'guard';
-      } else if (j === 0 && ahead >= 0) {
-        // l'éclaireur envoyé devant : le premier fantassin s'avance dans la galerie, puis revient à sa place
-        const p = this.along(s.path, Math.min(s.path.length - 1.01, pos + 0.3 + Math.sin(Math.PI * ahead) * SCOUT_AHEAD));
-        tx = p[0]; tz = p[1]; th = ahead < 0.5 ? p[2] : p[2] + Math.PI; act = 'run';
-      } else {
-        const [back, side] = m.slot!, p = this.along(s.path, pos - back);
-        tx = p[0] + Math.cos(p[2]) * side; tz = p[1] - Math.sin(p[2]) * side; th = p[2];
-        if (still) act = 'guard';
-      }
-      // chacun glisse jusqu'à sa place (pas de saut quand la colonne se déploie) ; ceux qui ne sont pas encore descendus
-      // dans les galeries restent cachés
-      if (m.x === undefined) { m.x = tx; m.z = tz; m.h = th; }
-      m.x += (tx - m.x) * ease; m.z! += (tz - m.z!) * ease; m.h = m.h! + wrapAngle(th - m.h!) * ease;
-      const x = m.x, z = m.z!, h = m.h, y = this.under.heightAt(x, z), moving = !fighting && !mining && !still;
-      const root = (m.rider ?? m.soldier)!.root;
-      root.visible = fighting || mining || pos - m.slot![0] > -0.15;
-      root.position.set(x, y, z); root.rotation.y = h;
-      if (m.rider) {
-        const r = m.rider;
-        // la tourelle : droit devant en route, vers le filon, vers la créature la plus proche au combat
-        const foe = fighting ? nearest(x, z, 3.4) : null;
-        const want = foe ? Math.atan2(foe.x - x, foe.z - z) : mining ? Math.atan2(lead[0] - x, lead[1] - z) : h;
-        const err = wrapAngle(want - h - m.aim!);
-        m.aim! += Math.sign(err) * Math.min(Math.abs(err), dt * 2.2);
-        r.turret!.rotation.y = m.aim!;
-        m.recoil = Math.max(0, m.recoil! - dt * 3);
-        armorStep(r, now * 13 + i * 1.7, moving ? 1 : 0, foe ? 0.03 : -0.05, m.recoil);
-        // son projecteur éclaire devant la tourelle ; les chenilles et les roues soulèvent la poussière
-        const dir = h + m.aim!;
-        Object.assign(c.lamps[v], { x: x + Math.sin(dir), y: y + 0.35, z: z + Math.cos(dir) });
-        if (dust && root.visible) this.fx.puff(x - Math.sin(h) * 0.35, y + 0.03, z - Math.cos(h) * 0.35, 2);
-        s.cool[i] -= dt;
-        if (!foe || Math.abs(err) > 0.12) return;
-        r.root.updateMatrixWorld(true);
-        const mz = r.turret!.localToWorld(r.muzzle!.clone()), fy = this.under.heightAt(foe.x, foe.z) + 0.16;
-        if (r.gun === 'cannon' && s.cool[i] <= 0) {
-          // coup de canon : souffle à la bouche, l'obus file et éclate sur la créature, la galerie s'illumine
-          s.cool[i] = 2.3 + Math.random() * 1.3;
-          m.recoil = 1;
-          this.fx.blast(mz.x, mz.y, mz.z, Math.sin(dir), Math.cos(dir));
-          this.fx.tracer(mz.x, mz.y, mz.z, foe.x, fy, foe.z, 0xffe6a0, 16);
-          this.fx.boom(foe.x, fy, foe.z);
-          this.mobs.strike(foe, x, z);
-          Object.assign(c.flash, { x: mz.x, y: mz.y + 0.25, z: mz.z });
-          c.flash.c.setRGB(1, 0.78, 0.48).multiplyScalar(3);
-        } else if (r.gun === 'mg') {
-          // rafale du canon-mitrailleur : six coups, autant de traçantes
-          if (s.cool[i] <= 0 && !m.burst) { m.burst = 6; m.burstT = 0; s.cool[i] = 1.7 + Math.random() * 0.8; this.mobs.strike(foe, x, z); }
-          if (m.burst! > 0 && (m.burstT! -= dt) <= 0) {
-            m.burst!--; m.burstT = 0.09; m.recoil = 0.45;
-            const jx = (Math.random() - 0.5) * 0.12, jz = (Math.random() - 0.5) * 0.12;
-            this.fx.flash(mz.x, mz.y, mz.z, 0xffd080);
-            this.fx.tracer(mz.x, mz.y, mz.z, foe.x + jx, fy, foe.z + jz, 0xff7a3a, 13);
-            this.fx.hit(foe.x + jx, fy, foe.z + jz, 0xffa050, 4, 'shot');
-          }
-        }
-        return;
-      }
-      const sol = m.soldier!;
-      if (fighting) {
-        const foe = nearest(x, z, 2.4);
-        if (foe) {
-          sol.root.rotation.y = Math.atan2(foe.x - x, foe.z - z);
-          foe.target = [x, z];
-          s.cool[i] -= dt;
-          if (s.cool[i] <= 0 && Math.hypot(foe.x - x, foe.z - z) < 1.75) {
-            s.cool[i] = 1.6;
-            const a = sol.root.rotation.y, fy = this.under.heightAt(foe.x, foe.z) + 0.16, mx = x + Math.sin(a) * 0.12, my = y + 0.2, mz = z + Math.cos(a) * 0.12;
-            this.fx.shot(mx, my, mz, foe.x, fy, foe.z);
-            this.fx.tracer(mx, my, mz, foe.x, fy, foe.z, 0xffd27a, 12);
-            this.mobs.strike(foe, x, z);
-          }
-        }
-      }
-      // au pas cadencé : toute la section part du même pied
-      soldierStep(sol, act === 'walk' ? now * 9 : now * 9 + i * 1.3, act);
-    });
-    // les drones : l'un éclaire devant la tête, l'autre veille au-dessus des transports ; au combat et au filon, ils tournent
-    // au-dessus de la tête de la colonne, projecteur braqué
-    c.drones.forEach((d, k) => {
-      let tx: number, tz: number, hy: number;
-      if (fighting || mining) {
-        const a = now * 0.6 + k * Math.PI;
-        tx = lead[0] + Math.sin(a) * 0.55; tz = lead[1] + Math.cos(a) * 0.55; hy = 0.85 + k * 0.15;
-      } else {
-        const p = this.along(s.path, k ? pos - 1.6 : pos + 0.9), side = k ? 0.35 : 0;
-        tx = p[0] + Math.cos(p[2]) * side; tz = p[1] - Math.sin(p[2]) * side; hy = k ? 1.1 : 0.95;
-      }
-      const o = d.root.position;
-      if (!d.root.userData.on) { d.root.userData.on = true; o.set(tx, this.under.heightAt(tx, tz) + hy, tz); }
-      o.x += (tx - o.x) * ease * 0.6; o.z += (tz - o.z) * ease * 0.6;
-      o.y += (this.under.heightAt(o.x, o.z) + hy - o.y) * ease;
-      const face = fighting || mining ? Math.atan2(lead[0] - o.x, lead[1] - o.z) : lead[2];
-      d.root.rotation.y += wrapAngle(face - d.root.rotation.y) * ease;
-      droneStep(d, now, k * 2.3);
-      const a = d.root.rotation.y;
-      Object.assign(c.lamps[c.lamps.length - c.drones.length + k], { x: o.x + Math.sin(a) * 0.3, y: this.under.heightAt(o.x, o.z) + 0.3, z: o.z + Math.cos(a) * 0.3 });
-    });
-    // la tête de la colonne éclaire la troupe ; les créatures s'enfuient devant tant de lumière
-    Object.assign(s.light, { x: lead[0], y: this.under.heightAt(lead[0], lead[1]) + 0.55, z: lead[1] });
-    if ((s.scareT -= dt) <= 0) { s.scareT = 1; this.mobs.scare(lead[0], lead[1], 3.2); }
-  }
-
-  /** Point du chemin à la distance s (en cases) et cap de marche */
-  private along(path: [number, number][], s: number): [number, number, number] {
-    const i = Math.max(0, Math.min(path.length - 2, Math.floor(s))), f = Math.max(0, Math.min(1, s - i));
-    const a = path[i], b = path[i + 1];
-    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, Math.atan2(b[0] - a[0], b[1] - a[1])];
-  }
-
-  private moveTroop(s: TroopShow, t: Troop, dt: number) {
-    if (s.modern) { this.moveColumn(s, t, dt); return; }
-    // l'avancement de l'expédition se lit en chemin parcouru, avec une halte à chaque filon et à chaque embuscade
-    const time = t.progress * s.route.total, { pos, leg } = routeAt(s.route, time);
-    const mining = leg?.kind === 'mine', fighting = leg?.kind === 'fight';
-    const lead = this.along(s.path, pos);
-    this.ambushes(s, t, time, lead, dt);
-    // les créatures encore debout de l'embuscade en cours
-    const live = fighting ? [...s.foes.values()].flat().filter((f) => f.alive && f.dying < 0) : [];
-    // au combat, les fusiliers se mettent en ligne, en travers du chemin, un peu en retrait, et tirent par salves
-    const rifles = s.members.map((m) => m.soldier?.arms[0].userData.hold === 'rifle');
-    const nr = rifles.filter(Boolean).length;
-    let ri = 0;
-    if (fighting && nr > 1) {
-      const volley = s.cool.findIndex((c, i) => rifles[i] && c <= 0) >= 0;
-      if (volley) s.cool.forEach((c, i) => { if (rifles[i] && c < 0.3) s.cool[i] = Math.min(c, 0); });
-    }
-    // l'éclaireur envoyé devant (le dernier à pied de la troupe) : il s'avance dans la galerie, puis revient ; la troupe l'attend
-    const ahead = t.scout !== undefined && t.scout >= 0 ? t.scout : -1, scouts = t.kind === 'scouts';
-    let sc = -1;
-    if (ahead >= 0) for (let i = s.members.length - 1; i > 0 && sc < 0; i--) if (s.members[i].soldier) sc = i;
-    s.members.forEach((m, i) => {
-      let x: number, z: number, h: number;
-      if (i === sc && !fighting) {
-        const p = this.along(s.path, Math.min(s.path.length - 1.01, pos + 0.3 + Math.sin(Math.PI * ahead) * SCOUT_AHEAD));
-        x = p[0]; z = p[1]; h = ahead < 0.5 ? p[2] : p[2] + Math.PI;
-      } else if (fighting) {
-        // chacun marche sur la créature la plus proche de sa place dans le cercle, s'arrête à portée (de lame, ou de fusil) et
-        // frappe ; sans créature à portée, il reste en cercle face au noir. Les fusiliers, eux, tiennent leur ligne
-        const rifle = rifles[i];
-        let a = (i / s.members.length) * Math.PI * 2 + 0.6, r = m.rider ? 0.42 : 0.3;
-        let hx = lead[0] + Math.sin(a) * r, hz = lead[1] + Math.cos(a) * r;
-        if (rifle && nr > 1) {
-          // sur deux rangs de six au plus, le second derrière le premier, en quinconce
-          const rank = Math.floor(ri / 6), inRank = Math.min(6, nr - rank * 6), k = (ri++ % 6) - (inRank - 1) / 2 + (rank % 2) * 0.5, back = 0.4 + rank * 0.17;
-          hx = lead[0] - Math.sin(lead[2]) * back + Math.cos(lead[2]) * k * 0.15;
-          hz = lead[1] - Math.cos(lead[2]) * back - Math.sin(lead[2]) * k * 0.15;
-          a = lead[2]; r = 0;
-        }
-        const foe = live.reduce<Mob | null>((b, f) => (Math.hypot(f.x - hx, f.z - hz) < (b ? Math.hypot(b.x - hx, b.z - hz) : rifle ? 2.4 : 1.6) ? f : b), null);
-        if (foe) {
-          const d = Math.hypot(foe.x - hx, foe.z - hz) || 1, reach = rifle ? (nr > 1 ? 1.6 : 0.55) : m.rider ? 0.34 : 0.24, go = Math.max(0, Math.min(0.45, d - reach));
-          x = hx + ((foe.x - hx) / d) * go; z = hz + ((foe.z - hz) / d) * go; h = Math.atan2(foe.x - x, foe.z - z);
-          // le coup porte : étincelles sur la créature, qui recule ; le fusil tire (éclair, traînée, impact)
-          s.cool[i] -= dt;
-          if (s.cool[i] <= 0 && Math.hypot(foe.x - x, foe.z - z) < reach + 0.12) {
-            s.cool[i] = rifle ? (nr > 1 ? 1.6 : 0.8 + Math.random() * 0.35) : 0.6 + Math.random() * 0.35;
-            const fy = this.under.heightAt(foe.x, foe.z) + 0.16;
-            if (rifle) this.fx.shot(x + Math.sin(h) * 0.12, this.under.heightAt(x, z) + 0.2, z + Math.cos(h) * 0.12, foe.x, fy, foe.z);
-            else this.fx.hit((x + foe.x * 2) / 3, fy, (z + foe.z * 2) / 3, 0xffd27a, 12, 'blade');
-            this.mobs.strike(foe, x, z);
-          }
-          foe.target = [x, z];
-        } else { x = hx; z = hz; h = a; }
-      } else if (mining) {
-        // autour du filon : les uns frappent la paroi, les autres montent la garde
-        const a = i * 2.1 + 0.5;
-        x = lead[0] + Math.cos(a) * 0.32 * (i ? 1 : 0.3); z = lead[1] + Math.sin(a) * 0.32 * (i ? 1 : 0.3); h = Math.atan2(lead[0] - x, lead[1] - z) + (i % 2 ? Math.PI : 0);
-      } else {
-        // en colonne par deux derrière le chef ; les cavaliers sur les flancs
-        const p = this.along(s.path, Math.max(0, pos - Math.floor((i + 1) / 2) * 0.32));
-        const side = i === 0 ? 0 : (i % 2 ? 1 : -1) * (m.rider ? 0.2 : 0.11);
-        x = p[0] + Math.cos(p[2]) * side; z = p[1] - Math.sin(p[2]) * side; h = p[2];
-      }
-      const y = this.under.heightAt(x, z);
-      if (m.rider) {
-        // à la charge, lance couchée ou sabre en avant ; au filon, ceux qui font face à la paroi frappent, les autres gardent
-        m.rider.root.position.set(x, y, z); m.rider.root.rotation.y = h;
-        const still = !fighting && !mining && (t.halt || ahead >= 0);
-        rideStep(m.rider, this.uTime.value * 13 + i * 1.7, fighting ? 0.3 : mining || still ? 0 : 1, fighting ? 'fight' : mining ? (i % 2 ? 'rest' : 'fight') : still ? 'rest' : 'charge');
-      } else if (m.soldier) {
-        // au filon, les uns frappent, les autres montent la garde
-        m.soldier.root.position.set(x, y, z); m.soldier.root.rotation.y = h;
-        // les éclaireurs, à la halte, relèvent le plan (l'un à genoux, l'autre aux aguets) ; à l'arrêt, la troupe monte la garde
-        const mode: SoldierMode = i === sc && !fighting ? 'run' : fighting ? 'fight' : mining ? (i % 2 ? 'guard' : scouts ? 'kneel' : 'fight') : t.halt || ahead >= 0 ? 'guard' : 'walk';
-        soldierStep(m.soldier, this.uTime.value * (mode === 'run' ? 13 : 9) + i * 1.3, mode);
-      }
-    });
-    // la torche du chef éclaire la troupe ; les créatures s'enfuient devant elle
-    Object.assign(s.light, { x: lead[0], y: this.under.heightAt(lead[0], lead[1]) + 0.55, z: lead[1] });
-    if ((s.scareT -= dt) <= 0) { s.scareT = 1; this.mobs.scare(lead[0], lead[1], 2.6); }
-  }
-
-  /** Position de la tête d'une troupe (pour que la caméra la suive), ou null si elle n'est pas sous terre */
-  troopAt(id: number): [number, number] | null {
-    const s = this.troops.get(id), m = s?.members[0];
-    const o = m ? (m.rider ?? m.soldier)!.root.position : null;
-    return o ? [o.x, o.z] : null;
-  }
-
-  /**
-   * Embuscades : les créatures surgissent un peu avant que la troupe n'arrive et la chargent ; pendant le combat elles
-   * tombent une à une ; à la fin, les dernières meurent, ou s'en retournent dans le noir si la troupe a dû reculer
-   */
-  private ambushes(s: TroopShow, t: Troop, time: number, lead: [number, number, number], dt: number) {
-    t.ambush.forEach((m, j) => {
-      if (s.over.has(j)) return;
-      if (time >= m.t0 + FIGHT_HALT) {
-        for (const f of s.foes.get(j) ?? []) if (m.result === 'rout') this.mobs.rout(f, lead[0], lead[1]); else this.mobs.kill(f);
-        s.over.add(j);
-        return;
-      }
-      if (time < m.t0 - 10) return;
-      let foes = s.foes.get(j);
-      if (!foes) { foes = this.mobs.ambush(m.kind, m.n, m.cell); s.foes.set(j, foes); }
-      // chacune prend sa place autour de la troupe au lieu de se ruer toutes au même point
-      foes.forEach((f, fi) => { if (f.alive && f.dying < 0) { const a = (fi / foes!.length) * Math.PI * 2 + j * 1.3; f.foe = [lead[0] + Math.sin(a) * 0.36, lead[1] + Math.cos(a) * 0.36]; } });
-      if (time < m.t0) return;
-      // les créatures rendent les coups : une lame les pare (étincelles blanches), parfois une morsure porte
-      for (const f of foes) {
-        if (!f.alive || f.dying >= 0 || !f.target || Math.hypot(f.target[0] - f.x, f.target[1] - f.z) > 0.42) continue;
-        const c = (s.foeCool.get(f) ?? Math.random() * 1.2) - dt;
-        if (c <= 0) {
-          const bite = m.result !== 'clean' && Math.random() < 0.3;
-          this.fx.hit((f.x + f.target[0]) / 2, this.under.heightAt(f.x, f.z) + 0.15, (f.z + f.target[1]) / 2, bite ? 0xff5a4a : 0xf2f4ff, bite ? 10 : 7, bite ? 'bite' : 'blade');
-          s.foeCool.set(f, 1 + Math.random() * 1.2);
-        } else s.foeCool.set(f, c);
-      }
-      // tombées jusqu'ici : toutes à la fin d'une victoire, toutes sauf une si un soldat est blessé, la moitié si l'on recule
-      const quota = m.result === 'rout' ? Math.floor(m.n / 2) : m.n - (m.result === 'hurt' ? 1 : 0);
-      const due = Math.min(quota, Math.floor(((time - m.t0) / FIGHT_HALT) * (quota + 1)));
-      let down = foes.filter((f) => !f.alive || f.dying >= 0).length;
-      for (const f of foes) if (down < due && f.alive && f.dying < 0) { this.fx.hit(f.x, this.under.heightAt(f.x, f.z) + 0.15, f.z, 0xffe8b0, 22, 'blade'); this.fx.puff(f.x, this.under.heightAt(f.x, f.z) + 0.05, f.z, 10); this.mobs.kill(f); down++; }
-    });
-  }
-
   /** Un filon sous le point (pour le curseur) */
   veinNear(x: number, z: number) {
     for (const k of this.veins.keys()) if (Math.hypot((k % N) + 0.5 - x, Math.floor(k / N) + 0.5 - z) < 1.4) return true;
@@ -2077,7 +1666,7 @@ export class UnderView {
     this.lightTimer -= dt;
     if (this.lightTimer <= 0) {
       this.lightTimer = LIGHT_PICK;
-      const all = this.sources.concat(this.torchSources, this.shaftSources, this.claimSources, this.campSources, this.guards.map((g) => g.light), this.patrols.map((p) => p.light), [...this.troops.values()].flatMap((s) => [s.light, ...(s.modern ? [...s.modern.lamps, s.modern.flash] : [])]), [...this.crews.values()].filter((c) => c.miners.length).map((c) => c.light), this.digCrew ? [this.digCrew.light] : []);
+      const all = this.sources.concat(this.torchSources, this.shaftSources, this.claimSources, this.campSources, this.guards.map((g) => g.light), this.patrols.map((p) => p.light), [...this.crews.values()].filter((c) => c.miners.length).map((c) => c.light), this.digCrew ? [this.digCrew.light] : []);
       const dd = (s: Source) => Math.hypot(s.x - target.x, s.z - target.z) - s.r;
       this.active = [this.lantern, ...all.filter((s) => dd(s) < dist * 1.2).sort((a, b) => dd(a) - dd(b)).slice(0, MAX_CAVE_LIGHTS - 1)];
     }
@@ -2097,7 +1686,7 @@ export class UnderView {
     this.stepPatrols(dt);
     this.fx.update(dt);
     this.mobs.age = this.age;
-    this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z })), ...[...this.crews.values(), ...(this.digCrew ? [this.digCrew] : [])].flatMap((c) => c.miners.map((m) => ({ x: m.x, z: m.z })))]);
+    this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.crews.values(), ...(this.digCrew ? [this.digCrew] : [])].flatMap((c) => c.miners.map((m) => ({ x: m.x, z: m.z })))]);
   }
 
   /** Sortie du souterrain : la surface ne reçoit plus ces lumières */

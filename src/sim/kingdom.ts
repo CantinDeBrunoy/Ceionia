@@ -40,12 +40,11 @@ export interface Fireball { x: number; z: number; t: number; r: number }
 /** Une plaque de sol qui s'embrase : où, son rayon, son âge (elle rougeoit, puis brûle) */
 export interface Patch { x: number; z: number; r: number; age: number; tick: number }
 
-export interface KingSave { phase: KingPhase; arrived: boolean; fallen?: boolean }
+/** (une ancienne sauvegarde a aussi `arrived`, l'arrivée au royaume, que rien ne lisait : ignoré) */
+export interface KingSave { phase: KingPhase; fallen?: boolean }
 
 export class KingFight {
   phase: KingPhase = 0;
-  /** le joueur est arrivé au royaume (la bannière s'est montrée) */
-  arrived = false;
   /** la citadelle est tombée (la victoire a été comptée) */
   fallen = false;
   fireballs: Fireball[] = [];
@@ -78,8 +77,6 @@ export class KingFight {
   step(dt: number) {
     if (dt <= 0) return;
     const h = this.hell, k = this.king, troops = h.alive('player');
-    // l'arrivée au royaume : une unité du joueur y entre
-    if (!this.arrived && troops.some((u) => h.map.zones[Z_KINGDOM] && u.z >= h.map.zones[Z_KINGDOM].z0)) this.arrived = true;
     if (this.phase === 0) {
       if (!k) return;
       const cit = this.citadel;
@@ -207,14 +204,13 @@ export class KingFight {
     return true;
   }
 
-  save(): KingSave { return { phase: this.phase, arrived: this.arrived, fallen: this.fallen }; }
+  save(): KingSave { return { phase: this.phase, fallen: this.fallen }; }
 
   /** Reprend un état sauvegardé (la faction a déjà été rechargée) */
   static load(hell: Hell, s: KingSave | null | undefined): KingFight {
     const f = new KingFight(hell);
     if (!s || typeof s !== 'object') { if (hell.victory) { f.phase = 3; f.fallen = true; } return f; }
     const ph = [0, 1, 2, 3].includes(s.phase) ? s.phase : 0;
-    f.arrived = !!s.arrived;
     f.fallen = !!s.fallen || hell.victory;
     const k = f.king;
     // le roi n'est plus là (abattu avant la sauvegarde) : le combat est fini
@@ -245,7 +241,7 @@ export interface KingdomReward { ore: number; gear: [GearId, number][]; joy: num
 export interface KingdomPurse {
   ore: number;
   exp: { perks: string[]; gear: Record<GearId, number>; bonus: Record<NeedKey, number> };
-  isleGuard: { waves: number; days: number };
+  isleGuard: { waves: number };
 }
 
 /**

@@ -70,7 +70,7 @@ Au large du continent, une île porte une arche : le portail des Enfers. Le gran
 - Issue (`IsleBattle.outcome`), pour toute vague : repoussée quand plus aucun démon ; perdue quand toutes les défenses sont tombées (ou, sans défense, plus aucune unité du joueur) ; une vague qui traîne `RAID_LIMIT` = 180 s de jeu compte pour repoussée (ses derniers démons repassent le portail).
 
 ### Les jours tenus
-`holdIsle` (`portal.ts`, appelé chaque image par `main.ts`) ajoute 1 à `isleGuard.days` par jour de jeu où l'île a sa tour et sa caserne. C'est un relevé : aucune règle n'en dépend (`ISLE_SECURE.days` = 6 et `Hell.heldFor` / `daysHeld` ne sont lus nulle part).
+Retirés le 18 nov. 2026 : ils n'étaient qu'un relevé, lu par aucune règle (`holdIsle`, `isleGuard.days`, `ISLE_SECURE.days`, `Hell.heldSince`, `heldFor`, `daysHeld`). Une ancienne sauvegarde qui porte `isleGuard.days` ou `heldSince` se charge : ces champs sont ignorés.
 
 ## Fonctionnement dans le code
 - **Deux simulations `Hell`** : la faction des Enfers (`War.faction`, carte `HellMap`) porte l'horloge des vagues, les compteurs et la planification ; le combat de l'île se joue dans `IsleBattle.sim`, un `Hell` sur `IsleMap` sans zone ni garnison (`gate` faux), qui ne contient que les démons d'une vague et les unités du joueur. `isle.step` ne lit pas les échéances.
@@ -100,7 +100,6 @@ Au large du continent, une île porte une arche : le portail des Enfers. Le gran
 - Les tests créent `new War(w)` sans choix : `pve` vaut `ask`, rien ne se passe. Il faut `acceptPve()` ou `skipInvasion()` (voir `pveWar` dans `invasion.test.ts`).
 - **Murs posés sur l'île** : un rempart ou une porte posés seuls entrent dans les emprises du combat au pas suivant (`isleSig` dans `syncDefenses`). Une nouvelle sorte de bâtiment de l'île n'a rien à faire de plus : l'empreinte compte tous les bâtiments de l'île.
 - Un démon coincé hors d'atteinte retardait toute la suite : `RAID_LIMIT` existe pour ça.
-- Les commentaires de `hellBalance.ts` (« 0,4 à la première vague, 1 à la sixième ») sont périmés ; les constantes font foi.
 - Une vague de `raid` sauvegardée est reprise sans sa composition annoncée : ses démons sont recréés avec les stats de la zone 1 (`demonStats(kind, 1)`).
 - La carte du portail ne s'ouvre plus d'elle-même : seulement à la demande du joueur, portail refermé. Ne pas remettre d'ouverture automatique après l'expédition ou au réveil du portail (le choix appartient au grand choix).
 

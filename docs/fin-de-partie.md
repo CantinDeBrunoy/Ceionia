@@ -62,7 +62,7 @@ Elle ne tient pas qu'à la fin de partie : `main.ts` déclenche `festAt` pour to
 - [ages.md](ages.md) : l'âge 5 donne le cosmodrome ; [batiments-catalogue.md](batiments-catalogue.md) pour `spaceport` et `fusion`.
 - [habitants.md](habitants.md) : `recruit`, `memberGo`, `partyAct`, `dismiss`, `findPath` pour la foule.
 - [sauvegarde.md](sauvegarde.md) : `exp.done` et `exp.perks` portent `moon` et `colony` ; `toMenu` sauvegarde avant de recharger.
-- [traduction.md](traduction.md) : légendes lunaires et du voyage passent par `tr` / `trx` ; les regex sur les libellés doivent accepter les deux langues.
+- [traduction.md](traduction.md) : légendes lunaires et du voyage passent par `tr` ; les regex sur les libellés doivent accepter les deux langues.
 - La fête foraine (`fairground.ts`, montagnes russes, tour de chute) et le cirque (`circus.ts`) sont des **bâtiments de loisirs** sans lien avec la fin ni avec la fête : voir [rendu-modeles.md](rendu-modeles.md) et [batiments-catalogue.md](batiments-catalogue.md). Le trophée du roi des Enfers est décrit dans [faune.md](faune.md).
 
 ## Pièges et invariants
@@ -79,5 +79,5 @@ Elle ne tient pas qu'à la fin de partie : `main.ts` déclenche `festAt` pour to
 - **Changer ce qui exige la fin** : `requires` de la mission dans `missions.ts`, puis le texte du conseil (`sim.ts`) et `futur.test.ts`.
 - **Ajouter un jalon spatial** : une mission âge 5 (destination `spaceport`), une fusée dans `RocketKind` / `drawRocket` / `ROCKET_H` / `ROCKET_R` (`rocket.ts`), l'enchaînement dans `IdleRockets.update`, le type de scène dans `launchpad`. Mettre à jour `futur.test.ts` (l'ordre des trois missions est testé).
 - **Changer la parade** : constantes en tête de `parade.ts` ; durée avant le voyage `PARADE_G`, `PARADE_MS` (`main.ts`).
-- **Changer le voyage** : `VOYAGE_S` et les seuils de `u` dans `voyageArt.ts` ; garder les légendes en `trx`.
+- **Changer le voyage** : `VOYAGE_S` et les seuils de `u` dans `voyageArt.ts` ; une légende par `tr('…')` littéral (un choix : `a ? tr('…') : tr('…')`), pour que le test de couverture la voie.
 - **Changer l'écran de fin** : `showVictory` ; les textes ont leur traduction dans `src/i18n/en/`.

@@ -202,7 +202,8 @@ export const armyCap = (c: RecruitCtx) => Math.min(troopCap(c.barracks, c.age), 
 /** Pourquoi l'on ne peut pas recruter cette troupe (null : on peut) */
 export function recruitWhy(a: Army, kind: TroopKind, c: RecruitCtx): string | null {
   const d = TROOPS[kind], f = troopForm(kind, c.age);
-  if (c.age < d.age) return tr('{name} : à partir du Moyen Âge', { name: d.plural });
+  // (les troupes viennent à l'Antiquité, âge 1, ou au Moyen Âge, âge 2)
+  if (c.age < d.age) return d.age >= 2 ? tr('{name} : à partir du Moyen Âge', { name: d.plural }) : tr('{name} : à partir de l’Antiquité', { name: d.plural });
   if (f.mount && !(c.stables ?? 0)) return tr('Il faut une écurie au village (la cavalerie monte les chevaux de l’écurie)');
   if (c.barracks <= 0) return tr('Il faut une caserne sur l’île du portail');
   if (armySize(a) >= troopCap(c.barracks, c.age)) return tr('Garnison au complet ({n} places : une autre caserne en ajouterait)', { n: troopCap(c.barracks, c.age) });

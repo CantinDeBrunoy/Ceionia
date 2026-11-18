@@ -44,6 +44,7 @@ registerDict('army', {
 
   // ---- raisons de refus du recrutement ----
   '{name} : à partir du Moyen Âge': '{name}: available from the Middle Ages',
+  '{name} : à partir de l’Antiquité': '{name}: available from Antiquity',
   'Il faut une écurie au village (la cavalerie monte les chevaux de l’écurie)': 'You need a stable in the village (cavalry rides the stable’s horses)',
   'Il faut une caserne sur l’île du portail': 'You need a barracks on the portal island',
   'Garnison au complet ({n} places : une autre caserne en ajouterait)': 'Garrison full ({n} places: another barracks would add more)',

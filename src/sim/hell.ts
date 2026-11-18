@@ -291,10 +291,9 @@ export class Hell {
   nextRaid = -1;
   /** vague en cours sur l'île (l'île signale son issue par `endRaid`) */
   activeRaid: RaidWave | null = null;
-  /** vagues repoussées, vagues qui ont submergé l'île ; depuis quand l'île tient (-1 : pas encore menacée) */
+  /** vagues repoussées, vagues qui ont submergé l'île */
   raidsRepelled = 0;
   raidsLost = 0;
-  heldSince = -1;
   /**
    * postes avancés du joueur encore tenus dans les Enfers (rempli par la base) : tant qu'il y en a, les démons doivent d'abord
    * les reprendre un à un, et aucune incursion ne vise l'île du portail
@@ -920,7 +919,7 @@ export class Hell {
    */
   raidDue(time: number) {
     if (this.victory || this.activeRaid) return false;
-    if (this.nextRaid < 0) { this.nextRaid = time + RAID_FIRST; this.heldSince = time; return false; }
+    if (this.nextRaid < 0) { this.nextRaid = time + RAID_FIRST; return false; }
     // le front tient : l'île attend ; une fois le dernier poste tombé, un répit avant la première incursion
     if (this.frontPosts > 0) { this.nextRaid = Math.max(this.nextRaid, time + FRONT_RESPITE); return false; }
     return time >= this.nextRaid;
@@ -931,11 +930,6 @@ export class Hell {
 
   /** L'île du portail est sécurisée : SECURE_WAVES vagues repoussées (acquis pour de bon, l'étape du passage d'âge) */
   get islandSecured() { return this.raidsRepelled >= SECURE_WAVES; }
-
-  /** Depuis combien de temps l'île tient (depuis la première menace, ou la dernière vague qui l'a submergée), en secondes */
-  heldFor(time: number) { return this.heldSince < 0 ? 0 : Math.max(0, time - this.heldSince); }
-  /** …en jours de jeu (`dayLen` : durée d'un jour, en secondes) */
-  daysHeld(time: number, dayLen: number) { return Math.floor(this.heldFor(time) / Math.max(1, dayLen)); }
 
   /**
    * La composition de la prochaine vague, selon l'armée du joueur (`armyPower`), l'âge, le niveau et la difficulté (voir
@@ -989,7 +983,7 @@ export class Hell {
     const was = this.islandSecured, wave = this.activeRaid.wave;
     this.activeRaid = null;
     if (repelled) { this.raidsRepelled++; this.lossStreak = 0; }
-    else { this.raidsLost++; this.lossStreak++; this.heldSince = time; }
+    else { this.raidsLost++; this.lossStreak++; }
     this.events.push({ type: 'raidEnd', wave, repelled });
     if (!was && this.islandSecured) { this.events.push({ type: 'secured' }); return true; }
     return false;
@@ -1003,7 +997,7 @@ export class Hell {
   save(players = true): HellSave {
     return {
       time: this.time, wave: this.wave, nextRaid: this.nextRaid, victory: this.victory, conquered: [...this.conquered],
-      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, heldSince: this.heldSince, reinforced: this.reinforced.map((p) => Math.round(p)),
+      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, reinforced: this.reinforced.map((p) => Math.round(p)),
       lossStreak: this.lossStreak, planned: this.planned ? [...this.planned] : null,
       buildings: [...this.buildings.values()].filter((b) => b.side === 'hell').map((b) => [b.id, Math.max(0, Math.round(b.hp))]),
       units: this.alive().filter((u) => players || u.side !== 'player').map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
@@ -1016,7 +1010,7 @@ export class Hell {
     // (une ancienne sauvegarde : aucune zone renforcée ; les zones déjà parcourues le seront à la première alerte)
     if (Array.isArray(s.reinforced)) s.reinforced.forEach((p, i) => { if (i < HELL_ZONE_N && Number.isFinite(p)) h.reinforced[i] = p; });
     h.time = s.time; h.wave = s.wave; h.nextRaid = s.nextRaid; h.victory = s.victory;
-    h.raidsRepelled = s.raidsRepelled ?? 0; h.raidsLost = s.raidsLost ?? 0; h.heldSince = s.heldSince ?? -1;
+    h.raidsRepelled = s.raidsRepelled ?? 0; h.raidsLost = s.raidsLost ?? 0;
     // (les anciennes sauvegardes oubliaient la vague annoncée et la série de défaites : rien de prévu, aucune défaite)
     h.lossStreak = Number.isFinite(s.lossStreak) ? Math.max(0, Math.floor(s.lossStreak!)) : 0;
     const plan = Array.isArray(s.planned) ? s.planned.filter((k) => k in DEMONS) : [];
@@ -1037,7 +1031,8 @@ export class Hell {
 
 export interface HellSave {
   time: number; wave: number; nextRaid: number; victory: boolean; conquered: boolean[];
-  raidsRepelled?: number; raidsLost?: number; heldSince?: number;
+  raidsRepelled?: number; raidsLost?: number;
+  // (une ancienne sauvegarde a aussi `heldSince`, depuis quand l'île tenait, que rien ne lisait : ignoré)
   /** défaites d'affilée (les vagues suivantes s'adoucissent) ; absent : 0 */
   lossStreak?: number;
   /** la vague annoncée, démon par démon ; absent ou null : aucune */

@@ -61,16 +61,6 @@ export interface ActiveExpedition {
   extra: number;
   bonus: Effect[];
   hurt: number;
-  /**
-   * troupe sous terre (moteur du monde souterrain, gardé pour les Enfers ; aucune mission ne l'emploie pour l'instant) : cases
-   * visées, case où elle descend (-1 : en surface), son point le plus avancé
-   */
-  targets: number[];
-  entry: number;
-  front: number;
-  /** longueur de son parcours (haltes comprises) et sa force au combat */
-  routeLen: number;
-  might: number;
   /** chevaux de l'écurie partis avec l'équipe */
   mounts: number;
   /** la mission avait déjà été réussie : on la refait (bêtes, minerai, vivres ; bonus durables seulement passagers) */
@@ -466,7 +456,7 @@ export class Expeditions {
       extra: c.dest === 'spaceport' && spaceRail(this.world) ? -c.work * SPACE_RAIL_WORK : 0,
       // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
       site: c.dest === 'cave' ? 'cave' : kind, age, sea: sea && kind === 'river',
-      targets: [], entry: -1, front: -1, redo: this.done(m), mounts, routeLen: 0, might: 0, air,
+      redo: this.done(m), mounts, air,
     };
     // la galère du portail traverse à l'allure d'une galère : loin de l'île, le travail s'allonge d'autant (sinon elle
     // filait d'une rive à l'autre en quelques secondes, et l'on croyait l'équipe téléportée)
@@ -488,9 +478,6 @@ export class Expeditions {
       else if (mounts > 0) kt.horse = true;
     });
     party.forEach((id, i) => this.agents.equip(id, kits[i]));
-    // force au combat : chacun compte, davantage en armure, armé, à cheval (en char, plus encore) ou la torche au poing (les
-    // monstres craignent la lumière)
-    a.might = kits.reduce((s, k) => s + 1 + (k.armor ? 1 : 0) + (k.weapon ? 0.6 : 0) + (k.rider ? (k.tank ? 1.4 : 0.9) : 0) + (k.torch ? 0.3 : 0), 0);
     this.active.push(a);
     if (m.farewell) {
       // le grand départ : les colons se retrouvent d'abord au cœur du village, où tout le monde vient leur dire adieu
@@ -536,8 +523,6 @@ export class Expeditions {
         a.phase = 'work'; a.t = 0;
         ag.partyAct(a.party, 'work');
         ag.mountParty(a.party, false);
-        // une troupe qui descend sous terre : on ne la voit plus en surface
-        if (a.entry >= 0) ag.partyHide(a.party, true);
         this.raise(a, true);
       } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * nextEventAt(a)) {
         this.raise(a, false);

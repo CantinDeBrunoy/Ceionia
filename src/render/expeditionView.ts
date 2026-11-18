@@ -146,7 +146,7 @@ export class ExpeditionView {
       // attendant l'équipe. Elle reste quand l'équipe repart (le loup détale, la pirogue chavire, les voisins saluent) et ne
       // s'efface, en douceur, qu'une fois l'équipe assez loin : on la voit s'en aller
       const away = a.phase === 'back' || a.phase === 'home';
-      if (!away && !sh.scene && a.entry < 0) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a, this.fx);
+      if (!away && !sh.scene) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a, this.fx);
       if (away && sh.scene) {
         const pos = this.agents.partyPositions(a.party), [fx, fz] = sh.scene.focus;
         if (a.phase === 'home' || a.t > LEAVE_T || pos.every(([x, z]) => Math.hypot(x - fx, z - fz) > LEAVE_DIST)) sh.scene.leave();

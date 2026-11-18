@@ -45,7 +45,7 @@ export function shortWhy(why: string): string {
   if (/écurie|stable/.test(why)) return tr('Il faut une écurie');
   if (/trop petit|too small/.test(why)) return tr('Village trop petit');
   if (/Pas de cheval|No horse/.test(why)) return tr('Pas de cheval libre');
-  if (/à partir du|available from/.test(why)) return tr('Pas encore connue');
+  if (/à partir d|available from/.test(why)) return tr('Pas encore connue');
   if (/portail est éteint|portal has gone out/.test(why)) return tr('Guerre finie');
   if (/atelier|workshop/i.test(why)) return tr('Il faut un atelier');
   if (/file de fabrication|crafting queue/i.test(why)) return tr('File de l’atelier pleine');

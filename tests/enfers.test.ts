@@ -207,11 +207,10 @@ describe('Faction des Enfers', () => {
     const h = new Hell(map(1));
     h.raidDue(0);
     let t = RAID_FIRST;
-    // une défaite : la vague suivante a le même niveau, l'île « tient » depuis ce moment
+    // une défaite : la vague suivante a le même niveau
     const w1 = h.spawnRaid(t);
     h.endRaid(false, t + 40);
     expect(h.raidsLost).toBe(1);
-    expect(h.heldFor(t + 100)).toBe(60);
     t = h.nextRaid;
     expect(h.spawnRaid(t).units.length).toBe(w1.units.length);
     let secured = h.endRaid(true, t + 20);

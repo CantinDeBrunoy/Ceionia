@@ -135,11 +135,11 @@ describe('Le royaume des Enfers', () => {
     f.step(0.05);
     k.hp = k.maxHp * 0.4;
     f.step(0.05);
-    f.arrived = true;
-    const hs = JSON.parse(JSON.stringify(h.save(false))), fs = JSON.parse(JSON.stringify(f.save()));
+    // (une ancienne sauvegarde porte encore `arrived` : il est ignoré)
+    const hs = JSON.parse(JSON.stringify(h.save(false))), fs = { ...JSON.parse(JSON.stringify(f.save())), arrived: true };
     const h2 = Hell.load(new HellMap(1), hs), f2 = KingFight.load(h2, fs);
     expect(f2.phase).toBe(2);
-    expect(f2.arrived).toBe(true);
+    expect('arrived' in f2).toBe(false);
     expect(f2.king!.stats.dmg).toBeCloseTo(k.stats.dmg, 5);
     expect(f2.king!.hp).toBeCloseTo(k.hp, 0);
     // une ancienne sauvegarde, sans combat : le roi dort ; une faction victorieuse : le combat est fini
@@ -152,7 +152,7 @@ describe('Le royaume des Enfers', () => {
 });
 
 describe('La victoire et ses récompenses', () => {
-  const purse = (): KingdomPurse => ({ ore: 10, exp: { perks: [], gear: { spear: 0, bow: 0, sword: 0, rifle: 0, rope: 0, torch: 0, boat: 0, kit: 0, armor: 0 }, bonus: { food: 0, water: 0, jobs: 0, joy: 0 } }, isleGuard: { waves: 1, days: 0 } });
+  const purse = (): KingdomPurse => ({ ore: 10, exp: { perks: [], gear: { spear: 0, bow: 0, sword: 0, rifle: 0, rope: 0, torch: 0, boat: 0, kit: 0, armor: 0 }, bonus: { food: 0, water: 0, jobs: 0, joy: 0 } }, isleGuard: { waves: 1 } });
 
   it('ne se touchent qu’une fois : trophée, forge infernale, minerai, équipement rare, île sécurisée', () => {
     const w = purse();
