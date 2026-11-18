@@ -345,6 +345,10 @@ button.pop:hover { background: rgba(255, 255, 255, 0.7); }
 @media (max-width: 720px) { #pauseBar { top: auto; bottom: 150px; gap: 8px; font-size: 15px; } #pauseBar b { font-size: 16px; } #pauseBar kbd { display: none; } }
 /* « Menu principal » toujours en vue au pied des onglets des paramètres */
 #ui > .overlay > .cePop .setTabs .setMenu { margin-top: 18px; color: #7a3b1c; }
+/* « Sauvegarder » puis « Sauvegarder et quitter » : le premier garde la marge, le second le suit de près */
+#ui > .overlay > .cePop .setTabs .setSave { color: var(--pInk); }
+#ui > .overlay > .cePop .setTabs .setSave + .setMenu { margin-top: 0; }
+#ui > .overlay > .cePop .setTabs .setSave.done { color: #3f7a2e; }
 /* un geste refusé sur la carte : la raison sous le curseur, rouge, qui tremble (voir `UI.refuse`) */
 #cursorDeny { position: fixed; left: 0; top: 0; z-index: 31; display: none; align-items: center; gap: 8px; max-width: min(380px, calc(100vw - 16px)); pointer-events: none; padding: 7px 14px 7px 8px; border-radius: 14px; font-size: 14px; font-weight: 800; line-height: 1.3; color: #fff; background: #c8322a; border: 2px solid #ffd2c8; box-shadow: 0 6px 20px rgba(80, 10, 0, 0.45); }
 #cursorDeny.show { display: flex; animation: cdShake 0.42s ease, cdFade 2.6s ease forwards; }

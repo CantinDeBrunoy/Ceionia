@@ -2635,7 +2635,7 @@ export class UI {
     const forced = DIFF_TEXT.resForced[h.world.difficulty];
     // la DA des fenêtres peintes de l'accueil (menuPop) : coque crème et dorée, le choix en cours en or
     const { ov, close } = menuPop(this.root, 'settings', 'options', tr('Paramètres'), `<div class="setWrap">
-      <nav class="setTabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 18, 2)}${l}</button>`).join('')}<button class="setMenu" id="gMenu2">${ic('house', 18)}${tr('Menu principal')}</button></nav>
+      <nav class="setTabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 18, 2)}${l}</button>`).join('')}<button class="setMenu setSave" id="gSave2">${ic('save', 18)}<span>${tr('Sauvegarder')}</span></button><button class="setMenu" id="gMenu2">${ic('house', 18)}${tr('Sauvegarder et quitter')}</button></nav>
       <div class="setPane">
       <section data-sec="time">${head('time')}
         <div class="row"><label>${tr('Vitesse')}</label><button data-sp="0">${ic('pause', 16, 2.2)} ${tr('Pause')}</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button><button data-sp="8">×8</button></div>
@@ -2693,6 +2693,14 @@ export class UI {
     bindLangPicker(ov);
     const q = <T extends HTMLElement>(s: string) => $(s, ov) as T;
     q('#gCredits').onclick = () => showCredits(this.root);
+    // sous les onglets : sauvegarder (le bouton le dit lui-même : la fenêtre ouverte retient les messages), ou
+    // sauvegarder et revenir au menu principal (`toMenu` sauvegarde avant de recharger la page)
+    q('#gSave2').onclick = () => {
+      h.saveNow(); h.audio.sfxClick();
+      const b = q('#gSave2');
+      b.classList.add('done'); $('span', b).textContent = tr('Partie sauvegardée');
+      window.setTimeout(() => { b.classList.remove('done'); $('span', b).textContent = tr('Sauvegarder'); }, 2000);
+    };
     q('#gMenu2').onclick = () => h.toMenu();
     ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
