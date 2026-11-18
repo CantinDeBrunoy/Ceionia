@@ -1,6 +1,6 @@
 /**
- * Pictos 3D en couleur à la place des émojis (dont le rendu varie selon le système) : le jeu d'icônes de Ceionia,
- * low-poly 3D comme l'équipement, en WebP 128 px dans `public/icons/pics/`.
+ * Pictos en couleur à la place des émojis (dont le rendu varie selon le système) : le jeu d'icônes de Ceionia,
+ * peint comme les icônes du HUD, en WebP 128 px dans `public/icons/pics/`.
  * `pic(émoji)` rend l'image ; un émoji absent de la table reste en texte. Pour en ajouter : une image carrée sur fond
  * transparent, réduite en WebP 128 px, et une ligne ici
  */
@@ -121,7 +121,7 @@ const PICS: Record<string, string> = {
 const key = (emoji: string) => emoji.replace(/️/g, '');
 
 /**
- * Émojis rendus par une icône peinte du HUD (`public/icons/hud/`) plutôt que par leur picto 3D : ressources, besoins,
+ * Émojis rendus par une icône peinte du HUD (`public/icons/hud/`) plutôt que par leur picto : ressources, besoins,
  * saisons, cadenas, alerte, combat, équipe, étoile des obligatoires, éclat des légendaires, sablier, éclair, boussole. Les mêmes icônes que la barre du haut, partout où `pic` est appelé
  */
 const HUD_PICS: Record<string, string> = {
