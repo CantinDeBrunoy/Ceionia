@@ -1155,8 +1155,8 @@ class Game implements UIHost {
     const v = spot ?? allyView(this.world);
     if (!v) return;
     this.follow(null); this.trainCam = null; this.incidentCam = null;
-    // (la cible un peu en deçà, côté caméra : la rive monte dans le haut de l'écran, au-dessus de la bulle du guide)
-    if (spot) { const y = this.cam.view().yaw; this.cam.goTo(spot.x + Math.sin(y) * 4, spot.z + Math.cos(y) * 4, 38); }
+    // (la rive au milieu de l'écran : la bulle du guide se tient à côté, l'ancre de la balise au-dessus)
+    if (spot) this.cam.goTo(spot.x, spot.z, 38);
     else this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
   }
 
