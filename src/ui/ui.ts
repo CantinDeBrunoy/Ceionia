@@ -865,7 +865,10 @@ export class UI {
   private markFirst() {
     const first = this.host.world.buildings.size === 0;
     // la place du village a été démolie : on la remet en lumière, sans rien verrouiller ni armer (le joueur reste libre)
-    const counts = this.host.sim.counts as Record<string, number>, lost = !first && lineOf('gather').every((k) => !(counts[k] ?? 0));
+    // (lue dans les bâtiments du monde, pas dans `sim.counts` : au chargement, ce compte est vide jusqu'au premier recomptage,
+    // et le message partait à tort, la place bien là ; Chloé, Margot, v6)
+    let lost = false;
+    if (!first) { const line = lineOf('gather'); lost = true; for (const b of this.host.world.buildings.values()) if (line.includes(b.kind)) { lost = false; break; } }
     if (lost && !this.plazaLostSaid) { this.plazaLostSaid = true; this.toast(tr('La place du village a disparu : reposez-la (le bouton qui luit) pour retrouver son bien-être et partir en expédition.')); }
     if (!lost) this.plazaLostSaid = false;
     const sel = ['#modes [data-t="build"]', `#subcats [data-c="${KINDS.gather.cat}"]`, '#items [data-kind="gather"]'];
