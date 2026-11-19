@@ -16,6 +16,7 @@ import { makeBeast } from './beasts';
 import { Building, sizeOf } from '../build/catalog';
 import { FloatIsles, FLOAT_LAND, FLOAT_BACK } from './floatIsles';
 import { Salvage } from './galleon';
+import { rod, sail3, shipHull, type V3 } from './models/orientShips';
 import { townPlans } from '../world/rivalTown';
 
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
@@ -83,34 +84,35 @@ const BOAT_MAKE: Record<BoatKind, (p: Parts) => void> = {
     p.box(0.13, 0.01, 0.045, 0, 0.032, -0.08, 0xb08458);
   },
   sail: (p) => {
-    // caravelle : coque ventrue de bois, château arrière, pont clair, trois mâts à voiles latines (grand mât, misaine, artimon),
-    // beaupré, flammes rouges et croix peinte sur la grand-voile
-    const side = 0x8a5a38, dark = 0x5f3e28, wood = 0x5a3e2e, cloth = 0xf4ecdc;
-    p.box(0.16, 0.012, 0.4, 0, 0, 0, dark);
-    for (const s of [-1, 1]) { p.box(0.016, 0.06, 0.4, s * 0.078, 0, 0, side); p.box(0.006, 0.006, 0.4, s * 0.082, 0.045, 0, 0xc9a46c); }
-    p.box(0.16, 0.06, 0.016, 0, 0, -0.2, side);
-    p.box(0.11, 0.06, 0.06, 0, 0, 0.22, side);
-    p.box(0.05, 0.06, 0.05, 0, 0, 0.275, side);
-    p.box(0.14, 0.008, 0.38, 0, 0.045, 0, 0xc9a46c);
-    // château arrière, dunette, gouvernail
-    p.box(0.15, 0.04, 0.1, 0, 0.05, -0.145, 0x9a6a44);
-    p.box(0.152, 0.008, 0.104, 0, 0.09, -0.145, 0xb08458);
-    p.box(0.012, 0.07, 0.012, 0, 0.0, -0.215, wood);
-    p.box(0.1, 0.03, 0.06, 0, 0.05, 0.16, 0x9a6a44);
-    // beaupré
-    p.add(new THREE.CylinderGeometry(0.004, 0.006, 0.12, 5).rotateX(Math.PI / 2 - 0.3), 0, 0.075, 0.33, 0x6a4a34);
-    const mast = (z: number, h: number, sz: number, tilt: number) => {
-      p.cyl(0.006, 0.009, h, 5, 0, 0.05, z, wood);
-      p.add(new THREE.CylinderGeometry(0.004, 0.004, sz * 1.5, 4).rotateZ(Math.PI / 2 - 0.35), 0, 0.05 + h * 0.68, z, wood);
-      sailTri(p, 0, [[0.06 + h * 0.2, z - sz * 0.5], [0.05 + h * 0.95, z - sz * 0.05 + tilt], [0.07 + h * 0.2, z + sz * 0.7]], cloth);
-      sailTri(p, 0.002, [[0.05 + h * 0.97, z], [0.05 + h * 1.12, z], [0.05 + h * 0.97, z - 0.06]], 0xc8443a);
+    // caravelle latine : coque galbée de bois à liston et préceinte, petit château arrière à fenêtres et fanal, gouvernail,
+    // beaupré ; trois mâts (grand mât, misaine, artimon) à voiles latines gonflées et laize rouge, flammes rouges, haubans. Le
+    // milieu du pont reste libre : l'équipe s'y tient (`BOAT_SEAT`)
+    const side = 0x8a5a38, dark = 0x5f3e28, wood = 0x5a3e2e, cloth = 0xf4ecdc, red = 0xc8443a, rope = 0x4a3a2c;
+    const h = shipHull(p, { L: 0.5, B: 0.17, depth: 0.05, top: 0.07, bow: 0.04, stern: 0.04, transom: 0.66, fine: 1.2, under: 0x2e241c, side, band: 0xc9a46c, deck: 0xb08458, inner: dark, wales: [0.035], waleCol: dark });
+    // le château arrière : deux fenêtres et le fanal à la poupe, la lisse, le gouvernail
+    const cy = h(-0.2) - 0.022;
+    p.box(0.11, 0.045, 0.1, 0, cy, -0.2, 0x9a6a44);
+    p.box(0.116, 0.007, 0.104, 0, cy + 0.045, -0.2, 0xb08458);
+    for (const x of [-0.022, 0.022]) p.box(0.016, 0.016, 0.004, x, cy + 0.016, -0.252, 0xe8b860);
+    p.box(0.014, 0.022, 0.014, 0, cy + 0.052, -0.24, 0xe8c66a);
+    p.cone(0.011, 0.014, 4, 0, cy + 0.074, -0.24, wood);
+    for (const s of [-1, 1]) rod(p, [s * 0.055, cy + 0.065, -0.25], [s * 0.055, cy + 0.065, -0.15], 0.003, wood);
+    p.box(0.01, 0.1, 0.026, 0, -0.05, -0.258, wood);
+    // le beaupré
+    rod(p, [0, h(0.22) - 0.01, 0.2], [0, 0.15, 0.36], 0.005, wood);
+    // les mâts et leurs voiles latines : la vergue penchée, l'amure en avant, le point d'écoute en arrière
+    const mast = (z: number, y0: number, H: number, sz: number) => {
+      p.cyl(0.005, 0.008, H, 5, 0, y0, z, wood);
+      const top = y0 + H, tack: V3 = [0.012, y0 + H * 0.24, z + sz * 0.75], peak: V3 = [0.012, top + 0.02, z - sz * 0.85];
+      rod(p, [0.01, tack[1] - 0.01, tack[2] + 0.02], [0.01, peak[1] + 0.01, peak[2] - 0.02], 0.004, wood);
+      sail3(p, tack, peak, [0.012, y0 + H * 0.12 + 0.02, z - sz * 0.6], cloth, sz * 0.18, red);
+      sailTri(p, 0, [[top, z], [top - 0.02, z], [top - 0.012, z - 0.07]], red);
+      for (const s of [-1, 1]) rod(p, [0, top - 0.02, z], [s * h.beam(z - 0.03) * 1.02, h(z - 0.03) - 0.01, z - 0.03], 0.0015, rope);
     };
-    mast(0.04, 0.46, 0.2, 0);
-    mast(0.17, 0.34, 0.15, 0);
-    mast(-0.13, 0.3, 0.14, 0);
-    // croix peinte sur la grand-voile
-    p.box(0.004, 0.07, 0.012, 0.004, 0.2, 0.04, 0xc8443a);
-    p.box(0.004, 0.012, 0.06, 0.004, 0.215, 0.04, 0xc8443a);
+    mast(0.04, h(0.04) - 0.022, 0.42, 0.2);
+    mast(0.17, h(0.17) - 0.022, 0.3, 0.15);
+    mast(-0.18, cy + 0.045, 0.24, 0.12);
+    rod(p, [0, h(0.04) + 0.38, 0.04], [0, 0.15, 0.36], 0.0015, rope);
   },
   steam: (p) => {
     // coque de fer, flottaison rouge, roues à aubes, cabine blanche, cheminée noire à bague rouge

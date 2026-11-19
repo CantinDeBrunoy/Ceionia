@@ -10,6 +10,7 @@ import { defTower, defBarracks, type DefKit } from './defenses';
 import { circus, type CircusKit } from './circus';
 import { arena, type ArenaKit } from './arena';
 import { rampartWall, rampartGate } from './ramparts';
+import { rod, shipHull } from './models/orientShips';
 
 /**
  * Bâtiments importés (CC0), par sorte puis par âge : leurs variantes ; null ou absent, le modèle procédural. Il ne reste que
@@ -7529,45 +7530,114 @@ export function freighter(p: Parts, age: number): [number, number, number] | nul
     for (const z of [-0.08, 0.06]) p.box(0.06, 0.05, 0.06, 0.05, 0.08, z, 0x9a6a44);
     return null;
   }
+  // le bastingage : une lisse le long du plat-bord, des deux bords, de za à zb
+  const rail = (h: ReturnType<typeof shipHull>, za: number, zb: number, col: number) => {
+    for (const s of [-1, 1]) for (let k = 0; k < 6; k++) {
+      const z0 = za + ((zb - za) * k) / 6, z1 = za + ((zb - za) * (k + 1)) / 6;
+      rod(p, [s * h.beam(z0) * 0.97, h(z0) + 0.022, z0], [s * h.beam(z1) * 0.97, h(z1) + 0.022, z1], 0.0022, col);
+    }
+  };
+  // un point du flanc, à la hauteur y, en z (pour y poser hublots et sabords)
+  const flank = (h: ReturnType<typeof shipHull>, s: number, y: number, z: number) => s * h.beam(z) * (0.92 + (0.08 * y) / h(z)) * 1.012;
+  // cheminée inclinée vers l'arrière : fût, bague, chapeau ; rend sa bouche
+  const funnel = (x: number, y: number, z: number, r: number, h: number, body: number, ring: number, cap: number, rake = -0.15): [number, number, number] => {
+    p.add(new THREE.CylinderGeometry(r, r * 1.12, h, 10).translate(0, h / 2, 0).scale(1, 1, 1.3), x, y, z, body, 0, false, 0, rake);
+    p.add(new THREE.CylinderGeometry(r * 1.02, r * 1.02, h * 0.2, 10).translate(0, h * 0.72, 0).scale(1, 1, 1.3), x, y, z, ring, 0, false, 0, rake);
+    p.add(new THREE.CylinderGeometry(r * 1.03, r * 1.03, h * 0.06, 10).translate(0, h * 0.97, 0).scale(1, 1, 1.3), x, y, z, cap, 0, false, 0, rake);
+    return [x, y + h * Math.cos(rake), z + h * Math.sin(rake)];
+  };
+  // canot de sauvetage (coque blanche, bâche) sur ses deux bossoirs
+  const lifeboat = (x: number, y: number, z: number, cover: number) => {
+    p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.075, 6, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.8, 1), x, y + 0.016, z, C.white);
+    p.box(0.03, 0.008, 0.07, x, y + 0.016, z, cover);
+    for (const dz of [-0.03, 0.03]) rod(p, [x * 0.82, y - 0.03, z + dz], [x, y + 0.04, z + dz], 0.0025, 0x8a8f96);
+  };
   if (age === 3) {
-    // vapeur : coque noire, flottaison rouge, liston blanc, hublots ; passerelle et rouf blancs, cheminée rayée, mâts de
-    // charge, canots, bastingage, panneaux de cale
-    const L = 0.74;
-    hull(0.26, 0.12, L, 0.06, 0x1e1e22, 0xb8322c, 0x9a7a5a);
-    p.box(0.262, 0.012, L + 0.06, 0, 0.045, 0, C.white);
-    for (let k = 0; k < 9; k++) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.008, 0.008, 0.004, 6).rotateZ(Math.PI / 2), s * 0.131, 0.015, -0.3 + k * 0.075, 0xffe2a0, 0, true);
-    p.box(0.17, 0.09, 0.22, 0, 0.066, -0.06, C.white); p.box(0.19, 0.012, 0.24, 0, 0.156, -0.06, 0x8a8f96);
-    p.box(0.15, 0.06, 0.1, 0, 0.168, -0.02, C.white); p.box(0.17, 0.01, 0.12, 0, 0.228, -0.02, 0x8a8f96);
-    for (let k = 0; k < 5; k++) p.box(0.022, 0.024, 0.004, -0.05 + k * 0.025, 0.19, 0.031, 0x86c4d8, 0, true);
-    for (let k = 0; k < 6; k++) for (const s of [-1, 1]) p.box(0.004, 0.026, 0.026, s * 0.086, 0.09, -0.15 + k * 0.038, 0x86c4d8, 0, true);
-    p.cyl(0.036, 0.042, 0.26, 10, 0, 0.16, -0.12, 0x1e1e22); p.cyl(0.0425, 0.0425, 0.05, 10, 0, 0.3, -0.12, 0xb8322c); p.cyl(0.043, 0.043, 0.012, 10, 0, 0.36, -0.12, 0x1e1e22);
-    for (const s of [-1, 1]) { p.box(0.04, 0.025, 0.1, s * 0.12, 0.17, -0.1, C.white); p.box(0.004, 0.06, 0.004, s * 0.12, 0.15, -0.14, 0x8a8f96); p.box(0.004, 0.06, 0.004, s * 0.12, 0.15, -0.06, 0x8a8f96); }
-    for (const z of [0.2, -0.3]) { p.cyl(0.007, 0.009, 0.42, 5, 0, 0.066, z, 0x6a4a34); p.add(new THREE.BoxGeometry(0.006, 0.006, 0.18), 0, 0.2, z + (z > 0 ? -0.07 : 0.07), 0x6a4a34, 0, false, 0, z > 0 ? 0.6 : -0.6); }
-    p.box(0.002, 0.002, 0.52, 0, 0.47, -0.05, 0x3a3030);
-    for (const [z, c] of [[0.17, 0x9a6a44], [0.28, 0x6a7a5a]] as number[][]) { p.box(0.14, 0.03, 0.08, 0, 0.066, z, 0x5a4a3a); p.box(0.1, 0.05, 0.06, 0, 0.096, z, c); }
-    for (const s of [-1, 1]) for (let k = 0; k < 14; k++) p.box(0.004, 0.03, 0.004, s * 0.12, 0.066, -0.33 + k * 0.05, C.white);
-    for (const s of [-1, 1]) p.box(0.004, 0.004, 0.68, s * 0.12, 0.096, 0, C.white);
-    p.box(0.06, 0.04, 0.004, 0, 0.2, -0.36, 0x2c4a9a);
-    return [0, 0.37, -0.12];
+    // vapeur : coque noire galbée, carène rouge, liston blanc, hublots ; rouf et passerelle blancs à ailerons, cheminée inclinée
+    // à bague rouge, manches à air, canots sur bossoirs, deux mâts de charge et leurs bômes, panneaux de cale, bastingage
+    const h = shipHull(p, { L: 0.84, B: 0.25, depth: 0.12, top: 0.07, bow: 0.05, stern: 0.025, transom: 0.7, fine: 1.05, under: 0xa8322a, side: 0x1e1e22, band: C.white, deck: 0x9a7a5a, inner: 0x3a3a3e, wales: [0.045], waleCol: 0x2e2e34 });
+    for (const s of [-1, 1]) for (let k = 0; k < 10; k++) {
+      const z = -0.3 + k * 0.064;
+      p.add(new THREE.CylinderGeometry(0.0075, 0.0075, 0.004, 6).rotateZ(Math.PI / 2), flank(h, s, 0.03, z), 0.03, z, 0xffe2a0);
+    }
+    rail(h, -0.4, 0.38, C.white);
+    // le rouf, le pont des embarcations, la passerelle vitrée à ailerons
+    const dy = h(-0.05) - 0.022;
+    p.box(0.17, 0.075, 0.24, 0, dy, -0.06, C.white);
+    p.box(0.2, 0.01, 0.27, 0, dy + 0.075, -0.06, 0x8a8f96);
+    for (const s of [-1, 1]) for (let k = 0; k < 6; k++) p.box(0.004, 0.022, 0.024, s * 0.086, dy + 0.03, -0.16 + k * 0.04, 0x86c4d8);
+    p.box(0.15, 0.06, 0.1, 0, dy + 0.085, 0.02, C.white);
+    p.box(0.26, 0.008, 0.05, 0, dy + 0.13, 0.04, C.white);
+    p.box(0.17, 0.01, 0.12, 0, dy + 0.145, 0.02, 0x8a8f96);
+    for (let k = 0; k < 5; k++) p.box(0.022, 0.024, 0.004, -0.05 + k * 0.025, dy + 0.11, 0.071, 0x86c4d8);
+    p.cyl(0.003, 0.003, 0.08, 4, 0, dy + 0.155, 0.0, 0x8a8f96);
+    // la cheminée, les manches à air
+    const top = funnel(0, dy + 0.085, -0.12, 0.036, 0.25, 0x1e1e22, 0xb8322c, 0x111114);
+    for (const s of [-1, 1]) {
+      p.cyl(0.008, 0.009, 0.06, 6, s * 0.05, dy + 0.085, -0.02 - 0.15 * (s + 1) / 2, C.white);
+      p.add(new THREE.CylinderGeometry(0.014, 0.01, 0.022, 6, 1, true).rotateX(Math.PI / 2 - 0.4), s * 0.05, dy + 0.15, -0.012 - 0.15 * (s + 1) / 2, C.white);
+    }
+    // les canots
+    for (const s of [-1, 1]) for (const z of [-0.03, -0.14]) lifeboat(s * 0.11, dy + 0.085, z, 0xc86a3a);
+    // les mâts de charge, leurs bômes, l'étai entre eux ; les panneaux de cale ; le pavillon de poupe
+    for (const z of [0.24, -0.3]) {
+      const y0 = h(z) - 0.022, f = z > 0 ? -1 : 1;
+      p.cyl(0.007, 0.01, 0.4, 6, 0, y0, z, 0x6a4a34);
+      p.cyl(0.014, 0.014, 0.01, 6, 0, y0 + 0.28, z, 0x6a4a34);
+      rod(p, [0, y0 + 0.04, z], [0, y0 + 0.17, z + f * 0.15], 0.004, 0x6a4a34);
+      rod(p, [0, y0 + 0.38, z], [0, y0 + 0.17, z + f * 0.15], 0.0015, 0x3a3030);
+      for (const s of [-1, 1]) rod(p, [0, y0 + 0.36, z], [s * h.beam(z - 0.03) * 0.98, h(z - 0.03), z - 0.03], 0.0015, 0x3a3030);
+    }
+    rod(p, [0, h(0.24) + 0.36, 0.24], [0, h(-0.3) + 0.36, -0.3], 0.0015, 0x3a3030);
+    rod(p, [0, h(0.24) + 0.36, 0.24], [0, h(0.42) + 0.01, 0.42], 0.0015, 0x3a3030);
+    for (const [z, c] of [[0.17, 0x9a6a44], [0.31, 0x6a7a5a], [-0.24, 0x8a5a3a]] as number[][]) {
+      p.box(0.12, 0.02, 0.08, 0, h(z) - 0.022, z, 0x5a4a3a);
+      p.box(0.11, 0.005, 0.07, 0, h(z) - 0.002, z, c);
+    }
+    p.box(0.03, 0.04, 0.02, 0.07, h(0.3) - 0.022, 0.3, 0x5a4a3a);
+    p.cyl(0.003, 0.003, 0.08, 4, 0, h(-0.42) - 0.01, -0.42, 0x8a8f96);
+    p.box(0.004, 0.035, 0.06, 0, h(-0.42) + 0.035, -0.45, 0x2c4a9a);
+    for (const s of [-1, 1]) p.box(0.006, 0.03, 0.006, s * h.beam(0.36) * 1.02, h(0.36) - 0.05, 0.36, 0x2a2a2c, 0, false, s * 0.25);
+    return top;
   }
-  // porte-conteneurs : coque rouge et bleu nuit à bulbe, château blanc à la poupe, cheminée, piles de conteneurs, grue
-  const L = 1.12;
-  hull(0.32, 0.12, L, 0.08, 0x23305a, 0xb8322c, 0x5d6878);
-  p.sphere(0.06, 0, -0.08, L / 2 + 0.17, 0x23305a, 1, 0.8);
-  p.box(0.326, 0.02, L + 0.08, 0, 0.06, 0, C.white);
-  p.box(0.28, 0.24, 0.16, 0, 0.085, -0.46, C.white); p.box(0.34, 0.03, 0.14, 0, 0.32, -0.46, C.white);
-  for (let k = 0; k < 4; k++) p.box(0.26, 0.022, 0.004, 0, 0.13 + k * 0.045, -0.379, 0x2a3440, 0, true);
-  p.box(0.3, 0.03, 0.02, 0, 0.3, -0.385, 0x2a3440, 0, true);
-  p.cyl(0.03, 0.03, 0.12, 8, 0, 0.33, -0.52, 0x23305a); p.cyl(0.031, 0.031, 0.03, 8, 0, 0.42, -0.52, 0xb8322c);
-  p.cyl(0.004, 0.004, 0.14, 4, 0, 0.35, -0.44, 0x9aa3ad);
-  const cols = [0xd84a3e, 0x3c7fd8, 0xf2c23a, 0x4fa860, 0xf28a3c, 0x8a5ad8, 0xe8e4dc];
-  for (let i = 0; i < 7; i++) for (let j = 0; j < 3; j++) for (let k = 0; k < 2 + ((i + j) % 2); k++) {
-    const x = (j - 1) * 0.09, y = 0.08 + k * 0.064, z = -0.3 + i * 0.12, c = cols[(i * 3 + j * 2 + k) % cols.length];
-    p.box(0.084, 0.06, 0.112, x, y, z, c);
-    for (const dz of [-0.04, 0, 0.04]) p.box(0.086, 0.06, 0.006, x, y, z + dz, dark(c, 0.85));
+  // porte-conteneurs : coque bleu nuit galbée à bulbe, carène rouge, liston blanc, gaillard d'avant et brise-lames, piles de
+  // conteneurs sur leurs panneaux, château blanc à la poupe (passerelle à ailerons, vitres, mât de radar), cheminée, canot
+  // de sauvetage orange sur sa rampe
+  const h = shipHull(p, { L: 1.18, B: 0.32, depth: 0.12, top: 0.085, bow: 0.04, stern: 0.02, transom: 0.86, fine: 0.75, under: 0xa8322a, side: 0x23305a, band: C.white, deck: 0x5d6878, inner: 0x4a5260, wales: [0.05], waleCol: 0x1a2440 });
+  p.add(new THREE.IcosahedronGeometry(0.04, 1).scale(0.8, 0.7, 1.6), 0, -0.075, 0.53, 0xa8322a);
+  rail(h, -0.58, 0.5, C.white);
+  for (const s of [-1, 1]) p.box(0.004, 0.02, 0.16, flank(h, s, 0.055, 0.1), 0.045, 0.1, C.white);
+  // le gaillard d'avant, son brise-lames, le mât de proue
+  p.box(0.22, 0.03, 0.1, 0, h(0.5) - 0.022, 0.5, 0x5d6878);
+  for (const s of [-1, 1]) p.box(0.15, 0.04, 0.008, s * 0.07, h(0.44) - 0.02, 0.44, C.white, s * 0.35);
+  p.cyl(0.004, 0.006, 0.14, 5, 0, h(0.5) + 0.008, 0.5, 0xf2c23a);
+  p.cyl(0.012, 0.014, 0.02, 6, -0.06, h(0.52) + 0.008, 0.52, 0x3a3c40); p.cyl(0.012, 0.014, 0.02, 6, 0.06, h(0.52) + 0.008, 0.52, 0x3a3c40);
+  // les conteneurs : huit rangées sur leurs panneaux de cale, trois de front, deux ou trois de haut
+  const cols = [0xd84a3e, 0x3c7fd8, 0xf2c23a, 0x4fa860, 0xf28a3c, 0x8a5ad8, 0xe8e4dc, 0x2a8a8a];
+  for (let i = 0; i < 8; i++) {
+    const z = -0.33 + i * 0.1, y0 = h(z) - 0.022;
+    p.box(0.29, 0.02, 0.094, 0, y0, z, 0x4a5260);
+    for (let j = 0; j < 3; j++) for (let k = 0; k < 2 + ((i + j) % 2) - (i === 7 ? 1 : 0); k++) {
+      const c = cols[(i * 3 + j * 5 + k * 2) % cols.length];
+      p.box(0.086, 0.056, 0.092, (j - 1) * 0.092, y0 + 0.02 + k * 0.058, z, k % 2 ? dark(c, 0.9) : c);
+    }
   }
-  p.box(0.02, 0.2, 0.02, 0.13, 0.08, 0.5, 0xf2c23a); p.add(new THREE.BoxGeometry(0.016, 0.016, 0.24), 0.13, 0.28, 0.42, 0xf2c23a, 0, false, 0, 0.3);
-  return [0, 0.45, -0.52];
+  // le château : six étages blancs à rangs de vitres, la passerelle débordante, ses ailerons, le mât de radar
+  const sz = -0.46, sy = h(sz) - 0.022;
+  p.box(0.26, 0.25, 0.13, 0, sy, sz, C.white);
+  for (let k = 0; k < 5; k++) p.box(0.22, 0.016, 0.004, 0, sy + 0.04 + k * 0.04, sz + 0.066, 0x2a3440);
+  for (const s of [-1, 1]) for (let k = 0; k < 5; k++) p.box(0.004, 0.016, 0.09, s * 0.131, sy + 0.04 + k * 0.04, sz, 0x2a3440);
+  p.box(0.36, 0.035, 0.11, 0, sy + 0.25, sz + 0.01, C.white);
+  p.box(0.34, 0.018, 0.004, 0, sy + 0.258, sz + 0.066, 0x2a3440);
+  p.box(0.37, 0.008, 0.12, 0, sy + 0.285, sz + 0.01, 0x8a8f96);
+  p.cyl(0.004, 0.006, 0.12, 5, 0, sy + 0.29, sz - 0.01, 0x9aa3ad);
+  p.box(0.08, 0.006, 0.012, 0, sy + 0.37, sz - 0.01, 0x3a3c40);
+  p.sphere(0.008, 0, sy + 0.415, sz - 0.01, 0xff3a2a);
+  // la cheminée derrière le château, le canot de sauvetage orange sur sa rampe à la poupe
+  const top = funnel(0, sy + 0.2, sz - 0.08, 0.034, 0.16, 0x23305a, 0xb8322c, 0x111114, -0.08);
+  p.box(0.07, 0.006, 0.1, 0, h(-0.57) + 0.02, -0.56, 0x8a8f96, 0, false, 0);
+  p.add(new THREE.CapsuleGeometry(0.02, 0.05, 2, 6).rotateX(Math.PI / 2 + 0.35), 0, h(-0.57) + 0.05, -0.56, 0xf28a3c);
+  return top;
 }
 
 /**

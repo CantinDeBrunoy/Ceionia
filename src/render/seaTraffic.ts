@@ -227,22 +227,57 @@ function galleon(p: Parts) {
   pennant(p, hull(az) + 0.55, az, 0.09, GOLD);
 }
 
-/** Navire futuriste : deux flotteurs blancs aux liserés lumineux, pont, cabine vitrée, mâts d'antennes et foils sous la coque */
+/** Ajoute à `p` ce que dessine `make`, décalé de x (un flotteur de catamaran) */
+function offsetX(p: Parts, x: number, make: (q: Parts) => void) {
+  const q = new Parts();
+  make(q);
+  for (const g of q.body) p.body.push(g.translate(x, 0, 0));
+  for (const g of q.glow) p.glow.push(g.translate(x, 0, 0));
+}
+/** Tronc de pyramide à base rectangulaire w × d, haut de h, le sommet réduit à `k` (une cabine, un rouf), posé en y */
+function frustum(p: Parts, w: number, h: number, d: number, k: number, x: number, y: number, z: number, col: number) {
+  p.add(new THREE.CylinderGeometry(k, 1, 1, 4, 1).rotateY(Math.PI / 4).scale(w / Math.SQRT2, h, d / Math.SQRT2).translate(0, h / 2, 0), x, y, z, col);
+}
+
+const PEARL = 0xf2f6fa, MIST = 0xdde8f0, STEEL = 0xaeb8c4, NEON = 0x6ae4ff, GLASS = 0x24506e, NAVY = 0x2a4a8a;
+/**
+ * Navire futuriste : deux coques fines et blanches à liseré lumineux (étrave haute, carène sombre), pont en losange qui les
+ * relie, cabine effilée sous sa verrière, aire d'envol à l'avant, mât de radar et antennes, aileron arrière, deux nacelles de
+ * propulsion, et les foils (jambes et ailes) sous la flottaison. Les liserés sont des couleurs du corps : le modèle des navires
+ * ne garde pas les lumières
+ */
 function hydrofoil(p: Parts) {
+  for (const s of [-1, 1]) offsetX(p, s * 0.12, (q) => shipHull(q, { L: 0.72, B: 0.085, depth: 0.045, top: 0.06, bow: 0.045, stern: 0, transom: 0.55, fine: 1.8, under: 0x2a3440, side: PEARL, band: NEON, deck: MIST, inner: STEEL }));
+  // le pont qui relie les coques, sa bordure lumineuse
+  p.add(new THREE.CylinderGeometry(1, 1, 1, 6).scale(0.2, 0.024, 0.32), 0, 0.068, -0.04, MIST);
+  p.add(new THREE.CylinderGeometry(1.015, 1.015, 1, 6).scale(0.2, 0.008, 0.32), 0, 0.058, -0.04, NEON);
+  // l'aire d'envol, à l'avant
+  p.add(new THREE.CircleGeometry(0.06, 10).rotateX(-Math.PI / 2), 0, 0.0812, 0.12, NAVY);
+  p.add(new THREE.RingGeometry(0.048, 0.054, 10).rotateX(-Math.PI / 2), 0, 0.0816, 0.12, NEON);
+  p.box(0.008, 0.001, 0.05, -0.015, 0.0814, 0.12, PEARL); p.box(0.008, 0.001, 0.05, 0.015, 0.0814, 0.12, PEARL); p.box(0.03, 0.001, 0.008, 0, 0.0814, 0.12, PEARL);
+  // la cabine effilée, sa verrière, la bande lumineuse à sa base, les hublots
+  frustum(p, 0.2, 0.07, 0.28, 0.72, 0, 0.08, -0.08, PEARL);
+  p.add(new THREE.IcosahedronGeometry(1, 1).scale(0.07, 0.042, 0.11), 0, 0.15, -0.05, GLASS);
+  p.box(0.205, 0.008, 0.285, 0, 0.08, -0.08, NEON);
+  for (const s of [-1, 1]) for (let k = 0; k < 4; k++) p.box(0.004, 0.012, 0.022, s * 0.088, 0.115, -0.17 + k * 0.045, GLASS);
+  // le mât de radar, l'antenne qui tourne (figée), le feu rouge, deux fouets
+  p.cyl(0.005, 0.009, 0.22, 5, 0, 0.15, -0.16, STEEL);
+  p.box(0.09, 0.008, 0.014, 0, 0.3, -0.16, NAVY);
+  p.sphere(0.012, 0, 0.38, -0.16, 0xff3a2a);
+  for (const s of [-1, 1]) rod(p, [s * 0.05, 0.15, -0.2], [s * 0.07, 0.32, -0.22], 0.0018, STEEL);
+  // l'aileron arrière sur deux jambes, liseré
+  for (const s of [-1, 1]) p.box(0.008, 0.07, 0.03, s * 0.1, 0.08, -0.3, NAVY, 0, false, s * 0.12);
+  p.box(0.27, 0.01, 0.06, 0, 0.15, -0.3, NAVY);
+  p.box(0.27, 0.004, 0.006, 0, 0.16, -0.272, NEON);
+  // les nacelles de propulsion au bout des coques, leur anneau lumineux
   for (const s of [-1, 1]) {
-    p.add(new THREE.CylinderGeometry(0.034, 0.034, 0.66, 8).rotateX(Math.PI / 2), s * 0.1, 0.055, 0, 0xf2f6fa);
-    p.add(new THREE.ConeGeometry(0.034, 0.12, 8).rotateX(Math.PI / 2), s * 0.1, 0.055, 0.39, 0xf2f6fa);
-    p.box(0.006, 0.006, 0.6, s * 0.134, 0.065, 0, 0x6ae4ff, 0, 'neon');
-    p.box(0.02, 0.07, 0.04, s * 0.1, -0.03, 0.2, 0xaeb8c4);
+    p.add(new THREE.CylinderGeometry(0.022, 0.026, 0.09, 8).rotateX(Math.PI / 2), s * 0.12, 0.03, -0.38, STEEL);
+    p.add(new THREE.CylinderGeometry(0.027, 0.027, 0.008, 8).rotateX(Math.PI / 2), s * 0.12, 0.03, -0.426, NEON);
+    p.box(0.01, 0.006, 0.01, s * 0.12, 0.072, 0.34, NEON);
   }
-  p.box(0.34, 0.02, 0.5, 0, 0.1, -0.02, 0xdde8f0);
-  p.box(0.2, 0.08, 0.26, 0, 0.12, -0.04, 0xf2f6fa);
-  p.box(0.18, 0.045, 0.012, 0, 0.15, 0.092, 0x6ae4ff, 0, 'neon');
-  for (const s of [-1, 1]) p.box(0.012, 0.04, 0.16, s * 0.1, 0.155, -0.04, 0x6ae4ff, 0, 'neon');
-  p.box(0.22, 0.012, 0.28, 0, 0.2, -0.04, 0x8a96a2);
-  p.cyl(0.006, 0.006, 0.2, 4, 0, 0.2, -0.12, 0xaeb8c4); p.sphere(0.014, 0, 0.4, -0.12, 0xff3a2a);
-  p.box(0.4, 0.008, 0.07, 0, -0.02, 0.2, 0xaeb8c4);
-  p.box(0.16, 0.008, 0.14, 0, 0.12, -0.3, 0x2a4a8a);
+  // les foils : deux jambes par coque, une aile à l'avant, une à l'arrière, en dièdre
+  for (const s of [-1, 1]) for (const z of [0.2, -0.24]) p.box(0.01, 0.09, 0.034, s * 0.12, -0.12, z, STEEL);
+  for (const [z, w] of [[0.2, 0.2], [-0.24, 0.17]]) for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(w, 0.006, 0.05), s * w / 2 * 0.98, -0.12 + w * 0.06, z, STEEL, 0, false, s * 0.12);
 }
 
 const BUILD: Record<VesselKind, (p: Parts) => [number, number, number] | null> = {
