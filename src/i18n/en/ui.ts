@@ -238,6 +238,7 @@ registerDict('ui', {
   'Le portail est ouvert : les démons vous attendent sur l’île.': 'The portal is open: the demons await you on the island.',
   'Le monde s’est agrandi : les deux îles sont là, au large.': 'The world has grown: the two islands lie offshore.',
   'Sauvegarde impossible : le monde ne s’est pas agrandi.': 'Save failed: the world did not grow.',
+  '📜 Le récit de l’expédition d’abord : le grand choix s’ouvrira juste après.': '📜 The expedition’s story first: the great choice will open right after.',
   '⚠️ Sauvegarde impossible : le navigateur refuse d’écrire (stockage plein ou bloqué). Exportez votre partie (Paramètres › Partie) pour ne rien perdre.': '⚠️ Save failed: the browser refuses to write (storage full or blocked). Export your game (Settings › Game) so nothing is lost.',
   '⚠️ Votre sauvegarde n’a pas pu être lue ({why}) : une nouvelle partie commence. L’ancienne est gardée de côté ; cliquez ici pour la télécharger.': '⚠️ Your save could not be read ({why}): a new game begins. The old one is kept aside; click here to download it.',
   // l'or et le comptoir des voisins (archipel accepté)

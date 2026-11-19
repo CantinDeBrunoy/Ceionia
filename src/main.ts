@@ -72,7 +72,7 @@ import { Traffic } from './render/traffic';
 import { Halos } from './render/halos';
 import { RailBoost } from './render/railBoost';
 import { UpgradeBadges } from './render/upgradeBadges';
-import { Expeditions } from './sim/expeditions';
+import { Expeditions, type Report } from './sim/expeditions';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
@@ -167,6 +167,29 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Sur place, une scène qui file plus vite que ceci (cases par seconde) est suivie sans lissage */
 const FOLLOW_FAST = 2;
 const goalName = (g: BattleGoal) => ({ plage: tr('la plage'), remparts: tr('les remparts'), port: tr('le port'), palais: tr('le palais') })[g];
+
+/** Les récits d'expédition gardés le temps du rechargement de la traversée (`sessionStorage`) */
+const LATE_REPORTS = 'village-lowpoly:late-reports';
+function keepLateReports(rs: Report[]) {
+  try {
+    if (!rs.length) { sessionStorage.removeItem(LATE_REPORTS); return; }
+    sessionStorage.setItem(LATE_REPORTS, JSON.stringify(rs.map((r) => ({ m: r.m.id, c: r.m.choices.indexOf(r.c), ok: r.ok, text: r.text, summary: r.summary, notes: r.notes, redo: r.redo }))));
+  } catch { /* stockage refusé : le récit est perdu, comme avant */ }
+}
+/** Relit (et efface) les récits gardés ; ceux dont la mission ou le choix n'existe plus sont oubliés */
+function readLateReports(): Report[] {
+  try {
+    const raw = sessionStorage.getItem(LATE_REPORTS);
+    sessionStorage.removeItem(LATE_REPORTS);
+    const list = JSON.parse(raw ?? '[]') as { m: string; c: number; ok: boolean; text: string; summary: string; notes: string[]; redo: boolean }[];
+    const out: Report[] = [];
+    for (const o of Array.isArray(list) ? list : []) {
+      const m = MISSIONS.find((x) => x.id === o.m), c = m?.choices[o.c];
+      if (m && c) out.push({ m, c, ok: !!o.ok, text: String(o.text ?? ''), summary: String(o.summary ?? ''), notes: Array.isArray(o.notes) ? o.notes.map(String) : [], redo: !!o.redo });
+    }
+    return out;
+  } catch { return []; }
+}
 
 class Game implements UIHost {
   scene = new THREE.Scene();
@@ -665,9 +688,12 @@ class Game implements UIHost {
     this.tools.overlay = this.trackEdit;
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
     this.expeditions.onReport = (r) => {
+      // (en attente jusqu'à ce que le récit s'ouvre : le grand choix l'attend, la traversée le garde)
+      this.reportsDue.add(r);
       // pas en plein geste sur la carte : le récit (et la cinématique du trophée) attendent la fin de la pose
       if (this.midGesture()) { setTimeout(() => this.expeditions.onReport?.(r), 250); return; }
       const show = () => {
+        this.reportsDue.delete(r);
         // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
         if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: tr('le village'), pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
         else this.ui.showReport(r);
@@ -679,10 +705,11 @@ class Game implements UIHost {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       show();
     };
-    // les îles découvertes (fin de la cinématique) : la carte du choix de l'allié, obligatoire
+    // les îles découvertes (fin de la cinématique) : la carte du choix de l'allié, obligatoire (un récit d'expédition gardé
+    // pendant la traversée passe d'abord : la carte vient ensuite, au calme, par `stepDiplo`)
     // la carte paix ou guerre attend le port et le comptoir chez l'allié (le tutoriel de l'or y mène)
     bindPostReady(allyPostReady);
-    this.onIslesRevealed = () => { if (allyPending(this.world)) this.diploChoice.showAlly(); };
+    this.onIslesRevealed = () => { if (allyPending(this.world) && !this.lateReports.length) this.diploChoice.showAlly(); };
     // la diplomatie de l'archipel : pas de passage d'âge pendant la bataille (le conflit à régler est une condition de l'âge)
     this.sim.beforeAdvance = () => {
       const why = ageGate(this.allyBattle);
@@ -1216,7 +1243,8 @@ class Game implements UIHost {
     if (cs && cs.kind !== this.naval.state.kind) this.naval.state = cs;
     // (une partie déjà au-delà du Médiéval : le conflit est réputé réglé, sans rien de plus)
     settleLate(d, this.sim.age, true);
-    if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine) return;
+    // (un récit d'expédition en attente, sa cinématique de trophée : ils passent avant les cartes)
+    if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine || this.reportsDue.size || this.lateReports.length || this.trophyStage.playing) return;
     if (allyPending(w)) this.diploChoice.showAlly();
     else if (d.cine) this.playPeace();
     // (les éclaireurs revenus : la carte « Lancer l'assaut », une fois par session ; la bataille ne part plus d'elle-même)
@@ -1504,9 +1532,15 @@ class Game implements UIHost {
     const w = this.world;
     if (w.reveal && this.revealReady()) { w.reveal = false; this.popups.taken(); this.revealIsles(); return; }
     if (this.voyageStage.playing) return;
+    // les récits gardés pendant la traversée : au calme, après la cinématique des îles
+    if (this.lateReports.length && !w.reveal && !this.revealing && this.portalCalm > 3 && this.popups.open && !this.popupBusy() && !this.diploChoice.visible) { for (const r of this.lateReports.splice(0)) this.expeditions.onReport?.(r); return; }
     if (w.crossroads) return;
     const { hell, world } = this.ways();
     if (crossroadsSettled(w, hell, world)) { w.crossroads = true; this.ui.update(); return; }
+    // le récit d'une expédition (et la cinématique de son trophée) passe avant : on choisissait sa voie avant de savoir qu'on
+    // avait vaincu le kraken, et « Explorer le monde » rechargeait la page par-dessus le récit (Bernard, Karim, v6)
+    if (this.reportsDue.size || this.trophyStage.playing) return;
+    if (this.crossroadsWanted && this.portalCalm > 3 && this.popups.open) { this.crossroadsWanted = false; this.popups.taken(); this.worldChoice.show(); return; }
     if (this.crossroadsAsked || this.portalCalm <= 3 || !this.popups.open || this.tutorial.active) return;
     const ap = this.sim.ageProgress(), others = !!ap && ap.items.every((i) => i.label === CHOICE_LABEL || i.have >= i.need);
     if (crossroadsDue(w, this.sim.age, hell, world, others)) { this.crossroadsAsked = true; this.popups.taken(); this.worldChoice.show(); }
@@ -1518,8 +1552,16 @@ class Game implements UIHost {
   openCrossroads() {
     const { hell, world } = this.ways();
     if (crossroadsSettled(this.world, hell, world)) return;
+    // un récit d'expédition attend : il passe d'abord, la carte s'ouvre juste après (`stepCrossroads`)
+    if (this.reportsDue.size || this.trophyStage.playing) { this.crossroadsWanted = true; this.ui.toast(tr('📜 Le récit de l’expédition d’abord : le grand choix s’ouvrira juste après.')); return; }
     this.worldChoice.show();
   }
+  /** la carte du grand choix demandée pendant qu'un récit d'expédition attendait : elle s'ouvre après lui */
+  private crossroadsWanted = false;
+  /** les récits d'expédition pas encore ouverts (la cinématique du trophée, un geste en cours…) */
+  private reportsDue = new Set<Report>();
+  /** les récits gardés pendant la traversée (rechargement de « Explorer le monde »), à montrer au calme */
+  private lateReports: Report[] = readLateReports();
 
   /**
    * La cinématique des îles peut partir : au sortir de la traversée, tout de suite (elle tient la brume tant que l'écran de
@@ -1595,6 +1637,8 @@ class Game implements UIHost {
       save.world.exploredAt = this.sim.age;
       if (!saveSlot(save)) { this.ui.toast(tr('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
       sessionStorage.setItem(AUTOSTART, `${w.mapId}|continue|voyage`);
+      // un récit d'expédition pas encore montré survit au rechargement (il s'ouvre après la cinématique des îles)
+      keepLateReports([...this.reportsDue]);
       film.mark();
       location.reload();
     });
