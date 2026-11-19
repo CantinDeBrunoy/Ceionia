@@ -644,26 +644,58 @@ function modernHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number,
   const frame = 0x3a4048, glass = 0x9fc4dc;
   p.box(w + 0.02, 0.03, d + 0.08, cx, 0, zc, 0xb8b4ac);
   if (kind === 0) {
-    // rez-de-chaussée enduit, étage bardé de bois qui avance sur la rue
+    // rez-de-chaussée enduit sur un socle sombre, étage bardé de bois qui avance sur la rue
     p.box(w, 0.3, d, cx, 0.03, zc, render);
-    const ux = cx + (o.v % 2 ? 0.03 : -0.03), uw = w * 0.9;
-    p.box(uw, 0.28, d + 0.04, ux, 0.33, zc + 0.02, accent);
-    for (let x = ux - uw / 2 + 0.03; x < ux + uw / 2 - 0.01; x += 0.04) p.box(0.006, 0.28, 0.004, x, 0.33, zf + 0.041, dark(accent, 0.82));
-    // grandes baies cerclées de sombre, bandeau vitré à l'étage
-    p.box(w * 0.46, 0.2, 0.012, cx - w * 0.16, 0.07, zf + 0.004, frame); p.box(w * 0.44, 0.18, 0.014, cx - w * 0.16, 0.08, zf + 0.005, glass, 0, true);
-    p.box(0.005, 0.18, 0.016, cx - w * 0.16, 0.08, zf + 0.006, frame);
-    p.box(uw * 0.7, 0.12, 0.012, ux, 0.41, zf + 0.044, frame); p.box(uw * 0.68, 0.1, 0.014, ux, 0.42, zf + 0.045, glass, 0, true);
-    // porte, auvent, numéro, jardinières
-    p.box(0.09, 0.2, 0.012, cx + w * 0.3, 0.03, zf + 0.006, frame); p.box(0.004, 0.06, 0.006, cx + w * 0.3 - 0.03, 0.12, zf + 0.013, 0xc4cad2);
-    p.box(0.13, 0.012, 0.07, cx + w * 0.3, 0.25, zf + 0.035, frame);
+    p.box(w + 0.006, 0.03, d + 0.006, cx, 0.03, zc, 0x6a6e72);
+    const ux = cx + (o.v % 2 ? 0.03 : -0.03), uw = w * 0.9, uz = zc + 0.02, ud = d + 0.04;
+    p.box(uw, 0.28, ud, ux, 0.33, uz, accent);
+    // le bardage : lames verticales sur la façade et les pignons libres, joint creux sous l'étage, sous-face éclairée
+    for (let x = ux - uw / 2 + 0.03; x < ux + uw / 2 - 0.01; x += 0.04) p.box(0.006, 0.28, 0.004, x, 0.33, uz + ud / 2 + 0.001, dark(accent, 0.82));
+    for (const s of [-1, 1]) if (s < 0 ? !o.L : !o.R) for (let z = uz - ud / 2 + 0.03; z < uz + ud / 2 - 0.01; z += 0.04) p.box(0.004, 0.28, 0.006, ux + s * (uw / 2 + 0.001), 0.33, z, dark(accent, 0.82));
+    p.box(uw + 0.004, 0.012, ud + 0.004, ux, 0.322, uz, 0x3a3e44);
+    for (const x of [ux - uw * 0.3, ux + uw * 0.05]) p.box(0.03, 0.004, 0.03, x, 0.318, zf + 0.025, 0xfff1c9, 0, true);
+    // la grande baie : cadre sombre, vitrage en trois, imposte, appui de pierre
+    const bx = cx - w * 0.16, bw = w * 0.44;
+    p.box(bw + 0.02, 0.21, 0.012, bx, 0.065, zf + 0.004, frame); p.box(bw, 0.18, 0.014, bx, 0.08, zf + 0.005, glass, 0, true);
+    for (const k of [-1, 1]) p.box(0.006, 0.18, 0.016, bx + k * bw / 6, 0.08, zf + 0.006, frame);
+    p.box(bw, 0.006, 0.016, bx, 0.22, zf + 0.006, frame);
+    p.box(bw + 0.04, 0.012, 0.03, bx, 0.06, zf + 0.012, 0xd8d4cc);
+    // la porte : bâti, vantail de bois à jour vitré, poignée barre, deux marches, auvent de béton à deux spots, numéro
+    const dx = cx + w * 0.3;
+    p.box(0.1, 0.21, 0.012, dx, 0.03, zf + 0.004, frame);
+    p.box(0.08, 0.19, 0.014, dx, 0.035, zf + 0.005, 0x8a5a3a);
+    p.box(0.018, 0.16, 0.016, dx - 0.025, 0.05, zf + 0.006, glass, 0, true);
+    p.box(0.004, 0.07, 0.006, dx + 0.025, 0.09, zf + 0.014, 0xc4cad2);
+    for (let k = 0; k < 2; k++) p.box(0.14 - k * 0.03, 0.012, 0.05 - k * 0.02, dx, 0.03 + k * 0.012 - 0.012, zf + 0.025 - k * 0.01, 0xc8c4bc);
+    p.box(0.15, 0.014, 0.08, dx, 0.25, zf + 0.04, 0xd8d4cc); p.box(0.15, 0.004, 0.08, dx, 0.264, zf + 0.04, frame);
+    for (const k of [-1, 1]) p.box(0.012, 0.004, 0.012, dx + k * 0.04, 0.248, zf + 0.06, 0xfff1c9, 0, true);
+    p.box(0.03, 0.02, 0.004, dx + 0.07, 0.18, zf + 0.008, 0x2a2e34); p.box(0.018, 0.01, 0.004, dx + 0.07, 0.185, zf + 0.01, C.white);
     for (const s of [-1, 1]) { p.box(0.08, 0.04, 0.04, cx + s * w * 0.18 + 0.05, 0.03, zf + 0.04, 0x6a6a6e); p.sphere(0.03, cx + s * w * 0.18 + 0.05, 0.08, zf + 0.04, 0x6fa85a, 0, 0.8); }
-    // acrotère, panneaux solaires, groupe de clim
-    p.box(uw + 0.02, 0.03, d + 0.06, ux, 0.61, zc + 0.02, dark(render, 0.9));
+    // le bandeau vitré de l'étage : montants, appui, garde-corps de verre
+    p.box(uw * 0.7, 0.12, 0.012, ux, 0.41, uz + ud / 2 + 0.004, frame); p.box(uw * 0.68, 0.1, 0.014, ux, 0.42, uz + ud / 2 + 0.005, glass, 0, true);
+    for (let k = 1; k < 4; k++) p.box(0.006, 0.1, 0.016, ux - uw * 0.34 + k * uw * 0.17, 0.42, uz + ud / 2 + 0.006, frame);
+    p.box(uw * 0.72, 0.01, 0.03, ux, 0.405, uz + ud / 2 + 0.014, 0xd8dce2);
+    p.box(uw * 0.66, 0.05, 0.004, ux, 0.415, uz + ud / 2 + 0.03, 0xbfe0ee); p.box(uw * 0.66, 0.006, 0.008, ux, 0.465, uz + ud / 2 + 0.03, 0x8a8f96);
+    // pignons libres : une fenêtre en bas, une en haut
+    for (const s of [-1, 1]) if (s < 0 ? !o.L : !o.R) {
+      const ry = s * Math.PI / 2;
+      wallWindows(p, cx + s * (w / 2 + 0.004), zc + 0.06, 0.1, 0.1, ry, 1, 0.07, 0.11, frame);
+      wallWindows(p, ux + s * (uw / 2 + 0.006), uz - 0.04, 0.1, 0.4, ry, 1, 0.09, 0.1, frame);
+    }
+    // acrotère et sa couvertine, panneaux solaires sur leurs cadres, lanterneau, ventilations
+    p.box(uw + 0.02, 0.03, ud + 0.02, ux, 0.61, uz, dark(render, 0.9));
+    // (le toit : gravier gris ou toiture végétale, ceint de la couvertine)
+    p.box(uw - 0.01, 0.004, ud - 0.01, ux, 0.64, uz, o.v % 2 ? 0x8aa86a : 0x9a9a94);
+    if (o.v % 2) for (let k = 0; k < 5; k++) p.box(0.05, 0.006, 0.05, ux - uw * 0.38 + hash2(o.v, k, 7) * uw * 0.76, 0.642, uz + 0.1 + hash2(k, o.v, 9) * 0.1, [0xa8b86a, 0x6f9a5a, 0xc8b86a][k % 3], k);
+    for (const s of [-1, 1]) { p.box(uw + 0.03, 0.02, 0.016, ux, 0.64, uz + s * (ud / 2 + 0.007), 0xc8c8c4); p.box(0.016, 0.02, ud + 0.03, ux + s * (uw / 2 + 0.007), 0.64, uz, 0xc8c8c4); }
     for (let k = 0; k < 3; k++) {
       const x = ux - uw * 0.3 + k * uw * 0.3;
       p.add(new THREE.BoxGeometry(uw * 0.26, 0.008, 0.16), x, 0.66, zc - 0.06, 0x2a3a6a, 0, false, 0, -0.35);
       for (let j = 0; j < 3; j++) p.add(new THREE.BoxGeometry(0.003, 0.009, 0.16), x - uw * 0.09 + j * uw * 0.09, 0.661, zc - 0.06, 0x8a9ab8, 0, false, 0, -0.35);
+      p.box(0.006, 0.05, 0.006, x, 0.636, zc - 0.11, 0x8a8f96);
     }
+    p.box(0.1, 0.03, 0.08, ux + uw * 0.22, 0.636, uz + 0.14, 0xd8dce2); p.box(0.09, 0.006, 0.07, ux + uw * 0.22, 0.666, uz + 0.14, glass, 0, true);
+    for (const x of [ux - uw * 0.36, ux - uw * 0.28]) { p.cyl(0.008, 0.008, 0.05, 5, x, 0.636, uz + 0.16, 0x8a8f96); p.cyl(0.012, 0.012, 0.006, 5, x, 0.686, uz + 0.16, 0x5d6168); }
     p.box(0.08, 0.06, 0.06, x0 + 0.08, 0.03, zc - d / 2 + 0.04, 0xd8dce2); p.box(0.05, 0.05, 0.004, x0 + 0.08, 0.035, zc - d / 2 + 0.071, 0x8a8f96);
   } else if (kind === 1) {
     // pavillon enduit, toit d'ardoise sombre, bow-window, porte vitrée, garage à porte sectionnelle
@@ -699,6 +731,33 @@ function modernHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number,
     p.box(ww * 0.5, 0.04, d * 0.5, cx - ww * 0.15, H + 0.03, zc - 0.05, 0x7fb87f); p.sphere(0.05, cx - ww * 0.25, H + 0.09, zc - 0.05, 0x6fa85a, 0, 0.9);
     p.cyl(0.05, 0.05, 0.09, 8, cx + ww * 0.25, H + 0.03, zc - 0.1, 0x8a8f96); p.cone(0.055, 0.03, 8, cx + ww * 0.25, H + 0.12, zc - 0.1, 0x5d6168);
     p.cyl(0.004, 0.004, 0.2, 4, cx + ww * 0.35, H + 0.03, zc + 0.12, 0x8a8f96);
+    // la boutique : piliers sombres, porte vitrée, enseigne en drapeau, deux bacs de buis
+    for (const s of [-1, 1]) p.box(0.03, 0.27, 0.02, cx + s * (ww / 2 - 0.015), 0.03, zf + 0.006, 0x3a4048);
+    p.box(0.07, 0.19, 0.016, cx + ww * 0.3, 0.03, zf + 0.008, 0x3a4048); p.box(0.05, 0.17, 0.018, cx + ww * 0.3, 0.04, zf + 0.009, glass, 0, true);
+    p.box(0.004, 0.06, 0.006, cx + ww * 0.3 - 0.018, 0.1, zf + 0.019, 0xc4cad2);
+    p.box(0.006, 0.006, 0.05, cx - ww / 2 + 0.03, 0.24, zf + 0.03, 0x3a4048); p.box(0.008, 0.05, 0.05, cx - ww / 2 + 0.03, 0.18, zf + 0.06, shop); p.box(0.01, 0.03, 0.03, cx - ww / 2 + 0.03, 0.19, zf + 0.06, C.white);
+    for (const s of [-1, 1]) { p.box(0.05, 0.04, 0.05, cx + s * ww * 0.36, 0.03, zf + 0.07, 0x6a6a6e); p.sphere(0.03, cx + s * ww * 0.36, 0.09, zf + 0.07, 0x5a8a4e, 0, 0.9); }
+    // les étages : bandeau entre chaque, meneau au milieu des baies, jardinière fleurie sur les balcons, climatiseur
+    for (let f = 0; f < 3; f++) p.box(ww + 0.008, 0.016, d + 0.008, cx, 0.3 + f * 0.33, zc, dark(render, 0.86));
+    for (let f = 0; f < 2; f++) {
+      const y = 0.36 + f * 0.33;
+      for (const s of [-1, 1]) {
+        const x = cx + s * ww * 0.24;
+        p.box(0.006, 0.18, 0.016, x, y + 0.01, zf + 0.006, frame);
+        p.box(ww * 0.14, 0.02, 0.02, x + s * ww * 0.1, y + 0.07, zf + 0.06, 0x8a6040);
+        for (let k = 0; k < 3; k++) p.box(0.016, 0.016, 0.016, x + s * ww * 0.1 - 0.025 + k * 0.025, y + 0.09, zf + 0.06, [C.pink, 0xd84a3e, C.butter, 0x6fa85a][(k + f + o.v) % 4], k);
+      }
+    }
+    p.box(0.06, 0.04, 0.03, cx - ww * 0.42, 0.62, zf + 0.016, 0xd8dce2); p.box(0.04, 0.03, 0.004, cx - ww * 0.42, 0.625, zf + 0.032, 0x8a8f96);
+    // pignons libres : fenêtres des deux étages
+    for (const s of [-1, 1]) if (s < 0 ? !o.L : !o.R) for (let f = 0; f < 2; f++) wallWindows(p, cx + s * (ww / 2 + 0.004), zc, d * 0.7, 0.36 + f * 0.33, s * Math.PI / 2, 2, 0.07, 0.14, frame);
+    // le toit-terrasse : couvertine, édicule de l'escalier, garde-corps, antenne parabolique
+    p.box(ww + 0.03, 0.008, d + 0.03, cx, H + 0.03, zc, 0xc8c8c4);
+    p.box(0.14, 0.12, 0.12, cx + ww * 0.12, H + 0.03, zc + 0.12, dark(render, 0.92)); p.box(0.06, 0.09, 0.004, cx + ww * 0.12, H + 0.03, zc + 0.181, 0x3a4048);
+    p.box(0.16, 0.01, 0.14, cx + ww * 0.12, H + 0.15, zc + 0.12, dark(render, 0.8));
+    for (const s of [-1, 1]) p.box(0.004, 0.05, d * 0.9, cx + s * (ww / 2 - 0.01), H + 0.038, zc, 0x8a8f96);
+    p.box(ww - 0.02, 0.004, 0.004, cx, H + 0.088, zf - 0.01, 0x8a8f96);
+    p.add(new THREE.SphereGeometry(0.03, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(-1.1), cx - ww * 0.36, H + 0.08, zc + 0.14, 0xe8e8e4); p.box(0.006, 0.05, 0.006, cx - ww * 0.36, H + 0.03, zc + 0.14, 0x8a8f96);
   }
   // le dos sur le jardin : baie coulissante et bandeau vitré de l'étage, fenêtres du pavillon, bandeaux des appartements
   const zb = zc - d / 2 - 0.006;
