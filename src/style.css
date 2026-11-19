@@ -721,7 +721,10 @@ body.under #selCard, body.photo #selCard { display: none; }
 .cePop .credits li::marker { color: #d39a45; }
 .cePop .credits a, .cePop.credits .hint a { color: #a8620e; font-weight: 700; text-decoration-color: rgba(168, 98, 14, 0.4); text-underline-offset: 2px; }
 #ui > .overlay > .cePop.credits .hint { margin: 0; font-size: 13px; font-weight: 500; line-height: 1.45; }
-@media (max-height: 760px) and (min-width: 721px) {
+/* écran de portable (820 px de haut ou moins) : titre plus petit, marge du bas réduite ; l'accueil tient sans ascenseur (il
+   défilait de 22 px en 1280 × 720 et de 19 px en 1366 × 768) */
+@media (max-height: 820px) and (min-width: 721px) {
+  .mInner { padding-bottom: 24px; }
   .mPeaks { width: 140px; }
   #menu h1 { font-size: 78px; }
   .mMode { flex-basis: 240px; }
