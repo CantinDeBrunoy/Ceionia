@@ -11874,6 +11874,18 @@ function towerPodium(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number,
   p.box(w, 0.006, 0.006, cx, 0.196, zf + 0.09, accent, 0, 'neon');
   p.box(0.16, 0.03, 0.006, cx + w * 0.22, 0.215, zf + 0.004, accent, 0, 'neon');
   p.box(0.09, 0.16, 0.014, cx - w * 0.28, 0.03, zf + 0.006, F.smoke);
+  // vitrines : montants, porte coulissante et ses deux vantaux, bornes lumineuses, bacs plantés, arceaux à vélos, affiche
+  for (let k = 1; k < 6; k++) p.box(0.006, 0.13, 0.016, cx - w * 0.43 + (k * w * 0.86) / 6, 0.05, zf + 0.006, F.white);
+  p.box(0.004, 0.14, 0.016, cx - w * 0.28, 0.03, zf + 0.015, F.steel);
+  for (const s of [-1, 1]) p.box(0.04, 0.13, 0.004, cx - w * 0.28 + s * 0.022, 0.035, zf + 0.016, F.glass2, 0, true);
+  p.box(w * 0.86, 0.01, 0.02, cx, 0.03, zf + 0.012, F.dark);
+  for (const s of [-1, 1]) {
+    p.box(0.06, 0.04, 0.05, cx + s * w * 0.4, 0.03, zf + 0.06, F.white); p.sphere(0.028, cx + s * w * 0.4, 0.085, zf + 0.06, F.leaf, 0, 0.8);
+    p.cyl(0.008, 0.008, 0.06, 6, cx + s * w * 0.12, 0.03, zf + 0.09, F.white); p.cyl(0.009, 0.009, 0.01, 6, cx + s * w * 0.12, 0.09, zf + 0.09, accent, 'neon');
+  }
+  for (let k = 0; k < 3; k++) p.add(new THREE.TorusGeometry(0.018, 0.003, 3, 8, Math.PI), cx + w * 0.05 + k * 0.03, 0.03, zf + 0.07, F.steel, Math.PI / 2);
+  p.box(0.05, 0.08, 0.006, cx + w * 0.33, 0.07, zf + 0.008, CYBER[(o.v + 1) % 4], 0, 'neon');
+  p.box(0.04, 0.06, 0.007, cx + w * 0.33, 0.08, zf + 0.009, F.smoke);
   if (!o.F) {
     p.box(w * 0.9, 0.006, 0.12, cx, 0.03, zf + 0.12, 0x8fcf7e);
     hedge(p, cx + w * 0.2, zf + 0.17, w * 0.4, 0.04, 0.05, 0.03);
@@ -11916,9 +11928,18 @@ function futureHouse(p: Parts, o: ModelOpts) {
     const r0 = 0.21, step = tier === 3 ? y0 + (H - y0) * 0.62 : Infinity, rAt = (y: number) => (y > step ? r0 * 0.78 : r0);
     p.cyl(r0, r0, Math.min(H, step) - y0, 12, cx, y0, zc, F.glass);
     if (step < H) { p.cyl(r0 + 0.04, r0 + 0.04, 0.03, 12, cx, step, zc, F.white); p.cyl(r0 * 0.78, r0 * 0.78, H - step, 12, cx, step, zc, F.glass); }
+    // nervures blanches du haut en bas, une sur deux plus saillante
+    for (let k = 0; k < 8; k++) {
+      const a = k * 0.785 + 0.2, t = k % 2 ? 0.014 : 0.024;
+      p.box(0.016, Math.min(H, step) - y0, t, cx + Math.cos(a) * r0, y0, zc + Math.sin(a) * r0, F.white, Math.PI / 2 - a);
+      if (step < H && k % 2 === 0) p.box(0.014, H - step, t, cx + Math.cos(a) * r0 * 0.78, step, zc + Math.sin(a) * r0 * 0.78, F.white, Math.PI / 2 - a);
+    }
     for (let y = y0 + 0.14, i = 0; y < H - 0.05; y += 0.15, i++) {
       const r = rAt(y);
       p.cyl(r + 0.055, r + 0.055, 0.02, 10, cx, y, zc, F.white);
+      // garde-corps de verre un étage sur deux, sur trois aux gratte-ciel (les tours sont nombreuses : rester sobre en triangles)
+      if (tier < 3 ? i % 2 : i % 3 === 1) p.add(new THREE.CylinderGeometry(r + 0.05, r + 0.05, 0.035, 10, 1, true).translate(0, 0.0375, 0), cx, y, zc, 0xbfe0ee);
+      if (i % 4 === 1) p.add(new THREE.CylinderGeometry(r + 0.052, r + 0.052, 0.006, 10, 1, true), cx, y + 0.07, zc, accent, 0, 'neon');
       if ((i + o.v) % 3 === 0) for (let k = 0; k < 3; k++) { const a = k * 2.1 + i; p.sphere(0.026, cx + Math.cos(a) * (r + 0.035), y + 0.035, zc + Math.sin(a) * (r + 0.035), F.leaf, 0, 0.8); }
       for (let k = 0; k < 8; k++) if ((k * 3 + i * 5 + o.v) % 7 < 2) { const a = k * 0.785 + 0.4; pane(p, 0.05, 0.07, cx + Math.cos(a) * (r + 0.002), y - 0.1, zc + Math.sin(a) * (r + 0.002), F.warm, Math.PI / 2 - a, true); }
     }
@@ -11938,6 +11959,18 @@ function futureHouse(p: Parts, o: ModelOpts) {
       p.box(fw, 0.12, fd, cx + dx, y, zc, F.glass, ry);
       p.box(fw + 0.04, 0.03, fd + 0.04, cx + dx, y + 0.12, zc, F.white, ry);
       lights(p, cx + dx + Math.sin(ry) * (fd / 2 + 0.003), zc + Math.cos(ry) * (fd / 2 + 0.003), ry, fw / 2, y + 0.03, y + 0.06, 0.1, i * 7 + o.v);
+      // montants sombres sur les deux grandes faces ; un balcon vitré un étage sur deux, de face, un côté puis l'autre
+      for (const fz of [1, -1]) for (let k = 1; k < 4; k++) {
+        const u = -fw / 2 + (k * fw) / 4, ff = fz * (fd / 2 + 0.004);
+        pane(p, 0.008, 0.12, cx + dx + Math.cos(ry) * u + Math.sin(ry) * ff, y, zc - Math.sin(ry) * u + Math.cos(ry) * ff, F.dark, fz > 0 ? ry : ry + Math.PI, false);
+      }
+      if (i % 2 === 0 && i > 0) {
+        const u = (i % 4 ? 1 : -1) * fw * 0.22, bz = fd / 2 + 0.035;
+        const bx = cx + dx + Math.cos(ry) * u + Math.sin(ry) * bz, bzz = zc - Math.sin(ry) * u + Math.cos(ry) * bz;
+        p.box(fw * 0.4, 0.012, 0.07, bx, y, bzz, F.white, ry);
+        p.box(fw * 0.4, 0.04, 0.004, bx + Math.sin(ry) * 0.033, y + 0.012, bzz + Math.cos(ry) * 0.033, 0xbfe0ee, ry);
+        p.sphere(0.018, bx - Math.cos(ry) * fw * 0.14, y + 0.03, bzz + Math.sin(ry) * fw * 0.14, F.leaf2, 0, 0.9);
+      }
       if (i % 3 === 1) for (const s of [-1, 1]) p.sphere(0.03, cx + dx + Math.cos(ry) * s * fw * 0.42, y + 0.17, zc - Math.sin(ry) * s * fw * 0.42, F.leaf, 0, 0.8);
       top = y + 0.15;
     }
@@ -11954,6 +11987,22 @@ function futureHouse(p: Parts, o: ModelOpts) {
     p.box(tw, H - mid - 0.05, td, cx, mid + 0.05, zc, F.glass);
     for (let y = y0 + 0.13; y < H - 0.02; y += 0.13) if (Math.abs(y - mid) > 0.12) p.box(tw + 0.012, 0.014, td + 0.012, cx, y, zc, F.white);
     lights(p, cx, zc + td / 2 + 0.004, 0, tw / 2, y0 + 0.04, H - 0.06, 0.13, o.v);
+    lights(p, cx, zc - td / 2 - 0.004, Math.PI, tw / 2, y0 + 0.04, H - 0.06, 0.13, o.v + 3);
+    // meneaux sur les deux faces, balcons à garde-corps de verre tous les trois étages, de part et d'autre du jardin
+    for (const fz of [1, -1]) for (let k = 1; k < 6; k++) {
+      const u = -tw / 2 + (k * tw) / 6;
+      pane(p, 0.007, mid - 0.1 - y0, cx + u, y0, zc + fz * (td / 2 + 0.005), F.dark, fz > 0 ? 0 : Math.PI, false);
+      pane(p, 0.007, H - mid - 0.05, cx + u, mid + 0.05, zc + fz * (td / 2 + 0.005), F.dark, fz > 0 ? 0 : Math.PI, false);
+    }
+    for (let y = y0 + 0.26, i = 0; y < H - 0.1; y += 0.39, i++) {
+      if (Math.abs(y - mid) < 0.2) continue;
+      const bx = cx + (i % 2 ? 0.08 : -0.08);
+      p.box(tw * 0.42, 0.012, 0.07, bx, y, zc + td / 2 + 0.035, F.white);
+      p.box(tw * 0.42, 0.04, 0.004, bx, y + 0.012, zc + td / 2 + 0.068, 0xbfe0ee);
+      p.box(0.06, 0.02, 0.02, bx - tw * 0.12, y + 0.012, zc + td / 2 + 0.05, F.leaf2);
+    }
+    p.box(0.12, 0.07, 0.1, cx + tw * 0.25, H + 0.035, zc - td * 0.25, F.pearl);
+    for (let k = 0; k < 3; k++) p.cyl(0.012, 0.012, 0.03, 6, cx - tw * 0.3 + k * 0.035, H + 0.035, zc - td * 0.3, F.steel);
     // le jardin suspendu : dalle, colonnes blanches, arbres
     p.box(tw + 0.08, 0.03, td + 0.08, cx, mid - 0.1, zc, F.white);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.cyl(0.01, 0.01, 0.15, 6, cx + sx * tw * 0.45, mid - 0.07, zc + sz * td * 0.42, F.white);
