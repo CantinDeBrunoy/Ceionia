@@ -17,7 +17,9 @@ describe('variantes de décor des choix', () => {
     expect(of('obsidian')).toEqual([null, 'hot']);
     expect(of('ascent')).toEqual([null, 'lava']);
     expect(of('eruption')).toEqual([null, 'trench']);
+    // le cerf blanc : la meute, ou l'affût
+    expect(of('stag')).toEqual([null, 'stalk']);
     const all = MISSIONS.flatMap((m) => m.choices).filter((c) => c.variant);
-    expect(all).toHaveLength(10);
+    expect(all).toHaveLength(11);
   });
 });

@@ -78,7 +78,7 @@ export interface ActiveExpedition {
 }
 
 /** Les chasses où le monstre meurt sur place : l'issue s'y tire avant la fin du travail */
-export const FATED = new Set<string>(['megalodon', 'kraken', 'dragon']);
+export const FATED = new Set<string>(['megalodon', 'kraken', 'dragon', 'stag']);
 /** Part du travail où se joue l'issue d'une chasse au monstre (après le dernier imprévu, qui survient aux trois quarts au plus) */
 export const FATE_AT = 0.8;
 /** Phare et chantier naval veillent sur les expéditions en mer : risque en moins (les deux se cumulent) */
@@ -485,6 +485,8 @@ export class Expeditions {
     kits.forEach((kt, i) => {
       // les chasseurs du mammouth ont toujours leurs lances de chasse au poing (les armes du village, emportées en plus, rendent la chasse plus sûre)
       if (c.scene === 'mammoth' || c.scene === 'megalodon' || c.scene === 'kraken' || c.scene === 'dragon') kt.weapon ??= huntWeapon(age);
+      // (le cerf blanc se chasse à l'arc, jusqu'à ce que les armes à feu le remplacent)
+      if (c.scene === 'stag') kt.weapon ??= age <= 2 ? 'bow' : huntWeapon(age);
       if (i < (take.armor ?? 0) + (take.energyArmor ?? 0)) kt.armor = true;
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       else if (kits.length - 1 - i < (take.lamp ?? 0)) kt.lamp = true;

@@ -314,6 +314,15 @@ export const EVENTS: ExpEvent[] = [
       { label: 'Finir au plus vite', risk: 1.25, work: -4, text: 'On a fini en hâte, les étincelles plein les cheveux.' },
     ],
   },
+  // ---------------- La chasse au cerf blanc ----------------
+  {
+    id: 'gaze', where: ['forest'], scenes: ['stag'], from: 0.3, title: 'Le regard du cerf blanc',
+    text: 'Le cerf blanc s’arrête au bord de la clairière et fixe les chasseurs. Une lumière pâle l’entoure. Personne n’ose bouger.',
+    options: [
+      { label: 'Bander l’arc sans bruit', risk: 0.85, work: 4, text: 'On a bandé l’arc sans un bruit, accroupis dans les fougères.' },
+      { label: 'Baisser les armes et le saluer', risk: 1.15, bonus: [joy(2, 6)], text: 'On a baissé les armes et salué le cerf blanc. Le village ne parle que de ce moment.' },
+    ],
+  },
   // ---------------- En partant pour le volcan : sur la rive d'en face (ou à son pied) ----------------
   {
     id: 'ash', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent', 'eruption'], arrive: true, title: 'Une pluie de cendres',

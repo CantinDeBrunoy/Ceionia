@@ -128,7 +128,7 @@ describe('la chasse au monstre des mers', () => {
 
   it('les autres expéditions tirent leur issue à la fin du travail, comme avant', () => {
     expect(FATED.has('mammoth')).toBe(false);
-    expect([...FATED].sort()).toEqual(['dragon', 'kraken', 'megalodon']);
+    expect([...FATED].sort()).toEqual(['dragon', 'kraken', 'megalodon', 'stag']);
     const v = village(0), a = v.ex.start(mission('herd'), 0, 0)!;
     play(v, a, () => a.phase === 'back' || a.phase === 'home');
     expect(a.fate).toBeUndefined();

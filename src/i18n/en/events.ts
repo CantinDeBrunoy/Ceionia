@@ -435,6 +435,13 @@ registerDict('events', {
   "On a approché sans bruit : on sait où se tiendra le chef rival.": "We crept closer without a sound: we know where the rival chief will stand.",
   "Noter l’endroit et passer": "Mark the Spot and Move On",
   "On a noté l’endroit sur la carte et poursuivi la reconnaissance.": "We marked the spot on the map and went on scouting.",
+  // la chasse au cerf blanc
+  'Le regard du cerf blanc': 'The White Stag’s Gaze',
+  'Le cerf blanc s’arrête au bord de la clairière et fixe les chasseurs. Une lumière pâle l’entoure. Personne n’ose bouger.': 'The white stag stops at the edge of the clearing and stares at the hunters. A pale light surrounds it. Nobody dares to move.',
+  'Bander l’arc sans bruit': 'Draw the bow silently',
+  'On a bandé l’arc sans un bruit, accroupis dans les fougères.': 'We drew our bows without a sound, crouching in the ferns.',
+  'Baisser les armes et le saluer': 'Lower your weapons and greet it',
+  'On a baissé les armes et salué le cerf blanc. Le village ne parle que de ce moment.': 'We lowered our weapons and greeted the white stag. The village talks of nothing else.',
   // sur le volcan
   'Une pluie de cendres': 'A Rain of Ash',
   'Le vent rabat la fumée du volcan : une cendre grise tombe sur l’équipe et lui pique les yeux.': 'The wind blows the volcano’s smoke back down: grey ash falls on the team and stings their eyes.',

@@ -544,4 +544,18 @@ registerDict('missions', {
   'creuse une tranchée pour détourner la coulée du village': 'digs a trench to turn the flow away from the village',
   'La coulée a suivi la tranchée et filé vers la mer : les maisons sont sauves ! Le village reconnaissant nous offre son fer.': 'The flow followed the trench and ran into the sea: the houses are saved! The grateful village gives us its iron.',
   'La lave a franchi la tranchée : on a sauvé les gens, pas les maisons. Deux sauveteurs sont brûlés.': 'The lava crossed the trench: we saved the people, not the houses. Two rescuers are burned.',
+  // la chasse au cerf blanc
+  'les bois du cerf blanc : un trophée sur la place du village': 'the white stag’s antlers: a trophy in the village square',
+  'La chasse au cerf blanc': 'The White Stag Hunt',
+  'Un cerf tout blanc, aux bois immenses, hante la forêt. On dit qu’il porte chance au village qui le prend. Le cor sonne.': 'A pure white stag with huge antlers haunts the forest. They say it brings luck to the village that takes it. The horn sounds.',
+  'Le courre avec la meute': 'Hunt It with the Hounds',
+  'Audacieux : les chiens le lèvent, on le poursuit.': 'Bold: the hounds flush it out, and the chase is on.',
+  'court le cerf blanc avec la meute': 'hunts the white stag with the hounds',
+  'Les chiens l’ont acculé au fond de la clairière : le cerf blanc est pris ! Ses bois immenses orneront la place.': 'The hounds cornered it at the back of the clearing: the white stag is taken! Its huge antlers will adorn the square.',
+  'Le cerf blanc a sauté le ruisseau et disparu dans la brume. Un chasseur s’est foulé la cheville.': 'The white stag leapt over the stream and vanished into the mist. A hunter sprained his ankle.',
+  'L’attendre à l’affût': 'Lie in Wait for It',
+  'Prudent : on le guette sans bruit, l’arc bandé.': 'Careful: watch for it in silence, bow drawn.',
+  'guette le cerf blanc à l’affût, l’arc bandé': 'lies in wait for the white stag, bow drawn',
+  'Au petit matin, le cerf blanc est venu brouter devant l’affût : une flèche, une seule. Ses bois rejoignent la place.': 'At dawn, the white stag came to graze in front of the hide: one arrow, just one. Its antlers join the square.',
+  'Le cerf blanc a flairé l’affût et s’est éloigné sans hâte. On l’a vu, au moins.': 'The white stag scented the hide and walked calmly away. At least we saw it.',
 });

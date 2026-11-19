@@ -3159,10 +3159,115 @@ function ibex(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Cerf blanc (chasse légendaire) ----------
+
+const STAG_COATS: Coat[] = [
+  // robe blanche à peine crème, dos nacré, bois dorés
+  { fur: 0xeeebe2, top: 0xfaf8f1, belly: 0xffffff, muzzle: 0xd9d2c4, nose: 0x3a302c, leg: 0xe4dfd4, hoof: 0x4e4238, antler: 0xe2c98a, tip: 0xfff1c4, eye: 0x1a1412 },
+];
+
+/**
+ * Le cerf blanc légendaire : un grand cerf élancé, robe blanche au dos nacré, poitrail profond et collier de poils sur le
+ * cou, longues pattes fines aux sabots sombres, tête fine au mufle gris, grandes oreilles, et des bois immenses, dorés, plus
+ * larges que son corps : merrain qui monte en lyre, andouiller d'œil, de bois et chevillure, puis une couronne de pointes au
+ * sommet. Marche tête haute, bondit, broute, brame cou tendu ; couché, il replie ses pattes
+ */
+function whitestag(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  const n0: V3 = [0, 0.2, 0.07], n1: V3 = [0, 0.262, 0.112];
+  r.bone('hips', null, 0, 0.17, -0.05);
+  r.bone('chest', 'hips', 0, 0.175, 0.03);
+  r.bone('ribs', 'chest', 0, 0.175, 0.03);
+  r.bone('neck', 'chest', ...n0);
+  r.bone('head', 'neck', ...n1);
+  r.bone('jaw', 'head', 0, 0.252, 0.15);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.016, 0.282, 0.112));
+  r.bone('tail1', 'hips', 0, 0.188, -0.1);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.022, 0.158, 0.058);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.022, 0.085, 0.06);
+    r.bone(`h${L}1`, 'hips', s * 0.024, 0.165, -0.07);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.024, 0.085, -0.082);
+  });
+
+  // corps élancé : croupe ronde, poitrail profond, ventre blanc relevé, dos nacré
+  r.add('hips', ell(0.03, 0.034, 0.048), [0, 0.172, -0.05], c.fur, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.032, 0.04, 0.056), [0, 0.172, 0.012], c.fur, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.022, 0.012, 0.05), [0, 0.138, -0.004], c.belly);
+  r.add('chest', ell(0.027, 0.036, 0.03), [0, 0.18, 0.05], c.fur, [0.25, 0, 0], c.top);
+  // cou long et fier, collier de poils sous la gorge
+  r.put('neck', seg(n0, n1, 0.02, 0.014, 7), c.fur, c.top);
+  r.add('neck', ell(0.021, 0.026, 0.02), [0, 0.2, 0.082], c.belly, [0.5, 0, 0]);
+  for (let i = 0; i < 5; i++) r.put('neck', seg([(i - 2) * 0.005, 0.2 - i * 0.002, 0.092], [(i - 2) * 0.006, 0.178 - i * 0.002, 0.096], 0.005, 0.001, 4), c.belly);
+  // tête fine, mufle gris, truffe sombre, yeux
+  r.add('head', ell(0.015, 0.016, 0.022), [0, 0.272, 0.118], c.fur, [0.3, 0, 0], c.top);
+  r.add('head', ell(0.01, 0.011, 0.022), [0, 0.258, 0.145], c.muzzle, [0.45, 0, 0]);
+  r.add('head', ell(0.006, 0.004, 0.004, 0), [0, 0.252, 0.164], c.nose);
+  r.both((s) => r.add('head', ell(0.0034, 0.004, 0.003, 0), [s * 0.013, 0.274, 0.128], c.eye, [0, s * 0.5, 0]));
+  r.add('jaw', ell(0.008, 0.004, 0.014, 0), [0, 0.246, 0.152], c.muzzle);
+  // grandes oreilles
+  r.both((s, L) => r.add(`e${L}`, ell(0.007, 0.014, 0.004, 0), [s * 0.026, 0.288, 0.108], c.fur, [0, 0, -s * 0.85], c.top));
+  // les bois immenses : le merrain monte en lyre, s'écarte, revient vers l'avant ; andouillers sur l'avant, couronne au sommet
+  r.both((s) => {
+    const beam: V3[] = [[s * 0.009, 0.284, 0.118], [s * 0.028, 0.318, 0.108], [s * 0.056, 0.356, 0.088], [s * 0.078, 0.398, 0.07], [s * 0.088, 0.44, 0.064], [s * 0.084, 0.478, 0.072], [s * 0.07, 0.508, 0.088]];
+    const rad = [0.0058, 0.0052, 0.0046, 0.004, 0.0034, 0.0028, 0.0016];
+    for (let i = 0; i + 1 < beam.length; i++) r.put('head', seg(beam[i], beam[i + 1], rad[i], rad[i + 1], 5), c.antler, i > 3 ? c.tip : undefined);
+    // la meule, à la base
+    r.add('head', ell(0.0075, 0.004, 0.0075, 0), beam[0], c.antler);
+    // andouillers : vers l'avant et vers le haut, le long du merrain (d'œil, de bois, chevillure, puis trois pointes)
+    const tines: [number, V3, number][] = [
+      [0.15, [s * 0.006, 0.02, 0.04], 0.0032], [0.3, [s * 0.012, 0.026, 0.038], 0.003], [0.48, [s * 0.016, 0.034, 0.03], 0.0028],
+      [0.64, [s * 0.026, 0.034, 0.022], 0.0026], [0.76, [s * 0.006, 0.038, 0.028], 0.0024], [0.88, [-s * 0.012, 0.03, 0.03], 0.0022],
+    ];
+    for (const [t, d, rt] of tines) {
+      const k = t * (beam.length - 1), i = Math.min(beam.length - 2, Math.floor(k)), b = along(beam[i], beam[i + 1], k - i);
+      const tip: V3 = [b[0] + d[0], b[1] + d[1], b[2] + d[2]], mid: V3 = [b[0] + d[0] * 0.5, b[1] + d[1] * 0.55 - 0.002, b[2] + d[2] * 0.5];
+      r.put('head', seg(b, mid, rt, rt * 0.75, 4), c.antler);
+      r.put('head', seg(mid, tip, rt * 0.75, 0.0006, 4), c.tip);
+    }
+    // la couronne : trois pointes en éventail au bout du merrain
+    const top = beam[beam.length - 1];
+    for (const [dx, dz] of [[0.016, 0.0], [0.004, 0.018], [-0.012, 0.012]]) r.put('head', seg(top, [top[0] + s * dx, top[1] + 0.03, top[2] + dz], 0.0018, 0.0005, 4), c.tip);
+  });
+  // la queue courte, blanche
+  r.add('tail1', ell(0.006, 0.012, 0.005, 0), [0, 0.178, -0.103], c.belly, [0.3, 0, 0]);
+  // longues pattes fines : épaules et cuisses, canons clairs, sabots sombres
+  r.both((s, L) => {
+    const x = s * 0.022, hx = s * 0.024;
+    r.add(`f${L}1`, ell(0.015, 0.034, 0.02), [x, 0.148, 0.056], c.fur, [0, 0, 0], c.top);
+    r.put(`f${L}1`, seg([x, 0.128, 0.058], [x, 0.085, 0.06], 0.008, 0.0062), c.leg);
+    r.put(`f${L}2`, seg([x, 0.085, 0.06], [x, 0.01, 0.062], 0.0058, 0.0048), c.leg);
+    r.put(`f${L}2`, seg([x, 0, 0.064], [x, 0.01, 0.062], 0.0062, 0.0055, 6), c.hoof);
+    r.add(`h${L}1`, ell(0.017, 0.04, 0.025), [hx, 0.15, -0.068], c.fur, [0.1, 0, 0], c.top);
+    r.put(`h${L}1`, seg([hx, 0.122, -0.072], [hx, 0.085, -0.082], 0.0085, 0.0062), c.leg);
+    r.put(`h${L}2`, seg([hx, 0.085, -0.082], [hx, 0.01, -0.072], 0.0058, 0.0048), c.leg);
+    r.put(`h${L}2`, seg([hx, 0, -0.07], [hx, 0.01, -0.072], 0.0062, 0.0055, 6), c.hoof);
+  });
+
+  const clips = quadClips({
+    walk: { dur: 1.0, A: 0.32, L: 0.85, ph: { hL: 0, fL: 0.25, hR: 0.5, fR: 0.75 }, bob: 0.004 },
+    // le bond : les pattes arrière ensemble, puis celles de devant
+    run: { dur: 0.5, A: 0.85, L: 1.25, ph: { hL: 0, hR: 0.05, fL: 0.45, fR: 0.5 }, bob: 0.018, rock: 0.2 },
+    neck: ['neck'], graze: [1.0], grazeHead: 0.4,
+    lie: { drop: 0.1, f: [-1.4, 2.4], h: [-1.0, 2.2] },
+  });
+  clips.push(
+    // il brame : cou tendu vers le ciel, mâchoire ouverte, puis secoue ses bois
+    ['Idle_2', 3.4, (u, P) => {
+      const k = win(u, 0.08, 0.7, 0.12), b = win(u, 0.25, 0.6, 0.05), sh = win(u, 0.72, 0.95, 0.05);
+      R(P, 'neck', -0.45 * k); R(P, 'head', -0.35 * k, 0.25 * sh * sn(u, 6));
+      R(P, 'jaw', 0.3 * b + 0.05 * b * sn(u, 12));
+      ears(P, -0.3 * k, 0);
+      breathe(P, u, 3, 1 + b);
+    }],
+  );
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
 export type BeastKind = 'bear' | 'elephant' | 'mammoth' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon' | 'sheep' | 'pig' | 'hen'
-  | 'rabbit' | 'duck' | 'duckling' | 'goose' | 'frog' | 'ibex';
+  | 'rabbit' | 'duck' | 'duckling' | 'goose' | 'frog' | 'ibex' | 'whitestag';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
@@ -3190,6 +3295,7 @@ const DEFS: Record<BeastKind, BeastDef> = {
   goose: { coats: GOOSE_COATS, build: (c) => fowl(c, 'goose') },
   frog: { coats: FROG_COATS, build: frog },
   ibex: { coats: IBEX_COATS, build: ibex },
+  whitestag: { coats: STAG_COATS, build: whitestag },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */

@@ -701,6 +701,10 @@ const emberGeo = new THREE.IcosahedronGeometry(0.03, 0);
 const FUR = 0x7a4a2a, FUR_DARK = 0x5a3620;
 /** Taille du mammouth de `beasts.ts` pour une femelle adulte (0,5 au garrot, 0,7 des défenses à la queue) */
 const MAMMOTH_SCALE = 1.5;
+/** Le cerf blanc : bien plus grand qu'un cerf de la forêt (ses bois dépassent la tête des chasseurs) */
+const STAG_SCALE = 1.7;
+/** Le halo pâle du cerf blanc, posé au sol sous lui */
+const STAG_HALO = new THREE.MeshBasicMaterial({ color: 0xfff6d8, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending });
 /** Un tronçon de cylindre de a à b, du rayon r0 au rayon r1 (pattes, trompe, queue, perches) */
 function tube(p: Parts, a: number[], b: number[], r0: number, r1: number, c: number, seg = 6) {
   const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
@@ -783,6 +787,8 @@ const BEHAVIOR: Record<Scene, string> = {
   // le volcan : la barque traverse jusqu'à son île, l'équipe y débarque et monte au lieu du travail (voir `VolcanoSite`) ; venue
   // à pied, elle y monte depuis le pied du cône (`volcano`)
   obsidian: 'boat', ascent: 'boat', eruption: 'boat',
+  // la chasse au cerf blanc : la clairière, le cerf, la meute ou l'affût (voir `stagHunt`)
+  stag: 'stag',
 };
 /**
  * L'expédition du portail, en part du travail : la galère touche l'île, l'équipe arrive à l'arche, le tourbillon s'éveille,
@@ -1075,6 +1081,12 @@ export class ExpeditionScene {
     old: Mammoth; at: [number, number]; dir: number; way: 'pits' | 'ravine' | 'follow'; trap: [number, number]; axis: [number, number];
     pits: THREE.Object3D[]; covers: THREE.Object3D[]; k: number; back: number;
   } | null = null;
+  /**
+   * La chasse au cerf blanc : le cerf (mené comme un mammouth : ses gestes par `stepMammoths`), la clairière où il paît, de
+   * quel côté du camp, la façon de chasser (la meute ou l'affût), l'affût, son halo, l'avancement le plus loin atteint, le temps
+   * depuis l'issue
+   */
+  private stagH: { m: Mammoth; at: [number, number]; dir: number; way: 'chase' | 'stalk'; blind: [number, number]; halo: THREE.Mesh; k: number; after: number; ang: number } | null = null;
   /** l'équipe est repartie (une fois) : l'échec se joue, ce qui la suit quitte la scène */
   private departed = false;
   /** l'équipe est repartie : le décor rétrécit et s'efface (secondes depuis, -1 : pas encore) */
@@ -1231,6 +1243,7 @@ export class ExpeditionScene {
     const w = this.world, age = a.m.age, st = this.story, y = (x: number, z: number) => w.surfaceAt(x, z);
     if (st === 'launch' || st === 'moon' || st === 'colony') this.launchpad(a, cx, cz);
     else if (st === 'mammoth') this.mammothHunt(a, cx, cz);
+    else if (st === 'stag') this.stagHunt(a, cx, cz);
     else if (st === 'games') this.gamesStage(a, cx, cz);
     else if (st === 'dragon') this.dragonLair(a, cx, cz);
     else if (st === 'salt') {
@@ -1559,6 +1572,160 @@ export class ExpeditionScene {
   }
 
   /**
+   * La chasse au cerf blanc : le camp des chasseurs et, du côté le plus dégagé, la clairière où paît le cerf blanc, un halo pâle
+   * à ses pieds. À courre, deux chiens partent avec les chasseurs ; à l'affût, un écran de branchages entre le camp et la
+   * clairière, où les chasseurs se tapissent
+   */
+  private stagHunt(a: ActiveExpedition, cx: number, cz: number) {
+    this.camp(cx, cz);
+    let dir = 0, best = -1;
+    for (let d = 0; d < 12; d++) {
+      const ang = (d / 12) * Math.PI * 2;
+      let n = 0;
+      while (n < 6 && this.free(cx + Math.sin(ang) * 0.5 * (n + 1), cz + Math.cos(ang) * 0.5 * (n + 1))) n++;
+      if (n > best) { best = n; dir = ang; }
+    }
+    const sx = Math.sin(dir), sz = Math.cos(dir), px = Math.cos(dir), pz = -Math.sin(dir);
+    const at = this.near(cx + sx * 2.3, cz + sz * 2.3, cx, cz), way = a.c.variant === 'stalk' ? 'stalk' : 'chase';
+    const actor = makeBeast('whitestag', 0, STAG_SCALE), o = actor.root;
+    o.position.set(at[0], this.world.surfaceAt(at[0], at[1]), at[1]);
+    o.rotation.y = dir + Math.PI;
+    this.group.add(o);
+    const b: Beast = { obj: o, actor: null, x: at[0], z: at[1], tx: at[0], tz: at[1], heading: dir + Math.PI, wait: 2, speed: 0.1 };
+    const m: Mammoth = { b, actor, size: 1, ph: 0, px: at[0], pz: at[1], v: 0, trumpet: 0, lie: 0, sink: 0 };
+    this.mammoths.push(m);
+    play(actor, ['Idle']);
+    const halo = new THREE.Mesh(new THREE.CircleGeometry(0.42, 20).rotateX(-Math.PI / 2), STAG_HALO);
+    this.group.add(halo); this.props.push(halo);
+    const blind = this.near(cx + sx * 1.15 + px * 0.25, cz + sz * 1.15 + pz * 0.25, cx, cz);
+    if (way === 'stalk') {
+      // l'affût : un écran de branchages et deux buissons, face à la clairière
+      for (const o2 of [-0.18, 0.18]) this.put(branchGeo(), blind[0] + px * o2, blind[1] + pz * o2, dir + Math.PI / 2).scale.setScalar(1.3);
+      for (const s of [-1, 1]) this.put(bushGeo(), blind[0] + px * s * 0.42, blind[1] + pz * s * 0.42, s);
+    } else for (let i = 0; i < 2; i++) {
+      // la meute : deux chiens courants, qui arrivent avec les chasseurs
+      const dog = hasModel('dog') ? makeActor('dog', 0.2) : null;
+      if (!dog) break;
+      this.group.add(dog.root);
+      this.dogs.push({ obj: dog.root, actor: dog, x: cx + (i ? 0.2 : -0.2), z: cz, tx: cx, tz: cz, heading: dir, wait: 0, speed: 1.9 });
+    }
+    this.focus = [(cx + at[0]) / 2, (cz + at[1]) / 2];
+    this.stagH = { m, at, dir, way, blind, halo, k: 0, after: 0, ang: 0 };
+  }
+
+  /**
+   * La chasse au cerf blanc, selon l'avancement : il paît dans la clairière pendant qu'on s'approche ; à courre, les chiens le
+   * lèvent et il tourne en bonds autour de la clairière, la meute aux trousses ; à l'affût, il s'avance en broutant vers
+   * l'écran de branchages. Il brame de temps en temps. L'issue (`a.fate`, aux quatre cinquièmes du travail) : pris, il se
+   * couche, et le halo s'éteint ; manqué, il s'enfuit en bondissant et disparaît dans la forêt
+   */
+  private stepStagHunt(dt: number, a: ActiveExpedition, k: number) {
+    const h = this.stagH!, m = h.m, b = m.b, [cx, cz] = a.dest, away = a.phase === 'back' || a.phase === 'home';
+    const K = (h.k = Math.max(h.k, k)), fate = a.fate ?? (away ? a.ok : undefined), sx = Math.sin(h.dir), sz = Math.cos(h.dir);
+    const move = (tx: number, tz: number, speed: number) => {
+      const dx = tx - b.x, dz = tz - b.z, d = Math.hypot(dx, dz);
+      if (d > 0.03 && speed > 0) { const st = Math.min(d, speed * dt); b.x += (dx / d) * st; b.z += (dz / d) * st; b.heading = Math.atan2(dx, dz); }
+      b.obj.rotation.y = b.heading;
+      return d > 0.03;
+    };
+    if (fate !== undefined) h.after += dt;
+    if (fate === true) {
+      // pris : il se couche là où il est
+      m.lie = Math.min(1, m.lie + dt * 0.5);
+    } else if (fate === false) {
+      // manqué : il bondit loin du camp et disparaît sous les arbres
+      const ang = Math.atan2(b.x - cx, b.z - cz);
+      move(b.x + Math.sin(ang) * 2, b.z + Math.cos(ang) * 2, 1.4);
+      if (h.after > 6) b.obj.visible = false;
+    } else if (K < 0.3) {
+      // il paît dans la clairière
+      if (!move(b.tx, b.tz, 0.12) && (b.wait -= dt) <= 0) {
+        b.wait = 3 + Math.random() * 3;
+        const ang = Math.random() * Math.PI * 2, d = Math.random() * 0.4;
+        [b.tx, b.tz] = this.near(h.at[0] + Math.cos(ang) * d, h.at[1] + Math.sin(ang) * d, cx, cz);
+      }
+    } else if (h.way === 'chase') {
+      // levé par les chiens : il tourne en bonds autour de la clairière
+      h.ang += dt * 0.55;
+      const r = 0.9, [tx, tz] = this.near(h.at[0] + Math.sin(h.ang) * r, h.at[1] + Math.cos(h.ang) * r, cx, cz);
+      move(tx, tz, 0.9);
+    } else {
+      // à l'affût : il s'avance en broutant vers l'écran de branchages, s'arrête, relève la tête
+      const u = Math.min(1, (K - 0.3) / 0.4), tx = h.at[0] + (h.blind[0] - h.at[0]) * u * 0.6, tz = h.at[1] + (h.blind[1] - h.at[1]) * u * 0.6;
+      move(tx, tz, 0.1);
+    }
+    // il brame de temps en temps (moins une fois couché)
+    if (m.lie < 0.3 && b.obj.visible && Math.random() < dt * (fate === undefined && K >= 0.3 ? 0.25 : 0.08)) m.trumpet = 1;
+    // le halo, à ses pieds : il pulse, et s'éteint quand il est pris
+    const y = this.world.surfaceAt(b.x, b.z);
+    h.halo.position.set(b.x, y + 0.012, b.z);
+    h.halo.visible = b.obj.visible && m.lie < 0.95;
+    h.halo.scale.setScalar((1 + 0.08 * Math.sin(this.t * 2.2)) * (1 - m.lie * 0.6));
+    // la meute : derrière le cerf qui fuit, de part et d'autre ; avant et après la chasse, près des chasseurs
+    const chase = h.way === 'chase' && K >= 0.3 && fate === undefined;
+    this.dogs.forEach((dg, i) => {
+      const side = i ? 1 : -1, back = b.heading + Math.PI + side * 0.7;
+      const gx = chase ? b.x + Math.sin(back) * 0.4 : cx + sx * 0.4 + side * 0.25, gz = chase ? b.z + Math.cos(back) * 0.4 : cz + sz * 0.4;
+      const ddx = gx - dg.x, ddz = gz - dg.z, dd = Math.hypot(ddx, ddz);
+      let moving = false;
+      if (dd > 0.06) { const st = Math.min(dd, dg.speed * dt); dg.x += (ddx / dd) * st; dg.z += (ddz / dd) * st; dg.heading = Math.atan2(ddx, ddz); moving = true; }
+      else dg.heading = Math.atan2(b.x - dg.x, b.z - dg.z);
+      dg.obj.position.set(dg.x, this.world.surfaceAt(dg.x, dg.z), dg.z);
+      dg.obj.rotation.y = dg.heading;
+      if (dg.actor) { play(dg.actor, moving ? ['Run'] : chase ? ['Jump_Start', 'Idle'] : ['Idle']); dg.actor.mixer.update(dt); }
+    });
+    this.focus = [(cx + b.x) / 2, (cz + b.z) / 2];
+  }
+
+  /**
+   * Un chasseur du cerf blanc : à courre, il entoure la clairière et tire à son tour quand le cerf passe à portée ; à l'affût,
+   * il reste tapi derrière les branchages, puis se relève et tire quand le cerf est tout près. L'issue venue, on s'approche du
+   * cerf couché (on acclame), ou on le regarde partir
+   */
+  private stepStagHunter(id: number, i: number, a: ActiveExpedition, k: number, dt: number) {
+    const h = this.stagH!, b = h.m.b, w = this.world, n = a.party.length, [cx, cz] = a.dest, fate = a.fate;
+    const phase = fate === true ? 'won' : fate === false ? 'lost' : k < 0.25 ? 'near' : 'hunt';
+    if (this.stage.get(id) !== phase || (phase === 'hunt' && h.way === 'chase' && (this.next.get(id) ?? 0) <= 0)) {
+      this.stage.set(id, phase);
+      this.next.set(id, 4 + Math.random() * 2);
+      let tx: number, tz: number;
+      if (phase === 'won') [tx, tz] = this.near(b.x + Math.cos(i * 1.6) * 0.45, b.z + Math.sin(i * 1.6) * 0.45, cx, cz);
+      else if (h.way === 'stalk' && phase !== 'lost') {
+        // tapis derrière l'écran, côte à côte
+        const px = Math.cos(h.dir), pz = -Math.sin(h.dir), o = (i - (n - 1) / 2) * 0.22;
+        [tx, tz] = this.near(h.blind[0] - Math.sin(h.dir) * 0.18 + px * o, h.blind[1] - Math.cos(h.dir) * 0.18 + pz * o, cx, cz);
+      } else {
+        const r = phase === 'near' ? 1.6 : phase === 'lost' ? 1.4 : 1.25, ang = h.dir + Math.PI + (i - (n - 1) / 2) * 0.55 + (phase === 'hunt' ? (Math.random() - 0.5) * 0.3 : 0);
+        [tx, tz] = this.near(h.at[0] - Math.sin(ang) * r, h.at[1] - Math.cos(ang) * r, cx, cz);
+      }
+      this.agents.memberGo(id, tx, tz, Math.atan2(b.x - tx, b.z - tz));
+      this.goal.set(id, 1);
+    }
+    this.next.set(id, (this.next.get(id) ?? 0) - dt);
+    const crouch = h.way === 'stalk' && phase === 'hunt' && k < 0.6;
+    if (this.goal.get(id) && this.agents.memberDone(id)) {
+      this.goal.delete(id);
+      this.agents.partyAct([id], phase === 'won' ? 'cheer' : phase === 'lost' ? 'stroll' : crouch ? 'sit' : phase === 'near' ? null : 'work');
+    }
+    // à l'affût, on se relève pour tirer
+    if (h.way === 'stalk' && phase === 'hunt' && !crouch && !this.goal.get(id) && this.agents.memberDone(id)) this.agents.partyAct([id], 'work');
+    // les traits : chacun à son tour, quand il est en place et que le cerf est à portée
+    if (phase === 'hunt' && !crouch && b.obj.visible && this.agents.memberDone(id)) {
+      let t = (this.spearT.get(id) ?? 1.2 + i * 0.9) - dt;
+      const p = this.agents.partyPositions([id])[0];
+      if (t <= 0 && p && Math.hypot(p[0] - b.x, p[1] - b.z) < 2.2) {
+        t = 2.8 + Math.random() * 2.2;
+        // (on vise à côté : le cerf blanc ne tombe qu'à l'issue)
+        const to = new THREE.Vector3(b.x + (Math.random() - 0.5) * 0.5, w.surfaceAt(b.x, b.z) + 0.05, b.z + (Math.random() - 0.5) * 0.5);
+        this.fire(new THREE.Vector3(p[0], w.surfaceAt(p[0], p[1]) + 0.17, p[1]), to, () => this.combat?.puff(to.x, to.y, to.z, 4));
+        this.agents.partyAct([id], 'work');
+      }
+      this.spearT.set(id, t);
+    }
+    return true;
+  }
+
+  /**
    * Un mammouth de taille `size` (1 : une femelle adulte) en (x, z), tourné vers `heading` : la bête articulée de `beasts.ts`
    * (robe tirée de sa taille). Ses gestes sont menés par `stepMammoths`, pas par `sMove` (sa bête n'a pas d'`actor`)
    */
@@ -1643,6 +1810,7 @@ export class ExpeditionScene {
       patrolboat: () => this.stagePatrol(s), cliffire: () => this.stageCliffire(s, a),
       music: () => this.stageMusic(s, a), blockade: () => this.stageBlockade(s, a), parley: () => this.stageParley(s, a), maelstrom: () => this.stageMaelstrom(s),
       // sur le volcan
+      gaze: () => this.stageGaze(s, a),
       tremor: () => this.stageTremor(s, a), fumes: () => this.stageFumes(s, a), lavaflow: () => this.stageLavaflow(s, a), ash: () => this.stageAsh(s, a), islander: () => this.stageIslander(s, a),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
@@ -2924,6 +3092,35 @@ export class ExpeditionScene {
       });
       void lx; void lz;
       return wild;
+    };
+  }
+
+  /**
+   * Le regard du cerf blanc : il s'arrête et fixe les chasseurs, une colonne de lumière pâle sur lui. Bander l'arc : les
+   * chasseurs s'accroupissent dans les fougères, la lumière baisse. Le saluer : ils se relèvent, et des lueurs montent autour
+   * du cerf
+   */
+  private stageGaze(s: Staging, a: ActiveExpedition) {
+    const h = this.stagH, [tx, tz] = this.teamAt(a), b = h?.m.b;
+    const [bx, bz] = b ? [b.x, b.z] : [tx + 1, tz];
+    const beam = this.sAdd(s, new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.4, 12, 1, true), STAG_HALO));
+    s.own.push(beam.geometry);
+    const motes = [0, 1, 2, 3, 4].map(() => { const m2 = this.sAdd(s, new THREE.Mesh(new THREE.OctahedronGeometry(0.02, 0), STAG_HALO)); s.own.push(m2.geometry); m2.visible = false; return m2; });
+    let acted = false;
+    return (dt: number) => {
+      const p = s.pick, t = s.after, x = b?.x ?? bx, z = b?.z ?? bz, y = this.world.surfaceAt(x, z);
+      if (b) { b.heading = Math.atan2(tx - b.x, tz - b.z); b.obj.rotation.y = b.heading; }
+      beam.position.set(x, y + 0.7, z);
+      beam.scale.setScalar(p === 0 ? Math.max(0.3, 1 - t * 0.15) : 1);
+      motes.forEach((m2, i) => {
+        m2.visible = p === 1 && t < 8;
+        const u = (t * 0.3 + i * 0.2) % 1;
+        m2.position.set(x + Math.cos(i * 1.3 + t) * 0.35, y + 0.1 + u * 0.9, z + Math.sin(i * 1.3 + t) * 0.35);
+      });
+      // (le geste, une fois la décision prise)
+      if (p >= 0 && !acted) { acted = true; this.agents.partyAct(a.party, p === 0 ? 'sit' : 'cheer'); }
+      void dt;
+      return p < 0 || t < 8;
     };
   }
 
@@ -4357,6 +4554,7 @@ export class ExpeditionScene {
     const k = onSite ? Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) : 0;
     if (this.flame) { const f = 1 + Math.sin(this.t * 17) * 0.12 + Math.sin(this.t * 29) * 0.08; this.flame.scale.set(f, 1.1 + Math.sin(this.t * 13) * 0.2, f); }
     if (this.mam) this.stepMammothHunt(dt, a, k);
+    else if (this.stagH) this.stepStagHunt(dt, a, k);
     else if (this.kind === 'hunt' && (onSite || a.phase === 'back')) this.stepHunt(dt, a);
     else for (const b of this.beasts) this.stepBeast(b, dt, a);
     this.workK = k;
@@ -5228,6 +5426,7 @@ export class ExpeditionScene {
       if (this.race && this.stepRacer(id, i, k)) return;
       if (this.games && this.stepAthlete(id, i, k, dt)) return;
       if (this.dragon && this.stepKnight(id, i, a, k, dt)) return;
+      if (this.stagH && this.stepStagHunter(id, i, a, k, dt)) return;
       if (this.kind === 'spring' && this.stepBather(id, i, a, dt)) return;
       if (this.pit && this.stepPugilist(id, i, a)) return;
       if (this.kind === 'delve' && this.mouth) { this.stepDelver(id, i, dt); return; }

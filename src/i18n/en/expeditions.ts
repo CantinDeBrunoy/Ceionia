@@ -215,6 +215,7 @@ registerDict('expeditions', {
   '🚂 Ce parcours existe déjà ({line}) : sur une voie unique, un seul train peut y rouler.': '🚂 This route already exists ({line}): on a single track, only one train can run.',
   // la cinématique d'un trophée qui rejoint la place (trophyStage.ts)
   'Le trophée du mammouth rejoint la place': 'The mammoth trophy joins the square',
+  'Les bois du cerf blanc rejoignent la place': 'The white stag’s antlers join the square',
   'Le tentacule du kraken rejoint la place': 'The kraken tentacle joins the square',
   'La dent du mégalodon rejoint la place': 'The megalodon tooth joins the square',
   'Le crâne du dragon rejoint la place': 'The dragon skull joins the square',

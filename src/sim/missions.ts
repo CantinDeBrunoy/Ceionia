@@ -48,7 +48,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // les éclaireurs de l'archipel : la barque traverse jusqu'à l'île rivale, l'équipe débarque et observe ses défenses
   | 'scout'
   // le volcan : l'obsidienne au pied des coulées, la montée au cratère, le village sauvé de l'éruption (voir `VOLCANIC`)
-  | 'obsidian' | 'ascent' | 'eruption';
+  | 'obsidian' | 'ascent' | 'eruption'
+  // la chasse légendaire au cerf blanc, dans la forêt (Moyen Âge) : la meute qui le lève, ou l'affût
+  | 'stag';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -114,9 +116,10 @@ export interface Choice {
    * une variante du décor, lue par l'écran et non par le libellé (qu'on peut renommer ou traduire) : `craters`, l'alunissage
    * au bord des cratères (retransmission) ; `warp`, le saut à travers l'espace (grand voyage de la colonie) ; `diver`, le
    * scaphandrier qui descend à l'épave ; `smoke`, le grand feu devant la grotte du dragon ; `hot`, la coulée encore tiède où
-   * l'on taille l'obsidienne ; `lava`, la descente au bord du lac de lave ; `trench`, la tranchée qui détourne la coulée
+   * l'on taille l'obsidienne ; `lava`, la descente au bord du lac de lave ; `trench`, la tranchée qui détourne la coulée ;
+   * `stalk`, l'affût où l'on guette le cerf blanc (sinon on le court avec la meute)
    */
-  variant?: 'craters' | 'warp' | 'diver' | 'smoke' | 'ally' | 'islet' | 'ship' | 'hot' | 'lava' | 'trench';
+  variant?: 'craters' | 'warp' | 'diver' | 'smoke' | 'ally' | 'islet' | 'ship' | 'hot' | 'lava' | 'trench' | 'stalk';
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -579,6 +582,27 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'ore', n: 12 }, joy(3, 6), joy(2), { t: 'perk', id: 'dragon' }], lose: [hurt(1, 2), joy(-1, 3)],
         winText: 'Le dragon est sorti en toussant, et les carreaux d’arbalète ont fait le reste ! Son trésor rentre au village sur le chariot.',
         loseText: 'Le dragon a jailli de la fumée et s’est envolé par-dessus la montagne : un chevalier brûlé.',
+      },
+    ],
+  },
+  {
+    // chasse légendaire facultative : le cerf blanc de la forêt ; ses bois rejoignent la place du village (trophée, cinématique)
+    id: 'stag', age: 2, mandatory: false, icon: '🦌', title: 'La chasse au cerf blanc',
+    intro: 'Un cerf tout blanc, aux bois immenses, hante la forêt. On dit qu’il porte chance au village qui le prend. Le cor sonne.',
+    choices: [
+      {
+        label: 'Le courre avec la meute', text: 'Audacieux : les chiens le lèvent, on le poursuit.',
+        dest: 'forest', scene: 'stag', doing: 'court le cerf blanc avec la meute', danger: ['beast'], party: 4, work: 30, risk: 0.38, carry: 'cart',
+        win: [food(3, 5), joy(4, 6), joy(2), { t: 'perk', id: 'stag' }], lose: [hurt(1, 2), joy(-1, 3)],
+        winText: 'Les chiens l’ont acculé au fond de la clairière : le cerf blanc est pris ! Ses bois immenses orneront la place.',
+        loseText: 'Le cerf blanc a sauté le ruisseau et disparu dans la brume. Un chasseur s’est foulé la cheville.',
+      },
+      {
+        label: 'L’attendre à l’affût', text: 'Prudent : on le guette sans bruit, l’arc bandé.',
+        dest: 'forest', scene: 'stag', variant: 'stalk', doing: 'guette le cerf blanc à l’affût, l’arc bandé', danger: ['beast', 'weather'], party: 3, work: 40, risk: 0.24, carry: 'cart',
+        win: [food(2, 5), joy(3, 6), joy(2), { t: 'perk', id: 'stag' }], lose: [],
+        winText: 'Au petit matin, le cerf blanc est venu brouter devant l’affût : une flèche, une seule. Ses bois rejoignent la place.',
+        loseText: 'Le cerf blanc a flairé l’affût et s’est éloigné sans hâte. On l’a vu, au moins.',
       },
     ],
   },
@@ -1085,7 +1109,7 @@ export function penHerds(w: World, flock: HerdKind[] = w.exp.herd) {
 /** Les expéditions du volcan : sur son île, qu'on gagne en barque (ou à pied, s'il est sur la terre du village) */
 export const VOLCANIC = new Set<Scene>(['obsidian', 'ascent', 'eruption']);
 
-const LEGENDS = new Set(['megalodon', 'kraken', 'dragon', 'games', 'moon', 'colony']);
+const LEGENDS = new Set(['megalodon', 'kraken', 'dragon', 'stag', 'games', 'moon', 'colony']);
 export const isLegendary = (m: Mission) => m.id === 'mammoth' || m.choices.some((c) => c.win.some((e) => e.t === 'perk' && LEGENDS.has(e.id)));
 /** Expéditions armées : une troupe de soldats, ou une chasse aux bêtes dangereuses */
 export const isMilitary = (m: Mission) => m.id === 'wolf' || m.choices.some((c) => !!c.troop);
@@ -1192,6 +1216,7 @@ PERK_NAME.spices = 'les épices des îles lointaines garnissent les tables du vi
 PERK_NAME.galleon = 'le trésor du galion englouti est au village';
 PERK_NAME.portal = 'le portail de l’autre rive est ouvert : tours de garde et caserne sur son île';
 PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place du village';
+PERK_NAME.stag = 'les bois du cerf blanc : un trophée sur la place du village';
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** Ce que la diplomatie gagne, en clair et en pastille */
