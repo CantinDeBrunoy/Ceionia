@@ -68,7 +68,6 @@ export class VoyageFilm {
     el.innerHTML = `${VOYAGE_PLATE}<video class="vyFilm" muted playsinline preload="auto" disablepictureinpicture aria-hidden="true">
         <source src="./voyage/traversee.webm" type="video/webm"><source src="./voyage/traversee.mp4" type="video/mp4"></video>
       <div class="kc-bar t"></div><div class="kc-bar b"></div><div class="kc-cap"><b></b><small></small></div>
-      <button class="vyGo" type="button" hidden>▶ ${tr('Prendre la mer')}</button>
       <button class="kc-skip vySkip" type="button">${KINGDOM_TEXT.skip}</button><div class="ldBar"><i></i></div><p class="ldStep" hidden></p>`;
     this.video = el.querySelector('video')!;
     this.cap = el.querySelector('.kc-cap b')!;
@@ -96,16 +95,9 @@ export class VoyageFilm {
       };
       v.addEventListener('error', fail);
       v.querySelectorAll('source')[1]?.addEventListener('error', fail);
-      // Après le rechargement, le navigateur refuse le son tant que le joueur n'a rien touché (la musique ne repartait qu'au
-      // premier clic, qui passait le film). Le film attend donc, sur sa première image, un clic sur « Prendre la mer » : ce
-      // geste lance le film et la musique ensemble ; le chargement continue derrière (17 nov. 2026)
-      const go = el.querySelector<HTMLButtonElement>('.vyGo')!;
-      if (m && !m.skip) {
-        go.hidden = false;
-        go.addEventListener('pointerdown', (e) => e.stopPropagation());
-        go.onclick = (e) => { e.stopPropagation(); go.hidden = true; void v.play().catch(() => { /* lecture refusée : la brume reste */ }); };
-      } else void v.play().catch(() => { /* lecture refusée : la brume reste */ });
-      this.whenDone(() => { go.hidden = true; });
+      // Le film part tout seul, muet comme toujours : le navigateur ne laisse partir la musique qu'au premier geste du
+      // joueur. Il attendait avant un clic sur « Prendre la mer » ; l'auteur veut le film tout de suite (19 nov. 2026)
+      void v.play().catch(() => { /* lecture refusée : la brume reste */ });
     }
     v.addEventListener('timeupdate', () => this.paint());
     this.paint();

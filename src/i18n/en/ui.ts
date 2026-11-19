@@ -193,7 +193,6 @@ registerDict('ui', {
   'Un navire prend la mer': 'A ship puts to sea',
   'Cap sur l’inconnu': 'Bound for the unknown',
   'La brume se lève…': 'The mist rises…',
-  'Prendre la mer': 'Set sail',
   'La mer s’ouvre': 'The sea opens up',
   'et l’horizon recule': 'and the horizon draws back',
   'Une île de sable et de palmiers': 'An island of sand and palms',
