@@ -1665,6 +1665,10 @@ class Game implements UIHost {
       } else if (n.kind === 'invasionDone') {
         this.ui.banner(tr('Invasion repoussée !'), tr('Plus aucune attaque sur l’île. Les Enfers sont ouverts : suivez le guide pour y mener vos troupes.'));
         this.ui.toast(n.text);
+      } else if (n.kind === 'routed') {
+        // plus aucune des nôtres debout dans les Enfers : une bannière et le compte rendu (pertes, démons abattus, soins)
+        this.ui.banner(tr('Repli forcé'), tr('Vos troupes sont tombées dans les Enfers'));
+        this.ui.toast(n.text, undefined, 'danger');
       } else if (n.kind === 'raid' && n.text.startsWith('🔥')) this.ui.info(n.text);
       else if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(tr('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
       else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell' && (n.kind !== 'zone' || /repris|reprendre|tombé|retaken|retake|has fallen/.test(n.text))) this.ui.toast(tr('{text} Cliquez ici pour y aller.', { text: n.text }), () => this.enterHell());

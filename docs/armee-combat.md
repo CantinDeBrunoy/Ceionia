@@ -62,6 +62,7 @@ Ordres (`Hell.order`, `HellOrder`) :
 
 ### Soins
 - Une troupe abattue (`wound`) est ramenée blessée : `HEAL_TIME` = 60 s à la caserne de l'île, 30 s à l'infirmerie de la base avancée (même si elle est tombée aux Enfers sans infirmerie, elle rentre sur l'île). Soins × 1,5 avec un lieu de soins au village (`sim.counts.health`, `stepWar`). Elle revient à pleine vie, redéployée.
+- **Le compte rendu d'une sortie** (`War.sortie`, `routReport`) : dans les Enfers, les nôtres tombés (par sorte), les démons abattus et le lieu du dernier tombé sont comptés ; quand plus aucune des nôtres n'y tient debout, une nouvelle `routed` dit le repli forcé (zone, pertes, devant quel bâtiment démoniaque, démons abattus, où l'on se soigne, conseil), avec la bannière « Repli forcé » (`Game`, nouvelles de la guerre). Avant (Karim, v6), six troupes tombaient en quelques secondes à ×8, chacune d'un petit message : « les troupes disparaissent ».
 - Blessures légères : `REGEN` = 2 pv/s hors incursion, sur l'île, × `healBoost` (zone purifiée) ; dans les Enfers, camp 2 pv/s et infirmerie 6 pv/s à 9 cases, hors combat.
 
 ### Aides militaires (`warTips.ts`)
