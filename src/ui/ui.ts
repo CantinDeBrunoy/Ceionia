@@ -634,7 +634,7 @@ export class UI {
       </footer>
       <div id="notifPanel" class="panel" hidden></div>
       <div id="pauseVeil" aria-hidden="true"></div>
-      <button id="pauseBar" type="button" aria-live="polite" hidden>${hudPic('sablier', 50)}<b>${tr('Jeu en pause')}</b><small><span class="pbKey">${tr('Espace ou clic pour reprendre')}</span><span class="pbTouch">${tr('Touchez pour reprendre')}</span></small></button>
+      <button id="pauseBar" type="button" aria-live="polite" hidden>${hudPic('sablier', 50)}<b>${tr('Jeu en pause')}</b><small><span class="pbKey">${tr('Espace, ou cliquez ici, pour reprendre')}</span><span class="pbTouch">${tr('Touchez ici pour reprendre')}</span></small></button>
       <div id="cursorHint"></div>
       <div id="cursorDeny" role="alert"><span class="cdX" aria-hidden="true">✕</span><span class="cdT"></span></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
@@ -1528,13 +1528,15 @@ export class UI {
     const bar = $('#pauseBar');
     if (bar.hidden === on) { bar.hidden = !on; $('#pauseVeil').classList.toggle('on', on); }
     if (!on) return;
-    // au-dessus de la barre de construction, de ses onglets (qui dépassent par le haut) et de la fiche de l'outil quand elle passe
-    // sous le titre (au téléphone, elle est au milieu) ; leur hauteur varie, d'où le calcul
-    const cx = window.innerWidth / 2;
+    // au-dessus de la barre de construction, de ses onglets (qui dépassent par le haut), des réglages de l'outil (tracé des routes,
+    // pinceau : ils flottent au-dessus de la barre), des outils (au téléphone, une rangée au-dessus) et de la fiche de l'outil
+    // quand elle passe sous le titre ; leur hauteur varie, d'où le calcul, refait à chaque mise à jour. Toute la largeur du titre
+    // compte, sablier compris (testeurs v6 : « Jeu en pause » couvrait « Ligne / Libre » et les outils du téléphone)
+    const cx = window.innerWidth / 2, half = bar.offsetWidth / 2 + 70;
     let top = Infinity;
-    for (const id of ['dockMain', 'subcats', 'info']) {
+    for (const id of ['dockMain', 'subcats', 'info', 'dockBottom', 'dockSide', 'modes', 'quickL', 'quickR', 'homeBack']) {
       const r = document.getElementById(id)?.getBoundingClientRect();
-      if (r && r.height > 0 && r.left < cx + 130 && r.right > cx - 130) top = Math.min(top, r.top);
+      if (r && r.height > 0 && r.left < cx + half && r.right > cx - half) top = Math.min(top, r.top);
     }
     const bottom = top < Infinity ? Math.round(window.innerHeight - top + 18) : 150;
     if (bar.dataset.b !== String(bottom)) { bar.style.bottom = bottom + 'px'; bar.dataset.b = String(bottom); }
