@@ -2309,7 +2309,7 @@ export class UI {
       const t = e.target as HTMLElement;
       // une autre façon de partir : le panneau de droite se redessine
       const pick = t.closest<HTMLButtonElement>('button[data-pick]');
-      if (pick) { sel = +pick.dataset.pick!; h.audio.sfxClick(); root.innerHTML = body(); return; }
+      if (pick) { sel = +pick.dataset.pick!; this.lastChoice.set(m.id, sel); h.audio.sfxClick(); root.innerHTML = body(); return; }
       if (t.closest('button.sBack')) { h.audio.sfxClick(); close(); return; }
       // l'équipement qui manque : le fabriquer d'ici, ou aller à sa fiche dans l'onglet Équipement
       const mkAll = t.closest<HTMLButtonElement>('button[data-mkall]');
@@ -2364,6 +2364,7 @@ export class UI {
         f.textContent = why;
         return;
       }
+      this.lastChoice.set(m.id, ci);
       close();
       closeMain();
       h.audio.sfxClick();
@@ -2378,11 +2379,20 @@ export class UI {
   private defaultChoice(m: Mission) {
     const ex = this.host.expeditions, cs = m.choices, st = choiceStyles(cs);
     const ok = (i: number) => !ex.why(m, cs[i]);
+    // la façon de partir choisie la dernière fois pour cette mission (fenêtre refermée, mission ratée qu'on relance)
+    const last = this.lastChoice.get(m.id);
+    if (last !== undefined && last < cs.length && ok(last)) return last;
     const bal = st.findIndex((x, i) => x.style === 'balanced' && ok(i));
     if (bal >= 0) return bal;
+    // sans équilibrée : la prudente, la première carte affichée (le premier choix des données, souvent l'audacieux, était
+    // retenu sans qu'on le voie : le kraken partait en « Trancher ses tentacules », testeurs v6)
+    const safe = st.findIndex((x, i) => x.style === 'cautious' && ok(i));
+    if (safe >= 0) return safe;
     const first = cs.findIndex((_, i) => ok(i));
     return first >= 0 ? first : 0;
   }
+  /** la dernière façon de partir choisie, par mission (le temps de la session) */
+  private lastChoice = new Map<string, number>();
 
   /**
    * La fenêtre de départ : à gauche l'illustration de la mission, son nom et sa phrase ; à droite la façon de partir
