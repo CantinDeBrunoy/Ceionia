@@ -6,6 +6,7 @@ export default defineConfig({
   // three.js à part : il change rarement, le navigateur le garde en cache d'une version à l'autre
   build: { chunkSizeWarningLimit: 700, rollupOptions: { output: { manualChunks: { three: ['three'] } } } },
   // les copies de travail rangées dans .claude/ ont leurs propres tests : on ne lance que ceux du projet
-  // (un délai large : en suite complète, plusieurs fichiers tournent en parallèle et certains tests dépassaient 5 s sans être en défaut)
-  test: { exclude: [...configDefaults.exclude, '.claude/**'], testTimeout: 60000 },
+  // (un délai large : en suite complète, plusieurs fichiers tournent en parallèle et certains tests dépassaient 5 s sans être en défaut ;
+  // la moitié des cœurs seulement : à pleine charge, un long test sans pause bloquait son processus et vitest le croyait muet, « Timeout calling onTaskUpdate »)
+  test: { exclude: [...configDefaults.exclude, '.claude/**'], testTimeout: 60000, maxWorkers: '50%' },
 });
