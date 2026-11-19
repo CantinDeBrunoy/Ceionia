@@ -143,6 +143,8 @@ const audioSettings = (s: Partial<Settings>) => Object.assign(audio, soundSettin
 const VILLAGE_DIST = 30;
 /** après un appui sur la carte, la vue ne part pas d'elle-même pendant ce temps (ms ; voir `Game.handsBusy`) */
 const HANDS_MS = 3000;
+/** après un appui sur la carte, récits et décisions d'expédition attendent ce temps (ms ; voir `Game.midGesture`) */
+const GESTURE_MS = 1500;
 /** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
 const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
@@ -660,6 +662,8 @@ class Game implements UIHost {
     this.tools.overlay = this.trackEdit;
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
     this.expeditions.onReport = (r) => {
+      // pas en plein geste sur la carte : le récit (et la cinématique du trophée) attendent la fin de la pose
+      if (this.midGesture()) { setTimeout(() => this.expeditions.onReport?.(r), 250); return; }
       const show = () => {
         // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
         if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: tr('le village'), pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
@@ -2214,6 +2218,13 @@ class Game implements UIHost {
    * il y a moins de `HANDS_MS`. La vue ne part alors pas d'elle-même (éruption, guide) : un message y mène. Elle partait en
    * pleine pose, et le clic suivant tombait ailleurs (testeurs v6)
    */
+  /**
+   * Le joueur est au milieu d'un geste sur la carte : une pose à moitié faite, un tracé commencé, ou un appui sur la carte il y a
+   * moins de `GESTURE_MS`. Récits et décisions d'expédition attendent : ils s'ouvraient sous le clic, le mangeaient et lâchaient
+   * l'outil (Karim, v6)
+   */
+  midGesture() { return this.tools.midGesture || performance.now() - this.cam.lastDown < GESTURE_MS; }
+
   handsBusy() { return this.tools.tool !== 'none' || this.tools.picking || !!this.railEdit || performance.now() - this.cam.lastDown < HANDS_MS; }
 
   /** Réveille le volcan de la case donnée : éruption, grondement et animaux qui détalent */

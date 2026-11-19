@@ -128,6 +128,8 @@ export interface UIHost {
   following: number | null;
   /** la vue suit une équipe (`far` : sans se rapprocher, au départ d'une expédition) */
   follow(id: number | null, far?: boolean): void;
+  /** le joueur est au milieu d'un geste sur la carte (pose à moitié faite, clic à l'instant) : rien ne s'ouvre de soi-même */
+  midGesture(): boolean;
   /** la vue revient sur le village (une seconde fois : vue d'ensemble) */
   goHome(): void;
 }
@@ -2528,11 +2530,14 @@ export class UI {
     if (a) this.forceDecision(a);
   }
 
-  /** Ouvre la décision d'une équipe tout de suite : les fenêtres ouvertes se ferment (sauf le menu), l'outil en main se range */
+  /**
+   * Ouvre la décision d'une équipe : les fenêtres ouvertes se ferment (sauf le menu). Pas en plein geste sur la carte (une pose à
+   * moitié faite, un clic à l'instant) : elle attend (`offerPending` la rouvre), et l'outil reste en main (testeurs v6 : la
+   * fenêtre mangeait le clic de pose et lâchait l'outil)
+   */
   private forceDecision(a: ActiveExpedition) {
-    if (this.root.querySelector('.decide')) return;
+    if (this.root.querySelector('.decide') || this.host.midGesture()) return;
     this.root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay').forEach((o) => { if (o.id !== 'menu' && !o.classList.contains('victory')) o.close?.(); });
-    if (this.host.tools.tool !== 'none') this.host.tools.setTool('none');
     this.showDecision(a);
   }
 
