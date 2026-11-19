@@ -46,7 +46,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // les îles flottantes de l'âge futuriste (archipel de plateformes, balises, cultures, drone-barge)
   | 'isles'
   // les éclaireurs de l'archipel : la barque traverse jusqu'à l'île rivale, l'équipe débarque et observe ses défenses
-  | 'scout';
+  | 'scout'
+  // le volcan : l'obsidienne au pied des coulées, la montée au cratère, le village sauvé de l'éruption (voir `VOLCANIC`)
+  | 'obsidian' | 'ascent' | 'eruption';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -85,7 +87,7 @@ export interface Choice {
    * ce que l'équipe rapporte, visible au retour : des bêtes qui la suivent, un chariot, des sacs sur le dos, ses invités, le
    * traîneau chargé de viande et de peaux
    */
-  carry?: 'animals' | 'cart' | 'sacks' | 'guests' | 'sledge';
+  carry?: 'animals' | 'cart' | 'sacks' | 'guests' | 'sledge' | 'refugees';
   /**
    * l'équipe prend la mer : au large, sur l'eau profonde, plus loin que la rive (sinon, faute de mer à portée, elle reste sur
    * la rivière la plus proche)
@@ -111,9 +113,10 @@ export interface Choice {
   /**
    * une variante du décor, lue par l'écran et non par le libellé (qu'on peut renommer ou traduire) : `craters`, l'alunissage
    * au bord des cratères (retransmission) ; `warp`, le saut à travers l'espace (grand voyage de la colonie) ; `diver`, le
-   * scaphandrier qui descend à l'épave ; `smoke`, le grand feu devant la grotte du dragon
+   * scaphandrier qui descend à l'épave ; `smoke`, le grand feu devant la grotte du dragon ; `hot`, la coulée encore tiède où
+   * l'on taille l'obsidienne ; `lava`, la descente au bord du lac de lave ; `trench`, la tranchée qui détourne la coulée
    */
-  variant?: 'craters' | 'warp' | 'diver' | 'smoke' | 'ally' | 'islet' | 'ship';
+  variant?: 'craters' | 'warp' | 'diver' | 'smoke' | 'ally' | 'islet' | 'ship' | 'hot' | 'lava' | 'trench';
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -455,6 +458,27 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // facultative : la première des expéditions du volcan, sur son île (on y traverse en barque, voir `Expeditions.volcanoTrip`)
+    id: 'obsidian', age: 1, mandatory: false, icon: '🌋', title: 'La pierre noire du volcan',
+    intro: 'Au pied du volcan, les coulées froides ont laissé une pierre noire, plus tranchante que le silex. Les artisans en voudraient pour leurs outils.',
+    choices: [
+      {
+        label: 'Ramasser au pied des coulées', text: 'Prudent : on ramasse les éclats froids, loin du cratère.',
+        dest: 'river', sea: true, scene: 'obsidian', fail: 'rocks', doing: 'ramasse les éclats d’obsidienne au pied des coulées', danger: ['water', 'fall'], party: 3, work: 26, risk: 0.12, carry: 'sacks',
+        win: [{ t: 'ore', n: 4 }, jobs(2, 6), joy(1)], lose: [],
+        winText: 'Les sacs sont pleins d’éclats noirs et brillants. Les artisans en font des lames et des miroirs.',
+        loseText: 'Des pierres ont dévalé la pente : l’équipe a dû repartir les sacs vides.',
+      },
+      {
+        label: 'Tailler la coulée encore tiède', text: 'Audacieux : la plus belle pierre, tout près de la lave.',
+        dest: 'river', sea: true, scene: 'obsidian', variant: 'hot', fail: 'rocks', doing: 'taille l’obsidienne dans une coulée encore tiède', danger: ['water', 'fall', 'weather'], party: 4, work: 20, risk: 0.3, carry: 'sacks',
+        win: [{ t: 'ore', n: 8 }, jobs(3, 6), joy(1)], lose: [hurt(1, 3)],
+        winText: 'De grands blocs d’obsidienne, taillés au bord de la coulée : on n’en a jamais vu d’aussi purs.',
+        loseText: 'La croûte a cédé sous un pied : un tailleur s’est brûlé, et l’équipe est rentrée.',
+      },
+    ],
+  },
   // ---------------- Moyen Âge ----------------
   {
     // réussie, elle rapporte de quoi passer à l'âge industriel (12 minerai, voir AGES), quel que soit le choix
@@ -666,6 +690,27 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // facultative : on monte au cratère du volcan (sur son île)
+    id: 'ascent', age: 2, mandatory: false, icon: '🔥', title: 'Monter au cratère',
+    intro: 'Au sommet du volcan, dit-on, un lac de feu bouillonne. Les alchimistes paieraient cher pour son soufre jaune. Qui osera monter jusqu’au bord ?',
+    choices: [
+      {
+        label: 'Par la crête, encordés', text: 'Prudent : on suit la crête, encordés deux par deux.',
+        dest: 'river', sea: true, scene: 'ascent', fail: 'rocks', doing: 'monte au cratère par la crête, encordée', danger: ['water', 'fall'], party: 3, work: 34, risk: 0.16, carry: 'sacks',
+        win: [{ t: 'ore', n: 6 }, joy(2, 6), joy(1)], lose: [hurt(1, 2)],
+        winText: 'L’équipe a vu le lac de feu de ses yeux, et rapporte du soufre plein les sacs. Le village ne parle que de ça.',
+        loseText: 'Un pan de la crête s’est effondré : un grimpeur blessé, et l’équipe a fait demi-tour sous le sommet.',
+      },
+      {
+        label: 'Descendre au bord du lac de lave', text: 'Audacieux : jusqu’au bord du feu, pour le plus beau soufre.',
+        dest: 'river', sea: true, scene: 'ascent', variant: 'lava', fail: 'rocks', doing: 'descend dans le cratère jusqu’au bord du lac de lave', danger: ['water', 'fall', 'weather'], party: 4, work: 26, risk: 0.35, carry: 'sacks',
+        win: [{ t: 'ore', n: 10 }, joy(3, 6), joy(1)], lose: [hurt(2, 3), joy(-1, 3)],
+        winText: 'Au bord même du lac de lave, l’équipe a gratté le soufre le plus pur. Les alchimistes n’en reviennent pas.',
+        loseText: 'Une bouffée brûlante est montée du lac : deux blessés, et l’équipe est redescendue en toussant.',
+      },
+    ],
+  },
   // ---------------- Âge industriel ----------------
   {
     id: 'railway', age: 3, mandatory: true, icon: '🚂', title: 'Le tracé du chemin de fer',
@@ -794,6 +839,27 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'ore', n: 22 }, joy(4, 6), joy(1), { t: 'perk', id: 'galleon' }], lose: [hurt(2, 3), joy(-1, 3)],
         winText: 'Le scaphandrier a ouvert les coffres du galion : de l’or et de l’argent, remontés à la pompe. Le village en parlera longtemps.',
         loseText: 'Le tuyau d’air s’est emmêlé : le scaphandrier a été remonté de justesse, et deux marins sont blessés.',
+      },
+    ],
+  },
+  {
+    // facultative : le volcan se réveille au-dessus d'un petit village de son île ; l'équipe traverse pour le sauver
+    id: 'eruption', age: 3, mandatory: false, icon: '🌋', title: 'Le village sous le volcan',
+    intro: 'Le volcan gronde et crache de la fumée. À son pied, un petit village de pêcheurs n’a pas de bateau pour fuir. Il faut y aller, vite.',
+    choices: [
+      {
+        label: 'Évacuer par la plage', text: 'Prudent : on emmène tout le monde vers le bateau.',
+        dest: 'river', sea: true, scene: 'eruption', fail: 'rocks', doing: 'conduit les habitants du village jusqu’au bateau', danger: ['water', 'fall'], party: 4, work: 30, risk: 0.15, carry: 'refugees',
+        win: [joy(3, 6), jobs(2), food(2, 6)], lose: [hurt(1, 2)],
+        winText: 'Tout le village est monté à bord avant que la lave n’arrive. Les pêcheurs s’installent chez nous, et ils ont des bras.',
+        loseText: 'La cendre a caché la plage : l’équipe a dû rembarquer sans tout le monde, et un sauveteur s’est blessé.',
+      },
+      {
+        label: 'Détourner la lave par une tranchée', text: 'Audacieux : on creuse pour sauver les maisons.',
+        dest: 'river', sea: true, scene: 'eruption', variant: 'trench', fail: 'rocks', doing: 'creuse une tranchée pour détourner la coulée du village', danger: ['water', 'fall', 'weather'], party: 5, work: 36, risk: 0.35, carry: 'refugees',
+        win: [joy(4, 6), joy(1), jobs(2), { t: 'ore', n: 6 }], lose: [hurt(2, 3), joy(-2, 4)],
+        winText: 'La coulée a suivi la tranchée et filé vers la mer : les maisons sont sauves ! Le village reconnaissant nous offre son fer.',
+        loseText: 'La lave a franchi la tranchée : on a sauvé les gens, pas les maisons. Deux sauveteurs sont brûlés.',
       },
     ],
   },
@@ -1016,6 +1082,9 @@ export function penHerds(w: World, flock: HerdKind[] = w.exp.herd) {
 
 /** Les missions obligatoires de l'âge : toutes à réussir pour ouvrir l'âge suivant (deux à la Préhistoire) */
 /** Les trophées des grandes légendes : une expédition qui en rapporte un est « légendaire » */
+/** Les expéditions du volcan : sur son île, qu'on gagne en barque (ou à pied, s'il est sur la terre du village) */
+export const VOLCANIC = new Set<Scene>(['obsidian', 'ascent', 'eruption']);
+
 const LEGENDS = new Set(['megalodon', 'kraken', 'dragon', 'games', 'moon', 'colony']);
 export const isLegendary = (m: Mission) => m.id === 'mammoth' || m.choices.some((c) => c.win.some((e) => e.t === 'perk' && LEGENDS.has(e.id)));
 /** Expéditions armées : une troupe de soldats, ou une chasse aux bêtes dangereuses */

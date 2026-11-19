@@ -221,4 +221,6 @@ registerDict('expeditions', {
   // la recherche des expéditions
   'Rechercher une expédition': 'Search for an expedition',
   'Aucune expédition ne répond à « {q} ».': 'No expedition matches “{q}”.',
+  'Il n’y a pas de volcan sur cette carte.': 'There is no volcano on this map.',
+  'Aucun chemin vers le volcan : ni rive en face de son île, ni sentier jusqu’à lui.': 'No way to the volcano: no shore facing its island, no path to it.',
 });

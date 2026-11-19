@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents, type Act, type Ride } from '../sim/agents';
 import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntSpot, PEACE_TRIPS, TRIP_OUT, TRIP_MEET, TRIP_LEAVE, TRIP_BOARD, TRIP_HOME } from '../sim/expeditions';
-import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
+import { HerdKind, Scene, BoatKind, boatKindFor, VOLCANIC } from '../sim/missions';
+import { nearestVolcano, volcanoGate, volcanoIsle } from '../sim/volcano';
+import { VolcanoSite } from './volcanoSite';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { makeFolk, folkStep, Folk, FolkPose, FolkRole } from './folk';
 import { balloonBasketGeo, balloonEnvelopeGeo } from './balloon';
@@ -778,6 +780,9 @@ const BEHAVIOR: Record<Scene, string> = {
   isles: 'boat',
   // les éclaireurs de l'archipel : la barque traverse jusqu'à l'île rivale, l'équipe y débarque (voir `stepScout`)
   scout: 'boat',
+  // le volcan : la barque traverse jusqu'à son île, l'équipe y débarque et monte au lieu du travail (voir `VolcanoSite`) ; venue
+  // à pied, elle y monte depuis le pied du cône (`volcano`)
+  obsidian: 'boat', ascent: 'boat', eruption: 'boat',
 };
 /**
  * L'expédition du portail, en part du travail : la galère touche l'île, l'équipe arrive à l'arche, le tourbillon s'éveille,
@@ -939,6 +944,10 @@ export class ExpeditionScene {
   private salv: Salvage | null = null;
   /** l'île du portail : où l'équipe débarque, et le portail qu'elle va réveiller */
   private isle: { land: [number, number]; gate: [number, number] } | null = null;
+  /** le décor d'une expédition du volcan (l'obsidienne, le cratère, le village sous l'éruption) */
+  private volc: VolcanoSite | null = null;
+  /** venue à pied au volcan : chacun a repris sa marche (le travail fini) */
+  private volcFree = false;
   /** les éclaireurs : la route de la barque sur l'eau (jusqu'au mouillage de la plage rivale), puis la marche sur l'île */
   private scout: { route: [number, number][]; len: number[]; walk: [number, number][]; post: [number, number]; walls: [number, number]; trip?: { kind: 'envoy' | 'islet' | 'ship'; props: THREE.Object3D[] } } | null = null;
   /** les îles flottantes (scène `isles`) : l'archipel, que l'équipe visite à pied */
@@ -1086,6 +1095,8 @@ export class ExpeditionScene {
     this.offshore = !!a.sea;
     this.boatKind = boatKindFor(a.age, this.story === 'megalodon' || this.story === 'kraken' || this.story === 'portal');
     let kind = BEHAVIOR[this.story] ?? 'camp';
+    // le volcan gagné à pied : pas de barque, l'équipe monte depuis le pied du cône
+    if (VOLCANIC.has(this.story) && !a.sea) { kind = 'volcano'; this.volcanoSite(a, [cx, cz]); }
     if (kind === 'boat' || kind === 'fish' || this.story === 'bridge') { this.water = this.findWater(cx, cz); if (!this.water && kind !== 'build') kind = 'camp'; }
     this.kind = kind;
     this.focus = [cx, cz];
@@ -1631,6 +1642,8 @@ export class ExpeditionScene {
       mistrust: () => this.stageMistrust(s, a), grievance: () => this.stageGrievance(s, a), seat: () => this.stageSeat(s, a), menu: () => this.stageMenu(s, a),
       patrolboat: () => this.stagePatrol(s), cliffire: () => this.stageCliffire(s, a),
       music: () => this.stageMusic(s, a), blockade: () => this.stageBlockade(s, a), parley: () => this.stageParley(s, a), maelstrom: () => this.stageMaelstrom(s),
+      // sur le volcan
+      tremor: () => this.stageTremor(s, a), fumes: () => this.stageFumes(s, a), lavaflow: () => this.stageLavaflow(s, a), ash: () => this.stageAsh(s, a), islander: () => this.stageIslander(s, a),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
       stings: () => this.stageSwarm(s, a, true), blast: () => this.stageBlast(s), gone: () => this.stageGone(s),
@@ -2915,6 +2928,161 @@ export class ExpeditionScene {
   }
 
   /**
+   * Une pluie de cendres sur la rive : des flocons gris tombent autour de l'équipe. La bâche : tendue sur deux piquets, l'équipe
+   * assise dessous. Partir : l'équipe court vers la barque sous la cendre qui tombe plus dru
+   */
+  private stageAsh(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), grey = new THREE.MeshLambertMaterial({ color: 0x8a8682 }), flake = new THREE.IcosahedronGeometry(0.012, 0);
+    s.own.push(grey, flake);
+    const flakes = Array.from({ length: 14 }, () => this.sAdd(s, new THREE.Mesh(flake, grey)));
+    const tarp = this.sPut(s, new THREE.BoxGeometry(0.7, 0.01, 0.5), tx, tz, 0.4, 0.2);
+    const canvas = new THREE.MeshLambertMaterial({ color: 0x9a8a5a });
+    s.own.push(tarp.geometry, canvas);
+    (tarp as THREE.Mesh).material = canvas;
+    tarp.visible = false;
+    return (dt: number) => {
+      const p = s.pick, t = s.after, dense = p === 1 ? 2 : 1;
+      flakes.forEach((m, i) => {
+        const h = (this.t * 0.18 * dense + i * 0.071) % 1, x = tx + Math.sin(i * 2.3) * 0.6 + Math.sin(this.t + i) * 0.05, z = tz + Math.cos(i * 1.9) * 0.6;
+        m.position.set(x, this.world.surfaceAt(x, z) + 0.6 * (1 - h), z);
+        m.visible = i < (p === 1 ? 14 : 9);
+      });
+      tarp.visible = p === 0 && t < 8;
+      if (p === 0 && t < 7) this.crewAct = 'sit';
+      if (p === 1 && t < 4) this.crewAct = 'run';
+      void dt;
+      return p < 0 || t < 8;
+    };
+  }
+
+  /**
+   * Un vieux pêcheur de l'île raccommode ses filets sur la rive. Le guide : il marche jusqu'à la barque et y monte avec
+   * l'équipe. Le poisson séché : un panier posé à côté de l'équipe. Le saluer : il agite la main, l'équipe part sans lui
+   */
+  private stageIslander(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), [hx, hz] = this.boat?.home ?? [tx + 0.6, tz];
+    const ox = tx + (tz - hz) * 0.2 + 0.25, oz = tz - (tx - hx) * 0.2 + 0.1;
+    const old = this.sNpc(s, 'fisher', Math.max(0, a.age - 1), ox, oz, Math.atan2(tx - ox, tz - oz), 'work');
+    const basket = this.sPut(s, sacksGeo(), tx + 0.15, tz - 0.12, 0);
+    basket.visible = false;
+    return (dt: number) => {
+      const p = s.pick, t = s.after, o = old.folk.root;
+      if (p === 0) {
+        // il rejoint la barque
+        const u = Math.min(1, t / 4), x = ox + (hx - ox) * u, z = oz + (hz - oz) * u;
+        o.position.set(x, this.world.surfaceAt(x, z), z);
+        o.rotation.y = Math.atan2(hx - ox, hz - oz);
+        old.pose = u < 1 ? 'walk' : 'idle';
+      } else if (p === 1) { basket.visible = t > 0.5; old.pose = 'talk'; }
+      else if (p === 2) { old.pose = 'cheer'; if (t < 4) this.crewAct = 'stroll'; }
+      void dt;
+      return p < 0 || t < 7;
+    };
+  }
+
+  /**
+   * Le volcan gronde : des pierres roulent sur la pente, au-dessus de l'équipe ; un gros rocher à côté d'elle. S'abriter :
+   * l'équipe recule contre le rocher et s'accroupit. Courir : elle file entre deux pierres qui dévalent jusqu'à elle
+   */
+  private stageTremor(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), [ux, uz] = this.uphill(tx, tz);
+    const boulder = this.sPut(s, rocksGeo(), tx - uz * 0.4 - ux * 0.15, tz + ux * 0.4 - uz * 0.15, tx * 3);
+    boulder.scale.setScalar(1.7);
+    // deux grosses pierres qui roulent jusqu'au sentier (la course les voit passer au ras de l'équipe)
+    const stones = [0, 1].map((i) => { const m = this.sPut(s, pebbleGeo(), tx + ux * 1.4 + uz * (i ? 0.3 : -0.3), tz + uz * 1.4 - ux * (i ? 0.3 : -0.3), i); m.scale.setScalar(2.2); return m; });
+    let rt = 0;
+    return (dt: number) => {
+      const p = s.pick, t = s.after, shaking = p < 0 || t < 6;
+      if (shaking && (rt -= dt) <= 0) {
+        rt = 0.35;
+        const j = (Math.random() - 0.5) * 0.9, sx = tx + ux * 1.2 + uz * j, sz = tz + uz * 1.2 - ux * j;
+        this.rock(sx, this.world.surfaceAt(sx, sz) + 0.3, sz, -ux * 0.8, -uz * 0.8, 0.8 + Math.random() * 0.5);
+      }
+      if (p === 0 && t < 6) { this.isleBack = 0.25; this.crewAct = 'sit'; }
+      if (p === 1 && t < 5) {
+        this.crewAct = 'run';
+        // les deux pierres dévalent, l'une derrière l'équipe, l'autre devant
+        stones.forEach((m, i) => {
+          const u = Math.min(1, t / (2 + i)), x = tx + ux * (1.4 - u * 2.4) + uz * (i ? 0.3 : -0.3), z = tz + uz * (1.4 - u * 2.4) - ux * (i ? 0.3 : -0.3);
+          m.position.set(x, this.world.surfaceAt(x, z) + 0.04, z);
+          m.rotation.x += dt * 6;
+        });
+      }
+      return shaking;
+    };
+  }
+
+  /**
+   * Des fumées jaunes sortent d'une fissure près du sentier. Le linge mouillé : une jarre d'eau à côté de l'équipe, qui
+   * reste à l'ouvrage dans la fumée. Attendre le vent : l'équipe s'assied, la fumée part de l'autre côté. Retenir son souffle :
+   * l'équipe traverse en courant, la fumée s'épaissit
+   */
+  private stageFumes(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), [ux, uz] = this.uphill(tx, tz), cx = tx + ux * 0.35 + uz * 0.3, cz = tz + uz * 0.35 - ux * 0.3;
+    const crack = this.sPut(s, new THREE.BoxGeometry(0.5, 0.012, 0.05), cx, cz, Math.atan2(uz, -ux));
+    s.own.push(crack.geometry);
+    const rim = new THREE.MeshBasicMaterial({ color: 0x5a1a10 });
+    s.own.push(rim);
+    (crack as THREE.Mesh).material = rim;
+    const clouds = [0, 1, 2, 3].map((i) => { const m = this.sAdd(s, new THREE.Mesh(gasGeo(), mats.body)); m.scale.setScalar(2 + i * 0.6); return m; });
+    const jar = this.sPut(s, new THREE.CylinderGeometry(0.035, 0.045, 0.09, 7), tx - ux * 0.25, tz - uz * 0.25, 0, 0.045);
+    const clay = new THREE.MeshLambertMaterial({ color: 0xb86a3a });
+    s.own.push(jar.geometry, clay);
+    (jar as THREE.Mesh).material = clay;
+    jar.visible = false;
+    return (dt: number) => {
+      const p = s.pick, t = s.after, drift = p === 1 ? Math.min(2.5, t * 0.35) : 0, thick = p === 2 ? 1 + Math.min(0.8, t * 0.2) : 1;
+      clouds.forEach((m, i) => {
+        const h = ((this.t * 0.25 + i * 0.25) % 1), x = cx - uz * drift + Math.sin(i * 2.1) * 0.15, z = cz + ux * drift + Math.cos(i * 1.7) * 0.15;
+        m.position.set(x, this.world.surfaceAt(cx, cz) + 0.05 + h * 0.4, z);
+        m.scale.setScalar((2 + i * 0.6) * thick * (1 - h * 0.3));
+      });
+      jar.visible = p === 0 && t < 10;
+      if (p === 0 && t < 8) this.crewAct = 'work';
+      if (p === 1 && t < 8) this.crewAct = 'sit';
+      if (p === 2 && t < 5) this.crewAct = 'run';
+      void dt;
+      return p < 0 || t < 9;
+    };
+  }
+
+  /**
+   * Une langue de lave coupe le sentier de la plage, entre l'équipe et la mer. Les pierres : on en pose une à une sur la
+   * coulée. Attendre : la lave noircit et se fige (une croûte sombre la recouvre). Sauter : l'équipe court et franchit d'un
+   * élan, des étincelles jaillissent
+   */
+  private stageLavaflow(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), [lx, lz] = this.volc?.land ?? this.focus;
+    const d = Math.max(0.01, Math.hypot(lx - tx, lz - tz)), bx = (lx - tx) / d, bz = (lz - tz) / d;
+    // la coulée passe en travers du sentier, à une demi-case vers la plage
+    const mx = tx + bx * 0.55, mz = tz + bz * 0.55, hot = new THREE.MeshBasicMaterial({ color: 0xff6a1e }), crust = new THREE.MeshLambertMaterial({ color: 0x2a2222 });
+    s.own.push(hot, crust);
+    const segs: THREE.Mesh[] = [], crusts: THREE.Mesh[] = [];
+    for (let i = -3; i <= 3; i++) {
+      const x = mx - bz * i * 0.16, z = mz + bx * i * 0.16, g = new THREE.BoxGeometry(0.1, 0.025, 0.2);
+      s.own.push(g);
+      const m = this.sAdd(s, new THREE.Mesh(g, hot)), c = this.sAdd(s, new THREE.Mesh(g, crust));
+      for (const o of [m, c]) { o.position.set(x, this.world.surfaceAt(x, z) + 0.013, z); o.rotation.y = Math.atan2(-bz, bx); }
+      c.visible = false;
+      segs.push(m); crusts.push(c);
+    }
+    const stones = [-0.12, 0, 0.12].map((o) => { const m = this.sPut(s, pebbleGeo(), mx + bx * o, mz + bz * o, o * 9, 0.02); m.scale.setScalar(1.5); m.visible = false; return m; });
+    let pt = 0;
+    return (dt: number) => {
+      const p = s.pick, t = s.after;
+      segs.forEach((m, i) => { m.scale.y = 1 + 0.4 * Math.sin(this.t * 4 + i); m.visible = !(p === 1 && t > 1 + i * 0.6); crusts[i].visible = !m.visible; });
+      stones.forEach((m, i) => (m.visible = p === 0 && t > 1 + i * 1.2));
+      if (p === 0 && t < 6) this.crewAct = 'work';
+      if (p === 1 && t < 8) this.crewAct = 'sit';
+      if (p === 2 && t < 4) {
+        this.crewAct = 'run';
+        if ((pt -= dt) <= 0) { pt = 0.12; this.puffAt(mx + (Math.random() - 0.5) * 0.4, this.world.surfaceAt(mx, mz) + 0.05, mz + (Math.random() - 0.5) * 0.4, 'puff'); }
+      }
+      return a.phase === 'work' && (p < 0 || t < 10);
+    };
+  }
+
+  /**
    * La flamme du relais vacille. La lanterne de secours : une lanterne rejoint le porteur, et la flamme repart, grande. Courir
    * plus vite : la flamme n'est plus qu'une lueur, le vent arrache des fumerolles derrière le porteur
    */
@@ -3797,6 +3965,13 @@ export class ExpeditionScene {
       this.isle = { land, gate: [p.x, p.z] };
     }
     // les éclaireurs : une route sur l'eau jusqu'à la plage de l'île rivale (voir `scoutTrip`)
+    // le volcan : tout droit vers lui jusqu'à la plage de son île (le dernier point d'eau avant sa terre)
+    else if (VOLCANIC.has(this.story) && this.volcanoSite(a, [wx, wz])) {
+      const [lx, lz] = this.isle!.land;
+      out = [lx, lz];
+      const dx = lx - wx, dz = lz - wz, L = Math.max(0.01, Math.hypot(dx, dz));
+      for (let k = 0.25; k < L; k += 0.25) { const x = wx + (dx / L) * k, z = wz + (dz / L) * k; if (this.depth(x, z) === null) break; out = [x, z]; }
+    }
     else if (this.story === 'scout' && this.scoutTrip(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
     // les pourparlers de la paix : une route sur l'eau jusqu'aux îles, et retour (voir `tripSetup`)
     else if (PEACE_TRIPS.has(a.m.id) && this.tripSetup(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
@@ -4194,6 +4369,14 @@ export class ExpeditionScene {
       for (const id of left) if (this.landed.has(id)) this.agents.partyGo([id], a.base[0], a.base[1]);
     }
     if (this.float) this.float.update(dt, k, onSite, (x, y, z) => this.puffAt(x, y, z));
+    if (this.volc) {
+      const away = a.phase === 'back' || a.phase === 'home';
+      // venue à pied : sur place, chacun monte au lieu du travail, puis, le travail fini, reprend sa marche
+      if (this.kind === 'volcano' && onSite && !a.wait) this.stepVolcano(k, a.party);
+      else if (this.kind === 'volcano' && away && !this.volcFree) { this.volcFree = true; for (const id of a.party) this.agents.ride(id, null); }
+      this.volc.update(dt, this.kind === 'volcano' ? k : onSite ? this.boatK : 0, this.agents.partyPositions(a.party).map((p): [number, number] => [p[0], p[1]]), onSite, away, a.ok);
+      this.focus = this.volc.focus;
+    }
     { const gone = a.phase === 'back' || a.phase === 'home'; this.salv?.update(dt, k, onSite, gone, gone && !a.ok); }
     if (this.swimmers.length) this.stepSwimmers(dt);
     if (this.monster) this.stepMonster(dt, a, k);
@@ -4560,7 +4743,7 @@ export class ExpeditionScene {
     if (es) this.sail(es.obj, es.home, es.out, bt.y, u, back, dt, this.embark(es.riders, es.home, docked), war, 1.3);
     // la chasse : la vue garde le combat entier (les deux galères, le monstre entre elles)
     this.focus = this.arena && es ? [(px + es.obj.position.x) / 2, (pz + es.obj.position.z) / 2] : this.salv ? this.salv.focus : [px, pz];
-    if (ashore) this.stepIsle(this.boatK);
+    if (ashore) { if (this.volc) this.stepVolcano(this.boatK, bt.riders); else this.stepIsle(this.boatK); }
     if (this.float) this.stepFloat(afloat);
   }
 
@@ -4865,6 +5048,37 @@ export class ExpeditionScene {
   }
 
   /**
+   * Le décor d'une expédition du volcan : le volcan le plus proche, le lieu du travail du côté d'où l'on vient, et la plage où
+   * l'on aborde (tout droit depuis le mouillage `from`, la première terre de son île) ; venue à pied, le pied du cône. Faux
+   * sans volcan (la scène retombe alors en simple voyage)
+   */
+  private volcanoSite(a: ActiveExpedition, from: [number, number]) {
+    const w = this.world, v = nearestVolcano(w, from[0], from[1]);
+    if (!v) return false;
+    const gate = volcanoGate(w, v.f, a.c, from);
+    let land: [number, number] = from;
+    if (a.sea) {
+      const isle = volcanoIsle(w, v.f), dx = v.f.x - from[0], dz = v.f.z - from[1], L = Math.max(0.01, Math.hypot(dx, dz));
+      land = [v.f.x, v.f.z];
+      for (let k = 0.5; k < L; k += 0.25) {
+        const x = from[0] + (dx / L) * k, z = from[1] + (dz / L) * k;
+        if (isle[w.ci(Math.floor(x), Math.floor(z))] && this.depth(x, z) === null) { land = [x + (dx / L) * 0.3, z + (dz / L) * 0.3]; break; }
+      }
+      this.isle = { land, gate };
+    }
+    this.volc = new VolcanoSite(w, this.group, this.props, a, land, gate, [v.f.x, v.f.z], (x, y, z, kind, vx, vz) => this.puffAt(x, y, z, kind, vx, vz));
+    return true;
+  }
+
+  /** L'équipe sur le volcan : de la plage au lieu du travail, l'ouvrage, la descente (voir `VolcanoSite.place`) */
+  private stepVolcano(k: number, ids: number[]) {
+    ids.forEach((id, i) => {
+      const p = this.volc!.place(i, k, this.isleBack, this.crewAct);
+      this.agents.ride(id, { x: p.x, z: p.z, y: this.world.surfaceAt(p.x, p.z), heading: p.heading, act: p.act });
+    });
+  }
+
+  /**
    * L'équipe du portail sur l'île : elle débarque, monte jusqu'à l'arche, s'y affaire en arc de cercle face à elle (on
    * allume les braseros, on déchiffre les runes), acclame le tourbillon qui s'éveille, puis redescend à la galère
    */
@@ -5005,6 +5219,8 @@ export class ExpeditionScene {
 
   /** Chaque membre (hors barque) va d'un point de travail à l'autre, ou reste au camp */
   private stepMembers(dt: number, a: ActiveExpedition, k: number) {
+    // (sur le volcan, venue à pied : `stepVolcano` mène chacun)
+    if (this.kind === 'volcano') return;
     const riders = this.boat?.riders ?? [];
     a.party.forEach((id, i) => {
       if (riders.includes(id)) return;
