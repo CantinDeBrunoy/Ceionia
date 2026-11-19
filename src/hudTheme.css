@@ -59,6 +59,10 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 
 #clock .time { font-family: var(--hSerif); font-weight: 800; font-size: 26px; letter-spacing: -0.02em; font-variation-settings: 'SOFT' 30, 'opsz' 48; }
 #clock small { color: var(--hInk); font-weight: 600; font-size: 12.5px; }
+/* la Fraunces n'a pas de chiffres à chasse fixe : « 06:32 » est plus large que « 13:07 ». Une largeur au moins égale à la plus
+   large des heures : l'horloge ne change plus de taille d'une heure à l'autre, et la rangée des boutons ne passe plus à la ligne
+   à minuit sur un téléphone (testeurs v6) */
+#clock .time { min-width: 2.9em; }
 
 /* le conseil du moment : une bulle crème bordée d'or, en Fraunces */
 #msg { background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: none; -webkit-backdrop-filter: none; }
