@@ -8,6 +8,8 @@
 Une bulle guide le joueur pas à pas. Elle se place à côté de l'élément dont elle parle, qu'entoure un anneau doré.
 Chaque étape a des tâches ; quand elles sont faites, la bulle dit « Bien joué ! » puis passe seule à la suivante.
 Rien n'est bloqué : « Suivant » passe toujours, « Passer le tutoriel » le met de côté.
+Un « Suivant » qui arrive moins de 0,9 s après un passage automatique (`LATE_MS`), ou enfoncé sur l'étape d'avant (`downOn`),
+est ignoré : il visait l'étape qui vient de se cocher et sautait la suivante (étapes 4 et 6 jamais vues, testeur v6).
 Plus tard dans la partie, des chapitres courts se lancent sur un événement : le choix d'affronter les démons, la première entrée
 dans les Enfers. Ils ne se montrent qu'une fois.
 

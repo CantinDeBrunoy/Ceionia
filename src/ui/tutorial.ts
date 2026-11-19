@@ -350,6 +350,8 @@ const GATE: Partial<Record<StepId, KindId[]>> = {
   habitat: ['gather', 'house', 'well'],
   food: ['gather', 'house', 'well', 'farm', 'lumber', 'quarry'],
 };
+/** après un passage automatique à l'étape suivante, un « Suivant » arrivé dans ce délai (ms) visait l'étape d'avant : ignoré */
+const LATE_MS = 900;
 /** les bâtiments que le tutoriel fait poser : un village qui en compte d'autres n'est plus un village neuf */
 const GUIDED = new Set<string>(['gather', 'house', 'well', 'farm', 'lumber', 'quarry']);
 
@@ -383,6 +385,10 @@ export class Tutorial {
   private body: HTMLElement;
   private arrow: HTMLElement;
   private ring: HTMLElement;
+  /** l'étape où le bouton de la bulle a été enfoncé, et l'instant du dernier passage automatique (voir `LATE_MS`) */
+  private downOn = '';
+  private autoAt = -Infinity;
+  private at() { return this.ch ? `${this.ch}|${this.ci}` : `|${this.i}`; }
   /** clics repérés pendant l'étape : un bouton à `data-a` (son action) */
   private clicks = new Set<string>();
   /** l'outil Route a été pris pendant cette étape */
@@ -518,10 +524,16 @@ export class Tutorial {
     ui.root.append(this.ring, this.box);
     // un clic sur la bulle ne tombe jamais sur la carte (ni ne pose un bâtiment avec l'outil en main)
     for (const t of ['pointerdown', 'pointerup', 'mousedown', 'touchstart']) this.box.addEventListener(t, (e) => e.stopPropagation());
+    this.box.addEventListener('pointerdown', () => (this.downOn = this.at()));
     this.box.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button');
       if (!b) return;
       b.blur();
+      // « Suivant » visé sur une étape que le tutoriel vient de passer de lui-même (« Bien joué ! ») : le clic tombait sur le
+      // bouton de l'étape d'après et la sautait (étapes 4 et 6 jamais vues, v6)
+      const late = (!!this.downOn && this.downOn !== this.at()) || performance.now() - this.autoAt < LATE_MS;
+      this.downOn = '';
+      if (b.classList.contains('tNext') && late) return;
       h.audio.sfxClick();
       if (b.classList.contains('tNext')) this.next();
       else if (b.classList.contains('tSkip')) this.skip();
@@ -715,7 +727,7 @@ export class Tutorial {
     const all = this.ticks.filter(Boolean).length >= (s.need ?? this.ticks.length);
     if (all && !s.read) {
       if (!this.doneAt) this.doneAt = performance.now();
-      else if (performance.now() - this.doneAt > 1000) { this.next(); return; }
+      else if (performance.now() - this.doneAt > 1000) { this.autoAt = performance.now(); this.next(); return; }
     }
     // une fenêtre ouverte (réglages, récit, décision) cache la bulle, sauf celle des expéditions à leur étape ; un chapitre
     // attend que le joueur soit là où il se passe ; la suite principale se cache sous terre et dans les Enfers ; tout se tait
