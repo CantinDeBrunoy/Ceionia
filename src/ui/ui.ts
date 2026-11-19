@@ -2315,7 +2315,9 @@ export class UI {
           const id = b.dataset.mk as GearId, g = GEAR_BY[id], left = Number(b.dataset.left ?? 1);
           for (let i = 0; i < left; i++) { if (ex.craft(id, age)) n++; else { last = ex.whyCraft(g, age); break; } }
         });
-        if (n) { h.audio.sfxClick(); key = ''; tick(); } else this.toast(last ?? tr('Impossible à fabriquer pour l’instant.'));
+        // (une partie seulement en fabrication, la file pleine : on dit pourquoi le reste attend ; les barques du kraken
+        // restaient en plan sans un mot, testeurs v6)
+        if (n) { h.audio.sfxClick(); key = ''; tick(); if (last) this.toast(last); } else this.toast(last ?? tr('Impossible à fabriquer pour l’instant.'));
         return;
       }
       const mk = t.closest<HTMLButtonElement>('button[data-mk]'), gg = t.closest<HTMLButtonElement>('button[data-geargo]');

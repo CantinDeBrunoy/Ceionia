@@ -126,18 +126,26 @@ export const huntWeapon = (age: number): 'spear' | 'sword' | 'rifle' | 'assault'
 export type Pack = Partial<Record<GearId, number>>;
 
 /**
- * Ce qu'une équipe emporte : contre chaque danger du choix, le meilleur équipement en réserve (autant de pièces que possible),
- * plus une trousse s'il y en a. `k` multiplie le risque : chaque danger compte pour sa part, paré d'autant que l'équipe est munie
+ * Ce qu'une équipe emporte : contre chaque danger du choix, le meilleur équipement en réserve, complété au besoin par le suivant
+ * (deux arcs et quatre lances pour six), plus une trousse s'il y en a. `k` multiplie le risque : chaque danger compte pour sa
+ * part, paré d'autant que l'équipe est munie. Une pièce sert contre un seul danger. Une pièce de plus en réserve ne fait jamais
+ * monter le risque : avant, la meilleure sorte seule partait, même à deux exemplaires, et deux arcs fabriqués chassaient trois
+ * lances (le risque du kraken passait de 42 à 51 % pendant la fabrication, testeurs v6)
  */
 export function loadout(c: Choice, stock: Stock): { take: Pack; k: number } {
   const take: Pack = {}, ds = dangersOf(c);
+  const left = (g: Gear) => (stock[g.id] ?? 0) - (take[g.id] ?? 0);
   let cut = 0;
   for (const d of ds) {
-    const best = GEAR.filter((g) => (g.guards === d || g.also === d) && stock[g.id] > 0 && !take[g.id]).sort((a, b) => b.cut - a.cut)[0];
-    if (!best) continue;
-    const need = best.per(c.party), n = Math.min(need, stock[best.id]);
-    take[best.id] = n;
-    cut += best.cut * (n / need);
+    // la part de l'équipe encore à munir contre ce danger (1 : toute l'équipe)
+    let room = 1;
+    for (const g of GEAR.filter((x) => (x.guards === d || x.also === d) && left(x) > 0).sort((a, b) => b.cut - a.cut)) {
+      if (room <= 1e-9) break;
+      const need = g.per(c.party), n = Math.min(left(g), Math.ceil(room * need - 1e-9)), part = Math.min(room, n / need);
+      take[g.id] = (take[g.id] ?? 0) + n;
+      cut += g.cut * part;
+      room -= part;
+    }
   }
   let k = 1 - cut / Math.max(1, ds.length);
   if (stock.kit > 0) { take.kit = 1; k *= 1 - GEAR_BY.kit.cut; }

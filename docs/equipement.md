@@ -1,11 +1,11 @@
 # Équipement des expéditions
 
 > Fichiers : `src/sim/gear.ts` (les pièces `GEAR`, prix, `loadout`, `gearGaps`), `src/sim/expeditions.ts` (`whyCraft`, `whyCraftAll`, `craft`, `cancelCraft`, `craftStep`, `preview`), `src/sim/missions.ts` (`ExpState.gear`, `craft`, `craftT`), `src/sim/events.ts` (options qui exigent une pièce, `needs`), `src/sim/kingdom.ts` (récompense en pièces, forge infernale), `src/sim/army.ts` (la garnison consomme les mêmes pièces), `src/ui/ui.ts` (`renderArsenal`, `gearNeedHtml`, `gearNeedDetail`, `kitHtml`).
-> Tests : `tests/armesEpoque.test.ts`, `i18nEquipement.test.ts`, `securite.test.ts`, `expeditions.test.ts`.
+> Tests : `tests/armesEpoque.test.ts`, `tests/equipementMele.test.ts`, `i18nEquipement.test.ts`, `securite.test.ts`, `expeditions.test.ts`.
 > Voir aussi : [expeditions.md](expeditions.md), [armee-combat.md](armee-combat.md), [economie-ressources.md](economie-ressources.md), [difficulte.md](difficulte.md), [batiments-catalogue.md](batiments-catalogue.md), [traduction.md](traduction.md), [sauvegarde.md](sauvegarde.md).
 
 ## En bref
-Le village fabrique des pièces d'équipement (lance, corde, torche, barque, armure…) et les garde en **réserve** (`world.exp.gear`). Au départ, chaque équipe emporte automatiquement, depuis la réserve, le meilleur de ce qui pare les dangers de son choix ; son risque d'échec baisse en proportion. Au retour, les pièces reviennent en réserve (un échec en perd une une fois sur deux). Aucune pièce n'est jamais obligatoire pour partir : sans équipement, le risque est seulement plus haut.
+Le village fabrique des pièces d'équipement (lance, corde, torche, barque, armure…) et les garde en **réserve** (`world.exp.gear`). Au départ, chaque équipe emporte automatiquement, depuis la réserve, le meilleur de ce qui pare les dangers de son choix, complété au besoin par la pièce suivante (deux arcs et quatre lances pour six : `loadout`, une pièce sert contre un seul danger, et une pièce de plus en réserve ne fait jamais monter le risque ; avant, seule la meilleure sorte partait, et deux arcs fabriqués chassaient trois lances : le risque montait pendant la fabrication, testeurs v6) ; son risque d'échec baisse en proportion. Au retour, les pièces reviennent en réserve (un échec en perd une une fois sur deux). Aucune pièce n'est jamais obligatoire pour partir : sans équipement, le risque est seulement plus haut.
 La garnison de l'île (caserne) puise dans la même réserve : voir « Liens ».
 
 ## Règles du jeu
@@ -73,7 +73,7 @@ Pour chaque danger du choix, dans l'ordre : la pièce en stock la plus protectri
 - Options d'imprévu qui exigent une pièce (`EventOption.needs`) : l'option n'est choisissable que si l'équipe en porte au moins une de la liste (`canTake`) ; le bouton est grisé sinon (« demande …, non emportées »). `events.ts` définit `WEAPONS`, `ARMORS`, `LIGHTS` (toutes les époques) : une équipe armée tient tête quelle que soit son arme.
 
 ### Ce que le joueur voit au départ (`gearGaps`)
-Pour chaque danger du choix qu'aucune pièce en réserve ne couvre en entier (stock < `per(party)`), la pièce **actuelle** (`gearCurrent` : connue et pas dépassée) la plus protectrice que le village sait fabriquer (`usable` : atelier ou lieu de soins là) est proposée : « 2 barques manquent », bouton « Fabriquer · prix », « Tout fabriquer » s'il y en a plusieurs, lien vers la fiche dans l'onglet Équipement. Les dangers se regroupent par pièce.
+Pour chaque danger du choix qu'aucune pièce en réserve ne couvre en entier (stock < `per(party)`), la pièce **actuelle** (`gearCurrent` : connue et pas dépassée) la plus protectrice que le village sait fabriquer (`usable` : atelier ou lieu de soins là) est proposée : « 2 barques manquent », bouton « Fabriquer · prix », « Tout fabriquer » s'il y en a plusieurs (dans la fenêtre de départ, il met en file ce qui tient et dit pourquoi le reste attend, la file pleine par exemple), lien vers la fiche dans l'onglet Équipement. Les dangers se regroupent par pièce.
 Les pièces dépassées pour les expéditions (`gearObsolete`) ne sont plus montrées dans l'onglet Équipement, même si une troupe de l'âge en a besoin (`troopGearNeeded`, `army.ts`) : la caserne les commande elle-même quand une recrue en manque (barre des troupes `command.ts`, Enfers `recruitPlan.ts`).
 
 ## Fonctionnement dans le code
