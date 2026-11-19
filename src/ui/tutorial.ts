@@ -3,7 +3,7 @@ import { ic } from './icons';
 import { tr, localize, colon } from '../i18n';
 import type { UI, UIHost } from './ui';
 import { layoutKeys } from '../core/controls';
-import { GEAR, GearId, dangersOf, gearCurrent } from '../sim/gear';
+import { GEAR, GEAR_BY, GearId, dangersOf, gearCurrent } from '../sim/gear';
 import { MISSIONS } from '../sim/missions';
 
 /**
@@ -93,13 +93,16 @@ export const TUTO_TEXT = {
     expeditions: {
       title: 'Les expéditions',
       text: 'Le bouton {compass} envoie une équipe chercher des ressources et de nouveaux bâtiments.',
-      choose: 'Choisissez une mission, puis « Partir ».',
+      choose: 'Choisissez une mission, puis « Lancer l’expédition ».',
       none: 'Personne n’est libre pour partir : passez à la suite.',
+      blocked: 'L’équipe ne peut pas partir pour l’instant (la raison est en bas de la fenêtre) : vous pouvez terminer le tutoriel.',
       wait: 'L’équipement sort bientôt de fabrication : attendez-le pour partir mieux protégé.',
       tasks: ['Ouvrir les expéditions', 'Lancer une expédition'],
     },
   },
   kindTask: (name: string) => tr('Poser : {name}', { name }),
+  /** l'étape de l'équipement nomme la pièce à fabriquer (sans nom, on fabriquait la première venue, une torche) */
+  craftTask: (name: string) => tr('Fabriquer : {name}', { name }),
   /** la vignette désignée est hors de la rangée visible du menu : la flèche d'abord */
   scroll: (arrow: string, name: string) => tr('Cliquez sur la flèche {arrow} pour faire paraître « {name} », puis sur le bâtiment.', { arrow, name }),
   locked: 'Le tutoriel vous le fera bâtir un peu plus tard.',
@@ -474,10 +477,19 @@ export class Tutorial {
           const tab = m.querySelector('[data-tab="gear"]');
           if (!tab?.classList.contains('on')) return tab;
           const g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
-          const mine = g ? m.querySelector(`button[data-craft="${g}"]:not([disabled])`) : null;
+          // la pièce de la mission, même pas encore fabricable (la note dit pourquoi) : jamais une autre à sa place
+          const mine = g ? m.querySelector(`button[data-craft="${g}"]`) : null;
           const b = mine && mine.getClientRects().length ? mine : [...m.querySelectorAll('button[data-craft]:not([disabled])')].find((x) => x.getClientRects().length);
           if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
           return b ?? m.querySelector('.arsenal');
+        },
+        tasks: () => {
+          const g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
+          return [T.gear.tasks[0], g ? TUTO_TEXT.craftTask(GEAR_BY[g].name) : T.gear.tasks[1]];
+        },
+        note: () => {
+          const g = tutoGear(h.sim.age, (k) => h.expeditions.has(k)), b = g ? q(`.expModal button[data-craft="${g}"][disabled]`) : null;
+          return b && !this.ticks[1] ? b.getAttribute('title') ?? '' : '';
         },
         check: () => {
           const st = h.expeditions.state, g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
@@ -507,6 +519,10 @@ export class Tutorial {
           const m = q('.sendModal') ?? q('.expModal');
           if (!m || this.ticks[1]) return '';
           if (q('.sendModal') && h.expeditions.state.craft.length) return T.expeditions.wait;
+          // la fenêtre de départ : ses approches restent cliquables même quand l'équipe ne peut pas partir (pas assez
+          // d'habitants libres) ; c'est « Lancer l'expédition » qui le dit
+          const go = q('.sendModal .sGo');
+          if (go) return (go as HTMLButtonElement).disabled ? T.expeditions.blocked : T.expeditions.choose;
           return m.querySelector('button.choice:not([disabled]), button[data-send]:not([disabled])') ? T.expeditions.choose : T.expeditions.none;
         },
       },
