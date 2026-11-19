@@ -1306,7 +1306,8 @@ export class UI {
     const towered = b.kind === 'wall' && rampartTower(h.world, b);
     const node = b.kind === 'wall' ? `<div class="acts ups"><button data-act="tower" class="primary" title="${attr(tr('Une tour vient seule aux bouts et aux angles du mur ; ici, on choisit pour ce pan.'))}">${ic('upgrade', 16, 2)} ${tr(towered ? 'Changer en simple pan' : 'Changer en tour')}</button></div>` : '';
     const upgrades = (ups ? `<div class="acts ups">${ups}</div>${upChk}` : '') + node;
-    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${railChip}|${rails}|${upgrades}`;
+    // (« Commander la garnison » n'a de sens que le portail ouvert : avant, le bouton ne menait à rien, testeur v6)
+    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${railChip}|${rails}|${upgrades}|${h.world.portalOpen}`;
     if (key === this.selKey) return;
     const same = box.dataset.id === String(b.id) && box.classList.contains('show');
     this.selKey = key;
@@ -1321,7 +1322,7 @@ export class UI {
     const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = tr(b.auto ? 'façade tournée vers la route' : 'orientée à la main');
     box.innerHTML = `<div class="ihead">${this.cardThumb(b.kind, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub" title="${attr(`${AGES[b.age].name}${size ? tr(' · {size} cases', { size }) : ''} · ${facing}`)}">${sizeOf(b)} × ${sizeOf(b)} · ${AGES[b.age].name}</small></div><button class="xfold" data-act="fold" title="${tr('Replier ou déplier')}" aria-label="${tr('Replier ou déplier')}">▾</button><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
       ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${upgrades}
-      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
+      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle && h.world.portalOpen ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
       <div class="acts xacts"><button data-act="move">${hudPic('deplacer', 18)} ${tr('Déplacer')}</button><button data-act="rot">${ic('rotate', 16, 2)} ${tr('Tourner')} <kbd>R</kbd></button><button data-act="del" class="danger xdel" title="${tr('Démolir')}" aria-label="${tr('Démolir')}">${ic('demolish', 17, 2)}</button></div>`;
     box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
     box.scrollTop = scroll;

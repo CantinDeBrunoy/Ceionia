@@ -505,28 +505,28 @@ export const KINDS: Record<KindId, KindDef> = {
   watchtower: {
     id: 'watchtower', size: 1, minAge: 1, icon: '🏹', cat: 'war',
     names: ['', 'Tour de garde', 'Tour de guet', 'Tour de garde', 'Poste de défense', 'Tour de défense'],
-    desc: 'Une tour et ses guetteurs : au village, des soldats patrouillent dans les rues autour d’elle ; sur l’île du portail, elle voit venir les démons de loin.',
-    perk: 'Au village, elle compte comme un poste de police pour la Sécurité et envoie une patrouille de deux soldats dans les rues voisines. Sur l’île du portail, elle tient tête aux vagues de démons.',
+    desc: 'Une tour et ses guetteurs : des soldats patrouillent dans les rues autour d’elle.',
+    perk: 'Elle compte comme un poste de police pour la Sécurité et envoie une patrouille de deux soldats dans les rues voisines. Elle ouvre la caserne et les remparts.',
   },
   barracks: {
     id: 'barracks', size: 2, minAge: 1, icon: '⚔️', cat: 'war',
     names: ['', 'Caserne', 'Caserne', 'Caserne', 'Base militaire', 'Base de défense'],
     desc: 'Dortoirs, cour d’exercice et râteliers d’armes : les soldats y logent, et une patrouille en sort pour faire sa ronde.',
-    perk: 'Il faut d’abord une tour de garde. Au village, chaque caserne ajoute des places à la garnison (une fois une caserne sur l’île pour accueillir les recrues) et envoie une patrouille de trois soldats. Sur l’île du portail, la garnison y loge et s’y soigne.',
+    perk: 'Au village, elle envoie une patrouille de trois soldats. Si vous ouvrez le portail des Enfers (le grand choix, fin de l’Antiquité), une caserne sur l’île du portail loge et soigne la garnison, et chaque caserne du village y ajoute des places.',
     reqKind: 'watchtower',
   },
   wall: {
     id: 'wall', size: 1, minAge: 1, icon: '🧱', cat: 'war',
     names: ['', 'Palissade', 'Muraille', 'Enceinte de brique', 'Mur de béton', 'Mur d’énergie'],
     desc: 'Un rempart qui ferme la ville, tracé d’un trait : un clic au point A, un clic au point B. Il s’interrompt de lui-même là où passe une route.',
-    perk: 'Il faut d’abord une tour de garde. Les pans se raccordent entre eux, avec un poteau ou une tourelle aux bouts et aux angles ; une porte ferme les passages. Décor : il ne gêne ni les habitants ni les véhicules.',
+    perk: 'Les pans se raccordent entre eux, avec un poteau ou une tourelle aux bouts et aux angles ; une porte ferme les passages. Décor : il ne gêne ni les habitants ni les véhicules.',
     reqKind: 'watchtower',
   },
   gate: {
     id: 'gate', size: 1, minAge: 1, icon: '🚪', cat: 'war',
     names: ['', 'Porte de palissade', 'Porte fortifiée', 'Porte de fer', 'Portail blindé', 'Porte à champ de force'],
     desc: 'La porte de la ville : deux tours et un passage, à poser dans un rempart ou en travers d’une route.',
-    perk: 'Il faut d’abord une tour de garde. Se pose sur une case libre ou sur une route (elle l’enjambe, battants ouverts) ; elle se tourne d’elle-même dans l’axe du mur.',
+    perk: 'Se pose sur une case libre ou sur une route (elle l’enjambe, battants ouverts) ; elle se tourne d’elle-même dans l’axe du mur.',
     reqKind: 'watchtower',
   },
 };
