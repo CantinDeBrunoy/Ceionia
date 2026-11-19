@@ -1748,6 +1748,8 @@ class Game implements UIHost {
     const mouse = this.controls.mode === 'mouse';
     this.cam.letterKeys = !mouse;
     this.cam.edgeScroll = mouse;
+    // (la barre du bas et le HUD : la carte visible entre leurs blocs ne fait pas défiler la vue)
+    this.cam.edgeShields = () => ['dockRow', 'hud'].map((id) => document.getElementById(id)?.getBoundingClientRect()).filter((r): r is DOMRect => !!r && r.width > 0);
     // à la souris, un glissé du clic gauche déplace la vue quand l'outil Voir est en main (un clic sans bouger choisit toujours)
     this.cam.dragPan = mouse ? () => this.cam.handler === this.tools && this.tools.tool === 'none' && !this.railEdit && !this.tools.picking : null;
   }

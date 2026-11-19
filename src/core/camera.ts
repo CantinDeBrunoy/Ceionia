@@ -12,6 +12,17 @@ export const SURFACE_MIN_PITCH = 0;
 
 /** largeur de la bande du bord de l'écran qui fait défiler la vue (contrôles à la souris) */
 export const EDGE_PX = 14;
+/** temps (s) passé dans la bande du bord avant que la vue défile : la souris qui ne fait qu'y passer ne la déplace pas */
+export const EDGE_DELAY = 0.3;
+/**
+ * Le bord de l'écran sous la souris (-1, 0, 1 en x et en y). `shields` : les blocs de l'interface (barre du bas, HUD). La barre
+ * du bas flotte au-dessus du bord : la carte visible entre ses blocs faisait défiler la vue après un clic dans la barre, ou entre
+ * les deux clics d'une pose (testeurs v6). Dans le cadre d'un bloc, rien ne défile ; sous lui, tout contre le bord, si
+ */
+export function edgeDir(x: number, y: number, w: number, h: number, shields: { left: number; right: number; top: number; bottom: number }[], m = EDGE_PX): [number, number] {
+  if (shields.some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) return [0, 0];
+  return [x < m ? -1 : x > w - m ? 1 : 0, y < m ? -1 : y > h - m ? 1 : 0];
+}
 
 export interface PointerInfo { x: number; y: number; touch: boolean; button: number; shift?: boolean; ctrl?: boolean }
 
@@ -60,6 +71,10 @@ export class CameraRig {
   dragPan: (() => boolean) | null = null;
   /** la souris sur le canevas, sans bouton appuyé (le défilement au bord) ; null : ailleurs (sur l'interface, hors de la page) */
   private edgeAt: { x: number; y: number } | null = null;
+  /** les cadres des blocs de l'interface où le bord ne défile pas (voir `edgeDir`) */
+  edgeShields: () => DOMRect[] = () => [];
+  /** depuis combien de temps (s) la souris tient un bord qui défile */
+  private edgeT = 0;
   /** clic gauche appuyé qui pourra devenir un glissé de la vue (`dragPan`) : où il a commencé */
   private dragFrom: { x: number; y: number } | null = null;
 
@@ -288,11 +303,13 @@ export class CameraRig {
     if ((L && k.has('KeyD')) || k.has('ArrowRight')) fx += 1;
     // la souris au bord de l'écran (à 14 px du bord du canevas) : la vue défile de ce côté, sans bouton appuyé
     const ea = this.edgeAt;
+    let edge: [number, number] = [0, 0];
     if (this.edgeScroll && ea && this.enabled && this.pointers.size === 0 && document.hasFocus()) {
-      const r = this.el.getBoundingClientRect(), m = EDGE_PX;
-      if (ea.x < m) fx -= 1; else if (ea.x > r.width - m) fx += 1;
-      if (ea.y < m) fz -= 1; else if (ea.y > r.height - m) fz += 1;
+      const r = this.el.getBoundingClientRect();
+      edge = edgeDir(ea.x, ea.y, r.width, r.height, this.edgeShields().map((b) => ({ left: b.left - r.left, right: b.right - r.left, top: b.top - r.top, bottom: b.bottom - r.top })));
     }
+    this.edgeT = edge[0] || edge[1] ? this.edgeT + dt : 0;
+    if (this.edgeT >= EDGE_DELAY) { fx += edge[0]; fz += edge[1]; }
     fx = Math.sign(fx); fz = Math.sign(fz);
     if (fx || fz) {
       this.onPan?.();
