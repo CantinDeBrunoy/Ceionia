@@ -2434,7 +2434,11 @@ export class UI {
     const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement nécessaire')}</b></span>
       ${ready || missing ? `<div class="gslots">${ready}${missing}</div>${gearNote}` : `<p class="gnote">${tr('Aucun équipement nécessaire : l’équipe part les mains libres.')}</p>`}<small class="sgP">${ic('team', 16, 2)} ${tr('{n} habitants', { n: c.party })}</small></div>`;
     // en bas : pourquoi on ne peut pas partir, sinon ce qui arrive en cas d'échec
-    const lose = effectSummary(c.lose);
+    // (un échec coûte une pièce emportée une fois sur deux, voir `Expeditions.finish` : l'aperçu disait « rien », testeur v6)
+    const carried = GEAR.some((g) => (pv.take[g.id] ?? 0) > 0);
+    const parts = c.lose.length ? [effectSummary(c.lose)] : [];
+    if (carried) parts.push(tr('peut-être une pièce d’équipement perdue'));
+    const lose = parts.length ? parts.join(' · ') : effectSummary(c.lose);
     const warn = why ?? (this.needsHtml(m) ? '' : lose ? tr('En cas d’échec : {what}', { what: lose }) : tr('Une expédition peut échouer : l’équipement la rend plus sûre.'));
     const needs = ex.missing(m).length ? `<div class="sNeeds req">${this.needsHtml(m)}</div>` : '';
     const L = './expeditions/depart/';

@@ -180,6 +180,7 @@ registerDict('ui', {
   'En cas d’échec : {what}': 'If it fails: {what}',
   'Une expédition peut échouer : l’équipement la rend plus sûre.': 'An expedition can fail: equipment makes it safer.',
   'Lancer l’expédition': 'Launch the expedition',
+  'peut-être une pièce d’équipement perdue': 'maybe one piece of gear lost',
   'Retour': 'Back',
   // ---- explorer le monde (l'archipel, en option)
   'Explorer le monde ?': 'Explore the world?',
