@@ -208,7 +208,7 @@ registerDict('tutorial', {
   'Pour commercer avec vos alliés, reliez vos îles : un port chez vous, puis un port chez eux.': 'To trade with your allies, link your islands: a harbor at home, then a harbor at theirs.',
   '{harbor} sur votre île': '{harbor} on your island',
   'Un port chez l’allié': 'A harbor at your ally’s',
-  'Maintenant {harbor} sur la côte de {isle}, hors de leur ville : les navires relieront les deux ports.': 'Now {harbor} on the coast of {isle}, outside their town: ships will link the two harbors.',
+  'Maintenant {harbor} sur la côte de {isle}, à la balise ⚓ ou ailleurs sur la rive dorée : les navires relieront les deux ports.': 'Now {harbor} on the coast of {isle}, at the ⚓ beacon or anywhere else on the golden shore: ships will link the two harbors.',
   '{harbor} sur l’île alliée': '{harbor} on the allied island',
   'Le comptoir': 'The trading post',
   'Pour finir, {post} sur {isle}, près du port : c’est là qu’on échangera avec vos alliés.': 'To finish, {post} on {isle}, near the harbor: that is where you will trade with your allies.',

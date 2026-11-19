@@ -49,6 +49,27 @@ export function allyView(w: Pick<World, 'isles' | 'diplo'>): { x: number; z: num
   return lobe ? { x: lobe.x, z: lobe.z } : { x: v.x, z: v.z };
 }
 
+/**
+ * Où poser le port chez l'allié : l'emprise valable (`canPlace`) la plus proche de notre île, son centre (null : aucune). On
+ * n'examine que le carré qui entoure l'île (une vingtaine de milliers d'emprises, quelques dizaines de millisecondes) : à
+ * appeler à la demande, pas à chaque image. La vue y va (`Game.goAlly`), la balise ⚓ la marque (`SpotBeacon`)
+ */
+export function allyHarborSpot(w: World): { x: number; z: number } | null {
+  const isle = allyIsle(w);
+  if (!isle) return null;
+  const s = KINDS.harbor.size, m = w.isles!.main, hx = m.x + m.n / 2, hz = m.z + m.n / 2;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const l of isle.lobes) { x0 = Math.min(x0, l.x - l.r); x1 = Math.max(x1, l.x + l.r); z0 = Math.min(z0, l.z - l.r); z1 = Math.max(z1, l.z + l.r); }
+  let best: { x: number; z: number } | null = null, bd = Infinity;
+  for (let z = Math.floor(z0) - 4; z < z1 + 4; z++)
+    for (let x = Math.floor(x0) - 4; x < x1 + 4; x++) {
+      const d = Math.hypot(x + s / 2 - hx, z + s / 2 - hz);
+      if (d >= bd || !w.inCells(x, z) || w.canPlace('harbor', x, z) !== null) continue;
+      bd = d; best = { x: x + s / 2, z: z + s / 2 };
+    }
+  return best;
+}
+
 /** Le bâtiment est-il sur l'île de l'allié ? (son coin et son coin opposé) */
 export function onAllyIsle(w: Pick<World, 'isles' | 'diplo'>, x: number, z: number, s = 1) {
   const isle = allyIsle(w);

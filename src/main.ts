@@ -60,7 +60,8 @@ import { UI, showMenu, UIHost, chooseControls } from './ui/ui';
 import { Controls, loadControls, saveControls, guessLayout } from './core/controls';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
-import { allyIsle, allyView, onAllyIsle, allyPostReady } from './sim/allyLand';
+import { allyIsle, allyView, onAllyIsle, allyPostReady, allyHarborSpot } from './sim/allyLand';
+import { SpotBeacon } from './render/spotBeacon';
 import { AGES, KINDS, KIND_ORDER, Building, sizeOf, type KindId } from './build/catalog';
 import { MISSIONS, VICTORY } from './sim/missions';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
@@ -212,6 +213,8 @@ class Game implements UIHost {
   /** le conflit vivant entre les deux îles rivales (décor : escarmouches, puis commerce ou patrouilles) */
   naval: NavalConflict;
   halos: Halos;
+  /** la balise ⚓ de l'emplacement du port chez l'allié (voir `stepBeacon`) */
+  harborBeacon = new SpotBeacon();
   /** pastilles « ⬆ » sur les bâtiments qui peuvent évoluer */
   upBadges: UpgradeBadges;
   expeditions: Expeditions;
@@ -545,7 +548,7 @@ class Game implements UIHost {
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
     this.applyQuality();
 
     const host = this;
@@ -1111,16 +1114,51 @@ class Game implements UIHost {
   /** La vue va sur l'île de l'allié, là où l'on peut bâtir (loin de leur ville) */
   goAlly() {
     if (this.mode !== 'surface') { this.ensureSurface(() => this.goAlly(), true); return; }
-    const v = allyView(this.world);
+    // pas encore de port chez l'allié : la vue cadre la rive où il se pose (la plus proche de notre île), de près ; avant, elle
+    // allait au milieu des collines et la rive dorée ne se voyait qu'au bord de l'écran (v6 : trois joueurs sur trois bloqués)
+    const spot = this.allyHarborTarget();
+    const v = spot ?? allyView(this.world);
     if (!v) return;
     this.follow(null); this.trainCam = null; this.incidentCam = null;
-    this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
+    // (la cible un peu en deçà, côté caméra : la rive monte dans le haut de l'écran, au-dessus de la bulle du guide)
+    if (spot) { const y = this.cam.view().yaw; this.cam.goTo(spot.x + Math.sin(y) * 4, spot.z + Math.cos(y) * 4, 38); }
+    else this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
+  }
+
+  /** l'emplacement du port chez l'allié, gardé tant qu'il reste valable (sa recherche coûte quelques dizaines de ms) */
+  private allySpot: { x: number; z: number; v: number } | null = null;
+  /** Où poser le port chez l'allié (null : allié pas choisi, port déjà bâti, ou aucune rive) */
+  private allyHarborTarget(): { x: number; z: number } | null {
+    const w = this.world;
+    if (!allyIsle(w) || this.harborsByIsle().ally) return (this.allySpot = null);
+    const c = this.allySpot, h = KINDS.harbor.size / 2;
+    if (c && (c.v === w.version || w.canPlace('harbor', c.x - h, c.z - h) === null)) { c.v = w.version; return c; }
+    const s = allyHarborSpot(w);
+    this.allySpot = s ? { x: s.x, z: s.z, v: w.version } : null;
+    return this.allySpot;
+  }
+
+  private beaconT = 0;
+  /**
+   * La balise ⚓ sur la rive où poser le port chez l'allié, tant qu'il n'y est pas : le port en main, ou le chapitre « L'or
+   * des voisins » une fois le port de notre île bâti. Revue deux fois par seconde
+   */
+  private stepBeacon(dt: number) {
+    this.harborBeacon.update(dt);
+    if ((this.beaconT -= dt) > 0) return;
+    this.beaconT = 0.5;
+    const t = this.tools, held = t.tool === 'build' && t.kind === 'harbor';
+    const want = this.mode === 'surface' && !!allyIsle(this.world) && (held || (this.tutorial.chapterOn === 'arch' && this.harborsByIsle().home > 0));
+    const spot = want ? this.allyHarborTarget() : null;
+    if (spot) this.harborBeacon.show(spot.x, spot.z, this.world.hAt(spot.x, spot.z));
+    else this.harborBeacon.hide();
   }
 
   /** La vue regarde-t-elle l'île de l'allié ? */
   private lookingAtAlly() {
     const isle = allyIsle(this.world);
-    return this.mode === 'surface' && !!isle && isle.lobes.some((l) => Math.hypot(this.cam.target.x - l.x, this.cam.target.z - l.z) < l.r + 6);
+    const t = this.cam.target, spot = this.allySpot;
+    return this.mode === 'surface' && !!isle && (isle.lobes.some((l) => Math.hypot(t.x - l.x, t.z - l.z) < l.r + 6) || (!!spot && Math.hypot(t.x - spot.x, t.z - spot.z) < 14));
   }
 
   /** Ports bâtis sur notre île et chez l'allié */
@@ -2552,6 +2590,7 @@ class Game implements UIHost {
     // la guerre : la faction des Enfers, ses incursions sur l'île, la garnison
     this.stepWar(dt, gdt);
     this.stepDiplo();
+    this.stepBeacon(dt);
     this.stepRivalBattle(dt, gdt);
     this.stepFarewell(dt);
     this.stepKingCrowd();
