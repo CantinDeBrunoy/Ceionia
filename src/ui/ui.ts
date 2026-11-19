@@ -1572,8 +1572,9 @@ export class UI {
    * Avec `act`, un clic dessus y mène.
    */
   toast(msg: string, act?: () => void, level?: NotifLevel) {
-    this.notifs.push(msg, performance.now(), { level, act });
+    const it = this.notifs.push(msg, performance.now(), { level, act });
     this.renderNotifs();
+    return it;
   }
 
   /** Une annonce discrète : seulement dans la cloche */
@@ -1679,6 +1680,7 @@ export class UI {
     const { sim, time, env } = this.host;
     this.renderRailEdit();
     this.renderCursorHint();
+    if (this.waitNotes.size) this.dropDecided();
     if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
     else if (!this.press && this.tilesNow() !== this.tilesKey) this.renderItems(true);
@@ -2520,9 +2522,17 @@ export class UI {
    * bâtir (sinon le message et la carte de l'équipe, qui clignote, y mènent)
    */
   expEvent(a: ActiveExpedition) {
-    this.toast(tr('{icon} « {mission} » : {event} — une décision vous attend (cliquez ici).', { icon: a.m.icon, mission: a.m.title, event: a.wait?.title.toLowerCase() ?? '' }), () => this.showDecision(a));
+    const ev = a.wait;
+    const it = this.toast(tr('{icon} « {mission} » : {event} — une décision vous attend (cliquez ici).', { icon: a.m.icon, mission: a.m.title, event: a.wait?.title.toLowerCase() ?? '' }), () => { if (a.wait === ev) this.showDecision(a); });
+    if (it && ev) this.waitNotes.set(it.id, { a, ev });
     this.forceDecision(a);
     this.update();
+  }
+
+  /** les messages « une décision vous attend » encore justes : leur équipe et l'imprévu (retirés une fois la décision prise) */
+  private waitNotes = new Map<number, { a: ActiveExpedition; ev: ExpEvent }>();
+  private dropDecided() {
+    for (const [id, { a, ev }] of this.waitNotes) if (a.wait !== ev) { this.notifs.retire(id); this.waitNotes.delete(id); }
   }
 
   /** l'imprévu de chaque équipe dont la fenêtre s'est déjà ouverte (une fois fermée sans choisir, elle ne se rouvre pas d'elle-même) */
