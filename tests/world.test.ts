@@ -10,7 +10,7 @@ import { KINDS, KindId, UPGRADES, Building } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { sculpt, brushOnBuilding } from '../src/world/terraform';
 import { GameTime } from '../src/core/time';
-import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
+import { Expeditions, Report, partyLimit, nextTeamAt } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { Railway } from '../src/sim/railway';
 import { EVENTS } from '../src/sim/events';
@@ -912,7 +912,8 @@ describe('expéditions', () => {
   });
 
   it('plus le village est peuplé, plus il mène d’expéditions de front', () => {
-    expect([0, 29, 30, 59, 60, 90, 500].map(partyLimit)).toEqual([1, 1, 2, 2, 3, 4, 4]);
+    expect([0, 19, 20, 49, 50, 79, 80, 500].map(partyLimit)).toEqual([1, 1, 2, 2, 3, 3, 4, 4]);
+    expect([1, 2, 3, 4].map(nextTeamAt)).toEqual([20, 50, 80, null]);
     const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 0, false);

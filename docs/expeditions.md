@@ -43,7 +43,7 @@ Champs lus par le jeu : `dest` (lieu), `party` (habitants), `work` (secondes de 
 ### Risque, équipe, durée
 - Risque réel affiché : `Expeditions.riskOf(c)` = `c.risk` × école ×0,7 × observatoire ×0,85 × institut de recherche ×0,8 × train du cosmodrome (`SPACE_RAIL_RISK`) × `securityK` (pompiers, police : plafond −15 %, `SECURITY_MAX`) × `rulesOf(difficulté).riskK` (×1,25 en Normal) × forge infernale (`FORGE_RISK`) ; en mer aussi phare (`LIGHTHOUSE_RISK` 0,88) et chantier naval (`SHIPYARD_RISK` 0,9).
 - Avec l'équipement (`preview(c).risk`) : × `loadout.k` (voir [equipement.md](equipement.md)). En route : `chance(a)` = `riskOf × a.riskK`, borné entre 0,02 et 0,95 ; `riskK` part de `loadout.k` et se multiplie de chaque option choisie à un imprévu.
-- Équipes en même temps : `partyLimit(pop)` = `min(MAX_TEAMS = 4, 1 + floor(pop / PER_TEAM = 30))`.
+- Équipes en même temps : `partyLimit(pop)` = 1 + le nombre de paliers de `TEAM_AT` atteints (20, 50, 80 habitants : quatre au plus) ; `nextTeamAt(max)` donne le palier suivant, que disent la fenêtre (« Équipe en plus à 20 habitants ») et le refus de départ. La deuxième venait à 30 et les suivantes à 60 et 90 : les testeurs l'attendaient trop (v6, 19 nov. 2026) ; tous les paliers ont avancé de 10, l'écart de 30 entre eux reste.
 - Le travail avance ×1,25 si le village a une écurie (`a.t += dt * 1.25`). L'attente d'une décision est comptée en secondes réelles (`waitT += dt / speed`) : sans réponse au bout de `AUTO_DECIDE = 90`, l'équipe prend l'option la plus sûre qu'elle peut suivre (`safest`).
 - Tutoriel : `lenient` = une équipe plus petite suffit (`need`).
 
