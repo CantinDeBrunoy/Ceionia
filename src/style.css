@@ -1153,7 +1153,7 @@ body.photo #photoBar { display: flex; }
 /* l'élément montré : un bouton prend un liseré doré, sans bouger ni clignoter ni changer de couleur (texte blanc ou foncé, il reste lisible) */
 button.tHi { box-shadow: inset 0 0 0 2px #ffb31a, 0 0 14px rgba(255, 179, 26, 0.45) !important; }
 /* autour de lui, un anneau doré dont la lueur respire lentement (l'anneau est à part : un élément redessiné ne la relance pas) */
-#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; border: 3px solid #ffb31a; box-shadow: 0 0 12px 3px rgba(255, 179, 26, 0.5); transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease; animation: tutoRing 3.2s ease-in-out infinite; }
+#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; border: 3px solid #ffb31a; box-shadow: 0 0 12px 3px rgba(255, 179, 26, 0.5); animation: tutoRing 3.2s ease-in-out infinite; }
 @keyframes tutoRing { 50% { box-shadow: 0 0 20px 6px rgba(255, 179, 26, 0.28); } }
 @media (prefers-reduced-motion: reduce) { #tutoRing { animation: none; } }
 .tutoToggle { justify-content: center; }

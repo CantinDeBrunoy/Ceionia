@@ -1,7 +1,7 @@
 # Tutoriel
 
 > Fichiers : `src/ui/tutorial.ts` (la bulle, la suite principale, l'état enregistré, le moteur des chapitres), `src/ui/tutorialChapters.ts` (les chapitres de l'île du portail, des Enfers et de l'archipel), `src/ui/portalChoice.ts` (la carte du choix PvE), `src/main.ts` (création, déclencheurs, messages sans tutoriel), `src/style.css` (bloc « Tutoriel guidé »), `src/i18n/en/tutorial.ts` (anglais)
-> Tests : `tests/tutoriel.test.ts`, `tests/tutorielChapitres.test.ts`, `tests/invasion.test.ts` (le tutoriel ne lit pas le PvE)
+> Tests : `tests/tutoriel.test.ts`, `tests/bulleTutoriel.test.ts`, `tests/tutorielChapitres.test.ts`, `tests/invasion.test.ts` (le tutoriel ne lit pas le PvE)
 > Voir aussi : [interface.md](interface.md), [portail-ile.md](portail-ile.md), [enfers.md](enfers.md), [armee-combat.md](armee-combat.md), [sauvegarde.md](sauvegarde.md), [traduction.md](traduction.md)
 
 ## En bref
@@ -81,12 +81,23 @@ dans les Enfers. Ils ne se montrent qu'une fois.
 - **Boucle** : `Tutorial.update` est appelé quatre fois par seconde (`Game.frame`, avec `ui.update`). Il coche les tâches
   (`Step.check`, une tâche faite le reste), passe à l'étape suivante une seconde après, cache la bulle quand une fenêtre
   (`.overlay`) est ouverte, puis `render` (HTML refait seulement si la clé change) et `place`.
-- **Une étape** (`Step`) : `anchor()` (l'élément montré, ou null : la bulle à droite sous le HUD), `check()`, et en option
+- **Une étape** (`Step`) : `anchor()` (l'élément montré, ou null : la bulle à une place fixe), `check()`, et en option
   `begin`, `text`, `more` (ligne HTML : les touches), `note`, `tasks`, `act` (un bouton dans la bulle), `bare` (l'élément ne
   sert qu'à placer la bulle : fiche du besoin, conditions d'âge), `read` (attend « OK »), `need`. Les textes d'une étape
   principale viennent de `TUTO_TEXT.steps[id]` ; ceux d'un chapitre, de `Step.t` (`CHAPTER_TEXT`).
-- **Placement** (`Tutorial.place`) : dessous si l'élément est en haut de l'écran, dessus s'il est en bas, sinon sur un côté ;
-  sous toutes les rangées du HUD (`#hud` ; il en a deux ou plus sur un écran moyen ou étroit), au-dessus du dock ; le côté qui cache le moins les fiches ouvertes ; la pointe vise le milieu.
+- **Placement** (`Tutorial.place`, choix par `bestSpot`) : « à côté, jamais dessus » (choix de l'auteur après la vague v6, où
+  la bulle cachait le village, les conditions de l'âge, la fiche du bâtiment, l'équipement à fabriquer, les onglets du bas). Les
+  places possibles : les quatre côtés de l'élément montré (ou de toute sa carte, `.gear`, `.mission`, `.sCard` : son image et
+  son nom restent visibles), et quatre places fixes (sous le HUD à droite et à gauche, au-dessus de la barre du bas à gauche et
+  à droite). Chacune est notée : couvrir l'élément coûte très cher ; puis les panneaux ouverts (fiches, conditions de l'âge,
+  fenêtres `.overlay > .modal`), les blocs du HUD, ceux de la barre du bas pris un par un (`DOCK` : ses colonnes se défont en
+  `display: contents` selon la largeur), et, sans fenêtre ouverte, le milieu de l'écran où la caméra pose le village (poids 0,7) ;
+  à égalité, la plus proche de l'élément. Sans élément montré, une des places fixes. La pointe ne paraît que sur un côté de
+  l'élément.
+- **L'anneau** suit l'élément à chaque image (`follow`, `requestAnimationFrame`), sans glissement : recalé quatre fois par
+  seconde et glissant en 0,25 s, il restait à côté du liseré du bouton pendant que le carrousel défilait (deux cadres décalés,
+  testeurs v6). Les cadres « à côté de leur cible » venaient aussi de la barre du haut qui changeait de disposition (voir
+  [interface.md](interface.md)).
 - **Vignette hors de la rangée** (`Tutorial.target`, pour toutes les étapes, chapitres compris) : une ancre `#items [data-kind]`
   cachée hors de la partie visible du carrousel est remplacée par la flèche qui la fait paraître (`#itNext` ou `#itPrev`,
   si elle n'est pas grisée), et la note de la bulle dit « Cliquez sur la flèche › pour faire paraître « … », puis sur le
