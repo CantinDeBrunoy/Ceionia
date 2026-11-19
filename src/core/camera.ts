@@ -238,6 +238,9 @@ export class CameraRig {
     this.clampGoal();
   }
 
+  /** La vue est arrivée où elle allait (elle ne glisse plus) */
+  settled() { return Math.hypot(this.target.x - this.goal.x, this.target.z - this.goal.z) < 1 && Math.abs(this.dist - this.goal.dist) < 1; }
+
   /** Vue courante (pour y revenir) */
   view() { return { ...this.goal }; }
 
