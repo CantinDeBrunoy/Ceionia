@@ -131,6 +131,8 @@ export interface ChapterHost {
   /** la vue regarde l'île de l'allié ; l'y mener */
   atAlly(): boolean;
   goAlly(): void;
+  /** le joueur a la main sur la carte (un outil en main, un clic à l'instant) : la vue ne part pas d'elle-même */
+  handsBusy(): boolean;
 }
 
 /** Une étape de chapitre : ses textes et sa logique */
@@ -201,7 +203,8 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
       note: () => (h.harbors().home ? '' : arrow('harbor')),
     }),
     step('archAllyHarbor', A.allyHarbor, {
-      begin: () => { if (!h.atAlly()) h.goAlly(); },
+      // (pas en pleine pose : la vue partait sous la souris ; le bouton « Aller sur l'île alliée » de la bulle y mène)
+      begin: () => { if (!h.atAlly() && !h.handsBusy()) h.goAlly(); },
       text: () => arch(A.allyHarbor.text), tasks: () => A.allyHarbor.tasks.map(arch),
       check: () => [h.harbors().ally > 0],
       anchor: () => (h.atAlly() && !h.harbors().ally ? tile('harbor') : null),

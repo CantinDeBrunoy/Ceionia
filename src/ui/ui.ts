@@ -126,7 +126,10 @@ export interface UIHost {
   railTrouble(): string | null;
   agents: Agents;
   following: number | null;
-  follow(id: number | null): void;
+  /** la vue suit une équipe (`far` : sans se rapprocher, au départ d'une expédition) */
+  follow(id: number | null, far?: boolean): void;
+  /** le joueur est au milieu d'un geste sur la carte (pose à moitié faite, clic à l'instant) : rien ne s'ouvre de soi-même */
+  midGesture(): boolean;
   /** la vue revient sur le village (une seconde fois : vue d'ensemble) */
   goHome(): void;
 }
@@ -631,7 +634,7 @@ export class UI {
       </footer>
       <div id="notifPanel" class="panel" hidden></div>
       <div id="pauseVeil" aria-hidden="true"></div>
-      <button id="pauseBar" type="button" aria-live="polite" hidden>${hudPic('sablier', 50)}<b>${tr('Jeu en pause')}</b><small><span class="pbKey">${tr('Espace ou clic pour reprendre')}</span><span class="pbTouch">${tr('Touchez pour reprendre')}</span></small></button>
+      <button id="pauseBar" type="button" aria-live="polite" hidden>${hudPic('sablier', 50)}<b>${tr('Jeu en pause')}</b><small><span class="pbKey">${tr('Espace, ou cliquez ici, pour reprendre')}</span><span class="pbTouch">${tr('Touchez ici pour reprendre')}</span></small></button>
       <div id="cursorHint"></div>
       <div id="cursorDeny" role="alert"><span class="cdX" aria-hidden="true">✕</span><span class="cdT"></span></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
@@ -867,8 +870,9 @@ export class UI {
     if (!lost) this.plazaLostSaid = false;
     const sel = ['#modes [data-t="build"]', `#subcats [data-c="${KINDS.gather.cat}"]`, '#items [data-kind="gather"]'];
     for (const s of sel) this.root.querySelector(s)?.classList.toggle('first', first || lost);
-    // la place du village est déjà en main : le premier clic sur le terrain la pose (une vignette qui luit sans être prise déroute)
-    if (first && !this.firstArmed && this.host.tools.tool === 'none') { this.firstArmed = true; this.host.tools.setTool('build', START_KIND); }
+    // la place du village est déjà en main : le premier clic sur le terrain la pose (une vignette qui luit sans être prise déroute).
+    // Pas pendant l'accueil et « Regardez autour de vous » du tutoriel : le glissé demandé posait le feu de camp (testeurs v6)
+    if (first && !this.firstArmed && this.host.tools.tool === 'none' && !this.tutorial?.looking) { this.firstArmed = true; this.host.tools.setTool('build', START_KIND); }
     // village vide : les onglets Relief et Nature, les autres rayons et les outils rapides sont grisés (voir startLock)
     const shut = (s: string, on: boolean) => this.root.querySelectorAll<HTMLElement>(s).forEach((b) => { b.classList.toggle('locked', on); b.setAttribute('aria-disabled', String(on)); });
     shut('#modes button:not([data-t="build"])', first);
@@ -1524,13 +1528,15 @@ export class UI {
     const bar = $('#pauseBar');
     if (bar.hidden === on) { bar.hidden = !on; $('#pauseVeil').classList.toggle('on', on); }
     if (!on) return;
-    // au-dessus de la barre de construction, de ses onglets (qui dépassent par le haut) et de la fiche de l'outil quand elle passe
-    // sous le titre (au téléphone, elle est au milieu) ; leur hauteur varie, d'où le calcul
-    const cx = window.innerWidth / 2;
+    // au-dessus de la barre de construction, de ses onglets (qui dépassent par le haut), des réglages de l'outil (tracé des routes,
+    // pinceau : ils flottent au-dessus de la barre), des outils (au téléphone, une rangée au-dessus) et de la fiche de l'outil
+    // quand elle passe sous le titre ; leur hauteur varie, d'où le calcul, refait à chaque mise à jour. Toute la largeur du titre
+    // compte, sablier compris (testeurs v6 : « Jeu en pause » couvrait « Ligne / Libre » et les outils du téléphone)
+    const cx = window.innerWidth / 2, half = bar.offsetWidth / 2 + 70;
     let top = Infinity;
-    for (const id of ['dockMain', 'subcats', 'info']) {
+    for (const id of ['dockMain', 'subcats', 'info', 'dockBottom', 'dockSide', 'modes', 'quickL', 'quickR', 'homeBack']) {
       const r = document.getElementById(id)?.getBoundingClientRect();
-      if (r && r.height > 0 && r.left < cx + 130 && r.right > cx - 130) top = Math.min(top, r.top);
+      if (r && r.height > 0 && r.left < cx + half && r.right > cx - half) top = Math.min(top, r.top);
     }
     const bottom = top < Infinity ? Math.round(window.innerHeight - top + 18) : 150;
     if (bar.dataset.b !== String(bottom)) { bar.style.bottom = bottom + 'px'; bar.dataset.b = String(bottom); }
@@ -2311,7 +2317,9 @@ export class UI {
           const id = b.dataset.mk as GearId, g = GEAR_BY[id], left = Number(b.dataset.left ?? 1);
           for (let i = 0; i < left; i++) { if (ex.craft(id, age)) n++; else { last = ex.whyCraft(g, age); break; } }
         });
-        if (n) { h.audio.sfxClick(); key = ''; tick(); } else this.toast(last ?? tr('Impossible à fabriquer pour l’instant.'));
+        // (une partie seulement en fabrication, la file pleine : on dit pourquoi le reste attend ; les barques du kraken
+        // restaient en plan sans un mot, testeurs v6)
+        if (n) { h.audio.sfxClick(); key = ''; tick(); if (last) this.toast(last); } else this.toast(last ?? tr('Impossible à fabriquer pour l’instant.'));
         return;
       }
       const mk = t.closest<HTMLButtonElement>('button[data-mk]'), gg = t.closest<HTMLButtonElement>('button[data-geargo]');
@@ -2356,8 +2364,9 @@ export class UI {
       close();
       closeMain();
       h.audio.sfxClick();
-      // la caméra suit l'équipe d'office ; l'œil de sa carte (à gauche) la lâche ou la reprend
-      h.follow(a.id);
+      // la caméra suit l'équipe d'office, à la même distance (elle se collait au sol, testeurs v6) ; l'œil de sa carte (à gauche)
+      // la lâche ou la reprend de près
+      h.follow(a.id, true);
       this.update();
     });
   }
@@ -2525,11 +2534,14 @@ export class UI {
     if (a) this.forceDecision(a);
   }
 
-  /** Ouvre la décision d'une équipe tout de suite : les fenêtres ouvertes se ferment (sauf le menu), l'outil en main se range */
+  /**
+   * Ouvre la décision d'une équipe : les fenêtres ouvertes se ferment (sauf le menu). Pas en plein geste sur la carte (une pose à
+   * moitié faite, un clic à l'instant) : elle attend (`offerPending` la rouvre), et l'outil reste en main (testeurs v6 : la
+   * fenêtre mangeait le clic de pose et lâchait l'outil)
+   */
   private forceDecision(a: ActiveExpedition) {
-    if (this.root.querySelector('.decide')) return;
+    if (this.root.querySelector('.decide') || this.host.midGesture()) return;
     this.root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay').forEach((o) => { if (o.id !== 'menu' && !o.classList.contains('victory')) o.close?.(); });
-    if (this.host.tools.tool !== 'none') this.host.tools.setTool('none');
     this.showDecision(a);
   }
 

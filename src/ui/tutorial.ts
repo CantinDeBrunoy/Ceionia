@@ -118,6 +118,31 @@ export const TUTO_TEXT = {
 type StepId = keyof typeof TUTO_TEXT.steps;
 type Side = 'below' | 'above' | 'right' | 'left';
 
+/** Un rectangle de l'écran à ne pas couvrir, et son poids */
+export interface Block { r: { left: number; right: number; top: number; bottom: number }; k: number }
+/** Une place possible pour la bulle (son coin haut gauche) ; `side` : de quel côté de l'élément montré (la pointe), '' : à part */
+export interface Spot { x: number; y: number; side: Side | '' }
+
+/**
+ * La place de la bulle (w × h) dans l'écran (W × H) : parmi les places proposées, ramenées dans l'écran, celle qui cache le
+ * moins ce qui compte. L'élément montré (`a`) ne doit jamais être couvert ; puis les panneaux (`blocks`, pondérés) ; à égalité,
+ * la plus proche de l'élément, et l'ordre des places
+ */
+export function bestSpot(W: number, H: number, w: number, h: number, a: Block['r'] | null, blocks: Block[], spots: Spot[], m = 8): Spot {
+  const over = (x: number, y: number, b: Block['r']) => Math.max(0, Math.min(x + w, b.right) - Math.max(x, b.left)) * Math.max(0, Math.min(y + h, b.bottom) - Math.max(y, b.top));
+  let best: Spot | null = null, bestScore = Infinity;
+  for (const sp of spots) {
+    const x = clamp(sp.x, m, Math.max(m, W - w - m)), y = clamp(sp.y, m, Math.max(m, H - h - m));
+    let score = blocks.reduce((t, b) => t + b.k * over(x, y, b.r), 0);
+    if (a) {
+      score += 50 * over(x, y, { left: a.left - 6, right: a.right + 6, top: a.top - 6, bottom: a.bottom + 6 });
+      score += 20 * Math.hypot(x + w / 2 - (a.left + a.right) / 2, y + h / 2 - (a.top + a.bottom) / 2);
+    }
+    if (score < bestScore - 1) { bestScore = score; best = { x, y, side: sp.side }; }
+  }
+  return best ?? { x: m, y: m, side: '' };
+}
+
 /** Les textes d'une étape : titre, phrase, tâches */
 export interface StepText { title: string; text: string; tasks: string[] }
 
@@ -404,7 +429,8 @@ export class Tutorial {
           return [Math.hypot(v.x - b.x, v.z - b.z) > 3 || Math.abs(v.yaw - b.yaw) > 0.35 || Math.abs(Math.log(v.dist / b.dist)) > 0.15];
         },
       },
-      make('fire', ['gather']),
+      // le feu de camp passe en main ici seulement (pas pendant « Regardez autour de vous », où le glissé demandé le posait)
+      { ...make('fire', ['gather']), begin: () => { this.base.kinds = count(); if (!h.world.buildings.size && h.tools.tool === 'none') h.tools.setTool('build', 'gather'); } },
       make('habitat', ['house', 'well']),
       // (un temps trois étapes, puis « Les ressources » à lire : le tutoriel était trop long, retour de l'auteur du 17 nov. 2026)
       make('food', ['farm', 'lumber', 'quarry']),
@@ -538,6 +564,8 @@ export class Tutorial {
 
   /** La bulle guide en ce moment (un chapitre qui attend ailleurs ne compte pas : conseils et aides reprennent) */
   /** une partie neuve : la suite principale tient le temps arrêté jusqu'au feu de camp (le bandeau « Jeu en pause » se tait) */
+  /** les deux premières étapes (accueil, regarder autour de soi) : rien en main, le feu de camp attend son étape */
+  get looking() { return this.on && this.guiding && !this.ch && ['welcome', 'camera'].includes(this.steps[this.i]?.id); }
   get holdsPause() { return this.on && this.guiding && !this.ch && ['welcome', 'camera', 'fire'].includes(this.steps[this.i]?.id); }
   get active() { return this.on && !(this.ch && this.chapters[this.ch]!.away?.()); }
 
@@ -592,6 +620,8 @@ export class Tutorial {
     this.base = {};
     this.clicks.clear();
     s.begin?.();
+    // accueil et « Regardez autour de vous » : rien en main (l'interface arme le feu de camp dans un village vide)
+    if (this.looking && this.host.tools.tool === 'build') this.host.tools.setTool('none');
     this.ticks = s.check().map(() => false);
     this.doneAt = 0;
     this.key = '';
@@ -761,45 +791,72 @@ export class Tutorial {
    * sur un côté), sans sortir de l'écran ; la pointe vise le milieu de l'élément. Sans élément : au centre, sous la barre du haut
    */
   private place() {
-    const box = this.box, ring = this.ring, W = innerWidth, H = innerHeight, m = 8, gap = 16;
+    // (les blocs de la barre du bas un par un : selon la largeur, ses colonnes se défont en `display: contents`)
+    const DOCK = '#itemsWrap, #subcats, #modes, #quickL, #quickR, #viewBtns, #miniMap, #dockBottom, #homeBack.on';
+    const box = this.box, ring = this.ring, W = innerWidth, H = innerHeight;
     const s = this.cur, a = this.target().a, r = a?.getBoundingClientRect();
     const seen = !!r && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < H && r.right > 0 && r.left < W;
     // (une fiche que le joueur vient d'ouvrir place la bulle sans être entourée)
     const bare = seen && !!s.bare?.(a!);
     ring.hidden = !seen || bare;
     this.light(seen && !bare ? a : null);
+    this.follow();
     const w = box.offsetWidth, h = box.offsetHeight;
+    // ce que la bulle ne doit pas cacher : les panneaux ouverts (fiches, conditions de l'âge, fenêtres), le HUD, la barre du bas,
+    // et, sans fenêtre ouverte, le milieu de l'écran, où la caméra pose le village (testeurs v6 : la bulle cachait le village,
+    // les conditions de l'âge, la fiche du bâtiment, l'équipement à fabriquer, les onglets du bas)
+    const rects = (q: string) => [...this.ui.root.querySelectorAll<HTMLElement>(q)].filter((e) => e !== box && !e.hidden && e.offsetParent).map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
+    const blocks: Block[] = [
+      ...rects('#needInfo, #census, #selCard, #info, .expCard, #agePanel.open #ageReq, .overlay > .modal, #agePanel, #resPanel, #needsBox, #hudR, #msg, ' + DOCK).map((b) => ({ r: b, k: 1 })),
+    ];
+    if (!this.ui.root.querySelector('.overlay')) blocks.push({ r: { left: W * 0.3, right: W * 0.7, top: H * 0.3, bottom: H * 0.68 }, k: 0.7 });
+    // les places fixes, quand rien n'est montré ou que les côtés de l'élément sont pris : sous le HUD à droite et à gauche,
+    // au-dessus de la barre du bas à gauche et à droite
+    const hudB = Math.max(80, ...rects('#hud > *, #needsBox, #hudNotes').map((b) => b.bottom)) + 12;
+    const dockT = Math.min(H - 8, ...rects(DOCK).map((b) => b.top)) - 12;
+    const fixed: Spot[] = [
+      { x: W - w - 12, y: hudB, side: '' }, { x: 12, y: hudB, side: '' },
+      { x: 12, y: dockT - h, side: '' }, { x: W - w - 12, y: dockT - h, side: '' },
+    ];
     if (!seen) {
-      // au centre, juste sous la barre du haut (et sous les messages qui s'y affichent)
-      const notes = document.getElementById('hudNotes')?.getBoundingClientRect();
-      const top = Math.max(document.getElementById('hud')?.getBoundingClientRect().bottom ?? 80, notes && notes.height ? notes.bottom : 0) + 12;
-      box.style.left = `${Math.max(m, (W - w) / 2)}px`;
-      box.style.top = `${clamp(top, m, H - h - m)}px`;
+      const p = bestSpot(W, H, w, h, null, blocks, fixed);
+      box.style.left = `${p.x}px`; box.style.top = `${p.y}px`;
       box.dataset.side = '';
       return;
     }
-    ring.style.left = `${r.left - 6}px`; ring.style.top = `${r.top - 6}px`;
-    ring.style.width = `${r.width + 12}px`; ring.style.height = `${r.height + 12}px`;
-    // dans la barre du bas, la bulle passe au-dessus de la fiche du bâtiment survolé ; en haut, sous tout le panneau (le conseil reste lisible)
-    const lid = Math.min(r.top, a!.closest('#dock')?.getBoundingClientRect().top ?? r.top);
-    // (en haut : sous toutes les rangées du HUD, qui peut en avoir deux ou plus sur un écran moyen ou étroit ; le conseil et
-    // les messages, hors du flux, ne comptent pas)
-    const floor = Math.max(r.bottom, a!.closest('#hud')?.getBoundingClientRect().bottom ?? r.bottom);
-    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const order: Side[] = cy < H / 2 ? ['below', 'above', 'right', 'left'] : ['above', 'below', 'right', 'left'];
-    const fits = (s: Side) => (s === 'below' ? floor + gap + h <= H - m : s === 'above' ? lid - gap - h >= m : s === 'right' ? r.right + gap + w <= W - m : r.left - gap - w >= m);
-    // la bulle évite aussi les fiches ouvertes (besoin, recensement, bâtiment, expédition) : elle prend le côté qui en cache le moins
-    const blockers = ['#needInfo', '#census', '#selCard', '#info', '.expModal', '.expCard'].flatMap((q) => [...this.ui.root.querySelectorAll(q)]).filter((e) => e !== a && !e.contains(a!) && !a!.contains(e) && (e as HTMLElement).offsetParent && !(e as HTMLElement).hidden).map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
-    const pos = (s: Side) => { const v = s === 'below' || s === 'above'; return { x: clamp(v ? cx - w / 2 : s === 'right' ? r.right + gap : r.left - gap - w, m, W - w - m), y: clamp(v ? (s === 'below' ? floor + gap : lid - gap - h) : cy - h / 2, m, H - h - m) }; };
-    const covered = (s: Side) => { const p = pos(s); return blockers.reduce((t, b) => t + Math.max(0, Math.min(p.x + w, b.right) - Math.max(p.x, b.left)) * Math.max(0, Math.min(p.y + h, b.bottom) - Math.max(p.y, b.top)), 0); };
-    const ok = order.filter(fits);
-    const side = (ok.length ? ok : order).reduce((best, s) => (covered(s) < covered(best) ? s : best));
-    const vert = side === 'below' || side === 'above';
-    const { x, y } = pos(side);
-    box.style.left = `${x}px`; box.style.top = `${y}px`;
-    box.dataset.side = side;
-    this.arrow.style.left = vert ? `${clamp(cx - x, 20, w - 20)}px` : '';
-    this.arrow.style.top = vert ? '' : `${clamp(cy - y, 20, h - 20)}px`;
+    const gap = 16, cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    // (un bouton dans une carte d'équipement ou de mission : toute la carte reste visible, son image et son nom)
+    const card = a!.closest('.gear, .mission, .sCard')?.getBoundingClientRect() ?? r;
+    const keep = { left: Math.min(r.left, card.left), right: Math.max(r.right, card.right), top: Math.min(r.top, card.top), bottom: Math.max(r.bottom, card.bottom) };
+    const sides: Spot[] = [
+      { x: cx - w / 2, y: keep.bottom + gap, side: 'below' }, { x: cx - w / 2, y: keep.top - gap - h, side: 'above' },
+      { x: keep.right + gap, y: cy - h / 2, side: 'right' }, { x: keep.left - gap - w, y: cy - h / 2, side: 'left' },
+    ];
+    const p = bestSpot(W, H, w, h, keep, blocks, [...sides, ...fixed]);
+    box.style.left = `${p.x}px`; box.style.top = `${p.y}px`;
+    box.dataset.side = p.side;
+    const vert = p.side === 'below' || p.side === 'above';
+    this.arrow.style.left = vert ? `${clamp(cx - p.x, 20, w - 20)}px` : '';
+    this.arrow.style.top = vert ? '' : `${clamp(cy - p.y, 20, h - 20)}px`;
+  }
+
+  /**
+   * L'anneau doré suit l'élément montré à chaque image (le carrousel qui défile, une fenêtre qui s'ouvre) : placé quatre fois
+   * par seconde avec un glissement, il restait à côté du liseré du bouton, deux cadres décalés (testeurs v6)
+   */
+  private followId = 0;
+  private follow() {
+    const fit = () => {
+      const a = this.lit, ring = this.ring;
+      if (!a || ring.hidden || !this.on || !a.isConnected) return false;
+      const r = a.getBoundingClientRect();
+      ring.style.left = `${r.left - 6}px`; ring.style.top = `${r.top - 6}px`;
+      ring.style.width = `${r.width + 12}px`; ring.style.height = `${r.height + 12}px`;
+      return true;
+    };
+    if (!fit() || this.followId) return;
+    const tick = () => { this.followId = fit() ? requestAnimationFrame(tick) : 0; };
+    this.followId = requestAnimationFrame(tick);
   }
 
   // ---------------- Réglages ----------------

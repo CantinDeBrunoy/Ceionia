@@ -927,6 +927,9 @@ export class ToolController implements ToolInput {
     if (this.h.autoRoads && b) autoRoad(w, b);
   }
 
+  /** Un geste en cours sur la carte : l'endroit d'une pose fixé (le côté de l'entrée reste à cliquer), le début d'un tracé, un bâtiment ramassé */
+  get midGesture() { return !!this.anchor || !!this.freeFrom || !!this.moveOrigin; }
+
   /** Pose en deux clics : 0 rien, 1 l'endroit est à cliquer, 2 l'endroit est fixé, le côté de l'entrée reste à cliquer */
   get placeStage(): 0 | 1 | 2 {
     if (this.tool === 'cave') return this.anchor ? 2 : 1;

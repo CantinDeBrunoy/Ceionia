@@ -142,6 +142,10 @@ const audio = new AudioEngine();
 const audioSettings = (s: Partial<Settings>) => Object.assign(audio, soundSettings(s));
 /** distance de la caméra quand elle revient sur le village (assez près pour reconnaître ses maisons) */
 const VILLAGE_DIST = 30;
+/** après un appui sur la carte, la vue ne part pas d'elle-même pendant ce temps (ms ; voir `Game.handsBusy`) */
+const HANDS_MS = 3000;
+/** après un appui sur la carte, récits et décisions d'expédition attendent ce temps (ms ; voir `Game.midGesture`) */
+const GESTURE_MS = 1500;
 /** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
 const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
@@ -597,7 +601,7 @@ class Game implements UIHost {
     this.command.onCard = () => this.ui.placeCards();
     // (une défense de l'île en main : le clic droit la lâche, il ne donne pas d'ordre aux troupes)
     this.cam.rightClick = (e) => { if (this.islePlace) { this.tools.escape(); this.endIslePlace(); return; } if (this.command.active) this.command.rightClick(e); };
-    this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
+    this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(false); });
     // le grand choix de la fin de l'Antiquité (les Enfers, explorer le monde, ni l'un ni l'autre), et chaque voie prise plus tard
     this.worldChoice = new WorldChoice(uiRoot, {
       click: () => audio.sfxClick(), ways: () => this.ways(),
@@ -661,6 +665,8 @@ class Game implements UIHost {
     this.tools.overlay = this.trackEdit;
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
     this.expeditions.onReport = (r) => {
+      // pas en plein geste sur la carte : le récit (et la cinématique du trophée) attendent la fin de la pose
+      if (this.midGesture()) { setTimeout(() => this.expeditions.onReport?.(r), 250); return; }
       const show = () => {
         // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
         if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: tr('le village'), pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
@@ -713,6 +719,8 @@ class Game implements UIHost {
     this.cam.dist = this.cam.homeDist();
     // une partie neuve s'ouvre près de la place à venir : de la vue d'ensemble, les premiers bâtiments seraient invisibles
     if (!w.buildings.size && this.cam.homeAt) this.cam.jump({ x: this.cam.homeAt[0], z: this.cam.homeAt[1], dist: 34 }, w.surfaceAt(this.cam.homeAt[0], this.cam.homeAt[1]));
+    // une partie reprise s'ouvre sur le village, pas sur toute l'île (Chloé, v6)
+    else { const c = this.villageCenter(); if (c) this.cam.jump({ x: c[0], z: c[1], dist: VILLAGE_DIST }, w.surfaceAt(c[0], c[1])); }
     window.addEventListener('resize', () => this.onResize());
     this.bindKeys();
     this.applyControls();
@@ -737,7 +745,7 @@ class Game implements UIHost {
       commandIsle: () => this.commandIsle(),
       arch: () => !!allyIsle(this.world), allyIsle: () => (this.world.diplo.ally ? isleName(this.world.diplo.ally) : ''),
       harbors: () => this.harborsByIsle(), posts: () => this.postsAtAlly(),
-      atAlly: () => this.lookingAtAlly(), goAlly: () => this.goAlly(),
+      atAlly: () => this.lookingAtAlly(), goAlly: () => this.goAlly(), handsBusy: () => this.handsBusy(),
     }));
     // un chapitre fini dit déjà ce que disaient les aides militaires du même moment : elles ne se répètent pas
     this.tutorial.onChapterEnd = (id, done) => { if (done) for (const t of (id === 'pve' ? ['isle', 'orders'] : ['hell']) as WarTipId[]) this.warTips.markSeen(t); };
@@ -1784,6 +1792,8 @@ class Game implements UIHost {
     const mouse = this.controls.mode === 'mouse';
     this.cam.letterKeys = !mouse;
     this.cam.edgeScroll = mouse;
+    // (la barre du bas et le HUD : la carte visible entre leurs blocs ne fait pas défiler la vue)
+    this.cam.edgeShields = () => ['dockRow', 'hud'].map((id) => document.getElementById(id)?.getBoundingClientRect()).filter((r): r is DOMRect => !!r && r.width > 0);
     // à la souris, un glissé du clic gauche déplace la vue quand l'outil Voir est en main (un clic sans bouger choisit toujours)
     this.cam.dragPan = mouse ? () => this.cam.handler === this.tools && this.tools.tool === 'none' && !this.railEdit && !this.tools.picking : null;
   }
@@ -2016,15 +2026,19 @@ class Game implements UIHost {
     return [mid(bs.map((b) => b.x + sizeOf(b) / 2)), mid(bs.map((b) => b.z + sizeOf(b) / 2))];
   }
 
-  /** Ramène la vue sur le village ; si elle y est déjà, passe à la vue d'ensemble. La vue cesse de suivre quoi que ce soit */
-  goHome() {
-    if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.goHome()); return; }
+  /**
+   * Ramène la vue sur le village ; si elle y est déjà (arrivée, pas en chemin), passe à la vue d'ensemble, sauf `overview`
+   * faux (le bouton « Retourner au village » : un second clic pendant le trajet montrait toute l'île). La vue cesse de suivre
+   * quoi que ce soit
+   */
+  goHome(overview = true) {
+    if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.goHome(overview)); return; }
     // la vue suivait quelque chose : elle revient au village, même si l'équipe en partait à peine
     const tracked = this.following !== null || this.trainCam !== null || this.incidentCam !== null;
     this.follow(null); this.trainCam = null; this.incidentCam = null;
     if (this.mode === 'under') { this.exitUnder(); return; }
     const c = this.villageCenter(), v = this.cam.view();
-    if (!c || (!tracked && Math.hypot(v.x - c[0], v.z - c[1]) < 2 && v.dist < VILLAGE_DIST * 1.2)) { this.cam.reset(); return; }
+    if (!c || (overview && !tracked && this.cam.settled() && Math.hypot(v.x - c[0], v.z - c[1]) < 2 && v.dist < VILLAGE_DIST * 1.2)) { this.cam.reset(); return; }
     this.cam.goTo(c[0], c[1], VILLAGE_DIST);
   }
 
@@ -2116,16 +2130,18 @@ class Game implements UIHost {
   }
 
   /** La caméra suit l'expédition donnée (null : elle redevient libre) */
-  follow(id: number | null) {
+  /** la vue suivie garde sa distance (au départ d'une expédition : pas de gros plan d'office) */
+  private followFar = false;
+  follow(id: number | null, far = false) {
     const a = this.expeditions.active.find((e) => e.id === id);
     // l'équipe est au village : depuis les Enfers (ou le commandement de l'île), la vue remonte d'abord
-    if (a && (this.mode === 'hell' || this.isleCmd)) { this.ensureSurface(() => this.follow(id)); return; }
+    if (a && (this.mode === 'hell' || this.isleCmd)) { this.ensureSurface(() => this.follow(id, far)); return; }
     this.following = a ? a.id : null;
     // une seule chose suivie à la fois : suivre l'équipe lâche le train et l'incident
     if (a) { this.trainCam = null; this.incidentCam = null; }
     // on cesse de suivre : la vue reste où elle est
     if (!a) return;
-    this.followPhase = ''; this.followLast = null; this.followSm = null; this.followRaw = null;
+    this.followPhase = ''; this.followLast = null; this.followSm = null; this.followRaw = null; this.followFar = far;
     if (this.mode === 'under') {
       // depuis le monde souterrain : la vue remonte retrouver l'équipe (aucune ne descend plus dans les galeries)
       this.exitUnder();
@@ -2133,7 +2149,7 @@ class Game implements UIHost {
     }
     // assez près pour voir l'équipe (de petits personnages) ; on se rapproche encore quand elle arrive sur place
     const p = this.agents.partyPositions(a.party)[0];
-    if (p) this.cam.follow(p[0], p[1], 10);
+    if (p) this.cam.follow(p[0], p[1], far ? undefined : 10);
   }
   get disasters() { return this.world.disasters; }
 
@@ -2235,6 +2251,20 @@ class Game implements UIHost {
    */
   ensureSurface(then: () => void, keepIsle = false) { this.surfaceGate.ensure(then, keepIsle); }
 
+  /**
+   * Le joueur a la main sur la carte : un outil en main (bâtiment, route, pinceau…), un tracé de ligne, ou un appui sur la carte
+   * il y a moins de `HANDS_MS`. La vue ne part alors pas d'elle-même (éruption, guide) : un message y mène. Elle partait en
+   * pleine pose, et le clic suivant tombait ailleurs (testeurs v6)
+   */
+  /**
+   * Le joueur est au milieu d'un geste sur la carte : une pose à moitié faite, un tracé commencé, ou un appui sur la carte il y a
+   * moins de `GESTURE_MS`. Récits et décisions d'expédition attendent : ils s'ouvraient sous le clic, le mangeaient et lâchaient
+   * l'outil (Karim, v6)
+   */
+  midGesture() { return this.tools.midGesture || performance.now() - this.cam.lastDown < GESTURE_MS; }
+
+  handsBusy() { return this.tools.tool !== 'none' || this.tools.picking || !!this.railEdit || performance.now() - this.cam.lastDown < HANDS_MS; }
+
   /** Réveille le volcan de la case donnée : éruption, grondement et animaux qui détalent */
   erupt(cell: number) {
     if (!this.eruptions.start(cell)) return;
@@ -2242,10 +2272,12 @@ class Game implements UIHost {
     this.ui.info(tr('Le volcan entre en éruption !'));
     // la première éruption de la partie : la vue file sur le volcan pour ne pas la manquer
     // (pas depuis les Enfers ni le commandement de l'île : la vue n'y est pas arrachée, le message mène au volcan)
+    // (pas en pleine pose : un message cliquable à la place)
     if (!this.volcanoSeen && this.mode === 'surface' && !this.isleCmd) {
       this.volcanoSeen = true;
-      this.follow(null);
-      this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 34);
+      const go = () => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 34); };
+      if (this.handsBusy()) this.ui.toast(tr('Le volcan entre en éruption ! Cliquez ici pour le voir.'), () => this.ensureSurface(go), 'danger');
+      else go();
     }
   }
 
@@ -2632,7 +2664,7 @@ class Game implements UIHost {
           if (sp < 8) { this.followVel[0] += (vx - this.followVel[0]) * 0.1; this.followVel[1] += (vz - this.followVel[1]) * 0.1; }
           x += this.followVel[0] * 0.6; z += this.followVel[1] * 0.6;
         } else this.followVel = [0, 0];
-        this.cam.follow(x, z, arrived ? 6.5 : undefined, lift);
+        this.cam.follow(x, z, arrived && !this.followFar ? 6.5 : undefined, lift);
       }
     }
     // la surface ne s'anime que lorsqu'on la regarde
@@ -2732,7 +2764,9 @@ class Game implements UIHost {
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) {
-      this.homeBtn.set(this.awayFromHome());
+      // (le bouton reste là tant que la vue glisse vers le village : il disparaissait sous la souris, et un second clic
+      // tombait sur un bâtiment)
+      this.homeBtn.set(this.awayFromHome() || (this.homeBtn.shown && !this.cam.settled()));
       // la musique de la fin (chute du roi des Enfers, voyage des colons, écrans de victoire), des Enfers, sinon de l'âge
       // (le voyage des colons et les écrans de victoire : rien que la musique, plus les feux d'artifice de la fête)
       const ending = !!uiRoot.querySelector('.overlay.voyage, .overlay.victory');
