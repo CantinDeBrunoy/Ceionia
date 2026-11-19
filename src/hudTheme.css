@@ -1316,6 +1316,22 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   .sendModal .sTop > img.dioImg, .sendModal .sTop > img { width: 200px; }
   .sendModal .scText { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
 }
+/* écran peu haut ou étroit : la fenêtre tient dans l'écran, titre en haut et bouton « Lancer » en bas toujours visibles, seul le
+   milieu défile. L'îlot reste dans sa bande (il sortait vers l'en-tête et couvrait le titre au téléphone). Avant, toute la page
+   défilait : titre coupé, bouton à moitié caché (testeurs v6, 1280 × 800 et moins) */
+@media (max-height: 880px), (max-width: 760px) {
+  .overlay > .modal.sendModal { display: flex; flex-direction: column; max-height: calc(100dvh - 56px); }
+  .overlay > .modal.sendModal > .mtitle { flex: none; }
+  .sendModal .sendBody { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .sendModal .sScroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+  .sendModal .sScroll > * { flex: none; }
+  .sendModal .sFoot { flex: none; }
+  /* (la bande de l'îlot gardait les 210 px de `.mart` : elle suit la hauteur de l'écran) */
+  .sendModal .sTop, .sendModal .sTop.mart, .sendModal .sTop.mart.dio { min-height: 0; height: clamp(84px, 18vh, 170px); }
+  .sendModal .sTop > img.dioImg, .sendModal .sTop > img { top: 0; bottom: 0; width: auto; height: 100%; max-width: 100%; object-fit: contain; }
+}
+/* les rouleaux dorés débordent de 24 px de chaque côté : la fenêtre leur laisse la place (ascenseur horizontal sinon) */
+@media (min-width: 761px) { .overlay > .modal.sendModal { max-width: min(1040px, calc(100vw - 80px)); } }
 
 /* ---------- la mini-carte toujours collée au coin bas droit (retour de l'auteur, 15 nov. 2026 : sur un écran de 2 000 px, le
    bloc centré la laissait vers le milieu, avec un grand vide à droite). Les deux colonnes du bord prennent la place qui reste
