@@ -4,6 +4,7 @@ import { Parts } from './parts';
 import { mats } from './materials';
 import { Puffs } from './particles';
 import { freighter } from './models';
+import { rod, sail3, sailor, shipHull, triGeo, type V3 } from './models/orientShips';
 
 /**
  * La circulation en mer : les navires de l'époque qui sortent des chantiers navals (caravelle, galion, vapeur, cargo, navire
@@ -25,53 +26,205 @@ export function fisherKind(age: number): VesselKind {
   return age <= 2 ? 'caravel' : age === 3 ? 'galleon' : age === 4 ? 'steamer' : 'hydro';
 }
 
-/** Coque effilée : pont de largeur w, profondeur d sous la flottaison, longueur L ; proue en pointe, poupe arrondie */
-export function hull(p: Parts, w: number, d: number, L: number, top: number, color: number, band: number | null, deck: number) {
-  p.add(new THREE.BoxGeometry(w, top + d * 0.45, L), 0, (top - d * 0.45) / 2, 0, color);
-  p.add(new THREE.BoxGeometry(w * 0.66, d * 0.6, L * 0.96), 0, -d * 0.7, 0, color);
-  p.add(new THREE.ConeGeometry(w * 0.71, w, 4).rotateY(Math.PI / 4).rotateX(Math.PI / 2).scale(1, (d + top) / w, 1), 0, (top - d) / 2, L / 2 + w / 2 - 0.01, color);
-  p.add(new THREE.CylinderGeometry((w / 2) * 0.7, (w / 2) * 0.5, d + top, 10, 1, false, Math.PI / 2, Math.PI), 0, (top - d) / 2, -L / 2, color);
-  if (band !== null) p.box(w * 1.01, 0.025, L, 0, -0.03, 0, band);
-  p.box(w * 0.94, 0.012, L + w * 0.3, 0, top, 0, deck);
-}
-
 const SMOKE = new THREE.Color(0.32, 0.3, 0.3);
-const WOOD = 0x7a5236, DARK = 0x5a3e2e, SAIL = 0xf2e6d0, RED = 0xb8322c;
+const WOOD = 0x7a5236, DARK = 0x5a3e2e, TAR = 0x2e241c, DECK = 0xb08458, PLANK = 0x8a6040, SAIL = 0xf2e6d0, SAIL2 = 0xe6d8bc;
+const RED = 0xb8322c, GOLD = 0xe8c66a, ROPE = 0x4a3a2c, IRON = 0x2a2a2c, PANE = 0xe8b860;
+type Hull = ReturnType<typeof shipHull>;
 
-/** Caravelle : coque de bois, château arrière, trois mâts, voiles carrées à croix rouge et voile latine à l'artimon */
-function caravel(p: Parts) {
-  hull(p, 0.15, 0.07, 0.5, 0.05, WOOD, null, 0xa07850);
-  p.box(0.14, 0.07, 0.15, 0, 0.05, -0.19, 0x8a6040); p.box(0.15, 0.01, 0.16, 0, 0.12, -0.19, DARK);
-  p.box(0.11, 0.045, 0.09, 0, 0.05, 0.2, 0x8a6040);
-  for (const [z, h] of [[0.04, 0.5], [0.17, 0.32], [-0.19, 0.34]]) p.cyl(0.008, 0.01, h, 5, 0, 0.05, z, DARK);
-  // grand mât : voile carrée à croix rouge ; mât de misaine : voile plus petite ; artimon : voile latine
-  p.box(0.27, 0.2, 0.008, 0, 0.22, 0.05, SAIL); p.box(0.03, 0.2, 0.01, 0, 0.22, 0.05, RED); p.box(0.27, 0.03, 0.01, 0, 0.3, 0.05, RED);
-  p.box(0.19, 0.13, 0.008, 0, 0.2, 0.18, SAIL); p.box(0.02, 0.13, 0.01, 0, 0.2, 0.18, RED);
-  p.box(0.012, 0.16, 0.2, 0, 0.2, -0.19, SAIL, 0, false, 0);
-  p.add(new THREE.BoxGeometry(0.012, 0.012, 0.26), 0, 0.37, -0.19, DARK, 0, false, 0, 0.5);
-  p.box(0.28, 0.012, 0.012, 0, 0.32, 0.05, DARK); p.box(0.28, 0.012, 0.012, 0, 0.11, 0.05, DARK);
-  p.box(0.07, 0.035, 0.004, 0.035, 0.57, 0.04, 0x3a6ab8); p.box(0.07, 0.012, 0.005, 0.035, 0.58, 0.04, 0xe8c66a);
-  p.box(0.05, 0.03, 0.004, 0.025, 0.37, 0.17, RED);
-  p.add(new THREE.BoxGeometry(0.01, 0.01, 0.12), 0, 0.075, 0.33, DARK, 0, false, 0, -0.35);
+/**
+ * Toile tendue sous une vergue (en y = 0), gonflée vers l'avant (+z) : une grille de facettes coupée en `us` × `vs` (de 0 à 1,
+ * de bâbord à tribord et du bas à la vergue), dont on garde les cases que choisit `keep`. Faces devant, ou derrière (`rear`)
+ */
+function canvas(w: number, h: number, belly: number, us: number[], vs: number[], keep: (i: number, j: number) => boolean, rear: boolean) {
+  const at = (a: number, b: number): V3 => {
+    const u = 2 * a - 1, v = 2 * b - 1;
+    // la toile tient à la vergue (peu de creux en haut), le ventre est sous le milieu
+    return [(u * w) / 2, (b - 1) * h, belly * (1 - u * u) * (1 - v * v * 0.5) * (1 - Math.max(0, v) * 0.4) - (rear ? 0.0012 : 0)];
+  };
+  const tris: V3[][] = [];
+  for (let i = 0; i + 1 < us.length; i++) for (let j = 0; j + 1 < vs.length; j++) {
+    if (!keep(i, j)) continue;
+    const a = at(us[i], vs[j]), b = at(us[i + 1], vs[j]), c = at(us[i + 1], vs[j + 1]), d = at(us[i], vs[j + 1]);
+    tris.push([a, b, c], [a, c, d]);
+  }
+  return triGeo(tris, (_c, nn) => (nn.z > 0) !== rear);
+}
+const PLAIN = [0, 1 / 3, 2 / 3, 1], CROSS_U = [0, 0.22, 0.44, 0.56, 0.78, 1], CROSS_V = [0, 0.27, 0.54, 0.66, 0.83, 1];
+/** Voile carrée bombée sous sa vergue (en y) : la toile des deux côtés, la croix peinte des deux côtés, la vergue */
+function course(p: Parts, w: number, h: number, y: number, z: number, belly: number, cross?: number) {
+  const us = cross === undefined ? PLAIN : CROSS_U, vs = cross === undefined ? PLAIN : CROSS_V;
+  const red = (i: number, j: number) => cross !== undefined && (i === 2 || j === 2);
+  for (const rear of [false, true]) {
+    p.add(canvas(w, h, belly, us, vs, (i, j) => !red(i, j), rear), 0, y, z, rear ? SAIL2 : SAIL);
+    if (cross !== undefined) p.add(canvas(w, h, belly, us, vs, red, rear), 0, y, z, cross);
+  }
+  rod(p, [-w * 0.56, y, z - 0.004], [w * 0.56, y, z - 0.004], 0.0055, DARK);
 }
 
-/** Galion marchand : haute coque sombre à liston d'or, gaillard arrière à fanal, trois mâts à deux étages de voiles, beaupré */
-function galleon(p: Parts) {
-  hull(p, 0.22, 0.1, 0.85, 0.08, DARK, 0xe8c66a, 0x8a6040);
-  for (let k = 0; k < 6; k++) for (const s of [-1, 1]) p.box(0.004, 0.022, 0.03, s * 0.111, 0.03, -0.25 + k * 0.09, 0x1c1410);
-  p.box(0.2, 0.14, 0.22, 0, 0.08, -0.34, 0x6a4430); p.box(0.18, 0.09, 0.14, 0, 0.22, -0.38, 0x8a6040); p.box(0.21, 0.012, 0.15, 0, 0.31, -0.38, DARK);
-  p.box(0.03, 0.04, 0.03, 0, 0.31, -0.45, 0xffd890, 0, true);
-  p.box(0.16, 0.07, 0.14, 0, 0.08, 0.34, 0x6a4430);
-  p.add(new THREE.BoxGeometry(0.014, 0.014, 0.22), 0, 0.12, 0.52, DARK, 0, false, 0, -0.3);
-  for (const [z, h] of [[0.06, 0.78], [0.26, 0.6], [-0.22, 0.58]]) p.cyl(0.01, 0.014, h, 5, 0, 0.08, z, DARK);
-  // grand mât et misaine : deux voiles carrées et un hunier ; artimon : voile latine
-  for (const [z, w, y] of [[0.06, 0.34, 0.2], [0.06, 0.3, 0.42], [0.06, 0.2, 0.62], [0.26, 0.26, 0.2], [0.26, 0.2, 0.4]]) {
-    p.box(w, 0.17, 0.008, 0, y, z, SAIL); p.box(w * 1.06, 0.012, 0.012, 0, y + 0.17, z, DARK);
+/** Château : un pont surélevé qui épouse la coque de z0 à z1, haut de h, cloison du côté du pont principal, lisse de garde-corps */
+function castle(p: Parts, hull: Hull, z0: number, z1: number, h: number, side: number, top: number, aft: boolean, rail = DARK) {
+  const n = 3, zs = Array.from({ length: n + 1 }, (_, i) => z0 + ((z1 - z0) * i) / n), sides: V3[][] = [], deck: V3[][] = [];
+  for (let i = 0; i < n; i++) {
+    const za = zs[i], zb = zs[i + 1], ba = hull.beam(za) * 0.99, bb = hull.beam(zb) * 0.99, ga = hull(za) - 0.02, gb = hull(zb) - 0.02;
+    for (const sg of [-1, 1]) sides.push([[sg * ba, ga, za], [sg * ba, ga + h + 0.02, za], [sg * bb, gb + h + 0.02, zb]], [[sg * ba, ga, za], [sg * bb, gb + h + 0.02, zb], [sg * bb, gb, zb]]);
+    deck.push([[-ba, ga + h, za], [ba, ga + h, za], [bb, gb + h, zb]], [[-ba, ga + h, za], [bb, gb + h, zb], [-bb, gb + h, zb]]);
   }
-  p.box(0.03, 0.17, 0.01, 0, 0.2, 0.06, RED); p.box(0.03, 0.17, 0.01, 0, 0.42, 0.06, RED);
-  p.box(0.012, 0.2, 0.26, 0, 0.22, -0.22, SAIL);
-  p.add(new THREE.BoxGeometry(0.012, 0.012, 0.32), 0, 0.44, -0.22, DARK, 0, false, 0, 0.5);
-  p.box(0.09, 0.05, 0.004, 0.045, 0.84, 0.05, RED); p.box(0.09, 0.016, 0.005, 0.045, 0.85, 0.05, 0xe8c66a);
+  const zw = aft ? z1 : z0, bw = hull.beam(zw) * 0.99, gw = hull(zw) - 0.02;
+  const wall: V3[][] = [[[-bw, gw, zw], [bw, gw, zw], [bw, gw + h + 0.02, zw]], [[-bw, gw, zw], [bw, gw + h + 0.02, zw], [-bw, gw + h + 0.02, zw]]];
+  p.add(triGeo(sides, (c, nn) => nn.x * c.x > 0), 0, 0, 0, side);
+  p.add(triGeo(deck, (_c, nn) => nn.y > 0), 0, 0, 0, top);
+  p.add(triGeo(wall, (_c, nn) => (aft ? nn.z > 0 : nn.z < 0)), 0, 0, 0, side);
+  for (const sg of [-1, 1]) for (let i = 0; i < n; i++) {
+    const za = zs[i], zb = zs[i + 1];
+    rod(p, [sg * hull.beam(za) * 0.99, hull(za) + h + 0.006, za], [sg * hull.beam(zb) * 0.99, hull(zb) + h + 0.006, zb], 0.004, rail);
+  }
+}
+
+/** Haubans : du mât (en y) au flanc, n de chaque bord vers l'arrière, et leurs enfléchures ; le porte-haubans, une planche sur le flanc */
+function shrouds(p: Parts, hull: Hull, z: number, y: number, n: number, spread: number) {
+  for (const sg of [-1, 1]) {
+    const foot = (k: number): V3 => { const zz = z - spread * (k + 0.3); return [sg * hull.beam(zz) * 1.04, hull(zz) - 0.012, zz]; };
+    for (let k = 0; k < n; k++) rod(p, [0, y, z], foot(k), 0.0018, ROPE);
+    const a = foot(0), b = foot(n - 1), on = (q: V3, f: number): V3 => [q[0] * (1 - f), q[1] + (y - q[1]) * f, q[2] + (z - q[2]) * f];
+    for (const f of [0.18, 0.36, 0.54]) rod(p, on(a, f), on(b, f), 0.0012, ROPE);
+    const zm = z - spread * (n / 2 - 0.2);
+    p.box(0.008, 0.008, spread * n + 0.01, sg * hull.beam(zm) * 1.03, hull(zm) - 0.022, zm, DARK);
+  }
+}
+
+/** Flamme qui flotte vers l'arrière, en haut d'un mât */
+function pennant(p: Parts, y: number, z: number, len: number, col: number) {
+  const t: V3[] = [[0, y, z], [0, y - 0.022, z], [0.006, y - 0.016, z - len]];
+  p.add(triGeo([t, [t[0], t[2], t[1]]], () => true), 0, 0, 0, col);
+}
+
+/**
+ * Caravelle « redonda » : coque galbée à liston et préceinte, château arrière à fenêtres et fanal, petit gaillard d'avant,
+ * beaupré, grand mât et misaine à voiles carrées gonflées (croix rouge), hunier, artimon latin ; haubans, porte-haubans,
+ * gouvernail, tonneaux et matelots. Proue vers +z, flottaison à y = 0
+ */
+function caravel(p: Parts) {
+  const hull = shipHull(p, { L: 0.56, B: 0.17, depth: 0.065, top: 0.055, bow: 0.05, stern: 0.06, transom: 0.68, fine: 1.15, under: TAR, side: WOOD, band: 0xc9a46c, deck: DECK, inner: DARK, wales: [0.04], waleCol: DARK });
+  // le château arrière (fenêtres, fanal, gouvernail, porte), le gaillard d'avant
+  castle(p, hull, -0.28, -0.13, 0.05, PLANK, DECK, true);
+  castle(p, hull, 0.15, 0.24, 0.035, PLANK, DECK, false);
+  const sy = hull(-0.28);
+  for (const x of [-0.025, 0.025]) p.box(0.018, 0.02, 0.004, x, sy + 0.012, -0.283, PANE);
+  p.box(0.08, 0.006, 0.004, 0, sy + 0.036, -0.283, 0xc9a46c);
+  p.box(0.016, 0.026, 0.016, 0, sy + 0.032, -0.268, GOLD);
+  p.cone(0.013, 0.016, 4, 0, sy + 0.058, -0.268, DARK);
+  p.box(0.012, 0.13, 0.03, 0, -0.07, -0.292, DARK);
+  p.box(0.024, 0.034, 0.004, 0, hull(-0.13) - 0.02, -0.128, 0x3a2a1e);
+  for (const sg of [-1, 1]) p.box(0.004, 0.016, 0.02, sg * hull.beam(-0.2) * 1.0, hull(-0.2) + 0.008, -0.2, PANE);
+  // le beaupré, les ancres aux bossoirs
+  rod(p, [0, hull(0.24) + 0.02, 0.22], [0, 0.2, 0.42], 0.006, DARK);
+  for (const sg of [-1, 1]) p.box(0.006, 0.04, 0.006, sg * hull.beam(0.21) * 1.05, hull(0.21) - 0.07, 0.21, IRON, 0, false, sg * 0.25);
+  // les mâts : grand mât, misaine, artimon (sur le château), la hune du grand mât
+  const mz = 0.02, fz = 0.17, az = -0.2;
+  p.cyl(0.006, 0.009, 0.58, 6, 0, 0.03, mz, DARK);
+  p.cyl(0.005, 0.008, 0.36, 6, 0, 0.05, fz, DARK);
+  p.cyl(0.004, 0.006, 0.32, 5, 0, hull(az) + 0.02, az, DARK);
+  p.cyl(0.02, 0.014, 0.018, 7, 0, 0.465, mz, PLANK);
+  // les voiles : grand-voile et misaine à croix rouge, hunier, artimon latin
+  course(p, 0.29, 0.2, 0.44, mz + 0.008, 0.04, RED);
+  course(p, 0.16, 0.075, 0.57, mz + 0.006, 0.02);
+  course(p, 0.2, 0.14, 0.37, fz + 0.008, 0.032, RED);
+  rod(p, [0.012, 0.19, -0.02], [0.012, 0.47, -0.32], 0.0045, DARK);
+  sail3(p, [0.014, 0.2, -0.035], [0.014, 0.46, -0.31], [0.012, hull(-0.26) + 0.06, -0.27], SAIL, 0.035);
+  // le gréement : haubans, étais, bras de la grand-vergue
+  shrouds(p, hull, mz, 0.45, 3, 0.03);
+  shrouds(p, hull, fz, 0.36, 2, 0.03);
+  rod(p, [0, 0.6, mz], [0, 0.39, fz], 0.0018, ROPE);
+  rod(p, [0, 0.39, fz], [0, 0.2, 0.42], 0.0018, ROPE);
+  rod(p, [0, 0.6, mz], [0, hull(az) + 0.33, az], 0.0018, ROPE);
+  for (const sg of [-1, 1]) rod(p, [sg * 0.16, 0.44, mz], [sg * 0.06, hull(-0.14) + 0.05, -0.14], 0.0015, ROPE);
+  // le pont : écoutille, tonneaux, cabestan, deux matelots
+  p.box(0.06, 0.012, 0.06, 0, hull(0.08) - 0.024, 0.08, 0x3a2a1e);
+  for (const [x, z] of [[0.045, -0.06], [0.05, -0.1], [-0.045, 0.11]]) p.cyl(0.012, 0.013, 0.026, 6, x, hull(z) - 0.022, z, PLANK);
+  p.cyl(0.012, 0.016, 0.022, 6, 0, hull(-0.07) - 0.022, -0.07, DARK);
+  sailor(p, -0.04, hull(-0.02) - 0.022, -0.02, 0x8a3a2a, SAIL2);
+  sailor(p, 0.01, hull(-0.22) + 0.03, -0.22, 0x3a5a8a, RED);
+  // pavillon bleu et or au grand mât, flamme rouge à la misaine
+  p.box(0.004, 0.035, 0.07, 0, 0.58, mz - 0.035, 0x3a6ab8);
+  p.box(0.005, 0.012, 0.07, 0, 0.592, mz - 0.035, GOLD);
+  pennant(p, 0.41, fz, 0.08, RED);
+}
+
+/**
+ * Galion marchand : haute coque sombre à liston d'or, préceintes et sabords, château arrière sur deux étages (galerie de poupe
+ * à fenêtres, trois fanaux), gaillard d'avant, éperon et beaupré à civadière ; trois mâts à hunes, voiles carrées gonflées sur
+ * deux ou trois étages (croix rouge aux basses voiles), artimon latin ; haubans, étais, chaloupe, matelots
+ */
+function galleon(p: Parts) {
+  const hull = shipHull(p, { L: 0.9, B: 0.25, depth: 0.1, top: 0.085, bow: 0.06, stern: 0.08, transom: 0.74, fine: 1.1, under: TAR, side: 0x4e3424, band: GOLD, deck: DECK, inner: DARK, wales: [0.05, 0.085], waleCol: 0x2e2018 });
+  // les sabords et leurs canons, entre les préceintes
+  for (const sg of [-1, 1]) for (let k = 0; k < 6; k++) {
+    const z = -0.25 + k * 0.085, y = hull(z) - 0.068, x = sg * hull.beam(z) * (0.92 + (0.08 * y) / hull(z)) * 1.012;
+    p.add(new THREE.PlaneGeometry(0.022, 0.02).rotateY((sg * Math.PI) / 2), x, y, z, 0x14100c);
+    p.add(new THREE.CylinderGeometry(0.0055, 0.0055, 0.024, 5, 1, true).rotateZ(Math.PI / 2), x + sg * 0.008, y, z, IRON);
+  }
+  // le château arrière sur deux étages, le gaillard d'avant
+  castle(p, hull, -0.45, -0.2, 0.07, 0x5e3e2a, DECK, true, GOLD);
+  castle(p, hull, -0.45, -0.31, 0.135, 0x6a4430, DECK, true, GOLD);
+  castle(p, hull, 0.24, 0.38, 0.05, 0x5e3e2a, DECK, false, GOLD);
+  for (const sg of [-1, 1]) {
+    for (const z of [-0.35, -0.4]) p.box(0.004, 0.024, 0.02, sg * hull.beam(z) * 0.995, hull(z) + 0.07, z, PANE);
+    for (const z of [-0.29, -0.25, -0.21]) p.box(0.004, 0.026, 0.026, sg * hull.beam(z) * 0.995, hull(z) + 0.006, z, RED);
+    p.box(0.005, 0.006, 0.14, sg * hull.beam(-0.38) * 0.995, hull(-0.38) + 0.056, -0.38, GOLD);
+  }
+  // la galerie de poupe : fenêtres sur deux rangs, moulures d'or, écusson, trois fanaux, le gouvernail
+  const sz = -0.452, sy = hull(-0.45);
+  for (const [y, n] of [[sy + 0.015, 4], [sy + 0.085, 3]] as [number, number][]) {
+    for (let k = 0; k < n; k++) p.box(0.022, 0.026, 0.004, (k - (n - 1) / 2) * 0.036, y, sz, PANE);
+    p.box(0.17, 0.007, 0.006, 0, y - 0.01, sz - 0.001, GOLD);
+  }
+  p.box(0.05, 0.035, 0.005, 0, sy - 0.045, sz - 0.001, GOLD);
+  for (const x of [-0.06, 0, 0.06]) {
+    p.box(0.018, 0.03, 0.018, x, sy + 0.12, -0.44, GOLD);
+    p.cone(0.014, 0.016, 4, x, sy + 0.15, -0.44, DARK);
+  }
+  p.box(0.014, 0.17, 0.04, 0, -0.1, -0.465, DARK);
+  p.box(0.026, 0.04, 0.004, 0, hull(-0.2) - 0.02, -0.198, 0x2e2018);
+  p.box(0.026, 0.04, 0.004, 0, hull(-0.31) + 0.05, -0.308, 0x2e2018);
+  // l'éperon, le beaupré, la civadière
+  rod(p, [0, hull(0.4) - 0.05, 0.4], [0, hull(0.4) - 0.015, 0.53], 0.012, 0x4e3424);
+  rod(p, [0, hull(0.37) + 0.05, 0.36], [0, 0.3, 0.66], 0.008, DARK);
+  course(p, 0.16, 0.09, 0.25, 0.58, 0.02);
+  // les mâts et leurs hunes
+  const fz = 0.25, mz = 0.03, az = -0.27;
+  p.cyl(0.008, 0.012, 0.78, 6, 0, 0.06, fz, DARK);
+  p.cyl(0.009, 0.014, 0.92, 6, 0, 0.06, mz, DARK);
+  p.cyl(0.006, 0.009, 0.5, 5, 0, hull(az) + 0.05, az, DARK);
+  for (const [z, y, r] of [[fz, 0.53, 0.026], [mz, 0.61, 0.03], [az, hull(az) + 0.42, 0.018]]) p.cyl(r, r * 0.7, 0.02, 7, 0, y, z, PLANK);
+  // les voiles : basses voiles à croix rouge, huniers, perroquet au grand mât ; artimon latin
+  course(p, 0.4, 0.22, 0.58, mz + 0.01, 0.05, RED);
+  course(p, 0.3, 0.16, 0.79, mz + 0.008, 0.035);
+  course(p, 0.18, 0.08, 0.94, mz + 0.006, 0.02);
+  course(p, 0.34, 0.19, 0.5, fz + 0.01, 0.045, RED);
+  course(p, 0.26, 0.14, 0.71, fz + 0.008, 0.03);
+  rod(p, [0.014, 0.3, -0.12], [0.014, 0.7, -0.46], 0.005, DARK);
+  sail3(p, [0.016, 0.31, -0.135], [0.016, 0.69, -0.45], [0.014, hull(-0.42) + 0.17, -0.42], SAIL, 0.04);
+  // le gréement : haubans, étais, bras de la grand-vergue
+  shrouds(p, hull, mz, 0.61, 4, 0.03);
+  shrouds(p, hull, fz, 0.53, 3, 0.03);
+  shrouds(p, hull, az, hull(az) + 0.42, 2, 0.025);
+  rod(p, [0, 0.97, mz], [0, 0.83, fz], 0.002, ROPE);
+  rod(p, [0, 0.61, mz], [0, 0.4, fz], 0.002, ROPE);
+  rod(p, [0, 0.83, fz], [0, 0.3, 0.66], 0.002, ROPE);
+  rod(p, [0, 0.78, mz], [0, hull(az) + 0.52, az], 0.002, ROPE);
+  for (const sg of [-1, 1]) rod(p, [sg * 0.21, 0.58, mz], [sg * 0.08, hull(-0.2) + 0.09, -0.2], 0.0016, ROPE);
+  // le pont : chaloupe retournée, écoutille, cabestan, matelots
+  p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.15, 6, 1, false, 0, Math.PI).rotateX(-Math.PI / 2).scale(1, 0.6, 1), 0, hull(0.12) - 0.022, 0.13, PLANK);
+  p.box(0.07, 0.012, 0.06, 0, hull(-0.08) - 0.024, -0.08, 0x2e2018);
+  p.cyl(0.014, 0.018, 0.026, 6, 0, hull(-0.15) - 0.022, -0.15, DARK);
+  sailor(p, 0.06, hull(0) - 0.022, 0, 0x8a3a2a, SAIL2);
+  sailor(p, -0.05, hull(-0.12) - 0.022, -0.12, 0x3a5a8a, RED);
+  sailor(p, 0.02, hull(-0.4) + 0.115, -0.4, 0x2e2018, GOLD);
+  // pavillon rouge et or au grand mât, flammes à la misaine et à l'artimon
+  p.box(0.004, 0.05, 0.09, 0, 0.96, mz - 0.045, RED);
+  p.box(0.005, 0.016, 0.09, 0, 0.977, mz - 0.045, GOLD);
+  pennant(p, 0.82, fz, 0.12, RED);
+  pennant(p, hull(az) + 0.55, az, 0.09, GOLD);
 }
 
 /** Navire futuriste : deux flotteurs blancs aux liserés lumineux, pont, cabine vitrée, mâts d'antennes et foils sous la coque */

@@ -16,10 +16,10 @@ const WIN = 0xffd890, LIGHT = 0x4af0d8;
 
 // ---------- Outils ----------
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 
 /** Géométrie de triangles, chacun retourné au besoin pour que sa face regarde du côté que choisit `out(centre, normale)` */
-function triGeo(tris: V3[][], out: (c: THREE.Vector3, n: THREE.Vector3) => boolean) {
+export function triGeo(tris: V3[][], out: (c: THREE.Vector3, n: THREE.Vector3) => boolean) {
   const pos: number[] = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), m = new THREE.Vector3();
   for (const t of tris) {
     a.set(...t[0]); b.set(...t[1]); c.set(...t[2]);
@@ -34,21 +34,24 @@ function triGeo(tris: V3[][], out: (c: THREE.Vector3, n: THREE.Vector3) => boole
   return g;
 }
 
-interface HullOpts {
+export interface HullOpts {
   L: number; B: number;
   /** creux sous la flottaison, hauteur du plat-bord au milieu, tonture à l'avant et à l'arrière */
   depth: number; top: number; bow: number; stern: number;
   /** largeur du tableau arrière (part de la largeur), finesse de l'avant (plus grand : plus effilé) */
   transom: number; fine: number;
   under: number; side: number; band?: number; deck: number; inner: number;
+  /** préceintes : des bandes plus bas sur le flanc, à ces distances sous le plat-bord, de la couleur `waleCol` */
+  wales?: number[]; waleCol?: number;
 }
 
 /**
  * Coque à facettes : des couples de l'arrière à l'avant, chacun un V à cinq points (quille, deux bouchains à la flottaison,
  * deux plats-bords), le plat-bord qui remonte vers l'étrave et la poupe. Œuvres vives et œuvres mortes de deux couleurs, un
  * liseré, le pont un peu sous le plat-bord (pavois sombre dedans), le tableau arrière fermé. Rend la hauteur du plat-bord en z
+ * (et, en `beam`, la demi-largeur au plat-bord en z)
  */
-function shipHull(p: Parts, o: HullOpts) {
+export function shipHull(p: Parts, o: HullOpts) {
   const n = 9, st: { z: number; b: number; g: number; k: number }[] = [];
   for (let i = 0; i <= n; i++) {
     const t = i / n, z = -o.L / 2 + o.L * t;
@@ -84,22 +87,29 @@ function shipHull(p: Parts, o: HullOpts) {
   p.add(triGeo(deck, (_c, nn) => nn.y > 0), 0, 0, 0, o.deck);
   p.add(triGeo(inner, (c, nn) => nn.x * c.x < 0), 0, 0, 0, o.inner);
   // le liseré sous le plat-bord, et le plat-bord lui-même
-  if (o.band !== undefined) {
-    const band: V3[][] = [];
+  // une bande sur le flanc, de `d0` à `d1` sous le plat-bord (le flanc rentre de 8 % jusqu'à la flottaison)
+  const strip = (d0: number, d1: number, col: number) => {
+    const band: V3[][] = [], x = (s: typeof st[0], y: number) => s.b * (0.92 + 0.08 * Math.max(0, y) / s.g) * 1.004;
     for (let i = 0; i < n; i++) {
       const a = st[i], b = st[i + 1];
+      if (a.g - d1 < 0.004 && b.g - d1 < 0.004) continue;
       for (const sg of [-1, 1]) {
-        const f = 1.004, A0: V3 = [sg * a.b * f, a.g - 0.005, a.z], A1: V3 = [sg * a.b * 0.985 * f, a.g - 0.035, a.z], B0: V3 = [sg * b.b * f, b.g - 0.005, b.z], B1: V3 = [sg * b.b * 0.985 * f, b.g - 0.035, b.z];
+        const A0: V3 = [sg * x(a, a.g - d0), a.g - d0, a.z], A1: V3 = [sg * x(a, a.g - d1), a.g - d1, a.z], B0: V3 = [sg * x(b, b.g - d0), b.g - d0, b.z], B1: V3 = [sg * x(b, b.g - d1), b.g - d1, b.z];
         band.push([A0, A1, B1], [A0, B1, B0]);
       }
     }
-    p.add(triGeo(band, outward), 0, 0, 0, o.band);
-  }
-  return (z: number) => { const t = Math.min(1, Math.max(0, (z + o.L / 2) / o.L)); return o.top + o.bow * t * t * t + o.stern * Math.pow(1 - t, 3); };
+    p.add(triGeo(band, outward), 0, 0, 0, col);
+  };
+  if (o.band !== undefined) strip(0.005, 0.035, o.band);
+  for (const d of o.wales ?? []) strip(d, d + 0.012, o.waleCol ?? o.band ?? o.side);
+  const ft = (z: number) => Math.min(1, Math.max(0, (z + o.L / 2) / o.L));
+  const gw = (z: number) => { const t = ft(z); return o.top + o.bow * t * t * t + o.stern * Math.pow(1 - t, 3); };
+  const beam = (z: number) => { const t = ft(z); return Math.max(0, (o.B / 2) * (t < 0.4 ? o.transom + (1 - o.transom) * Math.sin((t / 0.4) * Math.PI / 2) : Math.pow(Math.cos(((t - 0.4) / 0.6) * Math.PI / 2), 1 / o.fine))); };
+  return Object.assign(gw, { beam });
 }
 
 /** Un espar (ou un cordage) entre deux points, dans l'espace du navire */
-function rod(p: Parts, a: V3, b: V3, r: number, col: number) {
+export function rod(p: Parts, a: V3, b: V3, r: number, col: number) {
   const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), l = d.length();
   if (l < 1e-4) return;
   const g = new THREE.CylinderGeometry(r, r, l, r > 0.006 ? 5 : 3, 1, true);
@@ -108,7 +118,7 @@ function rod(p: Parts, a: V3, b: V3, r: number, col: number) {
 }
 
 /** Voile triangulaire bombée (vue des deux bords) : coins a, b, c ; le ventre gonfle vers +x de `belly` */
-function sail3(p: Parts, a: V3, b: V3, c: V3, col: number, belly = 0.03, stripe?: number) {
+export function sail3(p: Parts, a: V3, b: V3, c: V3, col: number, belly = 0.03, stripe?: number) {
   const m: V3 = [(a[0] + b[0] + c[0]) / 3 + belly, (a[1] + b[1] + c[1]) / 3, (a[2] + b[2] + c[2]) / 3];
   const t = [[a, b, m], [b, c, m], [c, a, m]] as V3[][];
   const both = [...t, ...t.map((x) => [x[0], x[2], x[1]] as V3[])];
@@ -122,7 +132,7 @@ function sail3(p: Parts, a: V3, b: V3, c: V3, col: number, belly = 0.03, stripe?
 }
 
 /** Voile carrée bombée sur sa vergue : largeur w, chute h, centre haut (y, z) */
-function squareSail(p: Parts, w: number, h: number, y: number, z: number, col: number, belly = 0.025) {
+export function squareSail(p: Parts, w: number, h: number, y: number, z: number, col: number, belly = 0.025) {
   const g = new THREE.PlaneGeometry(w, h, 2, 2), pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++) { const u = pos.getX(i) / (w / 2), v = pos.getY(i) / (h / 2); pos.setZ(i, belly * (1 - u * u) * (1 - v * v * 0.6)); }
   g.translate(0, -h / 2, 0);
@@ -131,7 +141,7 @@ function squareSail(p: Parts, w: number, h: number, y: number, z: number, col: n
 }
 
 /** Matelot : robe, ceinture, tête, turban (ou casque, casquette) */
-function sailor(p: Parts, x: number, y: number, z: number, robe: number, hat = WHITE, ry = 0) {
+export function sailor(p: Parts, x: number, y: number, z: number, robe: number, hat = WHITE, ry = 0) {
   p.add(new THREE.CylinderGeometry(0.009, 0.014, 0.045, 5).translate(0, 0.0225, 0), x, y, z, robe, ry);
   p.add(new THREE.CylinderGeometry(0.0105, 0.0105, 0.006, 5), x, y + 0.03, z, BRASS);
   p.add(new THREE.OctahedronGeometry(0.0095), x, y + 0.054, z, 0xb07a52);
