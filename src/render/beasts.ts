@@ -3209,15 +3209,15 @@ function whitestag(c: Coat): { rig: Rig; clips: ClipDef[] } {
   r.both((s, L) => r.add(`e${L}`, ell(0.007, 0.014, 0.004, 0), [s * 0.026, 0.288, 0.108], c.fur, [0, 0, -s * 0.85], c.top));
   // les bois immenses : le merrain monte en lyre, s'écarte, revient vers l'avant ; andouillers sur l'avant, couronne au sommet
   r.both((s) => {
-    const beam: V3[] = [[s * 0.009, 0.284, 0.118], [s * 0.028, 0.318, 0.108], [s * 0.056, 0.356, 0.088], [s * 0.078, 0.398, 0.07], [s * 0.088, 0.44, 0.064], [s * 0.084, 0.478, 0.072], [s * 0.07, 0.508, 0.088]];
-    const rad = [0.0058, 0.0052, 0.0046, 0.004, 0.0034, 0.0028, 0.0016];
+    const beam: V3[] = [[s * 0.01, 0.284, 0.118], [s * 0.034, 0.322, 0.106], [s * 0.07, 0.364, 0.086], [s * 0.098, 0.41, 0.068], [s * 0.11, 0.456, 0.062], [s * 0.104, 0.498, 0.072], [s * 0.086, 0.53, 0.09]];
+    const rad = [0.0095, 0.0085, 0.0076, 0.0066, 0.0056, 0.0045, 0.0026];
     for (let i = 0; i + 1 < beam.length; i++) r.put('head', seg(beam[i], beam[i + 1], rad[i], rad[i + 1], 5), c.antler, i > 3 ? c.tip : undefined);
     // la meule, à la base
-    r.add('head', ell(0.0075, 0.004, 0.0075, 0), beam[0], c.antler);
+    r.add('head', ell(0.011, 0.006, 0.011, 0), beam[0], c.antler);
     // andouillers : vers l'avant et vers le haut, le long du merrain (d'œil, de bois, chevillure, puis trois pointes)
     const tines: [number, V3, number][] = [
-      [0.15, [s * 0.006, 0.02, 0.04], 0.0032], [0.3, [s * 0.012, 0.026, 0.038], 0.003], [0.48, [s * 0.016, 0.034, 0.03], 0.0028],
-      [0.64, [s * 0.026, 0.034, 0.022], 0.0026], [0.76, [s * 0.006, 0.038, 0.028], 0.0024], [0.88, [-s * 0.012, 0.03, 0.03], 0.0022],
+      [0.15, [s * 0.008, 0.024, 0.046], 0.0052], [0.3, [s * 0.014, 0.032, 0.044], 0.005], [0.48, [s * 0.02, 0.04, 0.036], 0.0046],
+      [0.64, [s * 0.032, 0.04, 0.026], 0.0042], [0.76, [s * 0.008, 0.044, 0.032], 0.0038], [0.88, [-s * 0.014, 0.036, 0.034], 0.0034],
     ];
     for (const [t, d, rt] of tines) {
       const k = t * (beam.length - 1), i = Math.min(beam.length - 2, Math.floor(k)), b = along(beam[i], beam[i + 1], k - i);
@@ -3227,7 +3227,7 @@ function whitestag(c: Coat): { rig: Rig; clips: ClipDef[] } {
     }
     // la couronne : trois pointes en éventail au bout du merrain
     const top = beam[beam.length - 1];
-    for (const [dx, dz] of [[0.016, 0.0], [0.004, 0.018], [-0.012, 0.012]]) r.put('head', seg(top, [top[0] + s * dx, top[1] + 0.03, top[2] + dz], 0.0018, 0.0005, 4), c.tip);
+    for (const [dx, dz] of [[0.02, 0.0], [0.005, 0.022], [-0.014, 0.014]]) r.put('head', seg(top, [top[0] + s * dx, top[1] + 0.036, top[2] + dz], 0.003, 0.0008, 4), c.tip);
   });
   // la queue courte, blanche
   r.add('tail1', ell(0.006, 0.012, 0.005, 0), [0, 0.178, -0.103], c.belly, [0.3, 0, 0]);

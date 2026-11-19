@@ -81,7 +81,8 @@ export class VolcanoSite {
   focus: [number, number];
   private shards: THREE.Object3D[] = [];
   private sacks: THREE.Object3D[] = [];
-  private flows: { segs: THREE.Mesh[]; from: number }[] = [];
+  /** les coulées : un ruban de lave drapé sur la pente et son cœur plus clair, `quads` tronçons (voir `flow`) */
+  private flows: { meshes: THREE.Mesh[]; quads: number }[] = [];
   private trench: THREE.Mesh | null = null;
   private turn: THREE.Mesh[] = [];
   private folks: Villager[] = [];
@@ -111,7 +112,7 @@ export class VolcanoSite {
         this.shards.push(this.put(shardGeo(big), gx + Math.cos(ang) * r, gz + Math.sin(ang) * r, i * 1.7));
       }
       // la coulée tiède : une croûte noire fendue de lave, en amont du chantier
-      if (big) this.flow(gx - ux * 0.55, gz - uz * 0.55, gx - ux * 1.6, gz - uz * 1.6, 5, 0.06);
+      if (big) this.flow(gx - ux * 0.55, gz - uz * 0.55, gx - ux * 1.8, gz - uz * 1.8, 5, 0.22);
       for (let i = 0; i < n; i++) this.spots.push([gx + Math.cos(Math.atan2(uz, ux) + (i - (n - 1) / 2) * 0.7) * 0.32, gz + Math.sin(Math.atan2(uz, ux) + (i - (n - 1) / 2) * 0.7) * 0.32]);
     } else if (story === 'ascent') {
       // le soufre au bord, le drapeau qu'on plantera ; au bord du lac de lave, plus près du feu
@@ -143,7 +144,7 @@ export class VolcanoSite {
       this.put(netGeo(), gx + px * 0.6 + ux * 0.4, gz + pz * 0.6 + uz * 0.4, Math.atan2(px, pz));
       // la coulée : du cratère vers le village (elle s'arrête au-dessus des cases)
       const [cx, cz] = top, d = Math.hypot(gx - cx, gz - cz), sx = cx + (gx - cx) * (1.6 / d), sz = cz + (gz - cz) * (1.6 / d);
-      this.flow(sx, sz, gx - ux * 0.75, gz - uz * 0.75, 14, 0.09);
+      this.flow(sx, sz, gx - ux * 0.75, gz - uz * 0.75, 14, 0.5);
       if (a.c.variant === 'trench') {
         // la tranchée, en travers de la coulée, au-dessus des cases ; la lave qui s'y arrête file de côté, vers la mer
         const tx = gx - ux * 0.55, tz = gz - uz * 0.55;
@@ -181,17 +182,32 @@ export class VolcanoSite {
     return m;
   }
 
-  /** Une coulée de lave de (x0, z0) à (x1, z1), en `n` tronçons posés sur la pente (qui s'allument un à un, voir `grow`) */
+  /**
+   * Une coulée de lave de (x0, z0) à (x1, z1) : un ruban drapé sur le sol, point par point (des blocs plats, posés sur la pente
+   * raide du cône, s'y enfonçaient et ne laissaient voir que des tirets), qui serpente un peu, et son cœur plus clair. Elle
+   * avance en dévoilant ses tronçons un à un (`setDrawRange`)
+   */
   private flow(x0: number, z0: number, x1: number, z1: number, n: number, wide: number) {
-    const segs: THREE.Mesh[] = [], len = Math.hypot(x1 - x0, z1 - z0) / n, yaw = Math.atan2(x1 - x0, z1 - z0);
-    for (let i = 0; i < n; i++) {
-      const u = (i + 0.5) / n, x = x0 + (x1 - x0) * u + Math.sin(i * 1.7) * 0.04, z = z0 + (z1 - z0) * u + Math.cos(i * 1.3) * 0.04;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(wide * (1 + 0.3 * Math.sin(i)), 0.025, len * 1.25), i % 3 ? LAVA : LAVA_HOT);
-      m.position.set(x, this.world.surfaceAt(x, z) + 0.012, z);
-      m.rotation.y = yaw;
-      this.group.add(m); this.props.push(m); segs.push(m);
+    const N = n * 3 + 1, L = Math.hypot(x1 - x0, z1 - z0), ux = (x1 - x0) / L, uz = (z1 - z0) / L, meshes: THREE.Mesh[] = [];
+    for (const [half, lift, mat] of [[wide / 2, 0.03, LAVA], [wide * 0.18, 0.036, LAVA_HOT]] as [number, number, THREE.Material][]) {
+      const pos = new Float32Array(N * 6), idx: number[] = [];
+      for (let i = 0; i < N; i++) {
+        const u = i / (N - 1), sway = Math.sin(u * 9) * 0.12 * L / 6, w2 = half * (0.75 + 0.35 * Math.sin(i * 1.3)) * (1 - u * 0.3);
+        const cx = x0 + (x1 - x0) * u - uz * sway, cz = z0 + (z1 - z0) * u + ux * sway;
+        for (const [j, sd] of [[0, -1], [1, 1]]) {
+          const x = cx - uz * w2 * sd, z = cz + ux * w2 * sd;
+          pos.set([x, this.world.surfaceAt(x, z) + lift, z], (i * 2 + j) * 3);
+        }
+        if (i < N - 1) idx.push(i * 2, i * 2 + 2, i * 2 + 1, i * 2 + 1, i * 2 + 2, i * 2 + 3);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      const m = new THREE.Mesh(g, mat);
+      (mat as THREE.MeshBasicMaterial).side = THREE.DoubleSide;
+      this.group.add(m); this.props.push(m); meshes.push(m);
     }
-    this.flows.push({ segs, from: 0 });
+    this.flows.push({ meshes, quads: N - 1 });
   }
 
   /**
@@ -230,17 +246,17 @@ export class VolcanoSite {
       if (this.flag) this.flag.visible = k > 0.5 && (ok || !away);
     }
     // la lave : elle luit et ondule ; pendant l'éruption, la coulée descend vers le village
-    for (const f of this.flows) f.segs.forEach((m, i) => {
-      const lit = story !== 'eruption' || i < f.segs.length * Math.max(0.15, onSite || away ? Math.min(1, k * 1.4) : 0.15);
-      m.visible = lit;
-      m.scale.y = 1 + 0.3 * Math.sin(this.t * 3 + i);
-    });
+    const over = !!this.trench && away && !ok;
+    for (const f of this.flows) {
+      const grown = story !== 'eruption' || over ? 1 : Math.max(0.15, onSite || away ? Math.min(1, k * 1.8) : 0.15);
+      for (const m of f.meshes) m.geometry.setDrawRange(0, Math.max(1, Math.round(f.quads * grown)) * 6);
+    }
+    LAVA_HOT.color.setHSL(0.11, 1, 0.6 + 0.08 * Math.sin(this.t * 3));
     if (this.trench) {
       // la tranchée se creuse ; la coulée, arrivée dessus, file de côté (à l'échec, elle la franchit vers les cases)
       this.trench.scale.x = Math.max(0.001, onSite || away ? u : 0);
-      const front = k > 0.55, over = away && !ok;
+      const front = k > 0.55;
       this.turn.forEach((m, i) => { m.visible = front && !over && i < (k - 0.55) * 30; });
-      if (over) { const f = this.flows[0]; f.segs.forEach((m) => (m.visible = true)); }
     }
     // les villageois : ils regardent le cratère ; on évacue, ils descendent à la plage et montent à bord
     const leaving = story === 'eruption' && this.a.c.variant !== 'trench';

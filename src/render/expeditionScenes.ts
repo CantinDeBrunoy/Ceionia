@@ -702,9 +702,9 @@ const FUR = 0x7a4a2a, FUR_DARK = 0x5a3620;
 /** Taille du mammouth de `beasts.ts` pour une femelle adulte (0,5 au garrot, 0,7 des défenses à la queue) */
 const MAMMOTH_SCALE = 1.5;
 /** Le cerf blanc : bien plus grand qu'un cerf de la forêt (ses bois dépassent la tête des chasseurs) */
-const STAG_SCALE = 1.7;
+const STAG_SCALE = 1.9;
 /** Le halo pâle du cerf blanc, posé au sol sous lui */
-const STAG_HALO = new THREE.MeshBasicMaterial({ color: 0xfff6d8, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending });
+const STAG_HALO = new THREE.MeshBasicMaterial({ color: 0xfff6d8, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending });
 /** Un tronçon de cylindre de a à b, du rayon r0 au rayon r1 (pattes, trompe, queue, perches) */
 function tube(p: Parts, a: number[], b: number[], r0: number, r1: number, c: number, seg = 6) {
   const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
