@@ -867,8 +867,9 @@ export class UI {
     if (!lost) this.plazaLostSaid = false;
     const sel = ['#modes [data-t="build"]', `#subcats [data-c="${KINDS.gather.cat}"]`, '#items [data-kind="gather"]'];
     for (const s of sel) this.root.querySelector(s)?.classList.toggle('first', first || lost);
-    // la place du village est déjà en main : le premier clic sur le terrain la pose (une vignette qui luit sans être prise déroute)
-    if (first && !this.firstArmed && this.host.tools.tool === 'none') { this.firstArmed = true; this.host.tools.setTool('build', START_KIND); }
+    // la place du village est déjà en main : le premier clic sur le terrain la pose (une vignette qui luit sans être prise déroute).
+    // Pas pendant l'accueil et « Regardez autour de vous » du tutoriel : le glissé demandé posait le feu de camp (testeurs v6)
+    if (first && !this.firstArmed && this.host.tools.tool === 'none' && !this.tutorial?.looking) { this.firstArmed = true; this.host.tools.setTool('build', START_KIND); }
     // village vide : les onglets Relief et Nature, les autres rayons et les outils rapides sont grisés (voir startLock)
     const shut = (s: string, on: boolean) => this.root.querySelectorAll<HTMLElement>(s).forEach((b) => { b.classList.toggle('locked', on); b.setAttribute('aria-disabled', String(on)); });
     shut('#modes button:not([data-t="build"])', first);

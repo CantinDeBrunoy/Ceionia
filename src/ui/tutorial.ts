@@ -404,7 +404,8 @@ export class Tutorial {
           return [Math.hypot(v.x - b.x, v.z - b.z) > 3 || Math.abs(v.yaw - b.yaw) > 0.35 || Math.abs(Math.log(v.dist / b.dist)) > 0.15];
         },
       },
-      make('fire', ['gather']),
+      // le feu de camp passe en main ici seulement (pas pendant « Regardez autour de vous », où le glissé demandé le posait)
+      { ...make('fire', ['gather']), begin: () => { this.base.kinds = count(); if (!h.world.buildings.size && h.tools.tool === 'none') h.tools.setTool('build', 'gather'); } },
       make('habitat', ['house', 'well']),
       // (un temps trois étapes, puis « Les ressources » à lire : le tutoriel était trop long, retour de l'auteur du 17 nov. 2026)
       make('food', ['farm', 'lumber', 'quarry']),
@@ -538,6 +539,8 @@ export class Tutorial {
 
   /** La bulle guide en ce moment (un chapitre qui attend ailleurs ne compte pas : conseils et aides reprennent) */
   /** une partie neuve : la suite principale tient le temps arrêté jusqu'au feu de camp (le bandeau « Jeu en pause » se tait) */
+  /** les deux premières étapes (accueil, regarder autour de soi) : rien en main, le feu de camp attend son étape */
+  get looking() { return this.on && this.guiding && !this.ch && ['welcome', 'camera'].includes(this.steps[this.i]?.id); }
   get holdsPause() { return this.on && this.guiding && !this.ch && ['welcome', 'camera', 'fire'].includes(this.steps[this.i]?.id); }
   get active() { return this.on && !(this.ch && this.chapters[this.ch]!.away?.()); }
 
@@ -592,6 +595,8 @@ export class Tutorial {
     this.base = {};
     this.clicks.clear();
     s.begin?.();
+    // accueil et « Regardez autour de vous » : rien en main (l'interface arme le feu de camp dans un village vide)
+    if (this.looking && this.host.tools.tool === 'build') this.host.tools.setTool('none');
     this.ticks = s.check().map(() => false);
     this.doneAt = 0;
     this.key = '';
