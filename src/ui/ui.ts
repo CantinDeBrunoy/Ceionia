@@ -126,7 +126,8 @@ export interface UIHost {
   railTrouble(): string | null;
   agents: Agents;
   following: number | null;
-  follow(id: number | null): void;
+  /** la vue suit une équipe (`far` : sans se rapprocher, au départ d'une expédition) */
+  follow(id: number | null, far?: boolean): void;
   /** la vue revient sur le village (une seconde fois : vue d'ensemble) */
   goHome(): void;
 }
@@ -2357,8 +2358,9 @@ export class UI {
       close();
       closeMain();
       h.audio.sfxClick();
-      // la caméra suit l'équipe d'office ; l'œil de sa carte (à gauche) la lâche ou la reprend
-      h.follow(a.id);
+      // la caméra suit l'équipe d'office, à la même distance (elle se collait au sol, testeurs v6) ; l'œil de sa carte (à gauche)
+      // la lâche ou la reprend de près
+      h.follow(a.id, true);
       this.update();
     });
   }

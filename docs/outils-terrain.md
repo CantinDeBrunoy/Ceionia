@@ -68,7 +68,7 @@ est annulable (Ctrl+Z, 60 coups).
 - Retrait : Gomme ou Démolir sur le cône (`volcanoAt` : à moins de `0,85 × r` du cratère) ; `removeVolcano` rabat le cône sur
   son pied, raccord doux. Ctrl+Z le remet.
 - Réveil : outil Voir, un clic sur le cône ; ou, catastrophes actives, de lui-même tous les 5 à 10 jours de jeu, après 18 s
-  de secousses (`wakeVolcano`). La première éruption de la session amène la caméra (`volcanoSeen`).
+  de secousses (`wakeVolcano`). La première éruption de la session amène la caméra (`volcanoSeen`), sauf si le joueur a la main sur la carte (`Game.handsBusy` : un outil en main, un appui sur la carte il y a moins de 3 s) : un message cliquable y mène (testeurs v6, la vue partait en pleine pose).
 - Éruption : `ERUPTION_DUR = 16` s (grondement 1,2 s, paroxysme, déclin). Cinq coulées (sept si `r > 12`), parfois un bras ;
   elles avancent encore 10 s, refroidissent, s'effacent 24 s après. Les bombes de plus de 0,26 qui retombent sur un bâtiment
   l'enflamment (30 %, catastrophes actives).

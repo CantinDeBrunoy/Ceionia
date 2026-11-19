@@ -114,8 +114,12 @@ export class CameraRig {
     this.mode = 'gesture';
   }
 
+  /** dernier appui sur la carte (performance.now, ms) : la vue ne part pas d'elle-même juste après (`Game.handsBusy`) */
+  lastDown = -1e9;
+
   private onDown(e: PointerEvent) {
     if (!this.enabled) return;
+    this.lastDown = performance.now();
     this.el.setPointerCapture?.(e.pointerId);
     const i = this.info(e);
     this.pointers.set(e.pointerId, i);

@@ -141,6 +141,8 @@ const audio = new AudioEngine();
 const audioSettings = (s: Partial<Settings>) => Object.assign(audio, soundSettings(s));
 /** distance de la caméra quand elle revient sur le village (assez près pour reconnaître ses maisons) */
 const VILLAGE_DIST = 30;
+/** après un appui sur la carte, la vue ne part pas d'elle-même pendant ce temps (ms ; voir `Game.handsBusy`) */
+const HANDS_MS = 3000;
 /** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
 const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
@@ -736,7 +738,7 @@ class Game implements UIHost {
       commandIsle: () => this.commandIsle(),
       arch: () => !!allyIsle(this.world), allyIsle: () => (this.world.diplo.ally ? isleName(this.world.diplo.ally) : ''),
       harbors: () => this.harborsByIsle(), posts: () => this.postsAtAlly(),
-      atAlly: () => this.lookingAtAlly(), goAlly: () => this.goAlly(),
+      atAlly: () => this.lookingAtAlly(), goAlly: () => this.goAlly(), handsBusy: () => this.handsBusy(),
     }));
     // un chapitre fini dit déjà ce que disaient les aides militaires du même moment : elles ne se répètent pas
     this.tutorial.onChapterEnd = (id, done) => { if (done) for (const t of (id === 'pve' ? ['isle', 'orders'] : ['hell']) as WarTipId[]) this.warTips.markSeen(t); };
@@ -2086,16 +2088,18 @@ class Game implements UIHost {
   }
 
   /** La caméra suit l'expédition donnée (null : elle redevient libre) */
-  follow(id: number | null) {
+  /** la vue suivie garde sa distance (au départ d'une expédition : pas de gros plan d'office) */
+  private followFar = false;
+  follow(id: number | null, far = false) {
     const a = this.expeditions.active.find((e) => e.id === id);
     // l'équipe est au village : depuis les Enfers (ou le commandement de l'île), la vue remonte d'abord
-    if (a && (this.mode === 'hell' || this.isleCmd)) { this.ensureSurface(() => this.follow(id)); return; }
+    if (a && (this.mode === 'hell' || this.isleCmd)) { this.ensureSurface(() => this.follow(id, far)); return; }
     this.following = a ? a.id : null;
     // une seule chose suivie à la fois : suivre l'équipe lâche le train et l'incident
     if (a) { this.trainCam = null; this.incidentCam = null; }
     // on cesse de suivre : la vue reste où elle est
     if (!a) return;
-    this.followPhase = ''; this.followLast = null; this.followSm = null; this.followRaw = null;
+    this.followPhase = ''; this.followLast = null; this.followSm = null; this.followRaw = null; this.followFar = far;
     if (this.mode === 'under') {
       // depuis le monde souterrain : la vue remonte retrouver l'équipe (aucune ne descend plus dans les galeries)
       this.exitUnder();
@@ -2103,7 +2107,7 @@ class Game implements UIHost {
     }
     // assez près pour voir l'équipe (de petits personnages) ; on se rapproche encore quand elle arrive sur place
     const p = this.agents.partyPositions(a.party)[0];
-    if (p) this.cam.follow(p[0], p[1], 10);
+    if (p) this.cam.follow(p[0], p[1], far ? undefined : 10);
   }
   get disasters() { return this.world.disasters; }
 
@@ -2205,6 +2209,13 @@ class Game implements UIHost {
    */
   ensureSurface(then: () => void, keepIsle = false) { this.surfaceGate.ensure(then, keepIsle); }
 
+  /**
+   * Le joueur a la main sur la carte : un outil en main (bâtiment, route, pinceau…), un tracé de ligne, ou un appui sur la carte
+   * il y a moins de `HANDS_MS`. La vue ne part alors pas d'elle-même (éruption, guide) : un message y mène. Elle partait en
+   * pleine pose, et le clic suivant tombait ailleurs (testeurs v6)
+   */
+  handsBusy() { return this.tools.tool !== 'none' || this.tools.picking || !!this.railEdit || performance.now() - this.cam.lastDown < HANDS_MS; }
+
   /** Réveille le volcan de la case donnée : éruption, grondement et animaux qui détalent */
   erupt(cell: number) {
     if (!this.eruptions.start(cell)) return;
@@ -2212,10 +2223,12 @@ class Game implements UIHost {
     this.ui.info(tr('Le volcan entre en éruption !'));
     // la première éruption de la partie : la vue file sur le volcan pour ne pas la manquer
     // (pas depuis les Enfers ni le commandement de l'île : la vue n'y est pas arrachée, le message mène au volcan)
+    // (pas en pleine pose : un message cliquable à la place)
     if (!this.volcanoSeen && this.mode === 'surface' && !this.isleCmd) {
       this.volcanoSeen = true;
-      this.follow(null);
-      this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 34);
+      const go = () => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 34); };
+      if (this.handsBusy()) this.ui.toast(tr('Le volcan entre en éruption ! Cliquez ici pour le voir.'), () => this.ensureSurface(go), 'danger');
+      else go();
     }
   }
 
@@ -2601,7 +2614,7 @@ class Game implements UIHost {
           if (sp < 8) { this.followVel[0] += (vx - this.followVel[0]) * 0.1; this.followVel[1] += (vz - this.followVel[1]) * 0.1; }
           x += this.followVel[0] * 0.6; z += this.followVel[1] * 0.6;
         } else this.followVel = [0, 0];
-        this.cam.follow(x, z, arrived ? 6.5 : undefined, lift);
+        this.cam.follow(x, z, arrived && !this.followFar ? 6.5 : undefined, lift);
       }
     }
     // la surface ne s'anime que lorsqu'on la regarde

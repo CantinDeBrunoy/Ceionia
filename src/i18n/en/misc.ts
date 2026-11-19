@@ -32,6 +32,7 @@ registerDict('misc', {
   '🚂 Ligne modifiée : {line}.': '🚂 Line updated: {line}.',
   '🚂 Ligne ouverte : {line}.': '🚂 Line opened: {line}.',
   'Le volcan entre en éruption !': 'The volcano is erupting!',
+  'Le volcan entre en éruption ! Cliquez ici pour le voir.': 'The volcano is erupting! Click here to see it.',
   'Route libre : un clic au point A, un clic au point B.': 'Free road: click point A, then click point B.',
   'Route en ligne : glissez, case par case.': 'Straight road: drag it, tile by tile.',
   'Le brouillard se lève.': 'The fog is lifting.',
