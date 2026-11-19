@@ -106,8 +106,9 @@ export const shortLabel = (w: World, c: Cost) => tr('Il faut {cost} (vous avez {
 
 /** Production par jour d'un bâtiment, selon son âge */
 export const YIELD: Partial<Record<KindId, Partial<Record<Resource, number[]>>>> = {
-  // le double d'avant : la production venait trop lentement pour bâtir les grands bâtiments
-  lumber: { wood: [8, 12, 16, 22, 28, 34] },
+  // le double d'avant : la production venait trop lentement pour bâtir les grands bâtiments. Puis 12 et 14 (au lieu de 8 et
+  // 12) à la Préhistoire et à l'Antiquité : en Normal, on attendait le bois sans rien faire (testeurs v6, 19 nov. 2026)
+  lumber: { wood: [12, 14, 16, 22, 28, 34] },
   quarry: { stone: [6, 10, 14, 18, 24, 30] },
   mine: { ore: [0, 0, 6, 10, 16, 20], stone: [0, 0, 4, 6, 8, 10] },
   // le marché du Moyen Âge (le lieu de rencontre de cet âge) fait du troc : un peu de bois et de pierre

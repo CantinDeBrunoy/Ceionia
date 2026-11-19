@@ -54,7 +54,7 @@ export interface Gear {
 }
 
 export const GEAR: Gear[] = [
-  { id: 'spear', name: 'Lance', plural: 'Lances', icon: 'spear', age: 0, last: 1, ore: 0, wood: 2, stone: 1, time: 2, guards: 'beast', also: 'monster', cut: 0.25, per: (n) => n, desc: 'Un bâton durci au feu, une pointe de silex.' },
+  { id: 'spear', name: 'Lance', plural: 'Lances', icon: 'spear', age: 0, last: 1, ore: 0, wood: 1, stone: 1, time: 2, guards: 'beast', also: 'monster', cut: 0.25, per: (n) => n, desc: 'Un bâton durci au feu, une pointe de silex.' },
   { id: 'bow', name: 'Arc', plural: 'Arcs', icon: 'bow', age: 1, last: 1, ore: 0, wood: 4, time: 3, guards: 'beast', also: 'monster', cut: 0.38, per: (n) => n, desc: 'Tient les bêtes à distance, et rapporte parfois le dîner.' },
   { id: 'sword', name: 'Épée', plural: 'Épées', icon: 'sword', age: 2, last: 2, ore: 1, time: 4, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.5, per: (n) => n, desc: 'Forgée à l’atelier : loups et sangliers n’ont qu’à bien se tenir.' },
   { id: 'crossbow', name: 'Arbalète', plural: 'Arbalètes', icon: 'crossbow', age: 2, last: 2, ore: 1, wood: 3, time: 4, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.56, per: (n) => n, desc: 'Un carreau d’acier tendu d’un cran.' },

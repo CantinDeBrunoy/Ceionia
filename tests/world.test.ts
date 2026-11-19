@@ -1130,7 +1130,7 @@ describe('expéditions', () => {
     const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
     const wood = w.wood, stone = w.stone;
     for (let t = 0; t < 100; t++) ex.update(1);
-    expect(w.wood - wood).toBeCloseTo(12, 5);
+    expect(w.wood - wood).toBeCloseTo(14, 5);
     expect(w.stone - stone).toBeCloseTo(10, 5);
   });
 

@@ -15,7 +15,7 @@ La garnison de l'île (caserne) puise dans la même réserve : voir « Liens ».
 
 | Pièce (id) | Âge | Dernier âge | Prix | Atelier | Pare | `cut` | Pièces par équipe |
 |---|---|---|---|---|---|---|---|
-| Lance (`spear`) | 0 | 1 | 2 bois, 1 pierre* | non | bêtes, créatures | 0,25 | n |
+| Lance (`spear`) | 0 | 1 | 1 bois, 1 pierre* (2 bois avant le 19 nov. 2026) | non | bêtes, créatures | 0,25 | n |
 | Arc (`bow`) | 1 | 1 | 4 bois* | non | bêtes, créatures | 0,38 | n |
 | Épée (`sword`) | 2 | 2 | 1 minerai | oui | bêtes, créatures | 0,50 | n |
 | Arbalète (`crossbow`) | 2 | 2 | 1 minerai, 3 bois* | oui | bêtes, créatures | 0,56 | n |

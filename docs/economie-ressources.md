@@ -14,7 +14,7 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 
 | Bâtiment | Ressource | Par âge 0 … 5 |
 |---|---|---|
-| `lumber` (bûcheron) | bois | 8, 12, 16, 22, 28, 34 |
+| `lumber` (bûcheron) | bois | 12, 14, 16, 22, 28, 34 |
 | `quarry` (carrière) | pierre | 6, 10, 14, 18, 24, 30 |
 | `mine` | minerai | 0, 0, 6, 10, 16, 20 |
 | `mine` | pierre | 0, 0, 4, 6, 8, 10 |
@@ -23,12 +23,13 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 | `brickworks` | briques | 0, 0, 0, 8, 12, 16 |
 
 - Un bâtiment compte avec son `b.age`.
+- **Le bois avant l'Antiquité** (19 nov. 2026, testeurs v6 : en Normal, on attendait le bois sans rien faire, à +8 par jour, une hutte à 5 bois, et les lances des premières expéditions vidaient le stock) : bûcheron 8 → 12 à la Préhistoire et 12 → 14 à l'Antiquité, 60 bois au départ en Normal (50 avant), lance à 1 bois (2 avant). Mesuré par un joueur simulé (`tests/bilanBois.test.ts` : il comble les besoins, bâtit ce que demande l'Antiquité, envoie les deux expéditions obligatoires dès que la population le permet, 300 s de jeu chacune) : en Normal, l'Antiquité à 4,3 jours au lieu de 4,7, et 2 jours passés à attendre du bois au lieu de 3,8 (la pierre devient alors le frein, 1,4 jour) ; en Facile, 2,6 jours avant comme après. Avec des expéditions plus courtes (180 s), l'Antiquité ne vient pas plus tôt (2,8 jours en Normal) : ce sont elles qui tiennent le rythme, mais le village a 23 habitants au lieu de 15.
 - **Gare de marchandises voisine** (`railBoost`, `freight.ts`) : la production des bâtiments de `FREIGHT_KINDS` (briqueterie, mine, carrière, bûcheron, puits de pétrole, raffinerie) est multipliée par `1 + FREIGHT_BONUS = 1,75` (`FREIGHT_BONUS = 0,75`, `RAIL_REACH = 8` cases). Voir [chemin-de-fer.md](chemin-de-fer.md).
 - **Raffinerie** : traite au plus `REFINE_CRUDE = 12` barils de brut par jour (× `railBoost`) et tire `FUEL_PER_CRUDE = 0,75` carburant par baril.
 - **Voitures** : chaque usine automobile (`carworks`) brûle `CAR_FUEL = 2` carburant par jour. Sans carburant (et hors ressources illimitées), les automobiles restent au garage (`Expeditions.cars()`), ce qui coupe aussi les véhicules motorisés du village et des secours.
 
 ### Stocks de départ
-- Nouvelle partie (`Game` constructeur, `main.ts`) : bois et pierre = `startWood` / `startStone` de la difficulté : 60 / 60 en Bac à sable et Facile, 50 / 40 en Normal. Minerai, briques, brut, carburant : 0.
+- Nouvelle partie (`Game` constructeur, `main.ts`) : bois et pierre = `startWood` / `startStone` de la difficulté : 60 / 60 en Bac à sable et Facile, 60 / 40 en Normal. Minerai, briques, brut, carburant : 0.
 - `START_WOOD = START_STONE = 100` (`economy.ts`) ne servent que de valeur par défaut du `World` brut et de relecture d'une ancienne sauvegarde sans champ `wood` / `stone`.
 
 ### Coûts de construction (`costOf`, `priceIn`)
