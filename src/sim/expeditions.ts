@@ -242,8 +242,11 @@ const AUTO_DECIDE = 90;
 export const PEACE_TRIPS = new Set(['envoys', 'truce']);
 export const TRIP_OUT = 0.3, TRIP_MEET = 0.38, TRIP_LEAVE = 0.66, TRIP_BOARD = 0.72, TRIP_HOME = 0.93, TRIP_SAIL = 4;
 const OUT_MAX = 480;
-/** Pièces en attente de fabrication, au plus */
-const MAX_CRAFT = 6;
+/**
+ * Pièces en attente de fabrication, au plus : de quoi commander d'un coup le plus gros lot d'une expédition (le kraken :
+ * 6 harpons et 2 barques). À 6, « Tout fabriquer » laissait les barques dehors (Karim, v6)
+ */
+export const MAX_CRAFT = 10;
 
 /** Nombre d'expéditions que le village peut mener de front, selon sa population */
 export const partyLimit = (pop: number) => Math.min(MAX_TEAMS, 1 + Math.floor(pop / PER_TEAM));
