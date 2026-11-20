@@ -32,6 +32,8 @@ export function team(base: number, shade: number) {
   return -(Math.floor(-base / 1000) * 1000 + Math.round(Math.max(0, Math.min(9.99, shade)) * 100));
 }
 export const isTeam = (c: number) => c < 0;
+/** Une sentinelle assombrie (ou éclaircie) de `k` : `dark` des modèles appliqué à une couleur du blason */
+export const teamShade = (c: number, k: number) => team(c, ((-c % 1000) / 100) * k);
 
 const SCALE = { 1: 1, 2: 4, 3: 16, 4: 64, 5: 16, 6: 256 } as Record<number, number>;
 
@@ -78,6 +80,8 @@ export const TEAM = {
   uTeamShape: { value: 0 },
 };
 let current = '';
+/** Monte à chaque changement de blason (les images faites une fois, comme les portraits des troupes, se refont) */
+export let teamVersion = 0;
 
 /** Applique un blason : couleurs, emblème redessiné, forme (rien si c'est déjà le même) */
 export function setTeamBlason(bl: Blason) {
@@ -85,6 +89,7 @@ export function setTeamBlason(bl: Blason) {
   if (key === current) return;
   const emb = !current || current.split('|')[2] !== bl.e;
   current = key;
+  teamVersion++;
   TEAM.uTeamA.value.setHex(BLASON_COLORS[bl.a]);
   TEAM.uTeamB.value.setHex(BLASON_COLORS[bl.b]);
   TEAM.uTeamShape.value = SHAPES.indexOf(bl.s);

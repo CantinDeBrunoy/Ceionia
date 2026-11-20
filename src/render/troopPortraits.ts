@@ -4,6 +4,7 @@ import { makeRider, rideStep } from './riders';
 import { makeHoverTank, hoverStep } from './futureTroops';
 import { troopLook } from './battleUnits';
 import { mats } from './materials';
+import { addTeamPaint, teamVersion } from './teamPaint';
 import { TROOPS, type TroopKind } from '../sim/army';
 
 /**
@@ -28,6 +29,7 @@ export function portraitKey(kind: TroopKind, age: number) {
 }
 
 const done = new Map<string, string>();
+let doneFor = teamVersion;
 const queue: { key: string; kind: TroopKind; age: number }[] = [];
 const queued = new Set<string>();
 /** le rendu hors écran a échoué (pas de WebGL) : on garde les pictos */
@@ -42,6 +44,8 @@ let idleTimer = 0;
 export function troopPortrait(kind: TroopKind, age: number): string | null {
   const key = portraitKey(kind, age);
   if (TROOP_ART.has(key)) return `./troops/${key}.webp`;
+  // un nouveau blason : les portraits rendus ici se refont à ses couleurs
+  if (doneFor !== teamVersion) { done.clear(); queued.clear(); doneFor = teamVersion; }
   const url = done.get(key);
   if (url || broken) return url ?? null;
   if (!queued.has(key) && typeof document !== 'undefined') {
@@ -91,6 +95,8 @@ function makeStage(): Stage | null {
     // les matériaux du jeu portent la neige, l'eau, les lumières de la nuit : le portrait prend des matériaux simples
     const body = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0 });
     const glow = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.7, metalness: 0, emissive: new THREE.Color(0xffc46b), emissiveIntensity: 0.25 });
+    // les couleurs du blason du village (tabards, boucliers…)
+    addTeamPaint(body); addTeamPaint(glow);
     return { renderer, scene, camera, body, glow };
   } catch {
     return null;

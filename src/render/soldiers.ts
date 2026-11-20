@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Parts } from './parts';
+import { TEAM_A, TEAM_B, TEAM_EMBLEM, team, isTeam, teamShade } from './teamPaint';
 import { mats } from './materials';
 import { HUMAN_K } from './assets';
 
@@ -26,8 +27,11 @@ export interface Soldier {
  * à porter (un brancard) */
 export type SoldierMode = 'idle' | 'walk' | 'fight' | 'guard' | 'cheer' | 'run' | 'kneel' | 'carry';
 
-export const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
-const STEEL = 0xc4cad2, BLUE = 0x3a6ab8, GOLD = 0xe8c66a, SKIN = 0xe8b894, LEATHER = 0x5a3e2c, BLACK = 0x1e1e22, WHITE = 0xf0ece0;
+/** une teinte assombrie ; une couleur du blason (sentinelle) reste une sentinelle, nuancée d'autant */
+export const dark = (c: number, k: number) => (isTeam(c) ? teamShade(c, k) : new THREE.Color(c).multiplyScalar(k).getHex());
+/** les tissus et peintures aux couleurs du blason du village (voir teamPaint.ts) ; le métal reste métal */
+const COAT = team(TEAM_A, 0.72);
+const STEEL = 0xc4cad2, BLUE = TEAM_A, GOLD = 0xe8c66a, SKIN = 0xe8b894, LEATHER = 0x5a3e2c, BLACK = 0x1e1e22, WHITE = 0xf0ece0;
 const SKINS = [0xe8b894, 0xd8a07a, 0xb07a52, 0xf0c8a8];
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 
@@ -50,10 +54,10 @@ export interface Kit {
 }
 
 const roman: Kit = {
-  leg: SKIN, boot: LEATHER, hip: 0xb8322c, torso: 0xb8322c, arm: SKIN, hand: SKIN,
+  leg: SKIN, boot: LEATHER, hip: TEAM_A, torso: TEAM_A, arm: SKIN, hand: SKIN,
   dress(p) {
     // tunique qui dépasse en jupe, cuirasse à lames d'acier, épaulières, ceinturon à lanières
-    p.box(0.082, 0.04, 0.056, 0, 0.1, 0, 0xb8322c);
+    p.box(0.082, 0.04, 0.056, 0, 0.1, 0, TEAM_A);
     p.box(0.084, 0.055, 0.058, 0, 0.15, 0, STEEL);
     for (const y of [0.158, 0.172, 0.186, 0.2]) p.box(0.086, 0.004, 0.06, 0, y, 0, dark(STEEL, 0.75));
     for (const s of [-1, 1]) p.box(0.03, 0.022, 0.05, s * 0.05, 0.19, 0, STEEL);
@@ -77,7 +81,7 @@ const roman: Kit = {
     p.box(0.05, 0.008, 0.02, 0, 0.24, -0.026, STEEL);
     p.box(0.056, 0.006, 0.01, 0, 0.252, 0.024, STEEL);
     p.box(0.008, 0.008, 0.03, 0, 0.276, 0, dark(STEEL, 0.8));
-    p.box(0.012, 0.03, 0.06, 0, 0.275, 0, 0xd8443a);
+    p.box(0.012, 0.03, 0.06, 0, 0.275, 0, TEAM_B);
   },
   right(p) {
     // glaive
@@ -86,12 +90,9 @@ const roman: Kit = {
   },
   left(p) {
     // scutum rouge bordé d'or, ombilic et éclairs
-    p.box(0.012, 0.11, 0.07, 0.008, -0.045, 0.01, 0xb8322c);
+    p.box(0.012, 0.11, 0.07, 0.008, -0.045, 0.01, TEAM_EMBLEM);
     p.box(0.013, 0.11, 0.006, 0.008, -0.045, 0.046, GOLD); p.box(0.013, 0.11, 0.006, 0.008, -0.045, -0.026, GOLD);
-    p.sphere(0.012, 0.016, 0.01, 0.01, GOLD, 0, 0.6);
-    p.box(0.014, 0.004, 0.05, 0.008, 0.03, 0.01, GOLD); p.box(0.014, 0.004, 0.05, 0.008, -0.02, 0.01, GOLD);
     p.box(0.013, 0.006, 0.07, 0.008, 0.062, 0.01, GOLD); p.box(0.013, 0.006, 0.07, 0.008, -0.048, 0.01, GOLD);
-    for (const [y, z] of [[0.045, 0.034], [0.045, -0.014], [-0.03, 0.034], [-0.03, -0.014]]) p.add(new THREE.BoxGeometry(0.014, 0.004, 0.018), 0.008, y, z, GOLD, 0, false, 0, (z > 0.01 ? 1 : -1) * (y > 0 ? 0.8 : -0.8));
   },
 };
 
@@ -100,8 +101,7 @@ const knight: Kit = {
   dress(p) {
     // armure, tabard bleu à bande d'or, ceinture
     p.box(0.082, 0.1, 0.056, 0, 0.1, 0, STEEL);
-    p.box(0.086, 0.09, 0.06, 0, 0.1, 0, BLUE);
-    p.box(0.022, 0.09, 0.061, 0, 0.1, 0, GOLD);
+    p.box(0.086, 0.09, 0.06, 0, 0.1, 0, TEAM_EMBLEM);
     p.box(0.088, 0.01, 0.062, 0, 0.14, 0, LEATHER);
     for (const s of [-1, 1]) p.sphere(0.022, s * 0.048, 0.195, 0, STEEL, 0, 0.8);
     // jupe de mailles sous le tabard, gorgerin, fourreau sur la hanche gauche
@@ -126,7 +126,7 @@ const knight: Kit = {
     p.box(0.04, 0.006, 0.01, 0, 0.255, 0.027, 0x3c4a54);
     for (const x of [-0.012, 0, 0.012]) p.box(0.004, 0.004, 0.006, x, 0.236, 0.028, 0x3c4a54);
     p.cyl(0.02, 0.028, 0.01, 7, 0, 0.277, 0, STEEL);
-    p.sphere(0.02, 0, 0.29, -0.006, GOLD, 0, 1.4);
+    p.sphere(0.02, 0, 0.29, -0.006, TEAM_B, 0, 1.4);
   },
   right(p) {
     // épée
@@ -135,9 +135,8 @@ const knight: Kit = {
   },
   left(p) {
     // écu bleu à croix d'or
-    p.box(0.01, 0.075, 0.06, 0.008, -0.04, 0.008, BLUE);
-    p.add(new THREE.ConeGeometry(0.03, 0.03, 4).rotateZ(Math.PI).rotateY(Math.PI / 4), 0.008, -0.09, 0.008, BLUE);
-    p.box(0.011, 0.075, 0.012, 0.008, -0.04, 0.008, GOLD); p.box(0.011, 0.012, 0.06, 0.008, -0.03, 0.008, GOLD);
+    p.box(0.01, 0.075, 0.06, 0.008, -0.04, 0.008, TEAM_EMBLEM);
+    p.add(new THREE.ConeGeometry(0.03, 0.03, 4).rotateZ(Math.PI).rotateY(Math.PI / 4), 0.008, -0.09, 0.008, TEAM_A);
   },
 };
 
@@ -175,28 +174,28 @@ function shakoCords(p: Parts, c: number) {
 }
 
 const napoleonic: Kit = {
-  leg: WHITE, boot: BLACK, hip: 0x2c3e6a, torso: 0x2c3e6a, arm: 0x2c3e6a, hand: WHITE,
+  leg: WHITE, boot: BLACK, hip: COAT, torso: COAT, arm: COAT, hand: WHITE,
   dress(p) {
     // habit bleu à basques, revers rouges, buffleteries blanches croisées, épaulettes rouges, giberne
-    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0x2c3e6a);
-    p.box(0.084, 0.04, 0.02, 0, 0.09, -0.02, 0x2c3e6a);
-    p.box(0.04, 0.06, 0.004, 0, 0.16, 0.028, 0xd8443a);
+    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, COAT);
+    p.box(0.084, 0.04, 0.02, 0, 0.09, -0.02, COAT);
+    p.box(0.04, 0.06, 0.004, 0, 0.16, 0.028, TEAM_B);
     p.box(0.084, 0.008, 0.058, 0, 0.12, 0, WHITE);
     p.add(new THREE.BoxGeometry(0.012, 0.11, 0.004), 0, 0.165, 0.03, WHITE, 0, false, 0.62);
     p.add(new THREE.BoxGeometry(0.012, 0.11, 0.004), 0, 0.165, 0.03, WHITE, 0, false, -0.62);
-    for (const s of [-1, 1]) p.box(0.028, 0.012, 0.04, s * 0.048, 0.205, 0, 0xd8443a);
+    for (const s of [-1, 1]) p.box(0.028, 0.012, 0.04, s * 0.048, 0.205, 0, TEAM_B);
     p.box(0.05, 0.03, 0.016, 0.0, 0.11, -0.034, BLACK);
-    napoleonicKit(p, 0xd8443a, GOLD, 0x7a5a3e);
+    napoleonicKit(p, TEAM_B, GOLD, 0x7a5a3e);
   },
   shin: gaiters,
-  sleeve: (p) => cuff(p, 0xd8443a),
+  sleeve: (p) => cuff(p, TEAM_B),
   head(p) {
     // shako noir, plaque de cuivre, plumet rouge, jugulaire
     p.cyl(0.03, 0.027, 0.06, 8, 0, 0.245, 0, BLACK);
     p.box(0.064, 0.006, 0.03, 0, 0.245, 0.02, BLACK);
     p.box(0.02, 0.022, 0.004, 0, 0.27, 0.029, GOLD);
-    p.cyl(0.008, 0.01, 0.035, 5, 0, 0.305, 0.006, 0xd8443a);
-    p.sphere(0.012, 0, 0.345, 0.006, 0xd8443a, 0, 1.4);
+    p.cyl(0.008, 0.01, 0.035, 5, 0, 0.305, 0.006, TEAM_B);
+    p.sphere(0.012, 0, 0.345, 0.006, TEAM_B, 0, 1.4);
     shakoCords(p, WHITE);
   },
   right(p) {
@@ -241,7 +240,7 @@ const modern: Kit = {
   },
   sleeve(p) {
     // écusson du village sur le haut des manches, manche retroussée
-    for (const x of [-0.0125, 0.0125]) { p.box(0.002, 0.014, 0.016, x, -0.012, 0, BLUE); p.box(0.0025, 0.004, 0.016, x, -0.006, 0, GOLD); }
+    for (const x of [-0.0125, 0.0125]) { p.box(0.002, 0.014, 0.016, x, -0.012, 0, TEAM_EMBLEM); }
     p.box(0.026, 0.008, 0.03, 0, -0.056, 0, 0x6a7a54);
   },
   head(p) {
@@ -283,7 +282,7 @@ const future: Kit = {
     // plaques du ventre, cellules d'énergie aux hanches, insigne du village
     for (const y of [0.124, 0.136]) p.box(0.05, 0.004, 0.004, 0, y, 0.03, 0xc0c8d2);
     for (const s of [-1, 1]) { p.box(0.014, 0.024, 0.02, s * 0.047, 0.098, 0, 0x3a4250); p.box(0.004, 0.012, 0.004, s * 0.055, 0.104, 0.006, 0x5af0ff, 0, 'neon'); }
-    p.box(0.014, 0.014, 0.004, -0.024, 0.18, 0.033, BLUE); p.box(0.006, 0.006, 0.005, -0.024, 0.184, 0.034, GOLD);
+    p.box(0.014, 0.014, 0.004, -0.024, 0.18, 0.033, TEAM_EMBLEM);
   },
   shin(p) {
     // genouillère blindée, jambière à liseré lumineux, plaque de cheville
@@ -338,7 +337,7 @@ const manAtArms: Kit = {
   dress(p) {
     p.box(0.082, 0.11, 0.056, 0, 0.1, 0, 0xd8cfb8);
     for (const y of [0.125, 0.15, 0.175]) p.box(0.084, 0.004, 0.058, 0, y, 0, 0xb8ae94);
-    p.box(0.07, 0.1, 0.06, 0, 0.1, 0, 0xc23a32);
+    p.box(0.07, 0.1, 0.06, 0, 0.1, 0, TEAM_A);
     p.box(0.02, 0.1, 0.061, 0, 0.1, 0, WHITE);
     p.box(0.088, 0.01, 0.062, 0, 0.13, 0, LEATHER);
     // camail de mailles autour du cou, escarcelle et dague à la ceinture, épée au côté
@@ -365,7 +364,7 @@ const manAtArms: Kit = {
   right: (p) => spear(p),
   left(p) {
     // rondache de bois peinte, bordée de fer, ombilic
-    p.add(new THREE.CylinderGeometry(0.042, 0.042, 0.01, 12).rotateZ(Math.PI / 2), 0.01, -0.035, 0.008, 0xc23a32);
+    p.add(new THREE.CylinderGeometry(0.042, 0.042, 0.01, 12).rotateZ(Math.PI / 2), 0.01, -0.035, 0.008, TEAM_EMBLEM);
     p.add(new THREE.TorusGeometry(0.041, 0.004, 4, 14).rotateY(Math.PI / 2), 0.016, -0.035, 0.008, 0x8a8f96);
     p.box(0.012, 0.012, 0.012, 0.016, -0.041, 0.008, 0xd8dce2);
   },
@@ -442,7 +441,7 @@ const paladin: Kit = {
     knight.dress(p);
     // plastron qui dépasse du tabard, cape rouge dans le dos, grandes épaulières
     p.box(0.07, 0.03, 0.062, 0, 0.17, 0, STEEL);
-    p.box(0.09, 0.15, 0.008, 0, 0.06, -0.034, 0xb8322c);
+    p.box(0.09, 0.15, 0.008, 0, 0.06, -0.034, TEAM_A);
     for (const s of [-1, 1]) p.sphere(0.026, s * 0.05, 0.2, 0, dark(STEEL, 0.9), 0, 0.7);
   },
   head(p) {
@@ -450,26 +449,25 @@ const paladin: Kit = {
     p.cyl(0.031, 0.032, 0.062, 8, 0, 0.216, 0, STEEL);
     p.cyl(0.024, 0.031, 0.012, 8, 0, 0.278, 0, STEEL);
     p.box(0.044, 0.006, 0.01, 0, 0.252, 0.029, 0x2a2e34); p.box(0.006, 0.026, 0.01, 0, 0.234, 0.029, 0x2a2e34);
-    p.add(new THREE.IcosahedronGeometry(0.02, 0).scale(0.7, 1.5, 1.2), 0, 0.31, -0.006, 0xd8443a);
+    p.add(new THREE.IcosahedronGeometry(0.02, 0).scale(0.7, 1.5, 1.2), 0, 0.31, -0.006, TEAM_B);
     p.add(new THREE.IcosahedronGeometry(0.014, 0).scale(0.7, 1.4, 1.2), 0, 0.32, 0.01, WHITE);
   },
   left(p) {
     // écu bleu au lion d'or (un losange d'or au milieu), plus grand que celui de l'homme d'armes
-    p.box(0.012, 0.09, 0.07, 0.008, -0.05, 0.008, BLUE);
-    p.add(new THREE.ConeGeometry(0.035, 0.035, 4).rotateZ(Math.PI).rotateY(Math.PI / 4), 0.008, -0.1, 0.008, BLUE);
+    p.box(0.012, 0.09, 0.07, 0.008, -0.05, 0.008, TEAM_EMBLEM);
+    p.add(new THREE.ConeGeometry(0.035, 0.035, 4).rotateZ(Math.PI).rotateY(Math.PI / 4), 0.008, -0.1, 0.008, TEAM_A);
     p.add(new THREE.BoxGeometry(0.013, 0.09, 0.006), 0.008, -0.05, 0.044, GOLD); p.add(new THREE.BoxGeometry(0.013, 0.09, 0.006), 0.008, -0.05, -0.028, GOLD);
-    p.add(new THREE.BoxGeometry(0.014, 0.024, 0.024), 0.008, -0.045, 0.008, GOLD, 0, false, Math.PI / 4);
   },
 };
 
 /** Cuirassier de l'âge industriel : cuirasse d'acier sur l'habit bleu, casque à crinière noire, sabre, sans bouclier */
 const cuirassier: Kit = {
-  leg: WHITE, boot: BLACK, hip: 0x2c3e6a, torso: 0x2c3e6a, arm: 0x2c3e6a, hand: WHITE, hold: 'blade',
+  leg: WHITE, boot: BLACK, hip: COAT, torso: COAT, arm: COAT, hand: WHITE, hold: 'blade',
   dress(p) {
-    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0x2c3e6a);
+    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, COAT);
     p.box(0.086, 0.075, 0.062, 0, 0.13, 0, 0xd8dce2);
     p.box(0.088, 0.006, 0.064, 0, 0.2, 0, GOLD);
-    for (const s of [-1, 1]) p.box(0.028, 0.012, 0.042, s * 0.048, 0.205, 0, 0xd8443a);
+    for (const s of [-1, 1]) p.box(0.028, 0.012, 0.042, s * 0.048, 0.205, 0, TEAM_B);
     p.box(0.088, 0.01, 0.064, 0, 0.125, 0, WHITE);
   },
   head(p) {
@@ -542,7 +540,7 @@ const tirailleur: Kit = {
     // cornet à poudre et sac de balles au côté
     p.box(0.02, 0.03, 0.016, 0.046, 0.1, 0.012, LEATHER);
     p.add(new THREE.ConeGeometry(0.008, 0.04, 5).rotateZ(1.2), 0.034, 0.142, 0.03, 0xe8dcc0);
-    napoleonicKit(p, 0xe8c66a, 0xd8dce2, 0x5a4a32);
+    napoleonicKit(p, TEAM_B, 0xd8dce2, 0x5a4a32);
   },
   shin: gaiters,
   sleeve: (p) => cuff(p, 0x22402a),
@@ -550,8 +548,8 @@ const tirailleur: Kit = {
     p.cyl(0.03, 0.027, 0.055, 8, 0, 0.245, 0, 0x2f5a34);
     p.box(0.064, 0.006, 0.03, 0, 0.243, 0.02, BLACK);
     p.box(0.02, 0.02, 0.004, 0, 0.265, 0.029, GOLD);
-    p.sphere(0.011, 0, 0.292, 0.004, 0xe8c66a, 0, 1.2);
-    shakoCords(p, 0xe8c66a);
+    p.sphere(0.011, 0, 0.292, 0.004, TEAM_B, 0, 1.2);
+    shakoCords(p, TEAM_B);
   },
   right: (p) => longRifle(p, { wood: 0x7a5236, metal: 0x5a5f66, len: 0.16, band: GOLD }),
   left() {},
@@ -625,15 +623,15 @@ const RIFLEMEN = [fusilier, fusilier, fusilier, fusilier, { ...modern, hold: 'ri
 
 /** Hallebardier de l'âge industriel (le chevalier devenu piquier) : cuirasse et tassettes sur l'habit rouge, morion à crête, hallebarde */
 const halberdier: Kit = {
-  leg: 0x4a3e34, boot: LEATHER, hip: 0x9a2e2a, torso: STEEL, arm: 0x9a2e2a, hand: LEATHER, hold: 'spear',
+  leg: 0x4a3e34, boot: LEATHER, hip: TEAM_A, torso: STEEL, arm: TEAM_A, hand: LEATHER, hold: 'spear',
   dress(p) {
-    p.box(0.082, 0.1, 0.056, 0, 0.1, 0, 0x9a2e2a);
+    p.box(0.082, 0.1, 0.056, 0, 0.1, 0, TEAM_A);
     p.box(0.086, 0.07, 0.06, 0, 0.14, 0, STEEL);
     p.box(0.022, 0.06, 0.062, 0, 0.14, 0, dark(STEEL, 0.8));
     for (const x of [-0.026, 0, 0.026]) p.box(0.022, 0.05, 0.05, x, 0.07, 0.006, dark(STEEL, 0.9));
     p.box(0.088, 0.01, 0.062, 0, 0.105, 0, LEATHER);
     for (const s of [-1, 1]) p.sphere(0.024, s * 0.05, 0.195, 0, STEEL, 0, 0.7);
-    p.box(0.09, 0.15, 0.008, 0, 0.07, -0.034, 0x6a1e1c);
+    p.box(0.09, 0.15, 0.008, 0, 0.07, -0.034, team(TEAM_A, 0.7));
     // rivets de la cuirasse, gorgerin, épée à la hanche
     for (const x of [-0.03, 0.03]) p.box(0.005, 0.005, 0.004, x, 0.2, 0.031, GOLD);
     p.box(0.05, 0.014, 0.046, 0, 0.198, 0, dark(STEEL, 0.9));
@@ -642,13 +640,13 @@ const halberdier: Kit = {
   },
   shin(p) {
     // chausses rayées de jaune, jarretière
-    for (const y of [-0.07, -0.05, -0.03]) p.box(0.031, 0.008, 0.035, 0, y, 0, 0xe8c66a);
-    p.box(0.032, 0.006, 0.036, 0, -0.04, 0, 0x9a2e2a);
+    for (const y of [-0.07, -0.05, -0.03]) p.box(0.031, 0.008, 0.035, 0, y, 0, TEAM_B);
+    p.box(0.032, 0.006, 0.036, 0, -0.04, 0, TEAM_A);
   },
   sleeve(p) {
     // manche bouffante à crevés jaunes, gant de cuir
-    p.box(0.03, 0.03, 0.032, 0, -0.02, 0, 0x9a2e2a);
-    for (const z of [-0.008, 0.008]) p.box(0.031, 0.026, 0.004, 0, -0.018, z, 0xe8c66a);
+    p.box(0.03, 0.03, 0.032, 0, -0.02, 0, TEAM_A);
+    for (const z of [-0.008, 0.008]) p.box(0.031, 0.026, 0.004, 0, -0.018, z, TEAM_B);
     p.box(0.027, 0.014, 0.03, 0, -0.064, 0.002, LEATHER);
   },
   head(p) {
@@ -738,8 +736,7 @@ const watchman: Kit = {
   leg: 0x6a6a72, boot: LEATHER, hip: BLUE, torso: 0x8f949c, arm: 0x8f949c, hand: LEATHER,
   dress(p) {
     p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0x8f949c);
-    p.box(0.084, 0.11, 0.058, 0, 0.09, 0, BLUE);
-    p.box(0.02, 0.02, 0.06, 0, 0.16, 0, GOLD); p.box(0.008, 0.035, 0.061, 0, 0.152, 0, GOLD);
+    p.box(0.084, 0.11, 0.058, 0, 0.09, 0, TEAM_EMBLEM);
     p.box(0.086, 0.01, 0.06, 0, 0.13, 0, LEATHER);
   },
   head(p) {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Parts } from './parts';
+import { TEAM_EMBLEM } from './teamPaint';
 import { mats } from './materials';
 import { HUMAN_K } from './assets';
 import type { Rider } from './riders';
@@ -103,7 +104,7 @@ export function makeHoverTank(v = 0): Rider {
   for (const z of [-0.04, 0.02]) p.box(0.205, 0.002, 0.003, 0, 0.104, z, ANTHRA2);
   for (const s of [-1, 1]) {
     // emblème du village sur les flancs, poignées, patins de remorquage
-    p.box(0.004, 0.026, 0.034, s * 0.136, 0.034, -0.12, BLUE); p.box(0.005, 0.01, 0.012, s * 0.137, 0.042, -0.12, GOLD);
+    p.box(0.004, 0.026, 0.034, s * 0.136, 0.034, -0.12, TEAM_EMBLEM);
     for (const z of [0.05, -0.02]) p.box(0.004, 0.004, 0.03, s * 0.137, 0.068, z, ANTHRA);
     p.box(0.02, 0.012, 0.02, s * 0.11, 0.012, 0.2, ANTHRA2);
   }

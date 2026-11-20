@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Parts } from './parts';
+import { TEAM_A, TEAM_B, TEAM_EMBLEM, TEAM_FLAG_R, team, isTeam, teamShade } from './teamPaint';
 import { mats } from './materials';
 import { HUMAN_K } from './assets';
 import type { HoverParts } from './futureTroops';
@@ -27,8 +28,11 @@ export interface Rider {
 /** Ce que fait le cavalier : en route (arme haute), à la charge (lance couchée, sabre en avant), au combat */
 export type RiderMode = 'rest' | 'charge' | 'fight';
 
-const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
-const STEEL = 0xc4cad2, BLUE = 0x3a6ab8, GOLD = 0xe8c66a, SKIN = 0xe8b894, LEATHER = 0x4a3426, BLACK = 0x1e1e22, BRONZE = 0xc49a54;
+/** une teinte assombrie ; une couleur du blason (sentinelle) reste une sentinelle, nuancée d'autant */
+const dark = (c: number, k: number) => (isTeam(c) ? teamShade(c, k) : new THREE.Color(c).multiplyScalar(k).getHex());
+/** l'habit sombre des cavaliers de l'âge industriel : la couleur du blason, assombrie */
+const COAT = team(TEAM_A, 0.72);
+const STEEL = 0xc4cad2, BLUE = TEAM_A, GOLD = 0xe8c66a, SKIN = 0xe8b894, LEATHER = 0x4a3426, BLACK = 0x1e1e22, BRONZE = 0xc49a54;
 const OLIVE = 0x66723f, OLIVE_D = 0x4c5630, KHAKI = 0x8a845a, TRACK = 0x2f2f2c, IRON = 0x8a8f96, WHITE = 0xf0ece0;
 /** robes des chevaux : bai, alezan, noir, gris ; et leurs crins (crinière, queue) */
 const COATS = [0x8a6248, 0xa8683e, 0x3e3434, 0xd8d2c8];
@@ -167,7 +171,7 @@ function face(p: Parts, y: number, z: number) {
   p.box(0.008, 0.012, 0.006, 0, y + 0.01, z + 0.024, dark(SKIN, 0.88));
 }
 
-/** Lance rayée (hampe de frêne pour les Romains), garde en cône, fer ; flamme bleu et or à deux pointes si `pennon` ; couchée vers +z */
+/** Lance rayée (hampe de frêne pour les Romains), garde en cône, fer ; flamme au blason du village si `pennon` ; couchée vers +z */
 function lance(a = BLUE, b = GOLD, pennon = false) {
   const p = new Parts();
   for (let k = 0; k < 5; k++) p.add(new THREE.CylinderGeometry(0.0075 - k * 0.0008, 0.0085 - k * 0.0008, 0.12, 5).rotateX(Math.PI / 2), 0, 0, k * 0.12, k % 2 ? b : a);
@@ -176,9 +180,7 @@ function lance(a = BLUE, b = GOLD, pennon = false) {
   p.add(new THREE.ConeGeometry(0.009, 0.05, 4).rotateX(Math.PI / 2), 0, 0, 0.565, STEEL);
   p.add(new THREE.BoxGeometry(0.012, 0.012, 0.012), 0, 0, 0.535, dark(STEEL, 0.75));
   if (pennon) {
-    p.add(new THREE.BoxGeometry(0.003, 0.034, 0.05), 0, 0.02, 0.49, BLUE);
-    p.add(new THREE.BoxGeometry(0.0035, 0.01, 0.05), 0, 0.02, 0.49, GOLD);
-    for (const y of [0.03, 0.01]) p.add(new THREE.ConeGeometry(0.008, 0.03, 3).rotateX(-Math.PI / 2).scale(0.3, 1, 1), 0, y, 0.45, BLUE);
+    p.add(new THREE.BoxGeometry(0.003, 0.034, 0.07), 0, 0.02, 0.48, TEAM_FLAG_R);
   }
   return p;
 }
@@ -279,7 +281,7 @@ function tank(v: number): Rider {
     for (const s of [-1, 1]) p.box(0.006, 0.03, 0.05, s * 0.063, 0.16, -0.14, dark(TRACK, 1.3));
     p.box(0.1, 0.022, 0.03, 0, 0.166, -0.14, KHAKI);
     for (const s of [-1, 1]) {
-      p.box(0.004, 0.03, 0.03, s * 0.076, 0.157, -0.03, BLUE); p.box(0.005, 0.012, 0.012, s * 0.077, 0.166, -0.03, GOLD);
+      p.box(0.004, 0.03, 0.03, s * 0.076, 0.157, -0.03, TEAM_EMBLEM);
       for (const k of [0, 1, 2]) p.add(new THREE.CylinderGeometry(0.006, 0.006, 0.026, 5).rotateX(1.2), s * (0.06 + k * 0.009), 0.195, 0.04, dark(OLIVE_D, 0.8), s * 0.4);
     }
     p.cyl(0.026, 0.028, 0.02, 8, 0.03, 0.214, -0.06, OLIVE_D);
@@ -294,8 +296,7 @@ function tank(v: number): Rider {
     p.box(0.005, 0.005, 0.06, -0.002, 0.256, -0.015, TRACK);
     // antenne et fanion du village
     p.box(0.004, 0.2, 0.004, -0.055, 0.214, -0.1, BLACK);
-    p.box(0.003, 0.03, 0.05, -0.055, 0.384, -0.126, BLUE);
-    p.box(0.0035, 0.01, 0.05, -0.055, 0.384, -0.126, GOLD);
+    p.box(0.003, 0.03, 0.05, -0.055, 0.384, -0.126, TEAM_FLAG_R);
     const built = p.build(false);
     // galets de roulement, de part et d'autre (moyeu clair pour qu'on les voie tourner)
     const legs = [-1, 1].map((s) => {
@@ -336,13 +337,13 @@ function tank(v: number): Rider {
 
 /** Cavalier romain : selle à quatre cornes sur un tapis rouge à franges d'or, phalères, cotte de mailles, cape, casque à crête */
 function romanRider(p: Parts) {
-  saddle(p, 0xb8322c, GOLD);
+  saddle(p, TEAM_A, GOLD);
   for (const x of [-0.03, 0.03]) for (const z of [0.05, -0.052]) p.add(new THREE.ConeGeometry(0.008, 0.03, 4), x, 0.29, z, LEATHER, 0, false, x * 8, z * 6);
   for (let k = 0; k < 6; k++) for (const s of [-1, 1]) p.box(0.004, 0.018, 0.008, s * 0.077, 0.186, -0.065 + k * 0.022, GOLD);
   breastplate(p, LEATHER, GOLD);
   for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.009, 0.009, 0.004, 8).rotateZ(Math.PI / 2), s * 0.052, 0.232, 0.085, GOLD, s * 0.5);
   bridle(p, LEATHER, BRONZE);
-  seated(p, { thigh: SKIN, boot: LEATHER, coat: 0xb8322c, arm: SKIN, glove: SKIN });
+  seated(p, { thigh: SKIN, boot: LEATHER, coat: TEAM_A, arm: SKIN, glove: SKIN });
   // cotte de mailles, ceinturon à lanières, épée au côté
   p.box(0.091, 0.072, 0.065, 0, 0.3, 0, 0x8f949c);
   p.box(0.093, 0.012, 0.067, 0, 0.296, 0, LEATHER);
@@ -351,20 +352,18 @@ function romanRider(p: Parts) {
   p.add(new THREE.BoxGeometry(0.012, 0.11, 0.016), -0.058, 0.25, -0.02, 0x6a3a26, 0, false, 0, 0.9);
   p.box(0.016, 0.01, 0.02, -0.058, 0.286, 0.006, BRONZE);
   // cape rouge qui retombe sur la croupe, sa fibule
-  p.add(new THREE.BoxGeometry(0.094, 0.13, 0.012), 0, 0.33, -0.042, 0xa82a26, 0, false, 0, 0.22);
-  p.add(new THREE.BoxGeometry(0.1, 0.012, 0.06), 0, 0.27, -0.09, 0xa82a26, 0, false, 0, -0.35);
+  p.add(new THREE.BoxGeometry(0.094, 0.13, 0.012), 0, 0.33, -0.042, team(TEAM_A, 0.88), 0, false, 0, 0.22);
+  p.add(new THREE.BoxGeometry(0.1, 0.012, 0.06), 0, 0.27, -0.09, team(TEAM_A, 0.88), 0, false, 0, -0.35);
   p.sphere(0.008, 0.035, 0.375, 0.03, GOLD);
   // casque de bronze : bombe, crête rouge, couvre-joues, couvre-nuque, visière
   p.sphere(0.03, 0, 0.44, 0.004, BRONZE, 1, 0.8);
-  p.box(0.012, 0.03, 0.07, 0, 0.455, -0.002, 0xd84a3e);
+  p.box(0.012, 0.03, 0.07, 0, 0.455, -0.002, TEAM_B);
   p.box(0.06, 0.008, 0.02, 0, 0.41, -0.024, BRONZE);
   p.box(0.054, 0.006, 0.012, 0, 0.432, 0.03, BRONZE);
   for (const s of [-1, 1]) p.box(0.008, 0.026, 0.018, s * 0.026, 0.4, 0.016, BRONZE);
-  // bouclier ovale bleu : bord de bronze, ombilic, éclairs d'or
-  p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.012, 10).rotateZ(Math.PI / 2).scale(1, 1.3, 1), 0.076, 0.3, 0.02, BLUE);
+  // bouclier ovale au blason du village, bord de bronze
+  p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.012, 10).rotateZ(Math.PI / 2).scale(1, 1.3, 1), 0.076, 0.3, 0.02, TEAM_EMBLEM);
   p.add(new THREE.TorusGeometry(0.049, 0.004, 3, 12).rotateY(Math.PI / 2).scale(1, 1.3, 1), 0.082, 0.3, 0.02, BRONZE);
-  p.sphere(0.014, 0.084, 0.3, 0.02, GOLD);
-  for (const r of [0.6, -0.6]) p.add(new THREE.BoxGeometry(0.004, 0.05, 0.008), 0.083, 0.3, 0.02, GOLD, 0, false, 0, r);
 }
 
 /**
@@ -375,17 +374,17 @@ function knightRider(p: Parts) {
   // le caparaçon : devant et derrière (les jambes passent dessous), bordure d'or, dents du bas
   p.box(0.166, 0.11, 0.12, 0, 0.13, 0.065, BLUE);
   p.box(0.166, 0.11, 0.15, 0, 0.13, -0.085, BLUE);
-  p.box(0.168, 0.016, 0.3, 0, 0.13, -0.01, GOLD);
+  p.box(0.168, 0.016, 0.3, 0, 0.13, -0.01, TEAM_B);
   p.box(0.15, 0.03, 0.2, 0, 0.24, -0.04, BLUE);
   for (let k = 0; k < 7; k++) for (const s of [-1, 1]) {
-    p.add(new THREE.ConeGeometry(0.012, 0.02, 3).rotateX(Math.PI), s * 0.084, 0.122, -0.14 + k * 0.045, GOLD);
-    if (k % 2 === 0) p.add(new THREE.BoxGeometry(0.004, 0.016, 0.016), s * 0.084, 0.19, -0.14 + k * 0.045, GOLD, 0, false, Math.PI / 4);
+    p.add(new THREE.ConeGeometry(0.012, 0.02, 3).rotateX(Math.PI), s * 0.084, 0.122, -0.14 + k * 0.045, TEAM_B);
+    if (k % 2 === 0) p.add(new THREE.BoxGeometry(0.004, 0.016, 0.016), s * 0.084, 0.19, -0.14 + k * 0.045, TEAM_B, 0, false, Math.PI / 4);
   }
   p.box(0.13, 0.03, 0.02, 0, 0.17, 0.12, BLUE);
   // la tête couverte : chanfrein d'acier, oreillettes, plumet ; flançois de lames sur l'encolure
   beam(p, V(0, 0.368, 0.17), V(0, 0.308, 0.258), 0.05, 0.03, STEEL);
   p.box(0.01, 0.012, 0.014, 0, 0.35, 0.208, GOLD);
-  p.sphere(0.014, 0, 0.395, 0.17, GOLD, 0, 1.4);
+  p.sphere(0.014, 0, 0.395, 0.17, TEAM_B, 0, 1.4);
   for (let k = 0; k < 4; k++) beam(p, V(0, 0.262 + k * 0.022, 0.094 + k * 0.016), V(0, 0.278 + k * 0.022, 0.108 + k * 0.016), 0.05, 0.012, k % 2 ? STEEL : dark(STEEL, 0.85));
   bridle(p, 0x2a2a3a, GOLD);
   p.box(0.08, 0.016, 0.09, 0, 0.262, -0.002, LEATHER);
@@ -397,23 +396,21 @@ function knightRider(p: Parts) {
     p.sphere(0.024, s * 0.05, 0.36, 0, dark(STEEL, 0.9), 0, 0.75);
     p.sphere(0.014, s * 0.05, 0.278, 0.05, dark(STEEL, 0.9));
   }
-  // cotte d'armes bleue à bande d'or, ceinture, fourreau
-  p.box(0.09, 0.075, 0.065, 0, 0.255, 0, BLUE);
-  p.box(0.092, 0.018, 0.066, 0, 0.3, 0, GOLD);
-  p.box(0.02, 0.07, 0.067, 0, 0.32, 0, GOLD);
+  // cotte d'armes au blason du village, fourreau
+  p.box(0.09, 0.075, 0.065, 0, 0.255, 0, TEAM_EMBLEM);
+  p.box(0.092, 0.07, 0.066, 0, 0.32, 0, TEAM_A);
   p.add(new THREE.BoxGeometry(0.012, 0.12, 0.014), -0.058, 0.24, -0.03, 0x2a2a3a, 0, false, 0, 0.9);
   // grand heaume : fente et trous d'aération, cimier à plumes
   p.cyl(0.032, 0.034, 0.065, 8, 0, 0.385, 0.004, STEEL);
   p.cyl(0.024, 0.032, 0.012, 8, 0, 0.45, 0.004, STEEL);
   p.box(0.042, 0.008, 0.01, 0, 0.42, 0.036, 0x2a2e34);
   p.box(0.006, 0.026, 0.01, 0, 0.398, 0.036, 0x2a2e34);
-  p.add(new THREE.IcosahedronGeometry(0.022, 0).scale(0.7, 1.5, 1.2), 0, 0.485, -0.008, GOLD);
+  p.add(new THREE.IcosahedronGeometry(0.022, 0).scale(0.7, 1.5, 1.2), 0, 0.485, -0.008, TEAM_B);
   p.add(new THREE.IcosahedronGeometry(0.015, 0).scale(0.7, 1.4, 1.2), 0, 0.495, 0.01, 0xf0ece0);
-  // écu bleu à la bande d'or et au losange
+  // écu au blason du village, bordé d'or
   p.box(0.012, 0.09, 0.07, 0.072, 0.24, 0.02, GOLD);
-  p.box(0.014, 0.08, 0.062, 0.073, 0.245, 0.02, BLUE);
-  p.add(new THREE.ConeGeometry(0.035, 0.035, 4).rotateZ(Math.PI).rotateY(Math.PI / 4), 0.073, 0.232, 0.02, BLUE);
-  p.add(new THREE.BoxGeometry(0.015, 0.09, 0.012), 0.073, 0.25, 0.02, GOLD, 0, false, 0, 0.7);
+  p.box(0.014, 0.08, 0.062, 0.073, 0.245, 0.02, TEAM_EMBLEM);
+  p.add(new THREE.ConeGeometry(0.035, 0.035, 4).rotateZ(Math.PI).rotateY(Math.PI / 4), 0.073, 0.232, 0.02, TEAM_A);
 }
 
 /**
@@ -421,28 +418,28 @@ function knightRider(p: Parts) {
  * et bottes à l'écuyère, cuirasse rivetée, épaulettes, casque à cimier, crinière et plumet, fourreau du sabre
  */
 function cuirassierRider(p: Parts) {
-  saddle(p, 0x2c3e6a, GOLD);
+  saddle(p, COAT, GOLD);
   for (const s of [-1, 1]) {
-    p.add(new THREE.ConeGeometry(0.03, 0.05, 3).rotateX(Math.PI).scale(0.2, 1, 1.4), s * 0.076, 0.19, -0.06, 0x2c3e6a);
-    p.add(new THREE.ConeGeometry(0.02, 0.03, 3).rotateX(Math.PI).scale(0.2, 1, 1.4), s * 0.077, 0.19, -0.06, GOLD);
+    p.add(new THREE.ConeGeometry(0.03, 0.05, 3).rotateX(Math.PI).scale(0.2, 1, 1.4), s * 0.076, 0.19, -0.06, COAT);
+    p.add(new THREE.ConeGeometry(0.02, 0.03, 3).rotateX(Math.PI).scale(0.2, 1, 1.4), s * 0.077, 0.19, -0.06, TEAM_B);
     p.add(new THREE.CylinderGeometry(0.012, 0.01, 0.05, 6), s * 0.03, 0.27, 0.075, BLACK, 0, false, 0, 0.5);
     p.sphere(0.009, s * 0.077, 0.23, -0.02, GOLD);
   }
   p.box(0.082, 0.014, 0.08, 0, 0.276, -0.004, 0xf0ece0);
-  p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.13, 7).rotateZ(Math.PI / 2), 0, 0.29, -0.07, 0x2c3e6a);
+  p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.13, 7).rotateZ(Math.PI / 2), 0, 0.29, -0.07, COAT);
   for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.019, 0.019, 0.006, 7).rotateZ(Math.PI / 2), s * 0.05, 0.29, -0.07, LEATHER);
   breastplate(p, BLACK, GOLD);
   bridle(p, BLACK, STEEL);
-  seated(p, { thigh: 0xf0ece0, boot: BLACK, coat: 0x2c3e6a, arm: 0x2c3e6a, glove: 0xf0ece0, belt: 0xf0ece0 });
+  seated(p, { thigh: 0xf0ece0, boot: BLACK, coat: COAT, arm: COAT, glove: 0xf0ece0, belt: 0xf0ece0 });
   // cuirasse d'acier à rivets et bordure de laiton, épaulettes rouges
   p.box(0.094, 0.075, 0.068, 0, 0.3, 0, STEEL);
   p.box(0.096, 0.008, 0.07, 0, 0.372, 0, GOLD);
   for (const x of [-0.03, 0, 0.03]) p.box(0.005, 0.005, 0.004, x, 0.362, 0.034, GOLD);
   p.box(0.07, 0.006, 0.004, 0, 0.302, 0.034, dark(STEEL, 0.75));
-  for (const s of [-1, 1]) { p.box(0.03, 0.014, 0.04, s * 0.05, 0.392, 0, 0xd84a3e); p.box(0.034, 0.01, 0.012, s * 0.05, 0.39, 0.02, GOLD); }
+  for (const s of [-1, 1]) { p.box(0.03, 0.014, 0.04, s * 0.05, 0.392, 0, TEAM_B); p.box(0.034, 0.01, 0.012, s * 0.05, 0.39, 0.02, GOLD); }
   // fourreau du sabre, sabretache
   p.add(new THREE.BoxGeometry(0.01, 0.15, 0.014), -0.06, 0.22, -0.03, STEEL, 0, false, 0, 0.8);
-  p.box(0.004, 0.04, 0.03, -0.068, 0.2, -0.06, 0x2c3e6a);
+  p.box(0.004, 0.04, 0.03, -0.068, 0.2, -0.06, COAT);
   // casque : bombe, visière de cuir, jugulaires d'écailles, cimier de laiton, crinière noire, plumet rouge
   p.cyl(0.03, 0.033, 0.045, 7, 0, 0.405, 0.006, STEEL);
   p.sphere(0.03, 0, 0.448, 0.006, STEEL, 0, 0.5);
@@ -450,7 +447,7 @@ function cuirassierRider(p: Parts) {
   for (const s of [-1, 1]) p.box(0.006, 0.03, 0.01, s * 0.026, 0.39, 0.02, GOLD);
   p.box(0.014, 0.03, 0.068, 0, 0.452, 0.002, GOLD);
   p.add(new THREE.BoxGeometry(0.012, 0.11, 0.02), 0, 0.41, -0.052, 0x1a1a1a, 0, false, 0, -0.35);
-  p.add(new THREE.ConeGeometry(0.009, 0.07, 4), 0.027, 0.46, 0.01, 0xd84a3e);
+  p.add(new THREE.ConeGeometry(0.009, 0.07, 4), 0.027, 0.46, 0.01, TEAM_B);
 }
 
 /**
@@ -492,11 +489,11 @@ export function makeRider(age: number, v = 0, gendarme = false): Rider {
       saddle(p, BLUE, GOLD);
       bridle(p);
       seated(p, { thigh: 0x6a6a72, boot: LEATHER, coat: BLUE, arm: 0x8f949c, glove: LEATHER });
-      p.box(0.02, 0.02, 0.066, 0, 0.32, 0, GOLD);
+      p.box(0.02, 0.02, 0.066, 0, 0.32, 0, TEAM_B);
       p.sphere(0.03, 0, 0.425, 0, STEEL, 1, 0.75); p.cyl(0.05, 0.044, 0.012, 10, 0, 0.412, 0, STEEL);
       weapon = saber();
     } else if (era === 1) { romanRider(p); weapon = lance(0x9a7452, 0x8a6448); }
-    else if (era === 2) { knightRider(p); weapon = lance(BLUE, GOLD, true); }
+    else if (era === 2) { knightRider(p); weapon = lance(TEAM_A, TEAM_B, true); }
     else { cuirassierRider(p); weapon = saber(); }
     const built = p.build(false);
     // jambes : balzanes blanches sur deux d'entre elles
