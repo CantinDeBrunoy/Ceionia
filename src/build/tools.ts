@@ -62,6 +62,10 @@ export interface ToolHost {
   erupt(cell: number): void;
   /** routes automatiques jusqu'aux nouveaux bâtiments (réglage) */
   autoRoads: boolean;
+  /** l'habitant sous ce point de l'écran (pixels du canevas), s'il y en a un */
+  pickCitizen?(x: number, y: number): number | null;
+  /** l'habitant choisi change (null : aucun) */
+  onCitizen?(id: number | null): void;
 }
 
 /** Bâtiments de zone dont la surbrillance verte reste visible pendant la pose et à la sélection */
@@ -90,6 +94,8 @@ export class ToolController implements ToolInput {
   private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean } | null = null;
   /** bâtiment choisi d'un clic avec l'outil « Voir » : sa fiche s'affiche, on peut le déplacer, le tourner, le démolir */
   selected: number | null = null;
+  /** l'habitant choisi d'un clic (sa fiche à la place de celle d'un bâtiment) */
+  citizen: number | null = null;
   /** tracé d'une ligne de chemin de fer en cours : un clic sur un bâtiment le propose comme arrêt */
   picking = false;
   pickStop: ((b: Building | undefined) => void) | null = null;
@@ -205,7 +211,7 @@ export class ToolController implements ToolInput {
     const why = startRefusal(this.h.world, t, kind, KINDS[START_KIND].names[Math.max(this.h.getAge(), KINDS[START_KIND].minAge)]);
     if (why) { this.h.toast(why); return; }
     if (this.moveOrigin && (t !== 'move' && !(t === 'build'))) this.cancelMove();
-    if (t !== 'none') this.selected = null;
+    if (t !== 'none') { this.selected = null; if (this.citizen !== null) { this.citizen = null; this.h.onCitizen?.(null); } }
     // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route
     if (t !== this.tool || (kind && kind !== this.kind)) this.rotManual = false;
     if (t !== this.tool || (kind && kind !== this.kind)) { this.freeFrom = null; this.anchor = null; }
@@ -287,8 +293,19 @@ export class ToolController implements ToolInput {
   // ---------- Bâtiment sélectionné ----------
   /** Choisit un bâtiment (ou aucun) : sa fiche s'affiche, son emprise s'éclaire */
   select(id: number | null) {
-    if (this.selected === id) return;
+    if (this.selected === id && this.citizen === null) return;
     this.selected = id;
+    if (this.citizen !== null) { this.citizen = null; this.h.onCitizen?.(null); }
+    this.refreshVisuals();
+    this.h.changed();
+  }
+
+  /** Choisit un habitant : sa fiche s'ouvre (celle du bâtiment se ferme) */
+  selectCitizen(id: number) {
+    this.selected = null;
+    this.citizen = id;
+    this.h.onCitizen?.(id);
+    this.h.audio.sfxClick();
     this.refreshVisuals();
     this.h.changed();
   }
@@ -531,7 +548,11 @@ export class ToolController implements ToolInput {
       const pt = this.h.world.portal, hp = this.hit;
       if (this.picking && this.pickStop) this.pickStop(b);
       else if (!b && pt && hp && this.h.world.portalOpen && this.h.openPortal && Math.hypot(hp.x - pt.x, hp.z - pt.z) < 2.6) this.h.openPortal();
-      else this.select(b ? b.id : null);
+      else {
+        // un habitant sous le clic passe avant le bâtiment derrière lui
+        const who = this.h.pickCitizen?.(e.x, e.y) ?? null;
+        if (who !== null) this.selectCitizen(who); else this.select(b ? b.id : null);
+      }
     }
     this.downAt = null;
     if (this.pressed) {

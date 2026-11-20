@@ -38,6 +38,9 @@ import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { eyeClick } from './homeButton';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
+import { citizenCard, missingText } from './citizenCard';
+import { firstName, familyName } from '../sim/citizens';
+import { folkTraits } from '../render/folk';
 import { pic, hudPic, leadPic, withPic } from './pics';
 import { POPUP_PICS, preloadPics } from './preload';
 import { menuBg, LOGO_PEAKS } from './loading';
@@ -109,6 +112,9 @@ export interface UIHost {
   /** chemin de fer de gare en gare, et la caméra qui suit le train */
   railway: Railway;
   followTrain(line: number): void;
+  /** l'habitant que suit la caméra (sa fiche, bouton « Suivre »), et le suivre ou le lâcher */
+  citizenCam: number | null;
+  followCitizen(id: number | null): void;
   /** incendies, malaises, cambriolages en cours, et la caméra qui en suit un */
   incidents(): { key: string; icon: string; title: string; status: string; progress: number; x: number; z: number }[];
   incidentCam: string | null;
@@ -1258,9 +1264,15 @@ export class UI {
   private renderSelection() {
     const h = this.host, tl = h.tools, box = $('#selCard');
     const b = tl.selected !== null ? h.world.buildings.get(tl.selected) : undefined;
+    if (!b && tl.citizen !== null) { this.renderCitizen(box, tl.citizen); return; }
     if (!b) { if (this.selKey) { this.selKey = ''; box.classList.remove('show'); } return; }
     const d = KINDS[b.kind], a = Math.max(b.age, d.minAge), stats: string[] = [];
-    if (b.kind === 'house') { const n = h.agents.agents.filter((x) => x.home === b.id).length; stats.push(`${ic('house', 14, 2)} ${nplural(n, 'habitant', 'habitants')}`); }
+    if (b.kind === 'house' || b.kind === 'manor') {
+      // ceux qu'on voit de la maisonnée, par leur nom (un clic ouvre leur fiche)
+      const folk = h.agents.agents.filter((x) => x.home === b.id), n = folk.length;
+      const names = folk.slice(0, 6).map((x) => `<button class="who" data-act="cit:${x.id}">${firstName(x.id, h.sim.age, folkTraits(x.id, x.child).woman)}</button>`).join(' ');
+      stats.push(`${ic('house', 14, 2)} ${n ? tr('Famille {family} : {names}', { family: familyName(b.id, h.sim.age), names }) : nplural(n, 'habitant', 'habitants')}`);
+    }
     if (b.kind === 'pen' || b.kind === 'stable') {
       const herds = penHerds(h.world), list = (b.kind === 'pen' ? herds.pens : herds.stables).get(b.id) ?? [];
       const names: Record<string, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] }, count = new Map<string, number>();
@@ -1311,6 +1323,7 @@ export class UI {
     const same = box.dataset.id === String(b.id) && box.classList.contains('show');
     this.selKey = key;
     box.dataset.id = String(b.id);
+    box.classList.remove('citizen');
     // d'un rendu à l'autre du même bâtiment (les trains roulent), on garde ce qui est déplié et où l'on a défilé
     const opened = same ? [...box.querySelectorAll<HTMLDetailsElement>('details[open]')].map((x) => x.dataset.k) : [];
     const scroll = same ? box.scrollTop : 0, listScroll = same ? box.querySelector('.rlist')?.scrollTop ?? 0 : 0;
@@ -1344,6 +1357,7 @@ export class UI {
       else if (act === 'tower') tl.toggleSelectedTower();
       else if (act?.startsWith('up:')) tl.upgradeSelected(act.slice(3) as KindId);
       else if (act?.startsWith('follow:')) h.followTrain(+act.slice(7));
+      else if (act?.startsWith('cit:')) { tl.selectCitizen(+act.slice(4)); return; }
       else if (act?.startsWith('cargo:')) { const l = h.world.lines.find((x) => x.id === +act.slice(6)); if (l) { h.audio.sfxClick(); h.railway.setFreight(l.id, !l.freight); this.selKey = ''; this.renderSelection(); } }
       else if (act?.startsWith('edit:')) { h.audio.sfxClick(); h.startRailEdit({ line: +act.slice(5) }); }
       else if (act?.startsWith('drop:')) {
@@ -1351,6 +1365,25 @@ export class UI {
         if (l && await confirmBox(this.root, tr('Fermer la ligne {line} ? Ses voies seront retirées.', { line: r.lineLabel(l) }), tr('Fermer la ligne'))) h.railway.removeLine(l.id);
       }
       this.renderSelection();
+    }));
+  }
+
+  /** La fiche d'un habitant, dans la carte du bâtiment choisi (voir citizenCard.ts) ; il n'est plus montré : elle se ferme */
+  private renderCitizen(box: HTMLElement, id: number) {
+    const h = this.host, tl = h.tools, card = citizenCard(h, id);
+    if (!card) { tl.select(null); return; }
+    if (card.key === this.selKey) return;
+    this.selKey = card.key;
+    box.dataset.id = `c${id}`;
+    box.innerHTML = card.html;
+    box.classList.add('show', 'citizen');
+    box.classList.remove('fold');
+    this.placeCards();
+    box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((el) => (el.onclick = () => {
+      const act = el.dataset.act;
+      if (act === 'close') tl.select(null);
+      else if (act === 'follow') { h.audio.sfxClick(); h.followCitizen(h.citizenCam === id ? null : id); this.selKey = ''; this.renderSelection(); }
+      else if (act === 'home') { const c = h.agents.citizen(id); if (c && h.world.buildings.has(c.home)) { h.audio.sfxClick(); h.followCitizen(null); tl.select(c.home); } }
     }));
   }
 
@@ -1988,8 +2021,18 @@ export class UI {
     if (c.hungry) tips.push(tr('Une ferme, un champ ou un ponton de pêche nourrirait tout le monde.'));
     if (c.thirsty) tips.push(tr('Un point d’eau ou un puits de plus abreuverait tout le monde.'));
     if (c.unhappy) tips.push(tr('Un lieu de rencontre, une arène ou un lieu de culte rendrait le village plus heureux.'));
+    // ce qui retient les nouveaux venus (Chloé, v6 : « je n'ai pas compris ce qui manquait pour que des gens arrivent »)
+    const sim = this.host.sim, g = sim.growth();
+    const short = (k: NeedId) => Math.max(1, Math.ceil(sim[k].demand - sim[k].cap - 1e-6));
+    const lack = g.missing.map((k) => (k === 'jobs' ? tr('du travail ({n})', { n: nplural(short('jobs'), 'emploi', 'emplois') }) : k === 'health' ? tr('des soins ({n})', { n: nplural(short('health'), 'place', 'places') }) : missingText([k]))).join(', ');
+    // (un manque d'abord, s'il y en a : bâtir des maisons n'y changerait rien ; le village plein ensuite)
+    const full = g.full ? `<p class="cgrow full">${ic('house', 15, 2)} ${tr('Village plein : bâtissez des maisons pour accueillir de nouveaux habitants.')}</p>` : '';
+    const grow = g.missing.length ? `<p class="cgrow warn">${ic('alert', 15, 2)} ${tr('Personne de nouveau n’arrive : il manque {list}.', { list: lack })}</p>${full}`
+      : g.full ? full
+        : `<p class="cgrow ok">${ic('spring', 15, 2)} ${tr('De nouveaux habitants arrivent : le prochain est en route.')}${g.slow ? ` ${tr('(Plus lentement : le village se remet d’un manque.)')}` : ''}</p><div class="gbar"><i style="width:${Math.round(g.progress * 100)}%"></i></div>`;
     const html = `
       <h4>${ic('houses', 18, 2)} ${nplural(c.p, 'habitant', 'habitants')} <small>${tr('pour {n} places', { n: c.places })}${c.away ? tr(', dont {n} en expédition', { n: c.away }) : ''}</small></h4>
+      ${grow}
       <div class="cbar">${seg(c.employed, 'work', 'Au travail')}${seg(c.jobless, 'idle', 'Sans emploi')}${seg(c.others, 'kids', 'Enfants et anciens')}</div>
       ${row('hammer', 'Au travail', c.employed)}
       ${row('alert', 'Sans emploi', c.jobless, c.jobless ? 'warn' : '')}

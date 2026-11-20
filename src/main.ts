@@ -223,6 +223,8 @@ class Game implements UIHost {
   railway: Railway;
   railView: RailView;
   trainCam: number | null = null;
+  /** l'habitant que suit la caméra (bouton « Suivre » de sa fiche), jusqu'à Échap, un clic ailleurs ou un glissé de la vue */
+  citizenCam: number | null = null;
   /** ligne en cours de tracé : ses arrêts dans l'ordre, ses points de passage, et la ligne qu'elle remplacera (null : une nouvelle) */
   railEdit: RailEditState | null = null;
   /** clé du dernier calcul des arrêts possibles mis en valeur */
@@ -563,6 +565,8 @@ class Game implements UIHost {
       erupt: (cell) => this.erupt(cell),
       openPortal: () => { if (this.war.ensure()) void this.enterHell(); },
       get autoRoads() { return host.autoRoads; },
+      pickCitizen: (x, y) => (this.mode === 'surface' && !this.isleCmd ? this.agents.pickAt(x, y, this.cam.camera, canvas.clientWidth, canvas.clientHeight) : null),
+      onCitizen: (id) => { this.agents.selected = id; if (this.citizenCam !== id) this.citizenCam = null; },
     });
     this.cam.handler = this.tools;
     // prendre un outil du village (barre du bas, vignette) depuis les Enfers ou le commandement de l'île : on remonte d'abord
@@ -644,7 +648,7 @@ class Game implements UIHost {
       },
       syncTrophies: () => { this.trophyT = 0; this.syncTrophies(); },
       release: () => {
-        this.follow(null); this.trainCam = null; this.incidentCam = null; this.hellFollow = false;
+        this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null; this.hellFollow = false;
         // l'outil en main se pose le temps de la cinématique (rendu à la fin, `resume`)
         const t = this.tools;
         this.trophyTool = t.tool !== 'none' ? { t: t.tool, k: t.kind } : null;
@@ -656,7 +660,7 @@ class Game implements UIHost {
     this.expeditions.onNews = (m) => this.ui.toast(m, undefined, m.startsWith('⚔️') ? 'danger' : 'info');
     this.railway.onNews = (m) => this.ui.info(m);
     // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
-    this.cam.onPan = () => { this.hellFollow = false; this.trainCam = null; this.incidentCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
+    this.cam.onPan = () => { this.hellFollow = false; this.trainCam = null; this.incidentCam = null; this.citizenCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
     // tracer une ligne : un clic sur une gare l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
     this.tools.overlay = this.trackEdit;
@@ -1007,7 +1011,7 @@ class Game implements UIHost {
     if (this.mode === 'hell') { this.ensureSurface(() => this.commandIsle(), true); return; }
     const p = this.world.portal;
     if (this.mode !== 'surface' || !p || !this.war.ensure()) return;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.tools.setTool('none');
     this.cam.goTo(p.x, p.z + 1, Math.min(Math.max(this.cam.dist, 18), 26));
     // trois quarts plutôt que presque de dessus (l'inclinaison reste réglable : clic droit glissé)
@@ -1108,7 +1112,7 @@ class Game implements UIHost {
     const p = this.world.portal, v = this.cam.view();
     this.isleNear = this.mode === 'surface' && !!p && this.world.portalOpen && nearIsle(this.isleNear, Math.hypot(v.x - p.x, v.z - p.z), p.r);
     if (!this.isleNear) { if (this.isleCmd) this.leaveIsle(); return; }
-    if (this.isleCmd || this.fading || this.tools.tool !== 'none' || this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.railEdit || this.kingStage.playing || this.trophyStage.playing) return;
+    if (this.isleCmd || this.fading || this.tools.tool !== 'none' || this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.citizenCam !== null || this.railEdit || this.kingStage.playing || this.trophyStage.playing) return;
     this.enterIsle();
   }
 
@@ -1121,7 +1125,7 @@ class Game implements UIHost {
     if (this.mode !== 'surface') { this.ensureSurface(() => this.goAlly(), true); return; }
     const v = allyView(this.world);
     if (!v) return;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
   }
 
@@ -1149,7 +1153,7 @@ class Game implements UIHost {
     if (this.mode === 'hell') { this.ensureSurface(() => this.goIsle(), true); return; }
     const p = this.world.portal;
     if (!p || this.mode !== 'surface') return;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.cam.goTo(p.x, p.z, Math.min(Math.max(this.cam.dist, 20), 32));
   }
 
@@ -1252,7 +1256,7 @@ class Game implements UIHost {
     d.cine = false;
     if (!lay || !d.ally) return;
     this.peaceCine = true;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     const ally = isleOf(w, d.ally)!, rival = isleOf(w, rivalOf(d.ally))!, back = this.cam.view();
     const home = this.villageCenter() ?? [back.x, back.z];
     const steps: [number, () => void][] = [
@@ -1280,7 +1284,7 @@ class Game implements UIHost {
     let b: RivalBattle;
     try { b = new RivalBattle(w, rivalOf(d.ally), Math.max(1, this.sim.age), w.difficulty === 'easy' || w.sandbox, undefined, d.intel); } catch { return false; }
     this.leaveIsle(true);
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.tools.setTool('none');
     this.rivalBattle = b;
     this.allyBattle = true;
@@ -1789,7 +1793,7 @@ class Game implements UIHost {
     if (!i) { this.incidentCam = null; return; }
     if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.followIncident(key)); return; }
     // une seule chose suivie à la fois : la vue lâche l'équipe (et sa descente sous terre) ou le train
-    this.follow(null); this.trainCam = null;
+    this.follow(null); this.trainCam = null; this.citizenCam = null;
     this.incidentCam = i.key;
     // sous terre, on remonte droit sur l'incident
     if (this.mode === 'under') this.exitUnder(Math.floor(i.z) * N + Math.floor(i.x));
@@ -1996,8 +2000,8 @@ class Game implements UIHost {
   goHome(overview = true) {
     if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.goHome(overview)); return; }
     // la vue suivait quelque chose : elle revient au village, même si l'équipe en partait à peine
-    const tracked = this.following !== null || this.trainCam !== null || this.incidentCam !== null;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    const tracked = this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.citizenCam !== null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     if (this.mode === 'under') { this.exitUnder(); return; }
     const c = this.villageCenter(), v = this.cam.view();
     if (!c || (overview && !tracked && this.cam.settled() && Math.hypot(v.x - c[0], v.z - c[1]) < 2 && v.dist < VILLAGE_DIST * 1.2)) { this.cam.reset(); return; }
@@ -2010,10 +2014,20 @@ class Game implements UIHost {
     if (!p) return;
     if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.followTrain(line)); return; }
     // une seule chose suivie à la fois
-    this.follow(null); this.incidentCam = null;
+    this.follow(null); this.incidentCam = null; this.citizenCam = null;
     if (this.mode === 'under') this.exitUnder(Math.floor(p[1]) * N + Math.floor(p[0]));
     this.trainCam = line;
     this.cam.follow(p[0], p[1], 14);
+  }
+
+  /** La caméra suit cet habitant (null : elle le lâche) ; la vue s'approche s'il le faut */
+  followCitizen(id: number | null) {
+    if (id === null) { this.citizenCam = null; return; }
+    const p = this.agents.posOf(id);
+    if (!p || this.mode !== 'surface' || this.isleCmd) return;
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.citizenCam = id;
+    this.cam.follow(p[0], p[1], 9);
   }
 
   // ---------- Tracer une ligne de chemin de fer ----------
@@ -2100,7 +2114,7 @@ class Game implements UIHost {
     if (a && (this.mode === 'hell' || this.isleCmd)) { this.ensureSurface(() => this.follow(id, far)); return; }
     this.following = a ? a.id : null;
     // une seule chose suivie à la fois : suivre l'équipe lâche le train et l'incident
-    if (a) { this.trainCam = null; this.incidentCam = null; }
+    if (a) { this.trainCam = null; this.incidentCam = null; this.citizenCam = null; }
     // on cesse de suivre : la vue reste où elle est
     if (!a) return;
     this.followPhase = ''; this.followLast = null; this.followSm = null; this.followRaw = null; this.followFar = far;
@@ -2696,6 +2710,8 @@ class Game implements UIHost {
       const train = this.trainCam === null ? undefined : this.railway.trains.get(this.trainCam), tp = train ? this.railway.trainAt(train) : null;
       if (tp) this.cam.follow(tp[0], tp[1]);
       else this.trainCam = null;
+      // l'habitant suivi : la vue reste sur lui (chez lui, sur sa maison) ; il n'est plus montré, elle le lâche
+      if (this.citizenCam !== null) { const cp = this.agents.posOf(this.citizenCam); if (cp) this.cam.follow(cp[0], cp[1]); else { this.citizenCam = null; this.ui.update(); } }
       // l'incident suivi : la caméra reste dessus (sur le véhicule en route), jusqu'à ce qu'il soit fini
       if (this.incidentCam) { const i = this.incidents().find((x) => x.key === this.incidentCam); if (i) this.cam.follow(i.x, i.z); else this.incidentCam = null; }
       this.halos.update(dt, this.env.night);

@@ -11,3 +11,4 @@ import './tutorial';
 import './misc';
 import './expeditions';
 import './army';
+import './citizens';

@@ -222,6 +222,16 @@ export class Sim {
 
   get drought() { return this.moisture < 0.25 && this.fieldFood > 0; }
 
+  /**
+   * Pourquoi le village grandit, ou non (fiche des habitants, fiche d'un habitant) : les besoins qui manquent, dans l'ordre
+   * (`missing`, sans le logement), le village plein (`full`), l'avancée vers le prochain habitant (`progress`, 0 … 1) et la
+   * convalescence qui ralentit les arrivées (`slow`)
+   */
+  growth(): { full: boolean; missing: NeedId[]; progress: number; slow: boolean } {
+    const missing = this.world.sandbox ? [] : (['food', 'water', 'jobs', 'health', 'joy'] as NeedId[]).filter((k) => !this[k].ok);
+    return { full: !this.housing.ok, missing, progress: Math.min(1, Math.max(0, this.grow)), slow: this.recovering > 0 && rulesOf(this.world.difficulty).recoverK < 1 };
+  }
+
   get canGrow() {
     // au bac à sable, seules les places comptent : aucun besoin ne freine le village
     if (this.world.sandbox) return this.housing.ok;

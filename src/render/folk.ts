@@ -326,6 +326,12 @@ function figure(p: Parts, role: FolkRole, era: number, v: number, skin: number):
 }
 
 /** Un habitant (ou une figure) de l'époque `age` ; `v` choisit son allure, sa tenue, ses couleurs */
+/** Les traits d'un habitant (le portrait de sa fiche, le genre de son prénom), tirés comme dans `makeFolk` */
+export function folkTraits(v: number, child: boolean) {
+  const old = !child && hv(v, 4) % 6 === 0;
+  return { woman: hv(v, 1) % 2 === 1, skin: SKINS[hv(v, 2) % SKINS.length], hair: old ? GREY : HAIRS[hv(v, 3) % HAIRS.length], old };
+}
+
 export function makeFolk(look: FolkLook): Folk {
   const era = Math.min(5, Math.max(0, look.age)), v = look.v, role = look.role ?? 'villager', child = !!look.child;
   const woman = look.woman ?? (role === 'villager' && hv(v, 1) % 2 === 1);
