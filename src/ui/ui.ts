@@ -1552,7 +1552,12 @@ export class UI {
     const tl = this.host.tools, ps = tl.placeStage, st = ps === 2 ? 2 : tl.freeStage, el = $('#cursorHint');
     const txt = ps === 2 ? tr(tl.tool === 'cave' ? 'Cliquez du côté de l’ouverture' : 'Cliquez du côté de l’entrée') : st === 1 ? tr('Cliquez le point A') : st === 2 ? tr('Cliquez le point B') : '';
     if (txt !== this.hintTxt) { this.hintTxt = txt; el.textContent = txt; el.classList.toggle('show', !!txt); el.classList.toggle('b', st === 2); }
-    if (txt && this.cursorXY) el.style.transform = `translate(${this.cursorXY[0] + 18}px, ${this.cursorXY[1] + 20}px)`;
+    // près du bord droit ou du bas, l'étiquette passe de l'autre côté du curseur (elle sortait de l'écran, testeurs v6)
+    if (txt && this.cursorXY) {
+      const [x, y] = this.cursorXY, w = el.offsetWidth, h = el.offsetHeight;
+      const left = x + 18 + w > innerWidth - 8 ? x - 12 - w : x + 18, top = y + 20 + h > innerHeight - 8 ? y - 12 - h : y + 20;
+      el.style.transform = `translate(${Math.max(8, left)}px, ${Math.max(8, top)}px)`;
+    }
   }
 
   /**
