@@ -12102,6 +12102,8 @@ function futureOffice(p: Parts, v: number, tier = 1) {
     for (let k = 0; k < 4; k++) {
       const a = ry + k * Math.PI / 2;
       lights(p, Math.sin(a) * (s / 2 + 0.003), -0.02 + Math.cos(a) * (s / 2 + 0.003), a, s / 2, y + 0.025, y + 0.05, 0.1, i * 3 + k + v);
+      // trois montants sombres par face, un étage sur deux (les planchers blancs marquent les autres)
+      if (i % 2 === 0) for (let j = 1; j < 4; j++) { const u = -s / 2 + (j * s) / 4; pane(p, 0.006, 0.1, Math.sin(a) * (s / 2 + 0.004) + Math.cos(a) * u, y, -0.02 + Math.cos(a) * (s / 2 + 0.004) - Math.sin(a) * u, F.dark, a, false); }
     }
     y += 0.118;
   }
@@ -12113,6 +12115,14 @@ function futureOffice(p: Parts, v: number, tier = 1) {
   // parvis : jardinières, arbres, bancs, arceaux
   for (const s of [-1, 1]) { p.box(0.16, 0.05, 0.07, s * 0.33, 0.012, 0.36, F.pearl); p.sphere(0.05, s * 0.33, 0.08, 0.36, F.leaf, 0, 0.8); tree(p, s * 0.4, 0.2, 0.55, F.leaf); }
   p.box(0.16, 0.02, 0.04, 0, 0.04, 0.4, F.white);
+  // le hall : montants, porte tambour et son liseré, bornes, dépose-minute et sa voiture volante posée, livreur
+  for (let k = 0; k < 7; k++) p.box(0.006, 0.11, 0.008, -0.27 + k * 0.09, 0.022, 0.233, F.white);
+  p.cyl(0.05, 0.05, 0.11, 10, 0, 0.022, 0.25, F.glass2, true); p.cyl(0.055, 0.055, 0.008, 10, 0, 0.13, 0.25, F.white); p.box(0.004, 0.11, 0.09, 0, 0.022, 0.25, F.steel);
+  for (const x of [-0.12, 0.12]) { p.cyl(0.01, 0.012, 0.05, 6, x, 0.012, 0.42, F.white); p.cyl(0.011, 0.011, 0.008, 6, x, 0.062, 0.42, accent, 'neon'); }
+  p.box(0.3, 0.004, 0.12, 0.28, 0.012, 0.18, 0x3a4250); p.box(0.3, 0.004, 0.006, 0.28, 0.017, 0.12, accent, 0, 'neon');
+  p.add(new THREE.SphereGeometry(0.06, 10, 6).scale(0.78, 0.42, 1.45), 0.28, 0.05, 0.18, F.white, Math.PI / 2);
+  p.add(new THREE.SphereGeometry(0.038, 8, 5).scale(1, 0.72, 1.5), 0.28, 0.07, 0.18, F.smoke, Math.PI / 2);
+  figure(p, 0.15, 0.26, 0xf2c23a, 1.4, false, 0x2a2420); p.box(0.03, 0.03, 0.03, 0.17, 0.05, 0.28, 0xd8b04a);
 }
 
 /**
