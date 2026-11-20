@@ -57,6 +57,9 @@ import { AgePrep } from './render/agePrep';
 import { ToolController, ToolId } from './build/tools';
 import { AudioEngine, soundSettings, VOL_V } from './audio/audio';
 import { UI, showMenu, UIHost, chooseControls } from './ui/ui';
+import { chooseBlason } from './ui/blason';
+import { setTeamBlason } from './render/teamPaint';
+import { Blason } from './sim/blason';
 import { Controls, loadControls, saveControls, guessLayout } from './core/controls';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
@@ -493,6 +496,8 @@ class Game implements UIHost {
       if (w.sandbox) this.sim.age = Math.max(0, Math.min(AGES.length - 1, Math.round(startAge) || 0));
     }
     this.war.load(w.war);
+    // les couleurs du blason sur tous les drapeaux et les troupes (shader commun, voir render/teamPaint.ts)
+    setTeamBlason(w.blason);
     Object.assign(this.time, { dayLen: settings.dayLen === undefined || settings.dayLen === OLD_DAY_LEN ? 130 : settings.dayLen, seasonLen: settings.seasonLen === undefined || settings.seasonLen === OLD_SEASON_LEN ? 240 : settings.seasonLen, speed: settings.speed ?? 1 });
     audioSettings(settings);
     if (settings.quality) this.quality = settings.quality;
@@ -1966,6 +1971,21 @@ class Game implements UIHost {
   }
   /** Contrôles de la vue : retenus pour ce navigateur et appliqués à la caméra */
   setControls(c: Controls) { this.controls = c; saveControls(c); this.applyControls(); }
+  /** Change le blason du village : tout le jeu se teint à l'image suivante, la partie le garde */
+  setBlason(b: Blason) { this.world.blason = { ...b }; this.world.blasonSeen = true; setTeamBlason(b); }
+  /**
+   * Partie neuve : après le choix des contrôles, la fenêtre du blason (facultative, « Plus tard »). Elle ne revient pas
+   * d'elle-même ; le blason se change dans Paramètres › Partie
+   */
+  async askBlason() {
+    if (this.world.blasonSeen) return;
+    const was = this.time.paused;
+    this.time.paused = true;
+    const b = await chooseBlason(this.ui.root, this.world.blason, true, (x) => setTeamBlason(x));
+    this.time.paused = was;
+    this.world.blasonSeen = true;
+    if (b) this.setBlason(b);
+  }
   private applyControls() {
     const mouse = this.controls.mode === 'mouse';
     this.cam.letterKeys = !mouse;
@@ -3043,7 +3063,7 @@ async function boot() {
     ld.done();
     game.warnLoadError();
     // premier lancement : le choix des contrôles de la vue, avant tout
-    void game.askControls();
+    void game.askControls().then(() => game.askBlason());
   };
   let menu: HTMLElement | null = null;
   if (devN) { void start(CONTINENT, 'new', Number(dev?.get('seed')) || undefined); return; }

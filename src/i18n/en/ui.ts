@@ -593,4 +593,12 @@ registerDict('goals', {
   'Deux fermes verticales': 'Two vertical farms', 'Les champs montent vers le ciel.': 'The fields rise toward the sky.',
   'Une centrale à fusion': 'A fusion plant', 'Une énergie sans fin.': 'Endless energy.',
   'Le cosmodrome': 'The spaceport', 'Les étoiles vous attendent.': 'The stars are waiting for you.',
+  // le blason du village (ui/blason.ts, sim/blason.ts)
+  'Le blason du village': 'Village coat of arms', 'Ses couleurs flottent sur vos drapeaux et habillent vos troupes.': 'Its colours fly on your flags and dress your troops.',
+  'Couleur du champ': 'Field colour', 'Couleur de l’emblème': 'Emblem colour', 'Emblème': 'Emblem', 'Forme du drapeau': 'Flag shape',
+  'Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs. Vous pourrez le changer dans Paramètres › Partie.': 'It flies on your towers, ships and banners, and your troops wear its colours. You can change it later in Settings › Game.',
+  'Au hasard': 'Random', 'Plus tard': 'Later', 'Blason du village': 'Village coat of arms', 'Drapeau': 'Flag', 'Changer le blason': 'Change the coat of arms',
+  'Azur': 'Azure', 'Bleu nuit': 'Midnight blue', 'Pourpre': 'Purple', 'Bordeaux': 'Burgundy', 'Gueules': 'Red', 'Sinople': 'Green', 'Ocre': 'Ochre', 'Argent': 'Silver', 'Sable': 'Black',
+  'Soleil': 'Sun', 'Arbre': 'Tree', 'Épis': 'Wheat', 'Étoile': 'Star', 'Vagues': 'Waves', 'Couronne': 'Crown',
+  'Droit': 'Straight', 'À queue d’aronde': 'Swallowtail', 'En flamme': 'Pennant',
 });

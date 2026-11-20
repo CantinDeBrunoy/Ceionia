@@ -12,6 +12,9 @@ import type { GfxParams } from '../render/adaptive';
 import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
 import { type Controls, type CamControl, type KbLayout, layoutKeys } from '../core/controls';
+import { type Blason, flagSvg } from '../sim/blason';
+import { chooseBlason } from './blason';
+import { setTeamBlason } from '../render/teamPaint';
 import { matches } from './search';
 import { readSlot, SaveData, savedAgo, Quality } from '../save/save';
 import { helpOn, setHelpOn } from './warTips';
@@ -118,6 +121,8 @@ export interface UIHost {
   /** comment le joueur déplace la vue (souris ou clavier, et la disposition du clavier) ; voir `core/controls.ts` */
   controls: Controls;
   setControls(c: Controls): void;
+  /** le blason du village (couleurs des drapeaux et des troupes) ; voir `sim/blason.ts` */
+  setBlason(b: Blason): void;
   /** effets de la météo affichés (pluie, neige, brouillard), et les couper ou les rendre */
   readonly weatherFx: { rain: boolean; snow: boolean; fog: boolean };
   setWeatherFx(k: 'rain' | 'snow' | 'fog', on: boolean): void;
@@ -3198,6 +3203,9 @@ export class UI {
         <div class="row"><label>${tr('Clavier')}</label><button data-lay="azerty">AZERTY</button><button data-lay="qwerty">QWERTY</button></div>
         <p class="hint" id="ctlHint"></p>
         <div class="row"><label>${tr('Raccourcis clavier')}</label><button id="gKeys">${tr('Voir la liste')} <small>?</small></button></div>
+        <h4>${tr('Blason du village')}</h4>
+        <div class="row"><label>${tr('Drapeau')}</label><span class="setFlag">${flagSvg(h.world.blason, 66)}</span><button id="gBlason">${tr('Changer le blason')}</button></div>
+        <p class="hint">${tr('Ses couleurs flottent sur vos drapeaux et habillent vos troupes.')}</p>
         <h4>${tr('Règles')}</h4>
         <div class="row"><label>${DIFF_TEXT.setting}</label><span class="diffTag ${h.world.difficulty}">${ic(DIFF_TEXT.icon[h.world.difficulty], 16, 2)}${DIFF_TEXT.name[h.world.difficulty]}</span></div>
         <ul class="hint dpoints">${DIFF_TEXT.points[h.world.difficulty].map((x) => `<li>${x}</li>`).join('')}</ul>
@@ -3231,6 +3239,14 @@ export class UI {
     bindLangPicker(ov);
     const q = <T extends HTMLElement>(s: string) => $(s, ov) as T;
     q('#gCredits').onclick = () => showCredits(this.root);
+    // le blason : le village se teint pendant qu'on choisit, la croix rend l'ancien
+    q('#gBlason').onclick = () => {
+      h.audio.sfxClick();
+      void chooseBlason(this.root, h.world.blason, false, (b) => setTeamBlason(b)).then((b: Blason | null) => {
+        if (b) h.setBlason(b);
+        q('.setFlag').innerHTML = flagSvg(h.world.blason, 66);
+      });
+    };
     // sous les onglets : sauvegarder (le bouton le dit lui-même : la fenêtre ouverte retient les messages), ou
     // sauvegarder et revenir au menu principal (`toMenu` sauvegarde avant de recharger la page)
     q('#gSave2').onclick = () => {
@@ -3577,7 +3593,7 @@ const AGE_ICON = ['prehistoire', 'antiquite', 'medieval', 'industriel', 'moderne
  * paysage peint en bas (montagnes lointaines, prairie). `icon` : le losange du titre (un fichier icone_*.webp) ; `sub` : sous-titre.
  * Sert aussi en jeu (les paramètres) : le style vaut pour toute fenêtre `.cePop` de #ui
  */
-function menuPop(root: HTMLElement, cls: string, icon: string, title: string, body: string, onClose?: () => void, sub = '') {
+export function menuPop(root: HTMLElement, cls: string, icon: string, title: string, body: string, onClose?: () => void, sub = '') {
   const head = `<span class="popTi">${title}${sub ? `<small>${sub}</small>` : ''}</span>`;
   const r = modal(root, `cePop ${cls}`, icon ? `${popIc(icon, 'popBadge')}${head}` : title, body, onClose);
   $('.modal', r.ov).insertAdjacentHTML('afterbegin', `<img class="popCrest" src="${POP}montagnes_entete.webp" alt="" aria-hidden="true">`

@@ -113,13 +113,13 @@ export function emblemSvg(e: Emblem, fill: string, size = 28, holeFill = 'none')
   return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true"><path d="${EMBLEM_PATH[e]}" fill="${fill}" fill-rule="nonzero"/>${hole}</svg>`;
 }
 
-/** Le drapeau entier en SVG : champ, liseré, emblème au milieu */
+/** Le drapeau entier en SVG, comme il flotte en jeu : le champ découpé à sa forme, l'emblème au milieu (vers la hampe pour une forme découpée) */
 export function flagSvg(bl: Blason, width = 160) {
   const A = hex(BLASON_COLORS[bl.a]), B = hex(BLASON_COLORS[bl.b]);
-  // l'emblème pris dans le carré central du champ (décalé vers la hampe pour une flamme ou une queue d'aronde)
-  const cx = bl.s === 'droit' ? 50 : 40, k = 0.5;
+  // mêmes proportions que le shader (render/teamPaint.ts) : un carré de 0,74 de la hauteur, centré à 0,5 ou 0,42 de la longueur
+  const side = 66 * 0.74, cx = bl.s === 'droit' ? 50 : 42, k = side / 100;
   const hole = EMBLEM_HOLE[bl.e] ? `<path d="${EMBLEM_HOLE[bl.e]}" fill="${A}"/>` : '';
-  return `<svg viewBox="-4 -4 108 74" width="${width}" height="${(width * 74) / 108}" aria-hidden="true">
-    <path d="${SHAPE_PATH[bl.s]}" fill="${A}" stroke="${B}" stroke-width="2.5" stroke-linejoin="round"/>
-    <g transform="translate(${cx - 50 * k * 1.1} ${33 - 50 * k * 1.1}) scale(${k * 1.1})"><path d="${EMBLEM_PATH[bl.e]}" fill="${B}"/>${hole}</g></svg>`;
+  return `<svg viewBox="-2 -2 104 70" width="${width}" height="${(width * 70) / 104}" aria-hidden="true">
+    <path d="${SHAPE_PATH[bl.s]}" fill="${A}" stroke="rgba(0,0,0,.2)" stroke-width="1" stroke-linejoin="round"/>
+    <g transform="translate(${cx - side / 2} ${33 - side / 2}) scale(${k})"><path d="${EMBLEM_PATH[bl.e]}" fill="${B}"/>${hole}</g></svg>`;
 }

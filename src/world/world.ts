@@ -13,6 +13,7 @@ import { TradeState, newTradeState, readTradeState, saveTradeState } from '../si
 import { allyLand, awayWhy, tradepostWhy } from '../sim/allyLand';
 import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
+import { Blason, DEFAULT_BLASON, readBlason } from '../sim/blason';
 import { Crossing, crossingMap, nearestOnDeck, DECK_CLEAR, waterLevel } from './crossings';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
@@ -396,6 +397,10 @@ export class World {
    * d'être (une voie déjà prise) : sa carte ne s'ouvre plus d'elle-même (sauvegardé ; voir `sim/crossroads.ts`)
    */
   crossroads = false;
+  /** Le blason du village : ses couleurs teignent les drapeaux et les troupes (sauvé ; absent : le blason par défaut) */
+  blason: Blason = { ...DEFAULT_BLASON };
+  /** Le joueur a vu la fenêtre du blason (choisi, ou « Plus tard ») : elle ne s'ouvre plus d'elle-même (sauvé) */
+  blasonSeen = false;
   /**
    * Version du générateur de l'île principale (sauvegardée si ce n'est pas la 3) : une ancienne partie (version 1 ou 2)
    * agrandie à l'archipel garde le climat, la rivière et les biomes de son île (`mainGenOf`)
@@ -1869,6 +1874,8 @@ export class World {
       ...(this.isles ? { isles: this.isles } : {}),
       ...(this.explore === 'no' ? { explore: 'no' } : {}),
       ...(this.crossroads ? { crossroads: true } : {}),
+      blason: this.blason,
+      ...(this.blasonSeen ? { blasonSeen: 1 } : {}),
       ...(this.exploredAt !== null ? { exploredAt: this.exploredAt } : {}),
       ...(this.isles && this.mainGen !== GEN_VAR ? { mainGen: this.mainGen } : {}),
       ...(this.reveal ? { reveal: 1 } : {}),
@@ -2014,6 +2021,9 @@ export class World {
     this.isles = this.gen === GEN_ARCH ? archLayout(this.seed, N) : null;
     this.explore = d.explore === 'no' ? 'no' : 'ask';
     this.crossroads = d.crossroads === true;
+    this.blason = readBlason(d.blason);
+    // une ancienne partie (sans blason) ne voit pas la fenêtre s'ouvrir d'elle-même : le blason se change dans les paramètres
+    this.blasonSeen = d.blasonSeen === 1 || d.blason === undefined;
     this.exploredAt = Number.isInteger(d.exploredAt) && this.isles ? d.exploredAt : null;
     this.mainGen = this.isles && [GEN_FIXED, 2, 5].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;
