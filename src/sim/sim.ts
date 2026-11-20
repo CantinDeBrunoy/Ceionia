@@ -5,6 +5,7 @@ import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catal
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
+import { MAKER, Shortage, shortages, shortText } from './ledger';
 import { goldNeed, goldSince, tradeOpen } from './trade';
 import { archipelagoOn, canExpand } from '../world/expand';
 import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from './crossroads';
@@ -289,6 +290,12 @@ export class Sim {
    * Le conseil du moment. Chaque bâtiment y est nommé comme dans la barre de construction à l'âge du village, avec son
    * rayon (« Séchoir à grains » (Bâtir › Production), pas « une ferme ») ; `messageKind` dit lequel, pour le prendre en main
    */
+  /**
+   * Les matières qui bloquent l'âge suivant (voir `shortages` de `ledger.ts`), la plus longue à réunir d'abord : recalculées
+   * avec le conseil ; la barre des stocks les marque, leur fiche dit quoi bâtir
+   */
+  shortages: Shortage[] = [];
+
   private computeMessage() {
     const w = this.world;
     const p = this.pop;
@@ -308,8 +315,12 @@ export class Sim {
         const what = { stone: tr('de la pierre'), wood: tr('du bois'), brick: tr('des briques') }[r], where = { stone: tr('près des rochers (Nature › Rochers) ou dans la montagne'), wood: tr('en lisière ou dans une forêt'), brick: tr('elle se pose où l’on veut et cuit ses briques toute seule') }[r];
         return about(prod, tr('Il manque {what} pour {name} : {prod}, {where}.', { what, name: quote(k), prod: say(prod), where }));
       }
-      return about(k, text);
+      // une matière de construction qu'il faudra des jours à réunir pour l'âge suivant : on dit que c'est elle le goulot, et ce
+      // que coûte un producteur de plus (Karim, testeur v6 : « rien ne m'a dit que le bois était le goulot »)
+      const sh = this.shortages.find((x) => x.res !== 'ore' && MAKER[x.res] !== k);
+      return about(k, sh ? `${text} ${shortText(w, this.age, sh)}` : text);
     };
+    this.shortages = shortages(w, this.age, this.ageProgress()?.items ?? null);
     this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageGold = false; this.messageChoice = false; this.messageConflict = false; this.messageNeed = false;
     // au bac à sable, aucun conseil : on bâtit comme on veut
     if (w.sandbox) return tr('Bac à sable : tout est ouvert et gratuit, bâtissez comme vous voulez.');

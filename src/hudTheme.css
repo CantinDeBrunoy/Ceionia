@@ -1415,3 +1415,29 @@ body.dockMin #dock > #homeBack { margin-bottom: 26px; }
 .expFind input::-webkit-search-cancel-button { display: none; }
 .expFind:focus-within { border-color: var(--hGold); box-shadow: 0 0 0 2px rgba(224, 173, 69, 0.35); }
 @media (max-width: 600px) { .expFind input { width: 90px; } }
+
+/* ---------- les chiffres de l'économie (Karim, testeur v6) ---------- */
+/* une matière qui bloque l'âge suivant : son débit en orange, souligné d'un point */
+#res .res.short .rate { color: #C0532A; font-weight: 800; }
+#res .res.short .rate::after { content: ''; display: inline-block; width: 5px; height: 5px; margin-left: 3px; border-radius: 50%; background: #E0742F; vertical-align: 2px; }
+/* la fiche d'une ressource : titres des parties (production, consommation) */
+#needInfo .chead { margin: 6px 0 1px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--hInk2); }
+#needInfo .crow.total { border-top: 1px solid rgba(180, 140, 80, 0.3); margin-top: 3px; padding-top: 3px; }
+/* ouverte au survol : une ligne discrète dit qu'un clic la garde */
+#needInfo.peek::after { content: attr(data-tip); display: block; margin-top: 6px; font-size: 11px; font-style: italic; color: var(--hInk2); text-align: center; }
+/* la fiche d'un bâtiment : ce qu'il produit ou consomme par jour, en pastille dorée */
+.effs .eff.flow { background: #FFF1CF; box-shadow: inset 0 0 0 1px #E8C478; color: #5A3E1C; font-weight: 800; }
+.effs .eff.flow.neg { background: #FBE3D8; box-shadow: inset 0 0 0 1px #E3A58C; color: #8A3418; }
+/* outil Démolir : ce que rendrait le bâtiment visé, sous le curseur */
+/* (au-dessus de « Jeu en pause », qui se pose au milieu du bas de l'écran) */
+#cursorHint { z-index: 33; }
+#cursorHint.d { background: #A8432D; }
+#cursorHint.d b { color: #FFE3A6; }
+/* l'aide des raccourcis clavier */
+.keysHelp { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; text-align: left; }
+.keysHelp h5 { margin: 12px 0 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--hInk2); }
+.keysHelp .kr { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 3px 0; border-bottom: 1px solid rgba(180, 140, 80, 0.2); font-size: 13px; font-weight: 600; color: var(--hInk); }
+.keysHelp .kr > span:last-child { flex: none; white-space: nowrap; }
+.keysHelp kbd, #selCard kbd.k { display: inline-block; min-width: 22px; margin-left: 3px; padding: 1px 6px; border-radius: 6px; background: #FFFAF0; border: 1.5px solid #E2C27A; box-shadow: 0 2px 0 #D9B56A; font: 700 12px/1.4 Manrope, sans-serif; text-align: center; color: var(--hInk); }
+.keysHelp .note { grid-column: 1 / -1; margin: 10px 0 0; font-size: 12px; color: var(--hInk2); }
+@media (max-width: 700px) { .keysHelp { grid-template-columns: 1fr; } }

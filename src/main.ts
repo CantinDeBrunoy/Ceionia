@@ -2341,6 +2341,8 @@ class Game implements UIHost {
         }
         if (this.command.key(e)) return;
       }
+      // la vitesse (− / +, les deux touches à droite du 0 ou le pavé numérique), partout
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && this.speedKey(e)) return;
       if (this.mode === 'hell') {
         // une touche d'outil ou de bâtiment du village (B, R, X, chiffres…) ramène à la surface, puis prend l'outil
         const vt = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) || e.ctrlKey || e.metaKey || e.altKey ? undefined : map[k];
@@ -2360,6 +2362,11 @@ class Game implements UIHost {
         else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
         return;
       }
+      // ? : la liste des raccourcis ; J : les expéditions ; N : les notifications ; Maj+1 … 5 : les rayons de Bâtir
+      if (k === '?') { e.preventDefault(); this.ui.openKeys(); return; }
+      if (k === 'j') { this.ui.toggleExpeditions(); return; }
+      if (k === 'n') { this.ui.toggleNotifPanel(); return; }
+      if (e.shiftKey && digit !== undefined && +digit >= 1 && +digit <= 5) { if (this.isleCmd) this.leaveIsle(true); this.ui.openCat(+digit - 1); return; }
       // R tourne le bâtiment en main ou celui qu'on a choisi ; sinon c'est l'outil Route
       if (k === 'r' && (this.tools.holding() || this.tools.selected !== null)) { this.tools.rotate(); return; }
       const tool = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) ? undefined : map[k];
@@ -2386,6 +2393,17 @@ class Game implements UIHost {
     // Maj : la sélection des troupes s'ajoute à la précédente
     window.addEventListener('keyup', (e) => { if (e.key === 'Shift') this.command.setShift(false); });
     window.addEventListener('keydown', (e) => { if (e.key === 'Shift') this.command.setShift(true); });
+  }
+
+  /** − / + : ralentir ou accélérer le temps (×1, ×2, ×4, ×8) ; true si la touche était l'une d'elles */
+  private speedKey(e: KeyboardEvent) {
+    const up = e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+', down = e.code === 'Minus' || e.code === 'NumpadSubtract';
+    if (!up && !down) return false;
+    e.preventDefault();
+    const seq = [1, 2, 4, 8], i = Math.max(0, seq.indexOf(this.time.speed));
+    const next = seq[Math.min(seq.length - 1, Math.max(0, i + (up ? 1 : -1)))];
+    if (next !== this.time.speed) { this.time.speed = next; this.applySettings(); audio.sfxClick(); }
+    return true;
   }
 
   private onResize() {

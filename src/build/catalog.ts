@@ -180,14 +180,14 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['Abri de bûcheron', 'Camp de bûcherons', 'Scierie', 'Scierie à vapeur', 'Scierie mécanique', 'Scierie robotisée'],
     desc: 'Abat et débite le bois de la forêt voisine. À poser en lisière ou dans une forêt.',
     jobs: [1, 2, 2, 3, 3, 3],
-    perk: 'Donne du bois chaque jour (4, puis 6, 8, 11, 14, 17 selon l’âge) pour bâtir les grands bâtiments.',
+    perk: 'Donne du bois chaque jour pour bâtir les grands bâtiments ; d’un âge à l’autre, il en coupe davantage.',
   },
   quarry: {
     id: 'quarry', size: 1, minAge: 0, icon: '🪨', cat: 'prod',
     names: ['Pierrier', 'Carrière', 'Carrière', 'Carrière à treuil', 'Carrière mécanisée', 'Carrière robotisée'],
     desc: 'Taille la pierre des rochers voisins. À poser près des rochers ou dans la montagne.',
     jobs: [1, 2, 2, 3, 3, 3],
-    perk: 'Donne de la pierre chaque jour (3, puis 5, 7, 9, 12, 15 selon l’âge) pour bâtir les grands bâtiments.',
+    perk: 'Donne de la pierre chaque jour pour bâtir les grands bâtiments ; d’un âge à l’autre, elle en taille davantage.',
   },
   pier: {
     id: 'pier', size: 1, minAge: 0, icon: '🎣', cat: 'prod',

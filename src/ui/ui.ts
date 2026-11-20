@@ -26,11 +26,12 @@ import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
 import { choiceStyles, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
-import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
+import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, RES_NAME } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
 import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/crossroads';
 import { waysHtml, type ConflictWay } from './ways';
 import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
+import { flowOf, flowOfBuilding, ledgerOf, LedgerRow, Flow, refundTotal, shortText } from '../sim/ledger';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
@@ -320,6 +321,11 @@ const offered = (w: World, k: KindId) => kindOffered(w, k) && (k !== 'tradepost'
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
 /** une décimale quand il y en a une (« 2,4 » de bien-être ne s'affiche plus « 2 » en rouge) */
 const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
+/** Ce qu'un bâtiment produit ou consomme par jour, en pastilles (« +8 bois / jour », « −2 carburant / jour ») */
+const flowChips = (f: Flow) => (Object.keys(f) as Resource[]).filter((r) => f[r]).sort((a, b) => f[b]! - f[a]!)
+  .map((r) => `<span class="eff flow${f[r]! < 0 ? ' neg' : ''}">${resPic(r, 15)} ${tr('{n} {res} / jour', { n: signed(f[r]!), res: tr(RES_NAME[r]) })}</span>`).join('');
+/** « +8 », « −2,5 » : un débit par jour, signé */
+const signed = (v: number) => `${v < 0 ? '−' : '+'}${num(Math.abs(v))}`;
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
 const NEED_RULE: Record<NeedId, string> = {
   housing: 'Chaque habitant occupe une place. Le village grandit tant qu’il reste des places libres et que les autres besoins sont comblés.',
@@ -580,11 +586,11 @@ export class UI {
           <div id="timePanel">
             <div id="clock" class="panel"></div>
             <button id="bPause" class="round" title="${tr('Pause (Espace)')}" aria-label="${tr('Pause')}">${ic('pause', 20, 2.2)}</button>
-            <button id="bSpeed" class="round" title="${tr('Vitesse')}" aria-label="${tr('Vitesse')}"></button>
+            <button id="bSpeed" class="round" title="${tr('Vitesse (− / +)')}" aria-label="${tr('Vitesse')}"></button>
           </div>
           <nav id="menuBtns">
-            <button id="bExp" class="round" title="${tr('Expéditions')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span id="expBadge"></span></button>
-            <button id="bBell" class="round" title="${tr('Notifications')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
+            <button id="bExp" class="round" title="${tr('Expéditions (J)')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span id="expBadge"></span></button>
+            <button id="bBell" class="round" title="${tr('Notifications (N)')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
             <button id="bSettings" class="round" title="${tr('Paramètres')}" aria-label="${tr('Paramètres')}">${ic('gear', 21)}</button>
           </nav>
         </div>
@@ -646,7 +652,8 @@ export class UI {
       const b = (e.target as HTMLElement).closest('button');
       if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
     });
-    window.addEventListener('pointermove', (e) => { this.cursorXY = [e.clientX, e.clientY]; if (this.hintTxt) this.renderCursorHint(); }, { passive: true });
+    // (outil Démolir : la bulle suit le bâtiment visé, après que l'outil a regardé sous la souris)
+    window.addEventListener('pointermove', (e) => { this.cursorXY = [e.clientX, e.clientY]; this.onMap = (e.target as HTMLElement).tagName === 'CANVAS'; if (this.hintTxt || this.host.tools.tool === 'bulldoze') requestAnimationFrame(() => this.renderCursorHint()); }, { passive: true });
     // la carte d'explication suit la mise en page de la barre du bas (après le reflux)
     window.addEventListener('resize', () => requestAnimationFrame(() => this.placeCards()));
     root.addEventListener('wheel', (e) => {
@@ -677,8 +684,21 @@ export class UI {
     needInfo.className = 'panel';
     needInfo.hidden = true;
     root.appendChild(needInfo);
-    for (const n of NEEDS) $('#n-' + n.k).onclick = () => { this.needOpen === n.k ? this.closeNeed() : this.openNeed(n.k); this.host.audio.sfxClick(); };
-    $('#n-security').onclick = () => { this.needOpen === 'security' ? this.closeNeed() : this.openNeed('security'); this.host.audio.sfxClick(); };
+    needInfo.dataset.tip = tr('Cliquez sur l’icône pour garder la fiche ouverte');
+    // un clic ouvre la fiche et la garde ; sur une fiche ouverte au survol, il la garde ; sur une fiche gardée, il la ferme
+    const toggle = (open: boolean, show: () => void) => {
+      if (open && this.peek) this.pin(); else if (open) this.closeNeed(); else { show(); this.pin(); }
+      this.host.audio.sfxClick();
+    };
+    for (const k of [...NEEDS.map((n) => n.k), 'security' as const]) {
+      const el = $('#n-' + k);
+      el.onclick = () => toggle(this.needOpen === k, () => this.openNeed(k));
+      // au survol (à la souris), la fiche s'ouvre d'elle-même et se referme quand on s'en va (Karim, testeur v6, ne les avait pas trouvées)
+      el.onpointerenter = (e) => { if (e.pointerType === 'mouse') this.peekAt(() => this.needOpen !== k && this.openNeed(k)); };
+      el.onpointerleave = () => this.peekLeave();
+    }
+    needInfo.onpointerenter = () => clearTimeout(this.peekT);
+    needInfo.onpointerleave = () => this.peekLeave();
     // les stocks défilent dans une fenêtre de quelques ressources : les flèches avancent d'une ressource (demande de l'auteur,
     // 17 nov. 2026 : sept stocks côte à côte faisaient déborder le bandeau sur le panneau des âges et sur l'horloge)
     const view = $('#resView'), step = (d: number) => {
@@ -695,9 +715,13 @@ export class UI {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
       if (!el) return;
       const r = el.dataset.r as Resource;
-      if (this.resOpen === r) this.closeNeed(); else this.openRes(r);
-      this.host.audio.sfxClick();
+      toggle(this.resOpen === r, () => this.openRes(r));
     };
+    $('#res').onpointerover = (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
+      if (el && e.pointerType === 'mouse') this.peekAt(() => this.resOpen !== el.dataset.r && this.openRes(el.dataset.r as Resource));
+    };
+    $('#res').onpointerleave = () => this.peekLeave();
     needInfo.onclick = (e) => {
       if (this.resOpen === 'gold' && this.tradeClick(e.target as HTMLElement)) return;
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
@@ -968,7 +992,7 @@ export class UI {
     const sub = $('#subcats');
     // (pendant une recherche, aucun rayon n'est ouvert : les résultats viennent de tous)
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat && !query ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${hudPic(CAT_PIC[c.id], 22)}</b><span class="cl">${c.label}</span></button>`).join('')
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat && !query ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')} (${tr('Maj+{n}', { n: BUILD_CATS.indexOf(c) + 1 })})"><b>${hudPic(CAT_PIC[c.id], 22)}</b><span class="cl">${c.label}</span></button>`).join('')
       : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 20)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
     sub.classList.toggle('searching', !!query);
     // un sous-menu du Paysage : l'outil en main d'un autre sous-menu est lâché (sinon refreshTools ramènerait le sien)
@@ -1237,7 +1261,8 @@ export class UI {
     if (!k) return;
     const d: KindDef = KINDS[k], age = this.host.sim.age, lock = this.lockOf(k), a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
-    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
+    // ce qu'il produirait ou consommerait par jour à cet âge (sans gare de marchandises), puis ce qu'il apporte au village
+    const effs = flowChips(flowOf(k, a, 1, this.host.world.unlimited)) + GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
     // les grands bâtiments se paient en bois et en pierre, tous en Normal (sauf en ressources illimitées) ; le premier bûcheron est offert
     const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
     // (les défenses se comptent au village et sur l'île du portail)
@@ -1269,8 +1294,6 @@ export class UI {
     }
     // une défense de l'île du portail : la contamination de l'île, que son halo doré repousse
     if ((b.kind === 'watchtower' || b.kind === 'barracks') && h.world.onPortalIsland(b.x, b.z)) { const bl = isleBlight(h.world); if (bl) stats.push(b.kind === 'watchtower' ? tr('🔥 Contamination de l’île : {n} % · son halo doré la repousse alentour (on s’y soigne plus vite)', { n: Math.round(bl.level * 100) }) : tr('🔥 Contamination de l’île : {n} % · la caserne la fait reculer, sans halo autour d’elle', { n: Math.round(bl.level * 100) })); }
-    if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${tr('{n} briques cuites par jour · {stock} en réserve au village', { n: (YIELD.brickworks!.brick![a] ?? 0) * railBoost(h.world, b), stock: Math.floor(h.world.brick) })}`);
-    if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${tr('{n} barils de pétrole brut par jour · {stock} en réserve au village', { n: (YIELD.oilwell!.crude![a] ?? 0) * railBoost(h.world, b), stock: Math.floor(h.world.crude) })}`);
     if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} ${tr('Raffine jusqu’à {n} barils de brut par jour ({fuel} de carburant) · {crude} brut et {stock} carburant au village', { n: REFINE_CRUDE * railBoost(h.world, b), fuel: REFINE_CRUDE * FUEL_PER_CRUDE * railBoost(h.world, b), crude: Math.floor(h.world.crude), stock: Math.floor(h.world.fuel) })}`);
     if (b.kind === 'carworks' && !h.world.unlimited) stats.push(h.expeditions.cars() ? `${ic('fuel', 14, 2)} ${tr('Les voitures brûlent {n} carburant par jour · {stock} au village', { n: CAR_FUEL, stock: Math.floor(h.world.fuel) })}` : `${ic('fuel', 14, 2)} ${tr('Plus de carburant : les voitures restent au garage. La raffinerie en tire du pétrole brut des puits.')}`);
     // ce que le rail lui apporte (ou lui apporterait), et pour une gare, les bâtiments qu'elle sert
@@ -1306,7 +1329,9 @@ export class UI {
     const towered = b.kind === 'wall' && rampartTower(h.world, b);
     const node = b.kind === 'wall' ? `<div class="acts ups"><button data-act="tower" class="primary" title="${attr(tr('Une tour vient seule aux bouts et aux angles du mur ; ici, on choisit pour ce pan.'))}">${ic('upgrade', 16, 2)} ${tr(towered ? 'Changer en simple pan' : 'Changer en tour')}</button></div>` : '';
     const upgrades = (ups ? `<div class="acts ups">${ups}</div>${upChk}` : '') + node;
-    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${railChip}|${rails}|${upgrades}`;
+    // ce qu'il produit ou consomme par jour, gare de marchandises comprise
+    const flow = flowChips(flowOfBuilding(h.world, b));
+    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${flow}|${railChip}|${rails}|${upgrades}`;
     if (key === this.selKey) return;
     const same = box.dataset.id === String(b.id) && box.classList.contains('show');
     this.selKey = key;
@@ -1314,7 +1339,7 @@ export class UI {
     // d'un rendu à l'autre du même bâtiment (les trains roulent), on garde ce qui est déplié et où l'on a défilé
     const opened = same ? [...box.querySelectorAll<HTMLDetailsElement>('details[open]')].map((x) => x.dataset.k) : [];
     const scroll = same ? box.scrollTop : 0, listScroll = same ? box.querySelector('.rlist')?.scrollTop ?? 0 : 0;
-    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
+    const effs = flow + GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
     // le conseil : replié, son début sur une ligne ; déplié, tout le texte
     const [perkHead, perkRest] = d.perk ? brief(d.perk, 90) : ['', ''];
     const perk = d.perk ? `<details class="perk" data-k="perk"><summary>✦ <span>${perkHead}</span></summary>${perkRest}</details>` : '';
@@ -1458,7 +1483,9 @@ export class UI {
     if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel || this.host.expeditions.state.done.includes('oil')) items.push(['crude', 'crude', tr('Brut')], ['fuel', 'fuel', tr('Carburant')]);
     // l'or des voisins, seulement dans une partie qui a accepté l'archipel ; un clic ouvre le comptoir
     if (archipelagoOn(w)) items.push(['gold', 'coin', tr('Or')]);
-    const key = `${w.unlimited}|${getLang()}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
+    // une matière qui bloque l'âge suivant : son débit passe en orange, l'info-bulle dit pourquoi (sa fiche, quoi bâtir)
+    const short = new Map(this.host.sim.shortages.map((s) => [s.res, s]));
+    const key = `${w.unlimited}|${getLang()}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}/${short.has(r) ? Math.ceil(short.get(r)!.days) : ''}`).join('|');
     if (key === this.resKey) return;
     this.resKey = key;
     // la fiche du bâtiment en main dit si l'on a encore de quoi le payer
@@ -1472,7 +1499,7 @@ export class UI {
     const flow = (r: Resource) => (r === 'gold' ? '' : r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
       ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${resPic(r, 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
-      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b>${r === 'gold' ? `<em class="rate">${tr('échange')}</em>` : `<em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em>`}</span></div>`).join('');
+      : `<div class="res${short.has(r) ? ' short' : ''}" data-r="${r}" aria-label="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}${short.has(r) ? ' ' + attr(shortText(w, this.host.sim.age, short.get(r)!, true)) : ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b>${r === 'gold' ? `<em class="rate">${tr('échange')}</em>` : `<em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em>`}</span></div>`).join('');
     this.syncResNav();
   }
 
@@ -1508,13 +1535,31 @@ export class UI {
 
   /** Route libre : une bulle suit le curseur et dit quoi cliquer (le point A, puis le point B) */
   private cursorXY: [number, number] | null = null;
+  /** la souris est sur la carte (pas sur l'interface) */
+  private onMap = false;
   private hintTxt = '';
   private renderCursorHint() {
     // (un bâtiment ou une grotte dont l'endroit est fixé : le second clic donne le côté de l'entrée)
     const tl = this.host.tools, ps = tl.placeStage, st = ps === 2 ? 2 : tl.freeStage, el = $('#cursorHint');
-    const txt = ps === 2 ? tr(tl.tool === 'cave' ? 'Cliquez du côté de l’ouverture' : 'Cliquez du côté de l’entrée') : st === 1 ? tr('Cliquez le point A') : st === 2 ? tr('Cliquez le point B') : '';
-    if (txt !== this.hintTxt) { this.hintTxt = txt; el.textContent = txt; el.classList.toggle('show', !!txt); el.classList.toggle('b', st === 2); }
+    const del = tl.tool === 'bulldoze' ? this.demolishHint() : '';
+    const txt = del || (ps === 2 ? tr(tl.tool === 'cave' ? 'Cliquez du côté de l’ouverture' : 'Cliquez du côté de l’entrée') : st === 1 ? tr('Cliquez le point A') : st === 2 ? tr('Cliquez le point B') : '');
+    if (txt !== this.hintTxt) { this.hintTxt = txt; el.innerHTML = txt; el.classList.toggle('show', !!txt); el.classList.toggle('b', !del && st === 2); el.classList.toggle('d', !!del); }
     if (txt && this.cursorXY) el.style.transform = `translate(${this.cursorXY[0] + 18}px, ${this.cursorXY[1] + 20}px)`;
+  }
+
+  /**
+   * Outil Démolir : ce que rendrait un clic sur le bâtiment visé (ou, au pinceau large, sur tous ceux du disque), avant de
+   * cliquer (Karim, testeur v6 : le remboursement n'était dit qu'après). Vide quand on ne vise aucun bâtiment
+   */
+  private demolishHint(): string {
+    const w = this.host.world, list = this.onMap ? this.host.tools.bulldozeTargets() : [];
+    if (!list.length) return '';
+    const b = list[0], what = list.length > 1 ? nplural(list.length, 'bâtiment', 'bâtiments') : tr('« {name} »', { name: KINDS[b.kind].names[Math.max(b.age, KINDS[b.kind].minAge)] });
+    if (w.unlimited) return tr('Démolir {what}', { what });
+    const back = refundTotal(w, list);
+    // (le premier bûcheron ou la première carrière, offerts en Normal, ne rendent rien : on dit pourquoi)
+    const gift = list.length === 1 && PRODUCERS.includes(b.kind) && ![...w.buildings.values()].some((o) => o.kind === b.kind && o.id !== b.id);
+    return back ? tr('Démolir {what} : rend <b>{cost}</b>', { what, cost: costLabel(back) }) : tr(gift ? 'Démolir {what} : ne rend rien (il était offert)' : 'Démolir {what} : ne rend rien', { what });
   }
 
   /**
@@ -1714,9 +1759,9 @@ export class UI {
       $('.pv', el).textContent = pctText(Math.round(fill * 100));
       el.classList.toggle('warn', !need.ok && !housing);
       el.classList.toggle('full', !need.ok && housing);
-      el.title = housing ? tr('{need} : {pop} habitants pour {cap} places', { need: tr(n.label), pop: Math.floor(sim.pop), cap: need.cap }) : tr('{need} : {cap} pour un besoin de {demand}', { need: tr(n.label), cap: num(need.cap), demand: num(need.demand) });
+      el.setAttribute('aria-label', housing ? tr('{need} : {pop} habitants pour {cap} places', { need: tr(n.label), pop: Math.floor(sim.pop), cap: need.cap }) : tr('{need} : {cap} pour un besoin de {demand}', { need: tr(n.label), cap: num(need.cap), demand: num(need.demand) }));
     }
-    { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('.pv', $('#n-security')).textContent = pctText(Math.round(s * 100)); $('#n-security').title = tr('Sécurité : {pct} % des habitations couvertes (pompiers {fire} %, police {police} %)', { pct: Math.round(s * 100), fire: Math.round(sim.coverage.fireShare * 100), police: Math.round(sim.coverage.policeShare * 100) }); }
+    { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('.pv', $('#n-security')).textContent = pctText(Math.round(s * 100)); $('#n-security').setAttribute('aria-label', tr('Sécurité : {pct} % des habitations couvertes (pompiers {fire} %, police {police} %)', { pct: Math.round(s * 100), fire: Math.round(sim.coverage.fireShare * 100), police: Math.round(sim.coverage.policeShare * 100) })); }
     // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
     const cs = this.census(), alert = cs.untreated ? tr('{n} sans soins', { n: cs.untreated }) : cs.hungry ? tr(cs.hungry > 1 ? '{n} ont faim' : '{n} a faim', { n: cs.hungry }) : cs.thirsty ? tr(cs.thirsty > 1 ? '{n} ont soif' : '{n} a soif', { n: cs.thirsty })
       : cs.jobless ? tr('{n} sans emploi', { n: cs.jobless }) : cs.injured ? `${cs.injured} ${plural(cs.injured, 'blessé', 'blessés')}` : '';
@@ -1803,7 +1848,34 @@ export class UI {
     document.querySelectorAll('.need').forEach((el) => el.classList.toggle('open', el.id === 'n-' + k));
   }
 
+  /** la fiche d'un stock ou d'un besoin ouverte au survol (elle se referme quand la souris s'en va), pas d'un clic */
+  private peek = false;
+  private peekT = 0;
+  /** au survol : ouvre la fiche, sauf si une autre est déjà gardée ouverte d'un clic */
+  private peekAt(open: () => unknown) {
+    clearTimeout(this.peekT);
+    if ((this.needOpen || this.resOpen) && !this.peek) return;
+    this.peek = true;
+    open();
+    $('#needInfo').classList.add('peek');
+  }
+  private peekLeave() {
+    if (!this.peek) return;
+    clearTimeout(this.peekT);
+    // (un court délai : la souris passe du stock à sa fiche, juste dessous)
+    this.peekT = window.setTimeout(() => { if (this.peek) this.closeNeed(); }, 250);
+  }
+  /** la fiche ouverte au survol reste ouverte (un clic) */
+  private pin() {
+    clearTimeout(this.peekT);
+    this.peek = false;
+    $('#needInfo').classList.remove('peek');
+  }
+
   private closeNeed() {
+    clearTimeout(this.peekT);
+    this.peek = false;
+    $('#needInfo').classList.remove('peek');
     this.needOpen = null;
     this.host.tools.coverage.set(false);
     this.resOpen = null;
@@ -1833,24 +1905,24 @@ export class UI {
   /** Fiche d'une ressource : stock, production du jour et ses sources, à quoi elle sert, et le bâtiment qui en donnerait plus */
   private renderRes() {
     if (this.resOpen === 'gold') { this.renderTrade(); return; }
-    const h = this.host, w = h.world, r = this.resOpen!, meta = RES_META[r], day = h.expeditions.daily()[r], age = h.sim.age;
-    const rows: string[] = [];
-    for (const k of Object.keys(YIELD) as KindId[]) {
-      const per = YIELD[k]![r];
-      if (!per) continue;
-      let n = 0, v = 0;
-      for (const b of w.buildings.values()) if (b.kind === k && per[b.age]) { n++; v += per[b.age]; }
-      if (n) rows.push(`<div class="crow"><span>${KINDS[k].names[Math.max(age, KINDS[k].minAge)]}<i>× ${n}</i></span><em>+${num(v)}</em></div>`);
-    }
-    if (r === 'fuel' && day > 0) rows.push(`<div class="crow"><span>${tr('Raffinerie (du pétrole brut)')}</span><em>+${num(day)}</em></div>`);
+    const h = this.host, w = h.world, r = this.resOpen!, meta = RES_META[r], age = h.sim.age;
+    // le livre de la ressource : chaque sorte de bâtiment, ce qu'elle produit et ce qu'elle consomme par jour, puis le solde
+    const book = ledgerOf(w, r), day = book.net;
+    const row = (x: LedgerRow) => `<div class="crow"><span>${KINDS[x.kind].names[Math.max(age, KINDS[x.kind].minAge)]}<i>× ${x.n}</i></span><em class="${x.v < 0 ? 'neg' : ''}">${signed(x.v)}</em></div>`;
+    const prod = book.prod.map(row).join('') || `<div class="crow"><span class="none">${tr('Aucun bâtiment n’en produit encore.')}</span></div>`;
+    const use = book.use.length ? `<div class="chead">${tr('Consommation')}</div>${book.use.map(row).join('')}` : '';
+    const total = book.use.length || book.prod.length > 1 ? `<div class="crow total"><span>${tr('Solde')}</span><em class="${day < 0 ? 'neg' : day > 0 ? 'ok' : ''}">${tr('{n} par jour', { n: signed(day) })}</em></div>` : '';
+    // le goulot de l'âge suivant : combien il en faut encore, en combien de jours, et ce que coûte un producteur de plus
+    const sh = h.sim.shortages.find((x) => x.res === r);
     const k = meta.kind, lock = this.lockOf(k), name = KINDS[k].names[Math.max(age, KINDS[k].minAge)];
     const html = `
-      <h4>${ic(meta.icon, 18, 2)} ${tr(meta.label)}<em class="${day > 0 ? 'ok' : 'warn'}">${w.unlimited ? '∞' : Math.floor(w[r])}</em></h4>
+      <h4>${resPic(r, 20)} ${tr(meta.label)}<em class="${sh ? 'warn' : day > 0 ? 'ok' : 'warn'}">${w.unlimited ? '∞' : Math.floor(w[r])}</em></h4>
       <div class="sub">${day ? tr('{sign}{n} par jour', { sign: day > 0 ? '+' : '−', n: num(Math.abs(day)) }) : tr('rien n’en produit pour l’instant')}</div>
       <p class="hint">${tr(meta.use)}</p>
-      <div class="src">${rows.join('') || `<div class="crow"><span class="none">${tr('Aucun bâtiment n’en produit encore.')}</span></div>`}</div>
-      <p class="hint ${day > 0 ? 'ok' : 'warn'}">${tr(meta.more)}</p>
-      ${lock ? `<p class="hint warn">${pic('🔒', 16)} ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}`;
+      <div class="src"><div class="chead">${tr('Production par jour')}</div>${prod}${use}${total}</div>
+      ${sh ? `<p class="hint warn">${shortText(w, age, sh, true)}</p>` : `<p class="hint ${day > 0 ? 'ok' : 'warn'}">${tr(meta.more)}</p>`}
+      ${lock ? `<p class="hint warn">${pic('🔒', 16)} ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}
+`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
@@ -2652,6 +2724,39 @@ export class UI {
   }
 
   // ---------------- Réglages ----------------
+  /** Raccourci Maj+1 … 5 : ouvre le n-ième rayon de Bâtir (Habitat, Production, Services, Vie & culture, Militaire) */
+  openCat(i: number) {
+    const c = BUILD_CATS[i];
+    if (!c || document.body.classList.contains('photo')) return;
+    if (this.tab !== 'build') $<HTMLButtonElement>('#modes [data-t="build"]').click();
+    if (document.body.classList.contains('dockMin')) this.setDockMin(false);
+    this.root.querySelector<HTMLButtonElement>(`#subcats [data-c="${c.id}"]`)?.click();
+  }
+
+  /** Raccourci J : ouvre la fenêtre des expéditions, ou la referme */
+  toggleExpeditions() {
+    const ov = this.root.querySelector('.expModal')?.closest('.overlay') as (HTMLElement & { close?: () => void }) | null;
+    if (ov) ov.close?.(); else if (!this.menuOpen()) this.openExpeditions();
+  }
+
+  /**
+   * La liste des raccourcis clavier (touche ?, ou Paramètres › Partie). Les touches de la vue suivent la disposition du
+   * clavier choisie (ZQSD en AZERTY, WASD en QWERTY). Demande de Karim, testeur v6 qui joue aux jeux de stratégie
+   */
+  openKeys() {
+    if (this.root.querySelector('.keysModal')) return;
+    const k = layoutKeys(this.host.controls.layout), az = this.host.controls.layout === 'azerty';
+    const kb = (keys: string) => keys.split(' ').map((x) => `<kbd>${x}</kbd>`).join('');
+    const part = (title: string, rows: [string, string][]) => `<h5>${title}</h5>${rows.map(([keys, label]) => `<div class="kr"><span>${label}</span><span>${kb(keys)}</span></div>`).join('')}`;
+    const left = part(tr('Temps'), [[tr('Espace'), tr('Pause, reprendre')], ['− +', tr('Ralentir, accélérer (×1 à ×8)')]])
+      + part(tr('Fenêtres'), [['J', tr('Expéditions')], ['N', tr('Notifications')], ['?', tr('Cette aide')], [tr('Échap'), tr('Fermer la fenêtre, lâcher l’outil')]])
+      + part(tr('Vue'), [[`${k.move.join(' ')}`, tr('Déplacer (aussi les flèches)')], [k.turn.join(' '), tr('Tourner')], ['V', tr('Revenir au village')], ['P', tr('Mode photo')]]);
+    const right = part(tr('Bâtir'), [['B', tr('Reprendre le dernier bâtiment')], [tr('Maj+1 … 5'), tr('Rayons, d’Habitat à Militaire')], [tr('Ctrl+F'), tr('Chercher un bâtiment (ou /)')], ['R', tr('Tourner le bâtiment, sinon tracer une route')], ['X', tr('Démolir')], ['M', tr('Déplacer un bâtiment')], [tr('Ctrl+Z Ctrl+Y'), tr('Annuler, rétablir')]])
+      + part(tr('Paysage'), [['1 2 3 4 5', tr('Monter, baisser, aplanir, falaise, eau')], ['6 7 9 0', tr('Forêt, champ, gomme, montagne')], ['[ ]', tr('Taille du pinceau')]]);
+    const note = az ? tr('− et + : les deux touches à droite du 0 (« ) » et « = » en AZERTY), ou le pavé numérique.') : tr('− et + : les deux touches à droite du 0, ou le pavé numérique.');
+    modal(this.root, 'keysModal', tr('Raccourcis clavier'), `<div class="keysHelp"><div>${left}</div><div>${right}</div><p class="note">${note}</p></div>`);
+  }
+
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
     // quatre onglets en colonne (en rangée sur téléphone) ; chaque section commence par son titre et son icône
@@ -2691,6 +2796,7 @@ export class UI {
         <div class="row"><label>${tr('Déplacer la vue')}</label><button data-ctl="mouse">${tr('À la souris')}</button><button data-ctl="keys">${tr('Au clavier')}</button></div>
         <div class="row"><label>${tr('Clavier')}</label><button data-lay="azerty">AZERTY</button><button data-lay="qwerty">QWERTY</button></div>
         <p class="hint" id="ctlHint"></p>
+        <div class="row"><label>${tr('Raccourcis clavier')}</label><button id="gKeys">${tr('Voir la liste')} <small>?</small></button></div>
         <h4>${tr('Règles')}</h4>
         <div class="row"><label>${DIFF_TEXT.setting}</label><span class="diffTag ${h.world.difficulty}">${ic(DIFF_TEXT.icon[h.world.difficulty], 16, 2)}${DIFF_TEXT.name[h.world.difficulty]}</span></div>
         <ul class="hint dpoints">${DIFF_TEXT.points[h.world.difficulty].map((x) => `<li>${x}</li>`).join('')}</ul>
@@ -2823,6 +2929,7 @@ export class UI {
       ov.querySelectorAll<HTMLButtonElement>('[data-lay]').forEach((b) => b.classList.toggle('active', b.dataset.lay === c.layout));
       q('#ctlHint').textContent = controlText(c.mode, c.layout);
     };
+    $('#gKeys', ov).onclick = () => { h.audio.sfxClick(); this.openKeys(); };
     ov.querySelectorAll<HTMLButtonElement>('[data-ctl]').forEach((b) => (b.onclick = () => { h.setControls({ ...h.controls, mode: b.dataset.ctl as CamControl }); h.audio.sfxClick(); ctl(); }));
     ov.querySelectorAll<HTMLButtonElement>('[data-lay]').forEach((b) => (b.onclick = () => { h.setControls({ ...h.controls, layout: b.dataset.lay as KbLayout }); h.audio.sfxClick(); ctl(); }));
     ctl();

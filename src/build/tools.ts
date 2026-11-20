@@ -899,6 +899,26 @@ export class ToolController implements ToolInput {
     else if (big && performance.now() - this.lastToast > 1500) { this.h.toast(tr('Les grands bâtiments se démolissent un à un : un clic dessus (Ctrl+Z annule).')); this.lastToast = performance.now(); }
   }
 
+  /**
+   * Les bâtiments que démolirait un clic ici : celui qu'on vise, et avec le pinceau large les petits bâtiments du disque
+   * (comme `applyBulldoze` et `bulldozeDisc`). Sert à dire, avant le clic, ce que la démolition rendrait
+   */
+  bulldozeTargets(): Building[] {
+    if (this.tool !== 'bulldoze' || !this.hit) return [];
+    const w = this.h.world, out = new Map<number, Building>(), r = this.radius;
+    if (this.hitBuilding) out.set(this.hitBuilding.id, this.hitBuilding);
+    if (r > 1) {
+      const hx = this.hit.x, hz = this.hit.z;
+      for (let cz = Math.floor(hz - r); cz <= Math.ceil(hz + r); cz++)
+        for (let cx = Math.floor(hx - r); cx <= Math.ceil(hx + r); cx++) {
+          if (!w.inCells(cx, cz) || Math.hypot(cx + 0.5 - hx, cz + 0.5 - hz) > r) continue;
+          const b = w.buildingAt(cx, cz);
+          if (b && sizeOf(b) < 2) out.set(b.id, b);
+        }
+    }
+    return [...out.values()];
+  }
+
   private pickUp(chosen?: Building) {
     const c = this.cell();
     const w = this.h.world;
