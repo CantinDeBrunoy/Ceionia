@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, VEG_FIELD } from '../world/world';
-import { Building, KINDS, KindId, hasDoor, sizeOf } from '../build/catalog';
+import { Building, KINDS, KindId, hasDoor, sizeOf, walkableDecor } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
 import { makeFolk, folkStep, holdFolk, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
@@ -763,7 +763,7 @@ export class Agents {
     const o = w.occ[c];
     if (o && c !== start && c !== goal) {
       const b = w.buildings.get(o);
-      if (!b || b.kind !== 'lamp') return false;
+      if (!b || !walkableDecor(b.kind)) return false;
     }
     return true;
   }
@@ -1425,7 +1425,7 @@ export class Agents {
         if (last && a.targetHidden && dist < 0.35) a.hidden = true;
         // un obstacle posé sur le chemin : on recalcule
         const nc = a.path[a.pi];
-        if (nc !== undefined && w.occ[nc] && nc !== a.path[a.path.length - 1] && w.buildings.get(w.occ[nc])?.kind !== 'lamp') { this.reroute(a); continue; }
+        if (nc !== undefined && w.occ[nc] && nc !== a.path[a.path.length - 1] && !walkableDecor(w.buildings.get(w.occ[nc])?.kind ?? 'house')) { this.reroute(a); continue; }
         // la nuit, on rentre, sauf pour éteindre un feu
         if (night && !a.goingHome && !a.mission && !this.fighting(a) && this.pathBudget > 0) this.sendHome(a);
       } else if (a.state === 'doing') {

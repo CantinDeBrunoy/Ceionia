@@ -1415,3 +1415,13 @@ body.dockMin #dock > #homeBack { margin-bottom: 26px; }
 .expFind input::-webkit-search-cancel-button { display: none; }
 .expFind:focus-within { border-color: var(--hGold); box-shadow: 0 0 0 2px rgba(224, 173, 69, 0.35); }
 @media (max-width: 600px) { .expFind input { width: 90px; } }
+
+/* ---------- Six rayons de construction (le rayon Décorations s'est ajouté) : sur un écran d'ordinateur moyen, les onglets se
+   serrent pour tenir sur la rangée, loupe comprise ; plus étroit encore, seul l'onglet ouvert garde son nom (les autres, leur
+   image et leur info-bulle) ---------- */
+@media (min-width: 861px) and (max-width: 1399px) {
+  #dock #subcats button { padding: 0 8px 2px 7px; gap: 4px; font-size: 12.5px; }
+}
+@media (min-width: 861px) and (max-width: 1180px) {
+  #dock #subcats button:not(.on) .cl { display: none; }
+}

@@ -4,7 +4,7 @@ import { Crossing } from '../world/crossings';
 import type { Streams } from './streams';
 import { hash2 } from '../core/rng';
 import { Simplex } from '../world/noise';
-import { KindId, sizeOf } from '../build/catalog';
+import { KindId, isDecor, sizeOf } from '../build/catalog';
 import { mats } from './materials';
 import { SNOWY } from './terrainView';
 import { sampleCurve } from '../world/curves';
@@ -486,7 +486,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         }
     // la terre battue va de la rue jusqu'au mur des bâtiments qui la bordent : plus de liseré d'herbe entre les deux
     for (const b of w.buildings.values()) {
-      if (b.kind === 'lamp' || b.kind === 'pier') continue;
+      if (isDecor(b.kind) || b.kind === 'pier') continue;
       const s = sizeOf(b);
       for (const [dx, dz] of D4)
         for (let i = 0; i < s; i++) {
@@ -500,7 +500,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const urban = (x: number, z: number) => {
       if (!w.inCells(x, z)) return false;
       const k = w.ci(x, z);
-      return grid(x, z) || (!!w.occ[k] && w.buildingAt(x, z)?.kind !== 'lamp');
+      return grid(x, z) || (!!w.occ[k] && !isDecor(w.buildingAt(x, z)!.kind));
     };
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
@@ -558,7 +558,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     }
     const town = new Uint8Array(N * N);
     for (const b of w.buildings.values()) {
-      if (b.kind === 'lamp' || b.kind === 'pier') continue;
+      if (isDecor(b.kind) || b.kind === 'pier') continue;
       const s = sizeOf(b);
       for (let z = b.z - 2; z < b.z + s + 2; z++) for (let x = b.x - 2; x < b.x + s + 2; x++) if (w.inCells(x, z)) town[w.ci(x, z)] = 1;
     }
@@ -617,7 +617,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const urban = (x: number, z: number) => {
       if (!w.inCells(x, z)) return false;
       const k = w.ci(x, z);
-      return grid(x, z) || (!!w.occ[k] && w.buildingAt(x, z)?.kind !== 'lamp');
+      return grid(x, z) || (!!w.occ[k] && !isDecor(w.buildingAt(x, z)!.kind));
     };
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
@@ -634,7 +634,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     // pied des façades : le trottoir va jusqu'au mur
     const M = 0.26;
     for (const b of w.buildings.values()) {
-      if (b.kind === 'lamp' || b.kind === 'pier') continue;
+      if (isDecor(b.kind) || b.kind === 'pier') continue;
       const s = sizeOf(b);
       for (let z = b.z; z < b.z + s; z++)
         for (let x = b.x; x < b.x + s; x++)
@@ -673,7 +673,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const score = (k: number) => {
       const cx = k % N, cz = Math.floor(k / N);
       const dirs = D4.filter(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1);
-      const door = D4.some(([dx, dz]) => { const b = w.buildingAt(cx + dx, cz + dz); return !!b && b.kind !== 'lamp'; });
+      const door = D4.some(([dx, dz]) => { const b = w.buildingAt(cx + dx, cz + dz); return !!b && !isDecor(b.kind); });
       const bend = dirs.length === 2 && dirs[0][0] !== -dirs[1][0];
       return (dirs.length >= 3 ? 3 : 0) + (door ? 2 : 0) + (bend ? 1 : 0) + hash2(cx, cz, 61) * 0.5;
     };
@@ -969,7 +969,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         };
         const pave = (x: number, z: number) => {
           const ok = w.occ[w.ci(Math.min(N - 1, Math.floor(x)), Math.min(N - 1, Math.floor(z)))];
-          if (ok && w.buildings.get(ok)?.kind !== 'lamp') return 9;
+          if (ok && !isDecor(w.buildings.get(ok)?.kind ?? 'lamp')) return 9;
           let best = 9;
           for (let i = 0; i < circ.length; i += 3) best = Math.min(best, Math.hypot(x - circ[i], z - circ[i + 1]) - circ[i + 2]);
           return Math.min(best, plazaAt(x, z));

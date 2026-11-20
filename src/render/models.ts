@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Parts, type Glow } from './parts';
-import { KindId, KINDS, smallSize, isRampart } from '../build/catalog';
+import { KindId, KINDS, smallSize, isRampart, isLinear } from '../build/catalog';
+import { decorModel, DecorKit } from './decor';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { bakeFit, hasModel, ModelName } from './assets';
 import { hash2 } from '../core/rng';
@@ -13175,6 +13176,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'well': futureWell(p); return true;
     case 'watertower': futureWatertower(p); return true;
     case 'lamp': futureLamp(p); return true;
+    case 'hedge': case 'fence': case 'flowerbed': case 'bench': case 'statue': case 'paving': case 'fountain': decorModel(p, kind, 5, o.v, o.mask ?? 0, DECOR_KIT); return true;
     case 'gather': if (size >= 3) gatherPlaza(p, 5, o); else futureGather(p, o); return true;
     case 'temple': futureTemple(p); return true;
     case 'school': if (size < 2) return false; futureSchool(p); return true;
@@ -14045,6 +14047,8 @@ const DEF_KIT: DefKit = { sway, smoke, turn: turning, pipe, roof };
 const CIRCUS_KIT: CircusKit = { sway, turn: turning, smoke };
 /** Les aides dont l'arène (arena.ts) a besoin : en plus, le balancement régulier des coups et la foule animée */
 const ARENA_KIT: ArenaKit = { sway, turn: turning, smoke, swing, fan: animPart };
+/** Les aides dont les décorations (decor.ts) ont besoin */
+const DECOR_KIT: DecorKit = { flame, waterPool, waterJet, sway };
 
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? smallSize(kind) : KINDS[kind].size;
@@ -14052,7 +14056,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   if (imported) return imported;
   // (le bloc ne compte qu'au Moyen Âge, pour la couleur des toits ; le rang dans la ligne d'horizon, à l'âge futuriste)
   const key = kind === 'house' ? `${kind}|${age}|${o.v}|${+o.L}${+o.R}${+o.F}|${age === 2 ? o.row ?? '' : ''}|${age >= 5 ? o.tier ?? '' : ''}`
-    : `${kind}|${age}|${o.v % 3}|${size}${age >= 5 && kind === 'workshop' ? `|${o.tier ?? ''}` : ''}${isRampart(kind) ? `|m${o.mask ?? 0}` : ''}`;
+    : `${kind}|${age}|${o.v % 3}|${size}${age >= 5 && kind === 'workshop' ? `|${o.tier ?? ''}` : ''}${isRampart(kind) || isLinear(kind) ? `|m${o.mask ?? 0}` : ''}`;
   let m = cache.get(key);
   if (m) return m;
   const p = new Parts();
@@ -14087,6 +14091,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'terminal': if (size >= 3) terminalBig(p, Math.max(3, age)); else terminal(p, Math.max(3, age)); break;
     case 'station': station(p, Math.max(3, age)); break;
     case 'lamp': lamp(p, age); break;
+    case 'hedge': case 'fence': case 'flowerbed': case 'bench': case 'statue': case 'paving': case 'fountain': decorModel(p, kind, age, o.v, o.mask ?? 0, DECOR_KIT); break;
     case 'pier': pier(p, age, o); break;
     case 'health': health(p, age); break;
     case 'school': school(p, age); break;

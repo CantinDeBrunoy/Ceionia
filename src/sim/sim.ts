@@ -1,7 +1,7 @@
 import { tr } from '../i18n';
 import { Coverage, computeCoverage } from './coverage';
 import { World, N } from '../world/world';
-import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catalog';
+import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine, DECOR, DECOR_JOY_MAX } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
@@ -118,7 +118,7 @@ export class Sim {
 
   recalc() {
     const w = this.world;
-    let H = 0, F = 0, W = 0, J = 0, Jy = 0, He = 0;
+    let H = 0, F = 0, W = 0, J = 0, Jy = 0, He = 0, deco = 0;
     const counts: Record<string, number> = {};
     for (const m of Object.values(this.src)) m.clear();
     const add = (need: NeedId, key: string, v: number) => {
@@ -131,13 +131,17 @@ export class Sim {
       const k = KINDS[b.kind];
       const a = b.age;
       counts[b.kind] = (counts[b.kind] ?? 0) + 1;
-      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) add(need, b.kind, k[need]?.[a] ?? 0);
+      const decor = DECOR.includes(b.kind);
+      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) if (!decor) add(need, b.kind, k[need]?.[a] ?? 0);
+      if (decor) { const s = this.src.joy.get('decor') ?? { n: 0, v: 0 }; s.n++; this.src.joy.set('decor', s); }
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) add('water', 'riverside', k.housing?.[a] ?? 0);
       H += k.housing?.[a] ?? 0;
       F += k.food?.[a] ?? 0;
       W += k.water?.[a] ?? 0;
       J += k.jobs?.[a] ?? 0;
-      Jy += k.joy?.[a] ?? 0;
+      // (les décorations comptent à part, plafonnées ensemble : DECOR_JOY_MAX)
+      if (DECOR.includes(b.kind)) deco += k.joy?.[a] ?? 0;
+      else Jy += k.joy?.[a] ?? 0;
       He += k.health?.[a] ?? 0;
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += k.housing?.[a] ?? 0;
     }
@@ -153,6 +157,8 @@ export class Sim {
     // un emploi pour deux champs (des emplois entiers, comme les autres)
     J += Math.floor(fields / 2);
     Jy += forests * 0.08;
+    Jy += Math.min(DECOR_JOY_MAX, deco);
+    { const s = this.src.joy.get('decor'); if (s) s.v = Math.min(DECOR_JOY_MAX, deco); }
     this.coverage = computeCoverage(w.buildings.values());
     Jy += this.coverage.joy;
     this.counts = counts;
@@ -196,7 +202,7 @@ export class Sim {
   /** Le détail d'un besoin pour sa fiche : ce qui le fournit (du plus gros apport au plus petit) et le bâtiment qui le comble */
   needDetail(k: NeedId): NeedDetail {
     const e = this.world.exp, L = this.land;
-    const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? tr('Maisons au bord de l’eau') : this.nameOf(key as KindId), n: s.n, v: s.v }));
+    const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? tr('Maisons au bord de l’eau') : key === 'decor' ? tr('Décorations (au plus {n} ensemble)', { n: DECOR_JOY_MAX }) : this.nameOf(key as KindId), n: s.n, v: s.v }));
     if (k === 'food' && L.fields) rows.push({ label: tr(L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)'), n: L.fields, v: this.fieldsFood });
     if (k === 'jobs' && L.fields >= 2) rows.push({ label: tr('Champs'), n: L.fields, v: Math.floor(L.fields / 2) });
     if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: tr('Sécurité (pompiers et police)'), n: this.coverage.both, v: this.coverage.joy });

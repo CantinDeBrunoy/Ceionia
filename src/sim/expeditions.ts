@@ -2,7 +2,7 @@ import { Underground, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '..
 import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from '../world/world';
 import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, RECENT_EVENTS } from './missions';
-import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
+import { AGES, KINDS, KindId, isDecor, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { missionOffered, missionWhy, tributePerDay, isleOf, rivalOf } from './diplomacy';
@@ -968,7 +968,7 @@ export class Expeditions {
     const w = this.world, [bx, bz] = base, cand: [number, number, number][] = [];
     const town = new Uint8Array(N * N), ds: number[] = [];
     for (const b of w.buildings.values()) {
-      if (b.kind === 'lamp') continue;
+      if (isDecor(b.kind)) continue;
       const s = sizeOf(b);
       ds.push(Math.hypot(b.x + s / 2 - bx, b.z + s / 2 - bz));
       for (let dz = -4; dz < s + 4; dz++) for (let dx = -4; dx < s + 4; dx++) if (w.inCells(b.x + dx, b.z + dz)) town[w.ci(b.x + dx, b.z + dz)] = 1;

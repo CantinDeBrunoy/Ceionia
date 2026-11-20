@@ -291,7 +291,7 @@ const NEED_PIC: Record<NeedId | 'security', string> = { food: 'nourriture', wate
 const RES_PIC: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', brick: 'briques', crude: 'carburant', fuel: '⛽', gold: '💰' };
 const resPic = (r: Resource, size: number) => RES_PIC[r].length > 2 ? hudPic(RES_PIC[r], size) : pic(RES_PIC[r], size);
 const SEASON_PIC = ['printemps', 'ete', 'automne', 'hiver'];
-const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', war: 'militaire' };
+const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', deco: 'printemps', war: 'militaire' };
 /** Le picto de la carte du village, qui suit l'âge : Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste */
 const AGE_PIC = ['age-0', 'age-1', 'age-2', 'age-3', 'age-4', 'age-5'];
 const TAB_PIC: Record<string, string> = { build: 'production', land: 'paysage' };

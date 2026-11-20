@@ -1,4 +1,4 @@
-import { KINDS, KindId } from '../build/catalog';
+import { KINDS, KindId, isDecor } from '../build/catalog';
 import { tr } from '../i18n';
 import { Difficulty, rulesOf } from './difficulty';
 import type { World } from '../world/world';
@@ -46,8 +46,8 @@ export function costOf(kind: KindId, age: number, diff: Difficulty = 'easy', own
     return { wood: 8 + a * 4, stone: pens ? 2 + a : 6 + a * 4, ...(brick ? { brick } : {}) };
   }
   if (!owned && PRODUCERS.includes(kind)) return null;
-  // (un pan de rempart : le tiers d'un petit bâtiment, un mur en compte des dizaines)
-  const s = plaza ? 1 : kind === 'wall' ? 0.34 : d.size;
+  // (un pan de rempart : le tiers d'un petit bâtiment, un mur en compte des dizaines ; une décoration, le quart)
+  const s = plaza ? 1 : kind === 'wall' ? 0.34 : isDecor(kind) ? 0.25 : d.size;
   // ce qui produit une matière ne la demande pas : jamais bloqué faute de la matière même qu'il donnerait (le bûcheron ne
   // coûte pas de bois, la carrière pas de pierre ; la briqueterie, sans briques, et la mine, sans minerai, l'étaient déjà)
   return { wood: kind === 'lumber' ? 0 : Math.max(1, Math.round(s * (p.wood + a * p.woodAge))), stone: kind === 'quarry' ? 0 : Math.max(1, Math.round(s * (pens ? p.penStone + a * p.penStoneAge : p.stone + a * p.stoneAge))), ...(brick ? { brick: Math.round(brick * 1.5) } : {}) };

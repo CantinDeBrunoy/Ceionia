@@ -4,7 +4,7 @@ import { World, N, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, Snapshot } from '
 import { sculpt, raiseVolcano, removeVolcano, SculptTool, SculptCtx, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
-import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize, isRampart } from './catalog';
+import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize, isRampart, isLinear, isDecor } from './catalog';
 import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin, doorCells, doorSide, orientable, sideToward } from './placement';
@@ -18,6 +18,7 @@ import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
 import { isStart, startRefusal, START_KIND } from './startLock';
 import { traceRampart, layRampart, rampartCost, RampartTrace, rampartMask, toggledTower } from './rampart';
+import { linearMask } from './decor';
 import { costLabel } from '../sim/economy';
 import { tr } from '../i18n';
 
@@ -497,6 +498,17 @@ export class ToolController implements ToolInput {
     else if (VEG_TOOLS.includes(t) && !SINGLE_TOOLS.includes(t)) this.applyVeg();
     else if (t === 'road' && this.roadMode === 'line') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
+    // les petites décorations se posent aussi d'un glissé : une haie, une allée pavée, un parterre, case après case
+    else if (t === 'build' && !e.touch && isDecor(this.kind) && this.kind !== 'lamp') this.paintDecor();
+  }
+
+  /** Pose au glissé : une décoration sur chaque case neuve sous la souris, sans redire « Emplacement occupé » à chaque case */
+  private paintDecor() {
+    const hit = this.hit;
+    if (!hit) return;
+    const o = footprintOrigin(this.kind, hit.x, hit.z), cost = priceIn(this.h.world, this.kind, this.h.getAge());
+    if (this.placedAt === `${o.x},${o.z}` || this.h.world.canPlace(this.kind, o.x, o.z) || (cost && !canPay(this.h.world, cost))) return;
+    this.tryPlace();
   }
 
   up(e: PointerInfo) {
@@ -1106,7 +1118,7 @@ export class ToolController implements ToolInput {
       const reason = w.canPlace(kind, o.x, o.z);
       const age = this.h.getAge();
       // un rempart : l'aperçu prend le masque qu'aurait la pièce posée ici (la porte se tourne dans l'axe du mur ou de la rue)
-      const mask = isRampart(kind) ? rampartMask(w, { kind, x: o.x, z: o.z } as Building) : undefined;
+      const mask = isRampart(kind) ? rampartMask(w, { kind, x: o.x, z: o.z } as Building) : isLinear(kind) ? linearMask(w, { kind, x: o.x, z: o.z, rot: this.ghostRot }) : undefined;
       const key = `${kind}|${age}|${mask ?? ''}`;
       if (key !== this.ghostKey) {
         this.ghostKey = key;
