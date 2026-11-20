@@ -214,25 +214,26 @@ export function coralModel(p: Parts, age: number, v: number) {
   const Y = 0.066;
   // les coraux : branches (le corne de cerf), éventails, boules (le cerveau), en couleurs vives
   const COL = [0xf26a5a, 0xf2a83a, 0xb05ad8, 0xf27ab8, 0xe8d24a, 0x5ad8b8];
-  const spots: [number, number][] = [[-0.18, -0.12], [0.16, -0.16], [0.2, 0.12], [-0.12, 0.18], [0.0, 0.02], [-0.24, 0.04], [0.06, 0.22]];
+  const spots: [number, number][] = [[-0.18, -0.12], [0.16, -0.16], [0.2, 0.12], [-0.12, 0.18], [0.0, 0.02], [-0.24, 0.04], [0.06, 0.22], [-0.04, -0.24], [0.25, -0.02], [-0.2, 0.22]];
   spots.forEach(([x, z], i) => {
     const c = COL[(i + v) % COL.length], kind = (i + v) % 3;
     if (kind === 0) {
       // corne de cerf : un tronc court et des branches qui montent en s'écartant
-      p.cyl(0.008, 0.012, 0.03, 5, x, Y - 0.01, z, dk(c, 0.85));
-      for (let k = 0; k < 5; k++) { const a = (k / 5) * PI * 2 + i, h = 0.035 + H(i, k) * 0.03; p.add(new THREE.CylinderGeometry(0.004, 0.007, h, 4).translate(0, h / 2, 0), x + Math.cos(a) * 0.008, Y + 0.012, z + Math.sin(a) * 0.008, c, 0, false, Math.cos(a) * 0.5, -Math.sin(a) * 0.5); p.sphere(0.006, x + Math.cos(a) * (0.012 + h * 0.45), Y + 0.012 + h * 0.88, z + Math.sin(a) * (0.012 + h * 0.45), dk(c, 1.15)); }
+      p.cyl(0.011, 0.016, 0.03, 5, x, Y - 0.01, z, dk(c, 0.85));
+      for (let k = 0; k < 7; k++) { const a = (k / 7) * PI * 2 + i, h = 0.045 + H(i, k) * 0.04; p.add(new THREE.CylinderGeometry(0.005, 0.009, h, 4).translate(0, h / 2, 0), x + Math.cos(a) * 0.01, Y + 0.012, z + Math.sin(a) * 0.01, c, 0, false, Math.cos(a) * 0.6, -Math.sin(a) * 0.6); p.sphere(0.008, x + Math.cos(a) * (0.014 + h * 0.55), Y + 0.012 + h * 0.83, z + Math.sin(a) * (0.014 + h * 0.55), dk(c, 1.15)); }
     } else if (kind === 1) {
       // l'éventail de mer, dressé, et sa résille plus claire
       // (une face de chaque côté : une forme plate ne se voit que de face)
       for (const back of [0, PI]) {
-        p.add(new THREE.CircleGeometry(0.045, 8, 0, PI), x, Y - 0.005, z, c, i * 0.9 + back);
-        p.add(new THREE.CircleGeometry(0.03, 6, 0, PI).translate(0, 0, 0.001), x, Y - 0.005, z, dk(c, 1.2), i * 0.9 + back);
+        // (penché en arrière, pour qu'on le voie d'en haut)
+        p.add(new THREE.CircleGeometry(0.062, 9, 0, PI), x, Y - 0.005, z, c, i * 0.9 + back, false, 0, back ? 0.65 : -0.65);
+        p.add(new THREE.CircleGeometry(0.04, 7, 0, PI).translate(0, 0, 0.001), x, Y - 0.004, z, dk(c, 1.2), i * 0.9 + back, false, 0, back ? 0.65 : -0.65);
       }
       p.cyl(0.004, 0.006, 0.012, 4, x, Y - 0.006, z, dk(c, 0.7));
     } else {
       // le corail cerveau : une boule ridée à demi sortie de l'eau, et ses petits voisins
-      p.add(new THREE.IcosahedronGeometry(0.038, 1).scale(1, 0.6, 1), x, Y, z, c);
-      for (let k = 0; k < 3; k++) p.add(new THREE.TorusGeometry(0.022 - k * 0.006, 0.003, 3, 10).rotateX(PI / 2), x, Y + 0.018 - k * 0.002, z, dk(c, 0.8));
+      p.add(new THREE.IcosahedronGeometry(0.048, 1).scale(1, 0.6, 1), x, Y, z, c);
+      for (let k = 0; k < 3; k++) p.add(new THREE.TorusGeometry(0.03 - k * 0.008, 0.0035, 3, 12).rotateX(PI / 2), x, Y + 0.023 - k * 0.002, z, dk(c, 0.8));
       p.sphere(0.014, x + 0.04, Y + 0.002, z + 0.01, COL[(i + 2) % COL.length], 1, 0.7);
     }
   });
