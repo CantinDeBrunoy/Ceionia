@@ -72,6 +72,7 @@ Le préfixe `village-lowpoly` est l'ancien nom du jeu : **ne pas le renommer** (
 - Tutoriel, aides, bannières et langue sont **par navigateur**, pas par partie : une partie importée sur un autre navigateur ne rapporte pas ces états.
 
 ## Pièges et invariants
+- Les décorations sont des bâtiments ordinaires (`[kind, x, z, rot, …]`) : rien de neuf dans le format. L'identité des habitants (noms, familles) n'est pas sauvée : elle se déduit des numéros (voir [habitants.md](habitants.md)).
 - **Ne jamais jeter une sauvegarde pour un champ inconnu ou manquant** : valeur par défaut, `filter` des identifiants connus, `Number.isFinite`. Un `throw` dans `fromJSON` après son premier test laisse un monde à moitié rempli (le repli `newWorld` repart d'un monde déjà touché).
 - Une sauvegarde illisible ou refusée par `validate` fait démarrer une **partie neuve** (le menu ne propose alors pas « Reprendre », il dit pourquoi) ; elle est mise de côté avant, la sauvegarde automatique ne l'écrase donc pas. Une seule est gardée de côté : la plus récente remplace la précédente.
 - Une pièce d'équipement retirée de `gear` sans passer par `away` (une nouvelle façon d'emporter de l'équipement) serait perdue à un rechargement : toujours la noter dans `away` et l'en retirer au retour.

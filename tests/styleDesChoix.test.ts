@@ -39,6 +39,12 @@ describe('style des choix (prudent, audacieux)', () => {
     expect(injuredOf(mk(0, [], [{ t: 'injured', n: 2, days: 3 }, { t: 'unherd', kind: 'sheep', n: 1 }]))).toBe(2);
   });
 
+  it('trois choix sur deux niveaux de risque : trois noms différents (« Le blé des collines »)', () => {
+    const m = MISSIONS.find((x) => x.id === 'seeds')!;
+    expect(choiceStyles(m.choices).map((s) => s.style).sort()).toEqual(['balanced', 'bold', 'cautious']);
+    for (const m of MISSIONS) if (m.choices.length === 3) expect(new Set(choiceStyles(m.choices).map((s) => s.style)).size).toBe(3);
+  });
+
   it('toutes les missions : jamais d’étiquette fausse', () => {
     let seen = 0;
     for (const m of MISSIONS) {
@@ -49,6 +55,12 @@ describe('style des choix (prudent, audacieux)', () => {
       cs.forEach((c, i) => {
         const s = st[i];
         if (lo === hi) return expect(s.style).toBeNull();
+        // (trois choix sur deux niveaux : un des ex æquo devient « équilibré »)
+        if (s.style === 'balanced' && (c.risk === lo || c.risk === hi)) {
+          expect(cs.length).toBeGreaterThanOrEqual(3);
+          expect(cs.filter((x) => x.risk === c.risk).length).toBeGreaterThanOrEqual(2);
+          return;
+        }
         if (c.risk === lo) {
           expect(s.style).toBe('cautious');
           if (s.effect === 'fewerInjuries') for (const o of cs.filter((x) => x.risk === hi)) expect(injuredOf(c)).toBeLessThan(injuredOf(o));

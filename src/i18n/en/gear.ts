@@ -104,6 +104,7 @@ registerDict('gear', {
 
   // ---- décision d'imprévu ----
   '{icon} « {mission} » : {event} — une décision vous attend (cliquez ici).': '{icon} “{mission}”: {event} — a decision awaits you (click here).',
+  '{icon} « {mission} » : sans réponse, l’équipe a choisi d’elle-même « {option} ».': '{icon} “{mission}”: with no answer, the team chose “{option}” on its own.',
   'des armes': 'weapons',
   'avec {items}': 'with {items}',
   'demande {items}, non emportées': 'needs {items}, not taken along',

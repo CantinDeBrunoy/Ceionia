@@ -8,6 +8,7 @@ import { makeFolk, folkStep, Folk, FOLK_SEAT } from './folk';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { makeDraftHorse, rideStep, Rider } from './riders';
+import { carGeos, rowboatGeo, sailboatGeo, Geo } from './roadVehicles';
 
 const MAX_CARTS = 10, MAX_BOATS = 16, MAX_SAILS = 5;
 /** Écart à l'axe de la rue des véhicules : la voie de droite, au milieu de la chaussée (les piétons longent le trottoir plus loin) */
@@ -226,47 +227,11 @@ function colored(parts: [THREE.BufferGeometry, number][]) {
 }
 
 /**
- * Charrette tirée par un cheval (âges antique à industriel), automobile ancienne (âge industriel, une fois la course
- * automobile gagnée), petite voiture (âge moderne) ou voiture volante (âge futuriste) ; avant = +z
+ * Charrette tirée par un cheval, modèle de réserve du maillage de la flotte : sans usine automobile, ce sont les attelages
+ * animés de `cartRig` qui roulent ; avant = +z
  */
-function vehicleGeo(age: number, motor = false) {
+function vehicleGeo(age: number) {
   const wheel = (x: number, z: number, r: number) => new THREE.CylinderGeometry(r, r, 0.025, 8).rotateZ(Math.PI / 2).translate(x, r, z);
-  if (age >= 5) {
-    // coque blanche en goutte, verrière fumée, aileron, liseré et patins lumineux : elle file sans roues au ras de la chaussée
-    return colored([
-      [new THREE.SphereGeometry(0.1, 10, 6).scale(0.78, 0.42, 1.45).translate(0, 0.11, 0), 0xf2f4f6],
-      [new THREE.SphereGeometry(0.06, 8, 5).scale(1, 0.75, 1.5).translate(0, 0.145, -0.012), 0x2a3a4e],
-      [new THREE.BoxGeometry(0.004, 0.035, 0.06).translate(0, 0.16, -0.12), 0xe8553c],
-      [new THREE.BoxGeometry(0.162, 0.01, 0.17).translate(0, 0.095, 0), 0x5af0ff],
-      [new THREE.BoxGeometry(0.03, 0.014, 0.2).translate(-0.05, 0.05, 0), 0x3a4250], [new THREE.BoxGeometry(0.03, 0.014, 0.2).translate(0.05, 0.05, 0), 0x3a4250],
-      [new THREE.BoxGeometry(0.026, 0.004, 0.18).translate(-0.05, 0.043, 0), 0x9ff8ff], [new THREE.BoxGeometry(0.026, 0.004, 0.18).translate(0.05, 0.043, 0), 0x9ff8ff],
-      [new THREE.BoxGeometry(0.05, 0.016, 0.006).translate(-0.04, 0.11, 0.142), 0xfff1c9], [new THREE.BoxGeometry(0.05, 0.016, 0.006).translate(0.04, 0.11, 0.142), 0xfff1c9],
-    ]);
-  }
-  if (age === 3 && motor) {
-    const body = 0x1e2a24;
-    return colored([
-      [new THREE.BoxGeometry(0.14, 0.05, 0.24).translate(0, 0.07, -0.02), body],
-      [new THREE.BoxGeometry(0.12, 0.045, 0.09).translate(0, 0.095, 0.11), 0x2a2a2e],
-      [new THREE.BoxGeometry(0.09, 0.06, 0.012).translate(0, 0.09, 0.16), 0xc8a050],
-      [new THREE.BoxGeometry(0.13, 0.06, 0.03).translate(0, 0.12, -0.09), 0x5a3a2a],
-      [new THREE.BoxGeometry(0.12, 0.05, 0.004).translate(0, 0.14, 0.05), 0xcfe2f0],
-      [wheel(-0.078, 0.1, 0.04), 0x2a2a2e], [wheel(0.078, 0.1, 0.04), 0x2a2a2e], [wheel(-0.078, -0.1, 0.04), 0x2a2a2e], [wheel(0.078, -0.1, 0.04), 0x2a2a2e],
-      [new THREE.BoxGeometry(0.03, 0.008, 0.09).translate(-0.078, 0.085, 0.1), 0x1e1e22], [new THREE.BoxGeometry(0.03, 0.008, 0.09).translate(0.078, 0.085, 0.1), 0x1e1e22],
-      [new THREE.BoxGeometry(0.03, 0.008, 0.09).translate(-0.078, 0.085, -0.1), 0x1e1e22], [new THREE.BoxGeometry(0.03, 0.008, 0.09).translate(0.078, 0.085, -0.1), 0x1e1e22],
-      [new THREE.BoxGeometry(0.022, 0.022, 0.02).translate(-0.045, 0.105, 0.165), 0xffe8a0], [new THREE.BoxGeometry(0.022, 0.022, 0.02).translate(0.045, 0.105, 0.165), 0xffe8a0],
-      [new THREE.BoxGeometry(0.05, 0.05, 0.04).translate(0, 0.12, -0.02), 0x5a4a3a], [new THREE.BoxGeometry(0.032, 0.032, 0.032).translate(0, 0.165, -0.02), 0xe8b894],
-      [new THREE.BoxGeometry(0.036, 0.01, 0.042).translate(0, 0.186, -0.016), 0x3c3c40],
-    ]);
-  }
-  if (age >= 4) {
-    const body = 0xe8553c;
-    return colored([
-      [new THREE.BoxGeometry(0.15, 0.06, 0.28).translate(0, 0.07, 0), body],
-      [new THREE.BoxGeometry(0.13, 0.05, 0.14).translate(0, 0.125, -0.02), 0xcfe2f0],
-      [wheel(-0.075, 0.09, 0.035), 0x2e2a2c], [wheel(0.075, 0.09, 0.035), 0x2e2a2c], [wheel(-0.075, -0.09, 0.035), 0x2e2a2c], [wheel(0.075, -0.09, 0.035), 0x2e2a2c],
-    ]);
-  }
   return colored([
     [new THREE.BoxGeometry(0.14, 0.06, 0.18).translate(0, 0.1, -0.06), 0xb08968],
     [new THREE.BoxGeometry(0.12, 0.05, 0.14).translate(0, 0.15, -0.06), age >= 2 ? 0xd8c06a : 0x9ccf92],
@@ -280,7 +245,6 @@ function vehicleGeo(age: number, motor = false) {
 }
 
 const HULL = 0x2e3440, CHROME = 0xc8d0da, TINTED = 0x1c2836, SKIN = 0xe8b894;
-type Geo = { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null };
 
 /** Patins de sustentation des véhicules futuristes : carénage sombre de part et d'autre, semelle qui luit dessous */
 function pads(p: Parts, w: number, len: number, z = 0) {
@@ -377,34 +341,14 @@ function flyTruckGeo(): Geo {
   return p.build(false);
 }
 
-/** Les modèles du trafic : à l'âge futuriste (avec l'usine automobile), deux voitures volantes, un bus et un camion ; sinon un seul */
+/**
+ * Les modèles du trafic, avec l'usine automobile : à l'âge futuriste, trois voitures volantes, un bus et un camion ; avant,
+ * les voitures de l'époque (`carGeos`) ; sans usine, la charrette de réserve (les attelages animés la remplacent)
+ */
 function fleetGeos(age: number, motor: boolean): Geo[] {
   if (age >= 5 && motor) return [flyCarGeo(0xf2f4f6, 0x5af0ff), flyCarGeo(0x3a4250, 0xff8a3a), flyBusGeo(), flyCarGeo(0xd8382e, 0xfff1c9), flyTruckGeo()];
-  return [{ body: vehicleGeo(age, motor), glow: null }];
-}
-
-/** Barque de pêche (le pêcheur est un habitant modélisé, assis dedans) et sa canne qui pointe vers l'avant ; avant = +z */
-function rowboatGeo() {
-  return colored([
-    [new THREE.BoxGeometry(0.16, 0.05, 0.36).translate(0, 0.0, 0), 0x9a7452],
-    [new THREE.ConeGeometry(0.08, 0.1, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4).scale(1, 0.6, 1).translate(0, 0, 0.22), 0x9a7452],
-    [new THREE.BoxGeometry(0.13, 0.012, 0.3).translate(0, 0.026, 0), 0xc9a27a],
-    [new THREE.BoxGeometry(0.14, 0.02, 0.04).translate(0, 0.04, 0.08), 0x7a5a42],
-    [new THREE.CylinderGeometry(0.004, 0.004, 0.32, 4).rotateX(-0.95).translate(0.05, 0.13, 0.04), 0x5a3e2e],
-  ]);
-}
-
-/** Voilier : coque, mât et deux voiles ; avant = +z */
-function sailboatGeo() {
-  const sail = (pts: number[]) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); g.computeVertexNormals(); return g; };
-  return colored([
-    [new THREE.BoxGeometry(0.22, 0.08, 0.6).translate(0, 0.0, 0), 0xf7f3ec],
-    [new THREE.ConeGeometry(0.11, 0.2, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4).scale(1, 0.7, 1).translate(0, 0, 0.38), 0xf7f3ec],
-    [new THREE.BoxGeometry(0.2, 0.02, 0.55).translate(0, 0.045, 0), 0xb08968],
-    [new THREE.CylinderGeometry(0.008, 0.008, 0.75, 5).translate(0, 0.42, 0.04), 0x7a6355],
-    [sail([0, 0.12, 0.02, 0, 0.78, 0.04, 0, 0.12, -0.26, 0, 0.12, -0.26, 0, 0.78, 0.04, 0, 0.12, 0.02]), 0xffffff],
-    [sail([0, 0.12, 0.08, 0, 0.7, 0.06, 0, 0.12, 0.32, 0, 0.12, 0.32, 0, 0.7, 0.06, 0, 0.12, 0.08]), 0xf2e6c8],
-  ]);
+  if (motor) return carGeos(age);
+  return [{ body: vehicleGeo(age), glow: null }];
 }
 
 /**

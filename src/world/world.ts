@@ -1330,7 +1330,7 @@ export class World {
     // une station de ski : au pied d'une grosse montagne, pas d'une simple colline
     if (kind === 'alpine' && !this.bigPeakNear(x + s / 2, z + s / 2)) return tr('Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline');
     if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return tr('À poser en lisière ou dans une forêt');
-    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return tr('À poser près des rochers ou dans la montagne (des rochers se posent avec Nature › Rochers)');
+    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return tr('À poser près des rochers ou dans la montagne (des rochers se posent avec Paysage › Nature › Rochers)');
     // le puits de pétrole se fore sur un gisement
     if (kind === 'oilwell' && !this.onOil(x, z, s)) return tr('Un puits de pétrole ne se fore que sur un gisement (les taches sombres où le brut suinte)');
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive

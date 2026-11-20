@@ -46,9 +46,18 @@ export function choiceStyles(choices: Pick<Choice, 'risk' | 'win' | 'lose'>[]): 
   if (choices.length < 2) return choices.map(() => NONE);
   const risks = choices.map((c) => c.risk), lo = Math.min(...risks), hi = Math.max(...risks);
   if (lo === hi) return choices.map(() => NONE);
-  const cautious = choices.filter((c) => c.risk === lo), bold = choices.filter((c) => c.risk === hi);
+  // trois choix sur deux niveaux de risque seulement (« Le blé des collines » : pirogue et col à 0,3) : deux cartes portaient le
+  // même nom (Inès, Chloé, Margot, v6). Des deux ex æquo, celui qui rapporte le moins (le premier à égalité) est « équilibré »
+  let mid: (typeof choices)[number] | null = null;
+  if (choices.length >= 3 && choices.every((c) => c.risk === lo || c.risk === hi)) {
+    const his = choices.filter((c) => c.risk === hi), los = choices.filter((c) => c.risk === lo);
+    if (his.length >= 2) mid = his.reduce((a, b) => (gainsOf(b) < gainsOf(a) ? b : a));
+    else if (los.length >= 2) mid = los.reduce((a, b) => (gainsOf(b) > gainsOf(a) ? b : a));
+  }
+  const cautious = choices.filter((c) => c.risk === lo && c !== mid), bold = choices.filter((c) => c.risk === hi && c !== mid);
   const minBoldHurt = Math.min(...bold.map(injuredOf)), maxCautiousGain = Math.max(...cautious.map(gainsOf));
   return choices.map((c): ChoiceStyle => {
+    if (c === mid) return { style: 'balanced', effect: null };
     if (c.risk === lo) return { style: 'cautious', effect: injuredOf(c) < minBoldHurt ? 'fewerInjuries' : 'safer' };
     if (c.risk === hi) return { style: 'bold', effect: gainsOf(c) > maxCautiousGain ? 'moreRewards' : 'riskier' };
     return { style: 'balanced', effect: null };

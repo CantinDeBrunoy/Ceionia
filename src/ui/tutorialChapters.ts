@@ -49,7 +49,7 @@ export const CHAPTER_TEXT = {
     },
     allyHarbor: {
       title: 'Un port chez l’allié',
-      text: 'Maintenant {harbor} sur la côte de {isle}, hors de leur ville : les navires relieront les deux ports.',
+      text: 'Maintenant {harbor} sur la rive dorée de {isle}, à la balise ⚓ : les navires relieront les deux ports.',
       tasks: ['{harbor} sur l’île alliée'],
     },
     post: {

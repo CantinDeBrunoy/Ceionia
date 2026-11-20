@@ -14,6 +14,8 @@ export const SURFACE_MIN_PITCH = 0;
 export const EDGE_PX = 14;
 /** temps (s) passé dans la bande du bord avant que la vue défile : la souris qui ne fait qu'y passer ne la déplace pas */
 export const EDGE_DELAY = 0.3;
+/** durée (s) minimale d'un appui de touche de la vue : un tapotement fait un pas (2 à 3 cases) ou tourne d'environ 15° */
+export const TAP = 0.18;
 /**
  * Le bord de l'écran sous la souris (-1, 0, 1 en x et en y). `shields` : les blocs de l'interface (barre du bas, HUD). La barre
  * du bas flotte au-dessus du bord : la carte visible entre ses blocs faisait défiler la vue après un clic dans la barre, ou entre
@@ -49,6 +51,9 @@ export class CameraRig {
   private gest = { d: 0, a: 0, mx: 0, my: 0 };
   private last = { x: 0, y: 0 };
   keys = new Set<string>();
+  /** touche lâchée trop tôt : elle compte encore jusqu'à cet instant (un appui bref fait un pas, voir `TAP`) */
+  private letGo = new Map<string, number>();
+  private downAt = new Map<string, number>();
   handler: ToolInput | null = null;
   /** clic droit sans glisser (le contrôle des troupes y donne ses ordres ; le glisser fait toujours tourner la vue) */
   rightClick: ((e: PointerInfo) => void) | null = null;
@@ -91,9 +96,16 @@ export class CameraRig {
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.ctrlKey || e.metaKey || e.altKey) return;
       this.keys.add(e.code);
+      if (!e.repeat) { this.downAt.set(e.code, performance.now()); this.letGo.delete(e.code); }
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => { this.keys.clear(); this.edgeAt = null; });
+    // un appui bref (tapoter D) : la touche reste comptée TAP secondes, sinon elle était lâchée avant l'image suivante et
+    // la vue ne bougeait pas (testeur clavier, v6)
+    window.addEventListener('keyup', (e) => {
+      const t0 = this.downAt.get(e.code), now = performance.now();
+      if (t0 !== undefined && now - t0 < TAP * 1000 && this.keys.has(e.code)) this.letGo.set(e.code, t0 + TAP * 1000);
+      else this.keys.delete(e.code);
+    });
+    window.addEventListener('blur', () => { this.keys.clear(); this.letGo.clear(); this.edgeAt = null; });
     document.addEventListener('mouseleave', () => (this.edgeAt = null));
     this.apply(1);
   }
@@ -298,6 +310,7 @@ export class CameraRig {
 
   update(dt: number, groundY: (x: number, z: number) => number) {
     const k = this.keys;
+    if (this.letGo.size) { const now = performance.now(); for (const [c, t] of this.letGo) if (now >= t) { k.delete(c); this.letGo.delete(c); } }
     const sp = this.goal.dist * 0.7 * dt;
     let fx = 0, fz = 0;
     const L = this.letterKeys;

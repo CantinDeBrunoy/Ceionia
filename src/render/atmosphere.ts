@@ -7,6 +7,7 @@ import { Environment } from './env';
 import { SeasonState } from './season';
 import { AudioEngine } from '../audio/audio';
 import { wind as air } from './wind';
+import { isDecor } from '../build/catalog';
 
 const MTN_GREY = new THREE.Color(0xc2cad4);
 const MIST_DAY = new THREE.Color(0xf4f7fa), MIST_NIGHT = new THREE.Color(0x4e5a78), MIST_DAWN = new THREE.Color(0xffe4d4);
@@ -319,7 +320,7 @@ void main(){
     const w = this.world, a = this.rnd() * Math.PI * 2, dist = 12 + this.rnd() * 40;
     let gx = clamp(focus.x + Math.cos(a) * dist, 1, N - 1), gz = clamp(focus.z + Math.sin(a) * dist, 1, N - 1);
     // la foudre frappe volontiers ce qui dépasse : un bâtiment proche du point d'impact attire l'éclair
-    for (const b of w.buildings.values()) if (b.kind !== 'lamp' && Math.hypot(b.x + 0.5 - gx, b.z + 0.5 - gz) < 2.5 && this.rnd() < 0.5) { gx = b.x + 0.5; gz = b.z + 0.5; break; }
+    for (const b of w.buildings.values()) if (!isDecor(b.kind) && Math.hypot(b.x + 0.5 - gx, b.z + 0.5 - gz) < 2.5 && this.rnd() < 0.5) { gx = b.x + 0.5; gz = b.z + 0.5; break; }
     const gy = Math.max(0, w.hAt(gx, gz));
     const pts: THREE.Vector3[] = [];
     let x = gx + (this.rnd() - 0.5) * 8, z = gz + (this.rnd() - 0.5) * 8;

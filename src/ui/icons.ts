@@ -62,6 +62,7 @@ const P: Record<string, string> = {
   play: '<path d="M7 4l13 8-13 8z"/>',
   back: '<path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/>',
   gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8h14v-8"/><path d="M12 8v12"/><path d="M12 8c-2-4-6-4-6-1.5S10 8 12 8zM12 8c2-4 6-4 6-1.5S14 8 12 8z"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
   compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
   camera: '<path d="M14.5 5h-5L8 7H4.5A1.5 1.5 0 0 0 3 8.5v9A1.5 1.5 0 0 0 4.5 19h15a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 19.5 7H16z"/><circle cx="12" cy="13" r="3.2"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.6 2.6 3-.6.6 3 2.6 1.6-1.4 2.9 1.4 2.9-2.6 1.6-.6 3-3-.6L12 21.5l-1.6-2.6-3 .6-.6-3-2.6-1.6 1.4-2.9-1.4-2.9 2.6-1.6.6-3 3 .6z"/>',
@@ -189,6 +190,15 @@ const P: Record<string, string> = {
   refinery: '<path d="M2 21h20"/><path d="M4 21V8h3v13"/><path d="M9 21V5h3v16"/><path d="M14 21v-4a3 3 0 0 1 6 0v4"/><path d="M10.5 5V3"/><path d="M10.5 3c-1-.9-.4-1.8.2-2.2"/><path d="M7 12h2M7 16h2"/>',
   crude: '<path d="M12 3c3 4.5 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 3-6.5 6-11z"/><path d="M9.3 14.5a2.7 2.7 0 0 0 2.7 2.7"/>',
   fuel: '<path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M3 21h12"/><path d="M6.5 7.5h5"/><path d="M14 10h2a2 2 0 0 1 2 2v4a1.5 1.5 0 0 0 3 0V8l-3-3"/>',
+  // décorations
+  hedge: '<path d="M2 20h20"/><path d="M3 20v-7a3 3 0 0 1 4.5-2.6A3 3 0 0 1 12 9a3 3 0 0 1 4.5 1.4A3 3 0 0 1 21 13v7"/><path d="M7 20v-3M12 20v-4M17 20v-3"/>',
+  fence: '<path d="M5 21V6l1.5-2L8 6v15M11 21V6l1.5-2L14 6v15M17 21V6l1.5-2L20 6v15"/><path d="M3 10h18M3 16h18"/>',
+  flower: '<path d="M12 21v-8"/><circle cx="12" cy="8" r="2"/><path d="M12 6a2.5 2.5 0 1 1 3.5 1.4M14 8.5a2.5 2.5 0 1 1-1.3 3.4M11.3 10a2.5 2.5 0 1 1-3.3-1.5M10 7a2.5 2.5 0 1 1 2-3.5"/><path d="M12 17c-2.5 0-4-1.5-4.5-3M12 15c2 0 3.5-1 4-2.5"/><path d="M5 21h14"/>',
+  bench: '<path d="M3 11h18M4 7h16v4M3 15h18"/><path d="M5 15v5M19 15v5M6 11v4M18 11v4"/>',
+  statue: '<circle cx="12" cy="4.5" r="2"/><path d="M12 7v7M8.5 9.5l3.5 1 3-4.5M10 18l2-4 2 4"/><path d="M7 18h10v3H7z"/>',
+  paving: '<rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M3 15h18M9 3v6M15 9v6M9 15v6"/>',
+  fountain: '<path d="M3 15h18l-2 5H5z"/><path d="M12 15V7"/><path d="M12 7c-3 0-5 2-5.5 5M12 7c3 0 5 2 5.5 5"/><path d="M9 7h6"/><path d="M12 7V3"/>',
+
 };
 
 /** Icône au trait, de la couleur du texte */
@@ -207,11 +217,13 @@ export const KIND_ICON: Record<KindId, string> = {
   watchtower: 'watchtower', barracks: 'shield', wall: 'wall', gate: 'gate',
   shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
   concord: 'concord', tradepost: 'scales', triumph: 'arch', embassy: 'dome',
+  hedge: 'hedge', fence: 'fence', flowerbed: 'flower', bench: 'bench', statue: 'statue', paving: 'paving', fountain: 'fountain',
 };
-export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', war: 'sword' };
+export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', deco: 'flower', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */
 export const SUB_ICON: Record<string, string> = {
   logis: 'house', eau: 'drop', lumiere: 'lamp', nourriture: 'bread', materiaux: 'rock', industrie: 'anvil', sante: 'heart', savoir: 'book',
   securite: 'shield', defense: 'sword', remparts: 'wall', transport: 'train', parcs: 'leaf', detente: 'smile', culte: 'columns', monuments: 'castle',
+  jardin: 'flower', mobilier: 'bench', ornements: 'statue',
 };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

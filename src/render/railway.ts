@@ -51,6 +51,58 @@ class Mesher {
   }
 }
 
+/** Une pièce tirée d'un profil de côté (z, y), large de `w` le long de x */
+function extrudeX(pts: [number, number][], w: number) {
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y))), { depth: w, bevelEnabled: false });
+  return g.translate(0, 0, -w / 2).rotateY(-Math.PI / 2);
+}
+
+/** Châssis d'une voiture de l'époque moderne (longueur `l`, centré en z) : longerons, traverses de tête rouges, réservoirs */
+function frame4(p: Parts, l: number, z: number, color: number) {
+  p.box(0.15, 0.025, l, 0, 0.05, z, color);
+  for (const s of [-1, 1]) p.box(0.006, 0.02, l - 0.01, s * 0.076, 0.052, z, dark(color, 0.75));
+  for (const e of [-1, 1]) p.box(0.152, 0.026, 0.008, 0, 0.05, z + e * (l / 2), 0xb84a3a);
+  p.box(0.09, 0.02, 0.08, 0, 0.03, z, 0x2a2a2e);
+}
+
+/** Bogie moderne centré en z : longerons latéraux, quatre roues, boîtes d'essieu, ressorts, traverse */
+function bogie4(p: Parts, z: number) {
+  for (const s of [-1, 1]) {
+    for (const d of [-0.035, 0.035]) {
+      p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 10).rotateZ(Math.PI / 2), s * 0.066, 0.035, z + d, 0x3c3c40);
+      p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.016, 6).rotateZ(Math.PI / 2), s * 0.077, 0.035, z + d, 0x8a8f96);
+    }
+    p.box(0.01, 0.018, 0.13, s * 0.078, 0.03, z, 0x2a2a2e);
+    p.box(0.012, 0.022, 0.03, s * 0.078, 0.038, z, 0x5a5e66);
+    for (const d of [-0.012, 0.012]) p.cyl(0.006, 0.006, 0.016, 6, s * 0.078, 0.042, z + d, 0xd8a03a);
+  }
+  p.box(0.15, 0.016, 0.03, 0, 0.044, z, 0x2a2a2e);
+}
+
+/** Tampons et attelage à un bout (z, signe vers l'extérieur) */
+function buffers4(p: Parts, z: number) {
+  const s = Math.sign(z);
+  for (const x of [-0.05, 0.05]) {
+    p.add(new THREE.CylinderGeometry(0.007, 0.007, 0.02).rotateX(Math.PI / 2), x, 0.065, z + s * 0.01, 0x5a5e66);
+    p.add(new THREE.CylinderGeometry(0.014, 0.014, 0.005, 8).rotateX(Math.PI / 2), x, 0.065, z + s * 0.021, 0x8a8f96);
+  }
+  p.box(0.02, 0.012, 0.02, 0, 0.058, z + s * 0.012, 0x3c3c40);
+}
+
+/** Pantographe replié sur ses isolateurs, posé sur le toit à (z, y) : châssis, bras inférieur et supérieur, archet */
+function pantograph(p: Parts, z: number, y: number) {
+  const metal = 0x3c3c40, arm = (z0: number, y0: number, z1: number, y1: number) => {
+    const len = Math.hypot(z1 - z0, y1 - y0);
+    for (const x of [-0.022, 0.022]) p.add(new THREE.BoxGeometry(0.004, len, 0.004), x, (y0 + y1) / 2, (z0 + z1) / 2, metal, 0, false, 0, Math.atan2(z1 - z0, y1 - y0));
+  };
+  for (const [x, dz] of [[-0.03, -0.03], [0.03, -0.03], [-0.03, 0.03], [0.03, 0.03]]) { p.cyl(0.006, 0.006, 0.014, 6, x, y, z + dz, 0xb84a3a); }
+  p.box(0.07, 0.006, 0.07, 0, y + 0.014, z, metal);
+  arm(z - 0.025, y + 0.02, z + 0.04, y + 0.05);
+  arm(z + 0.04, y + 0.05, z - 0.005, y + 0.085);
+  p.box(0.1, 0.005, 0.014, 0, y + 0.085, z - 0.005, metal);
+  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.004, 0.004, 0.03), s * 0.055, y + 0.082, z - 0.005, metal, 0, false, s * 0.5);
+}
+
 /** Locomotive (avant = +z) : à vapeur, chaudière noire et roues rouges, à l'âge industriel ; diesel jaune ensuite ; bandeau à la couleur de la ligne */
 export function locoGeo(age: number, line: number) {
   const p = new Parts();
@@ -76,16 +128,43 @@ export function locoGeo(age: number, line: number) {
     return p.build(false);
   }
   if (age >= 4) {
-    const body = 0xf2f2ee, band = line;
-    p.box(0.17, 0.035, 0.42, 0, 0.05, 0, 0x3c3c40);
-    p.box(0.15, 0.16, 0.4, 0, 0.085, -0.01, body);
-    p.box(0.152, 0.03, 0.402, 0, 0.13, -0.01, band);
-    p.box(0.14, 0.1, 0.1, 0, 0.245, 0.12, body);
-    p.box(0.12, 0.05, 0.004, 0, 0.27, 0.172, 0x2e3c48, 0, true);
-    for (const s of [-1, 1]) p.box(0.004, 0.04, 0.07, s * 0.071, 0.27, 0.12, 0x2e3c48);
-    for (let k = 0; k < 3; k++) p.box(0.1, 0.012, 0.05, 0, 0.245, -0.16 + k * 0.07, 0x5a5e66);
-    p.box(0.03, 0.025, 0.006, 0, 0.17, 0.192, 0xfff0c0, 0, true);
-    for (const z of [-0.13, 0.13]) { p.box(0.15, 0.05, 0.12, 0, 0.012, z, 0x2a2a2e); for (const s of [-1, 1]) for (const d of [-0.035, 0.035]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.014, 8).rotateZ(Math.PI / 2), s * 0.07, 0.035, z + d, 0x3c3c40); }
+    // locomotive électrique : caisse blanche à cabine en pente, pare-brise en deux glaces, chevron et bandeau à la couleur de
+    // la ligne, grilles d'aération, porte et vitres de cabine, toit sombre, pantographe sur ses isolateurs, bogies, tampons
+    const white = 0xf2f2ee, roof = 0x4a4e56, glass = 0x2e3c48, grey = 0x8a8f96;
+    frame4(p, 0.4, 0, 0x3c3c40);
+    bogie4(p, -0.13); bogie4(p, 0.13);
+    p.add(extrudeX([[-0.2, 0.075], [0.19, 0.075], [0.205, 0.1], [0.205, 0.15], [0.17, 0.235], [0.15, 0.25], [-0.2, 0.25]], 0.15), 0, 0, 0, white);
+    p.box(0.13, 0.014, 0.33, 0, 0.25, -0.03, roof);
+    // les glaces du pare-brise (en pente) et leur montant, les vitres et la porte de la cabine
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.062, 0.07, 0.004).rotateX(-0.4), s * 0.034, 0.192, 0.189, glass);
+    p.add(new THREE.BoxGeometry(0.008, 0.075, 0.005).rotateX(-0.4), 0, 0.192, 0.19, white);
+    for (const s of [-1, 1]) {
+      p.box(0.004, 0.045, 0.045, s * 0.0755, 0.17, 0.12, glass);
+      p.box(0.004, 0.11, 0.032, s * 0.0755, 0.085, 0.065, dark(white, 0.86));
+      p.box(0.005, 0.03, 0.02, s * 0.0757, 0.155, 0.065, glass);
+      // bandeau, et le chevron qui remonte vers la cabine
+      p.box(0.004, 0.024, 0.36, s * 0.0755, 0.11, -0.03, line);
+      p.add(new THREE.BoxGeometry(0.004, 0.024, 0.07), s * 0.0755, 0.125, 0.165, line, 0, false, 0, 0.55);
+      // les grilles d'aération et leurs lames
+      for (const z of [-0.16, -0.09, -0.02]) {
+        p.box(0.004, 0.07, 0.05, s * 0.0755, 0.145, z, 0x6a6e76);
+        for (let k = 0; k < 4; k++) p.box(0.005, 0.004, 0.048, s * 0.0758, 0.152 + k * 0.016, z, 0xc8ccd2);
+      }
+      // mains montoires et marchepieds de la cabine
+      p.box(0.006, 0.08, 0.004, s * 0.079, 0.09, 0.088, grey);
+      p.box(0.02, 0.004, 0.02, s * 0.07, 0.06, 0.088, grey);
+    }
+    // le front : bandeau, feux (deux en bas, un sous le toit), feux rouges, attelage, tampons, chasse-pierres
+    p.box(0.15, 0.024, 0.005, 0, 0.11, 0.205, line);
+    for (const s of [-1, 1]) { p.box(0.022, 0.014, 0.004, s * 0.05, 0.135, 0.206, 0xfff4d8, 0, true); p.box(0.01, 0.01, 0.004, s * 0.064, 0.09, 0.206, 0xff3a2a, 0, true); }
+    p.box(0.02, 0.01, 0.004, 0, 0.232, 0.162, 0xfff4d8, 0, true);
+    p.add(new THREE.BoxGeometry(0.15, 0.03, 0.02), 0, 0.05, 0.205, 0x2a2a2e, 0, false, 0, -0.4);
+    buffers4(p, 0.205);
+    // le toit : pantographe sur ses isolateurs, disjoncteur, trappes, avertisseurs
+    pantograph(p, -0.06, 0.257);
+    p.cyl(0.012, 0.012, 0.02, 6, 0, 0.257, -0.15, grey); p.cyl(0.006, 0.006, 0.02, 6, 0, 0.277, -0.15, 0xb84a3a);
+    for (const z of [0.04, 0.09]) p.box(0.09, 0.008, 0.04, 0, 0.257, z, dark(roof, 1.2));
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.004, 0.008, 0.02, 6).rotateX(Math.PI / 2), s * 0.03, 0.262, 0.14, grey);
     return p.build(false);
   }
   const boiler = 0x2a2a2e, brass = 0xc8a050, red = 0xb83a2e;
@@ -122,7 +201,16 @@ function coachGeo(age: number, riders: number, line: number) {
       p.box(0.004, 0.014, 0.4, s * 0.078, 0.11, 0, line);
       for (const z of [-0.17, 0.17]) p.box(0.005, 0.12, 0.03, s * 0.078, 0.07, z, 0xd8dce2);
     }
-    for (const z of [-0.205, 0.205]) p.box(0.12, 0.13, 0.012, 0, 0.07, z, 0x3c3c40);
+    for (const z of [-0.205, 0.205]) p.box(0.09, 0.07, 0.01, 0, 0.07, z, 0x5a6270);
+    // montants entre les vitres, portes vitrées à leur liseré lumineux ; sur le toit, deux nacelles
+    // de climatisation à grilles et l'antenne ; bogies carénés et leurs patins
+    for (const s of [-1, 1]) {
+      for (let k = 0; k <= 6; k++) p.box(0.005, 0.05, 0.006, s * 0.0788, 0.14, -0.18 + k * 0.06, 0xd8dce2);
+      for (const z of [-0.17, 0.17]) { p.box(0.005, 0.06, 0.014, s * 0.0788, 0.09, z, 0x1e2a38); p.box(0.005, 0.004, 0.03, s * 0.079, 0.19, z, line, 0, 'neon'); }
+    }
+    for (const z of [-0.1, 0.1]) { p.box(0.08, 0.02, 0.09, 0, 0.225, z, 0xd8dce2); for (let k = 0; k < 3; k++) p.box(0.082, 0.003, 0.006, 0, 0.246, z - 0.03 + k * 0.03, 0x8a929c); }
+    p.cyl(0.0015, 0.0015, 0.04, 3, 0.03, 0.235, 0, 0x3c3c40);
+    for (const z of [-0.13, 0.13]) { p.box(0.15, 0.028, 0.09, 0, 0.012, z, 0x3a4250); for (const s of [-1, 1]) p.box(0.006, 0.006, 0.08, s * 0.072, 0.014, z, 0x9ff8ff, 0, 'neon'); }
     return p.build(false);
   }
   const p = new Parts(), wood = age >= 4 ? 0x4a6a8a : 0x7a5a42, roofC = line;
@@ -145,18 +233,178 @@ function coachGeo(age: number, riders: number, line: number) {
   return p.build(false);
 }
 
-/** Wagon de minerai (tombereau) ; chargé, un tas de pierres et de minerai qui brille */
-function wagonGeo(age: number, loaded: boolean) {
-  if (age >= 5) {
-    // wagon de fret caréné : coque argentée au toit arrondi, liseré bleu-vert, trappes de déchargement, témoin du chargement
-    const p = new Parts(), shell = 0xd8dce2;
-    p.box(0.15, 0.035, 0.3, 0, 0.035, 0, 0x2e3238);
-    p.box(0.145, 0.12, 0.31, 0, 0.06, 0, shell);
-    p.add(new THREE.CylinderGeometry(0.0725, 0.0725, 0.31, 12, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.4, 1), 0, 0.18, 0, shell);
-    for (const s of [-1, 1]) { p.box(0.004, 0.012, 0.31, s * 0.073, 0.12, 0, 0x2ab0b0); for (const z of [-0.08, 0.08]) p.box(0.004, 0.06, 0.08, s * 0.0735, 0.07, z, 0xb8bec6); }
-    p.box(0.03, 0.01, 0.03, 0, 0.215, 0.1, loaded ? 0x3aff7a : 0x8a929c, 0, loaded);
-    return p.build(false);
+/**
+ * Châssis caréné d'une voiture de la rame futuriste (longueur `l`) : jupe sombre, bogies aux deux bouts et leurs patins qui
+ * luisent, soufflets d'intercirculation, liseré à la couleur de la ligne ; rend rien, dessine dans `p`
+ */
+function hoverFrame(p: Parts, l: number, line: number) {
+  p.box(0.16, 0.035, l - 0.02, 0, 0.035, 0, 0x2e3238);
+  for (const z of [-l / 2 + 0.07, l / 2 - 0.07]) {
+    p.box(0.15, 0.028, 0.09, 0, 0.012, z, 0x3a4250);
+    for (const s of [-1, 1]) p.box(0.006, 0.006, 0.08, s * 0.072, 0.014, z, 0x9ff8ff, 0, 'neon');
   }
+  for (const z of [-l / 2 - 0.004, l / 2 + 0.004]) p.box(0.09, 0.07, 0.01, 0, 0.07, z, 0x5a6270);
+  for (const s of [-1, 1]) p.box(0.003, 0.006, l - 0.04, s * 0.081, 0.066, 0, line, 0, 'neon');
+}
+
+/**
+ * Wagon-trémie de la rame de fret futuriste : caisse argentée à pans coupés, nervures, trémies et leurs trappes sous le
+ * ventre, chargement de minerai qui luit (vert) dans la cuve ouverte, passerelle et garde-corps, témoin de charge
+ */
+function hopper5(p: Parts, line: number, loaded: boolean) {
+  const shell = 0xd8dce2, l = 0.32;
+  hoverFrame(p, l, line);
+  p.add(new THREE.CylinderGeometry(0.075, 0.05, l, 4, 1, true).rotateY(Math.PI / 4).rotateX(Math.PI / 2).scale(1, 1, 1), 0, 0.13, 0, shell);
+  p.box(0.15, 0.08, l, 0, 0.06, 0, shell);
+  for (const z of [-l / 2, l / 2]) p.box(0.15, 0.1, 0.01, 0, 0.06, z, dark(shell, 0.9));
+  for (let k = 0; k < 6; k++) for (const s of [-1, 1]) p.box(0.006, 0.08, 0.008, s * 0.076, 0.06, -l / 2 + 0.03 + k * 0.052, 0xb8bec6);
+  for (const z of [-0.08, 0.08]) { p.add(new THREE.ConeGeometry(0.05, 0.04, 4).rotateY(Math.PI / 4).rotateX(Math.PI), 0, 0.03, z, 0x8a929c); p.box(0.05, 0.006, 0.03, 0, 0.012, z, 0x2ab0b0); }
+  if (loaded) {
+    p.add(new THREE.IcosahedronGeometry(0.07, 0).scale(1, 0.4, 2), 0, 0.16, 0, 0x5a6670);
+    for (let i = 0; i < 6; i++) p.add(new THREE.OctahedronGeometry(0.012), (hash2(i, 1, 93) - 0.5) * 0.08, 0.18, (hash2(i, 2, 93) - 0.5) * 0.24, 0x3aff7a, 0, 'neon');
+  }
+  for (const s of [-1, 1]) p.box(0.004, 0.02, l - 0.02, s * 0.078, 0.15, 0, 0x8a929c);
+  p.box(0.03, 0.01, 0.03, 0.05, 0.14, l / 2 - 0.02, loaded ? 0x3aff7a : 0x8a929c, 0, loaded ? 'neon' : false);
+}
+
+/**
+ * Fourgon de la rame futuriste : capsule blanche au toit arrondi, deux portes coulissantes à hublot de chaque côté, nervures,
+ * logo lumineux de la ligne, nacelle d'un drone livreur sur le toit et son drone posé
+ */
+function van5(p: Parts, line: number) {
+  const white = 0xf4f6f8, l = 0.4;
+  hoverFrame(p, l, line);
+  p.box(0.155, 0.13, l - 0.01, 0, 0.06, 0, white);
+  p.add(new THREE.CylinderGeometry(0.0775, 0.0775, l - 0.01, 12, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.4, 1), 0, 0.19, 0, white);
+  for (const s of [-1, 1]) {
+    for (const z of [-0.09, 0.09]) {
+      p.box(0.004, 0.11, 0.09, s * 0.078, 0.07, z, 0xe2e8ec);
+      p.box(0.005, 0.003, 0.09, s * 0.0785, 0.18, z, 0x8a929c);
+      p.box(0.005, 0.03, 0.03, s * 0.079, 0.13, z, 0x1e2a38);
+    }
+    for (const z of [-0.18, 0, 0.18]) p.box(0.005, 0.12, 0.006, s * 0.0785, 0.065, z, 0xc8d0d8);
+    p.box(0.005, 0.03, 0.05, s * 0.079, 0.14, 0, line, 0, 'neon');
+  }
+  p.box(0.08, 0.02, 0.1, 0, 0.22, -0.1, 0xd8dce2);
+  p.box(0.06, 0.004, 0.06, 0, 0.24, -0.1, line, 0, 'neon');
+  // le drone livreur posé sur sa nacelle : corps, ventre lumineux, quatre bras et leurs rotors, caisse
+  p.box(0.05, 0.016, 0.05, 0, 0.245, -0.1, 0x3a4250);
+  p.box(0.03, 0.004, 0.03, 0, 0.243, -0.1, 0x5af0ff, 0, 'neon');
+  for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + k * Math.PI / 2; p.box(0.03, 0.006, 0.006, Math.sin(a) * 0.02, 0.255, -0.1 + Math.cos(a) * 0.02, 0x8a929c, a + Math.PI / 2); p.cyl(0.018, 0.018, 0.003, 8, Math.sin(a) * 0.04, 0.262, -0.1 + Math.cos(a) * 0.04, 0xd8dce2); }
+}
+
+/**
+ * Wagon-citerne futuriste : citerne blanche couchée aux bouts bombés, cerclée de bandes à la couleur de la ligne, passerelle
+ * et garde-corps sur le dessus, trou d'homme, vannes et tuyauterie au flanc, berceaux sur le châssis caréné
+ */
+function tank5(p: Parts, line: number) {
+  const white = 0xf2f4f6, l = 0.34;
+  hoverFrame(p, l, line);
+  for (const z of [-0.1, 0.1]) p.box(0.12, 0.05, 0.03, 0, 0.06, z, 0x8a929c);
+  p.add(new THREE.CylinderGeometry(0.07, 0.07, l - 0.08, 12).rotateX(Math.PI / 2), 0, 0.15, 0, white);
+  for (const z of [-1, 1]) p.add(new THREE.SphereGeometry(0.07, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2).rotateX((z * Math.PI) / 2).scale(1, 1, 0.55), 0, 0.15, z * (l / 2 - 0.04), white);
+  for (const z of [-0.09, 0, 0.09]) p.add(new THREE.CylinderGeometry(0.072, 0.072, 0.012, 12).rotateX(Math.PI / 2), 0, 0.15, z, z ? line : 0x3a4250);
+  p.box(0.05, 0.006, l - 0.1, 0, 0.222, 0, 0x8a929c);
+  for (const s of [-1, 1]) for (const z of [-0.1, 0, 0.1]) p.box(0.003, 0.03, 0.003, s * 0.025, 0.225, z, 0xc8d0d8);
+  for (const s of [-1, 1]) p.box(0.003, 0.003, l - 0.1, s * 0.025, 0.255, 0, 0xc8d0d8);
+  p.cyl(0.02, 0.02, 0.02, 8, 0, 0.215, 0.05, 0xd8dce2);
+  p.add(new THREE.CylinderGeometry(0.006, 0.006, 0.18, 5).rotateX(Math.PI / 2), 0.074, 0.1, 0, 0x8a929c);
+  for (const z of [-0.06, 0.06]) { p.cyl(0.008, 0.008, 0.02, 6, 0.074, 0.1, z, 0x5a6270); p.add(new THREE.TorusGeometry(0.008, 0.003, 3, 6).rotateY(Math.PI / 2), 0.086, 0.12, z, 0xd84a3e); }
+}
+
+/**
+ * Tombereau moderne : caisse d'acier rouille évasée, ranches et rebord, bouts en pente, trémie de vidange, échelle, volant de
+ * frein, plaque à la couleur de la ligne ; bogies, châssis, tampons ; chargé, un tas de pierres et de minerai qui brille
+ */
+function wagon4(p: Parts, loaded: boolean, line: number) {
+  const side = 0x9a5a44, rib = dark(side, 0.72), l = 0.3;
+  frame4(p, l, 0, 0x3c3c40);
+  for (const z of [-0.1, 0.1]) bogie4(p, z);
+  for (const e of [-1, 1]) buffers4(p, e * (l / 2));
+  p.box(0.13, 0.012, 0.27, 0, 0.068, 0, dark(side, 0.8));
+  for (const s of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(0.012, 0.11, 0.29), s * 0.072, 0.125, 0, side, 0, false, s * 0.16);
+    p.add(new THREE.BoxGeometry(0.016, 0.012, 0.3), s * 0.081, 0.181, 0, rib, 0, false, s * 0.16);
+    for (let k = 0; k < 6; k++) p.add(new THREE.BoxGeometry(0.008, 0.11, 0.01), s * 0.079, 0.125, -0.125 + k * 0.05, rib, 0, false, s * 0.16);
+    p.add(new THREE.BoxGeometry(0.004, 0.03, 0.06), s * 0.08, 0.135, 0.04, line, 0, false, s * 0.16);
+  }
+  for (const e of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(0.15, 0.12, 0.012), 0, 0.125, e * 0.14, side, 0, false, 0, -e * 0.25);
+    p.box(0.16, 0.012, 0.016, 0, 0.18, e * 0.155, rib);
+  }
+  p.add(new THREE.ConeGeometry(0.045, 0.035, 4).rotateY(Math.PI / 4).rotateX(Math.PI), 0, 0.045, 0, 0x6a6e76);
+  // échelle et volant de frein à un bout
+  for (const x of [0.03, 0.06]) p.box(0.004, 0.12, 0.004, x, 0.06, 0.165, 0x8a8f96);
+  for (let k = 0; k < 4; k++) p.box(0.034, 0.004, 0.004, 0.045, 0.08 + k * 0.03, 0.165, 0x8a8f96);
+  p.add(new THREE.TorusGeometry(0.018, 0.003, 3, 10), -0.04, 0.15, 0.168, 0xd8a03a);
+  if (loaded) {
+    p.sphere(0.075, 0, 0.16, -0.06, 0x6a6660, 0, 0.55); p.sphere(0.07, 0, 0.16, 0.07, 0x7a746c, 0, 0.55);
+    for (let i = 0; i < 6; i++) p.sphere(0.016, (hash2(i, 1, 91) - 0.5) * 0.08, 0.19 + hash2(i, 2, 91) * 0.02, (hash2(i, 3, 91) - 0.5) * 0.22, [0xe8c66a, 0xd84a5a, 0x6ad8e8, 0x4a6ad8][i % 4], 0);
+  }
+}
+
+/** Un conteneur (long de `l`, centré en z) : parois nervurées, toit, pièces de coin, portes au bout `door` (+1 ou -1) et leurs barres, bandeau */
+function container(p: Parts, z: number, l: number, color: number, door: number, line: number) {
+  const rib = dark(color, 0.78), y = 0.065, h = 0.14;
+  p.box(0.148, h, l, 0, y, z, color);
+  p.box(0.14, 0.006, l - 0.01, 0, y + h, z, dark(color, 1.12));
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 6; k++) p.box(0.004, h - 0.02, 0.008, s * 0.075, y + 0.01, z - l / 2 + 0.02 + (k * (l - 0.04)) / 5, rib);
+    p.box(0.004, 0.022, l * 0.5, s * 0.0755, y + 0.09, z, line);
+    for (const e of [-1, 1]) for (const yy of [y, y + h - 0.012]) p.box(0.012, 0.012, 0.012, s * 0.07, yy, z + e * (l / 2 - 0.006), 0x3c3c40);
+  }
+  const ez = z + door * (l / 2 + 0.002);
+  p.box(0.004, h - 0.01, 0.004, 0, y + 0.005, ez, rib);
+  for (const x of [-0.05, -0.02, 0.02, 0.05]) p.box(0.004, h - 0.02, 0.006, x, y + 0.01, ez + door * 0.002, 0x8a8f96);
+}
+
+/** Wagon porte-conteneurs : plateau, deux conteneurs (bleu et rouge) portes aux bouts, bogies, tampons */
+function van4(p: Parts, line: number) {
+  const l = 0.38;
+  frame4(p, l, 0, 0x3c3c40);
+  for (const z of [-0.13, 0.13]) bogie4(p, z);
+  for (const e of [-1, 1]) buffers4(p, e * (l / 2));
+  container(p, 0.093, 0.178, 0x3a6ab8, 1, line);
+  container(p, -0.093, 0.178, 0xb84a3a, -1, line);
+}
+
+/**
+ * Wagon-citerne moderne : citerne blanche couchée sur ses berceaux, aux bouts bombés, cerclée de rouge, bandeau à la couleur
+ * de la ligne, plaque orange de danger, dôme et trou d'homme, passerelle et garde-corps, échelles, vanne de vidange ; bogies,
+ * châssis, tampons
+ */
+function tank4(p: Parts, line: number) {
+  const tank = 0xe8e8e4, l = 0.3, rail = 0x8a8f96;
+  frame4(p, l, 0, 0x3c3c40);
+  for (const z of [-0.1, 0.1]) bogie4(p, z);
+  for (const e of [-1, 1]) buffers4(p, e * (l / 2));
+  for (const z of [-0.08, 0.08]) p.box(0.12, 0.03, 0.03, 0, 0.06, z, 0x5a5e66);
+  p.add(new THREE.CylinderGeometry(0.068, 0.068, 0.28, 14).rotateX(Math.PI / 2), 0, 0.15, 0, tank);
+  for (const z of [-1, 1]) p.add(new THREE.SphereGeometry(0.068, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX((z * Math.PI) / 2).scale(1, 1, 0.35), 0, 0.15, z * 0.14, tank);
+  for (const z of [-0.1, 0.1]) p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.012, 14).rotateX(Math.PI / 2), 0, 0.15, z, 0xd8553c);
+  for (const s of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(0.004, 0.018, 0.17), s * 0.067, 0.145, 0, line, 0, false, 0);
+    p.box(0.004, 0.026, 0.034, s * 0.068, 0.17, -0.05, 0xf08a2a);
+    p.box(0.005, 0.004, 0.034, s * 0.0685, 0.182, -0.05, 0x26262a);
+  }
+  // dôme, trou d'homme, passerelle et garde-corps, échelles des deux côtés
+  p.cyl(0.026, 0.026, 0.03, 10, 0, 0.205, 0, tank); p.cyl(0.02, 0.02, 0.008, 10, 0, 0.235, 0, 0x8a8f96);
+  p.box(0.06, 0.005, 0.12, 0, 0.215, 0, rail);
+  for (const s of [-1, 1]) {
+    for (const z of [-0.055, 0, 0.055]) p.box(0.003, 0.035, 0.003, s * 0.03, 0.218, z, rail);
+    p.box(0.003, 0.003, 0.12, s * 0.03, 0.252, 0, rail);
+    for (const z of [0.05, 0.075]) p.box(0.004, 0.15, 0.004, s * 0.074, 0.065, z, rail);
+    for (let k = 0; k < 5; k++) p.box(0.004, 0.004, 0.025, s * 0.074, 0.08 + k * 0.03, 0.0625, rail);
+  }
+  // la vanne de vidange sous le ventre et son volant
+  p.cyl(0.008, 0.008, 0.03, 6, 0, 0.065, 0, 0x5a5e66);
+  p.add(new THREE.TorusGeometry(0.012, 0.003, 3, 8).rotateX(Math.PI / 2), 0, 0.068, 0, 0xd84a3e);
+}
+
+/** Wagon de minerai (tombereau) ; chargé, un tas de pierres et de minerai qui brille */
+function wagonGeo(age: number, loaded: boolean, line = 0x2ab0b0) {
+  if (age >= 5) { const p = new Parts(); hopper5(p, line, loaded); return p.build(false); }
+  if (age === 4) { const p = new Parts(); wagon4(p, loaded, line); return p.build(false); }
   const p = new Parts(), side = age >= 4 ? 0x9a5a44 : 0x6f5640;
   p.box(0.15, 0.03, 0.32, 0, 0.05, 0, 0x3c3c40);
   p.box(0.13, 0.012, 0.28, 0, 0.08, 0, dark(side, 0.8));
@@ -176,7 +424,8 @@ function wagonGeo(age: number, loaded: boolean) {
  * coulissante à l'âge industriel ; conteneur bleu sur wagon plat à l'époque moderne ; bandeau à la couleur de la ligne
  */
 function vanGeo(age: number, line: number) {
-  if (age >= 5) return wagonGeo(age, true);
+  if (age >= 5) { const p = new Parts(); van5(p, line); return p.build(false); }
+  if (age === 4) { const p = new Parts(); van4(p, line); return p.build(false); }
   const p = new Parts();
   p.box(0.16, 0.03, 0.4, 0, 0.05, 0, 0x3c3c40);
   if (age >= 4) {
@@ -198,8 +447,9 @@ function vanGeo(age: number, line: number) {
 }
 
 /** Wagon-citerne : la citerne couchée sur son châssis, cerclée, son dôme et son échelle (noire, puis blanche à l'époque moderne) */
-function tankGeo(age: number) {
-  if (age >= 5) return wagonGeo(age, true);
+function tankGeo(age: number, line = 0x2ab0b0) {
+  if (age >= 5) { const p = new Parts(); tank5(p, line); return p.build(false); }
+  if (age === 4) { const p = new Parts(); tank4(p, line); return p.build(false); }
   const p = new Parts(), tank = age >= 4 ? 0xe8e8e4 : 0x2a2a2e;
   p.box(0.15, 0.03, 0.32, 0, 0.05, 0, 0x3c3c40);
   p.add(new THREE.CylinderGeometry(0.068, 0.068, 0.3, 12).rotateX(Math.PI / 2), 0, 0.15, 0, tank);
@@ -602,7 +852,7 @@ export class RailView {
     const key = `${kind}|${variant}|${this.age}|${color}`;
     let g = this.geos.get(key);
     if (!g) {
-      g = kind === 'loco' ? locoGeo(this.age, color) : kind === 'coach' ? coachGeo(this.age, variant ? 6 : 0, color) : kind === 'van' ? vanGeo(this.age, color) : kind === 'tank' ? tankGeo(this.age) : wagonGeo(this.age, !!variant);
+      g = kind === 'loco' ? locoGeo(this.age, color) : kind === 'coach' ? coachGeo(this.age, variant ? 6 : 0, color) : kind === 'van' ? vanGeo(this.age, color) : kind === 'tank' ? tankGeo(this.age, color) : wagonGeo(this.age, !!variant, color);
       this.geos.set(key, g);
     }
     return g;

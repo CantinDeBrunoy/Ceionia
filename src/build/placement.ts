@@ -1,5 +1,5 @@
 import { World } from '../world/world';
-import { KINDS, KindId, hasDoor } from './catalog';
+import { KINDS, KindId, hasDoor, isDecor } from './catalog';
 
 export const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 
@@ -31,7 +31,8 @@ export function doorCells(kind: KindId, x: number, z: number, s: number, side: n
  * route, puis la rotation actuelle) ; sans route contre le bâtiment, vers la plus proche à quelques cases ; sinon rot inchangée
  */
 export function facingRoadRot(world: World, kind: KindId, x: number, z: number, rot: number, size = KINDS[kind].size): number {
-  if (kind === 'lamp') return rot;
+  // (une décoration garde le sens qu'on lui donne)
+  if (isDecor(kind)) return rot;
   // le ponton s'avance vers l'eau, le quai du port la longe : le côté qui en borde le plus
   const s = size;
   if (kind === 'pier' || kind === 'harbor') {

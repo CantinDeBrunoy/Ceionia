@@ -1,7 +1,7 @@
 import { tr } from '../i18n';
 import { Coverage, computeCoverage } from './coverage';
 import { World, N } from '../world/world';
-import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catalog';
+import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine, DECOR, DECOR_JOY_MAX } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
@@ -9,6 +9,7 @@ import { goldNeed, goldSince, tradeOpen } from './trade';
 import { archipelagoOn, canExpand } from '../world/expand';
 import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from './crossroads';
 import { CONFLICT_LABEL, conflictItem } from './diplomacy';
+import { SEEDS_PERK, SEEDS_FIELDS } from './isleMissions';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -118,7 +119,7 @@ export class Sim {
 
   recalc() {
     const w = this.world;
-    let H = 0, F = 0, W = 0, J = 0, Jy = 0, He = 0;
+    let H = 0, F = 0, W = 0, J = 0, Jy = 0, He = 0, deco = 0;
     const counts: Record<string, number> = {};
     for (const m of Object.values(this.src)) m.clear();
     const add = (need: NeedId, key: string, v: number) => {
@@ -131,13 +132,17 @@ export class Sim {
       const k = KINDS[b.kind];
       const a = b.age;
       counts[b.kind] = (counts[b.kind] ?? 0) + 1;
-      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) add(need, b.kind, k[need]?.[a] ?? 0);
+      const decor = DECOR.includes(b.kind);
+      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) if (!decor) add(need, b.kind, k[need]?.[a] ?? 0);
+      if (decor) { const s = this.src.joy.get('decor') ?? { n: 0, v: 0 }; s.n++; this.src.joy.set('decor', s); }
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) add('water', 'riverside', k.housing?.[a] ?? 0);
       H += k.housing?.[a] ?? 0;
       F += k.food?.[a] ?? 0;
       W += k.water?.[a] ?? 0;
       J += k.jobs?.[a] ?? 0;
-      Jy += k.joy?.[a] ?? 0;
+      // (les décorations comptent à part, plafonnées ensemble : DECOR_JOY_MAX)
+      if (DECOR.includes(b.kind)) deco += k.joy?.[a] ?? 0;
+      else Jy += k.joy?.[a] ?? 0;
       He += k.health?.[a] ?? 0;
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += k.housing?.[a] ?? 0;
     }
@@ -153,6 +158,8 @@ export class Sim {
     // un emploi pour deux champs (des emplois entiers, comme les autres)
     J += Math.floor(fields / 2);
     Jy += forests * 0.08;
+    Jy += Math.min(DECOR_JOY_MAX, deco);
+    { const s = this.src.joy.get('decor'); if (s) s.v = Math.min(DECOR_JOY_MAX, deco); }
     this.coverage = computeCoverage(w.buildings.values());
     Jy += this.coverage.joy;
     this.counts = counts;
@@ -196,7 +203,7 @@ export class Sim {
   /** Le détail d'un besoin pour sa fiche : ce qui le fournit (du plus gros apport au plus petit) et le bâtiment qui le comble */
   needDetail(k: NeedId): NeedDetail {
     const e = this.world.exp, L = this.land;
-    const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? tr('Maisons au bord de l’eau') : this.nameOf(key as KindId), n: s.n, v: s.v }));
+    const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? tr('Maisons au bord de l’eau') : key === 'decor' ? tr('Décorations (au plus {n} ensemble)', { n: DECOR_JOY_MAX }) : this.nameOf(key as KindId), n: s.n, v: s.v }));
     if (k === 'food' && L.fields) rows.push({ label: tr(L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)'), n: L.fields, v: this.fieldsFood });
     if (k === 'jobs' && L.fields >= 2) rows.push({ label: tr('Champs'), n: L.fields, v: Math.floor(L.fields / 2) });
     if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: tr('Sécurité (pompiers et police)'), n: this.coverage.both, v: this.coverage.joy });
@@ -212,9 +219,19 @@ export class Sim {
   get yieldK() { return 0.55 + 0.55 * this.moisture; }
 
   /** Récolte des champs, en parts entières (selon la pluie ; le blé des collines l'enrichit) */
-  private get fieldsFood() { return down(this.fieldFood * this.yieldK * (this.world.exp.perks.includes('seeds') ? 1.3 : 1)); }
+  private get fieldsFood() { return down(this.fieldFood * this.yieldK * (this.world.exp.perks.includes('seeds') ? 1.3 : 1) * (this.world.exp.perks.includes(SEEDS_PERK) ? SEEDS_FIELDS : 1)); }
 
   get drought() { return this.moisture < 0.25 && this.fieldFood > 0; }
+
+  /**
+   * Pourquoi le village grandit, ou non (fiche des habitants, fiche d'un habitant) : les besoins qui manquent, dans l'ordre
+   * (`missing`, sans le logement), le village plein (`full`), l'avancée vers le prochain habitant (`progress`, 0 … 1) et la
+   * convalescence qui ralentit les arrivées (`slow`)
+   */
+  growth(): { full: boolean; missing: NeedId[]; progress: number; slow: boolean } {
+    const missing = this.world.sandbox ? [] : (['food', 'water', 'jobs', 'health', 'joy'] as NeedId[]).filter((k) => !this[k].ok);
+    return { full: !this.housing.ok, missing, progress: Math.min(1, Math.max(0, this.grow)), slow: this.recovering > 0 && rulesOf(this.world.difficulty).recoverK < 1 };
+  }
 
   get canGrow() {
     // au bac à sable, seules les places comptent : aucun besoin ne freine le village
@@ -305,7 +322,7 @@ export class Sim {
       const c = priceIn(w, k, this.age);
       for (const [r, prod] of [['stone', 'quarry'], ['wood', 'lumber'], ['brick', 'brickworks']] as const) {
         if (!c || w.unlimited || w[r] >= (c[r] ?? 0) || this.producing(r)) continue;
-        const what = { stone: tr('de la pierre'), wood: tr('du bois'), brick: tr('des briques') }[r], where = { stone: tr('près des rochers (Nature › Rochers) ou dans la montagne'), wood: tr('en lisière ou dans une forêt'), brick: tr('elle se pose où l’on veut et cuit ses briques toute seule') }[r];
+        const what = { stone: tr('de la pierre'), wood: tr('du bois'), brick: tr('des briques') }[r], where = { stone: tr('près des rochers (Paysage › Nature › Rochers) ou dans la montagne'), wood: tr('en lisière ou dans une forêt'), brick: tr('elle se pose où l’on veut et cuit ses briques toute seule') }[r];
         return about(prod, tr('Il manque {what} pour {name} : {prod}, {where}.', { what, name: quote(k), prod: say(prod), where }));
       }
       return about(k, text);
