@@ -1,7 +1,7 @@
 import { tr } from '../i18n';
 import { hudPic } from './pics';
 import type { People } from '../world/archipelago';
-import { DiploState, Path, isleName, peopleName, rivalOf, type Intel } from '../sim/diplomacy';
+import { DiploState, Path, isleName, peopleName, rivalOf, talkRisk, TALK_RISK, type Intel } from '../sim/diplomacy';
 
 /**
  * Les cartes de la diplomatie de l'archipel, dans le style de la carte du choix du portail (parchemin bordé d'or, titre en
@@ -82,7 +82,7 @@ export class DiploChoice {
     }
     if (this.mode === 'battle') {
       const ally = d.ally ?? 'orient', rival = rivalOf(ally);
-      const learnt = d.intel.map((i) => `<li>${INTEL[i]()}</li>`).join('');
+      const learnt = d.intel.map((i) => `<li>${INTEL[i]()}</li>`).join('') + warBoons(d).map((l) => `<li class="dcBoon">${l}</li>`).join('');
       this.el.innerHTML = `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rival, 64)}</div>
         <h4>${tr('Les éclaireurs sont de retour')}</h4>
         <p class="pcSub">${tr('La côte de {isle} est reconnue. Nos troupes et celles de {ally} sont prêtes à débarquer.', { isle: isleName(rival), ally: peopleName(ally) })}</p>
@@ -100,14 +100,32 @@ export class DiploChoice {
       <p class="pcSub">${tr('Nos alliés, {ally}, sont toujours en guerre contre {rival}. Que fera notre village ?', { ally: peopleName(ally), rival: peopleName(rival) })}</p>
       <div class="pcBtns dcCol">
         ${why ? `<p class="dcWhy">${why}</p>` : ''}
-        ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('une ambassade, sans risque : un comptoir, un monument, une fête'), d.path === 'peace', !!why)}
+        ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('deux pourparlers, {r} % d’échec chacun : un comptoir, un monument, une fête', { r: Math.round(talkRisk(d) * 100) }), d.path === 'peace', !!why)}
         ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('une expédition militaire, puis la bataille : butin et tribut d’or'), d.path === 'war', !!why)}
+        ${boonsNote(d)}
         ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('rester au Médiéval et continuer à jouer'))}
       </div>
       <small class="pcNote">${tr('Il faut régler ce conflit pour passer à l’âge suivant. Pour y revenir : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
   }
 
   hide() { this.el.style.display = 'none'; }
+}
+
+/** Les avantages des expéditions des îles pour la bataille, une ligne chacun (vide : aucun) */
+export function warBoons(d: Pick<DiploState, 'boons'>): string[] {
+  const b = d.boons, out: string[] = [];
+  if (b.allies > 0) out.push(tr('🛡️ Renforts alliés gagnés sur les îles : +{n} troupes', { n: b.allies }));
+  if (b.ours > 0) out.push(tr('⚔️ Armés chez les forgerons alliés : +{n} de nos soldats', { n: b.ours }));
+  if (b.foes > 0) out.push(tr('🎯 Flotte et garnison rivales affaiblies : −{n} ennemis', { n: b.foes }));
+  return out;
+}
+
+/** Ce que les expéditions des îles ont gagné, sur la carte paix ou guerre : la paix plus sûre, la bataille plus facile */
+function boonsNote(d: DiploState) {
+  const war = warBoons(d), r = Math.round(talkRisk(d) * 100), base = Math.round(TALK_RISK * 100);
+  const peace = r !== base ? tr('Paix : risque des pourparlers {base} % → {r} %, grâce à vos expéditions sur les îles.', { base, r }) : '';
+  if (!war.length && !peace) return `<p class="dcBoons">${tr('Les expéditions facultatives sur les îles (Expéditions, au Médiéval) donnent des troupes pour la bataille ou des chances pour la paix.')}</p>`;
+  return `<p class="dcBoons">${[peace, ...war.map((l) => tr('Guerre : {l}', { l }))].filter(Boolean).join('<br>')}</p>`;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

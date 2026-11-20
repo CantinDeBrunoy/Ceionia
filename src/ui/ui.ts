@@ -20,8 +20,8 @@ import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expedi
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { isleName, kindOffered, CONFLICT_LABEL } from '../sim/diplomacy';
-import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
+import { isleName, kindOffered, CONFLICT_LABEL, boonsMatter, talkRisk, TALK_RISK } from '../sim/diplomacy';
+import { boonText, effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
@@ -1150,9 +1150,35 @@ export class UI {
     const range = (a: number[], f: (n: number) => string) => { const lo = Math.min(...a), hi = Math.max(...a); return lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`; };
     const risks = cs.map((c) => this.host.expeditions.preview(c).risk);
     const lvl = Math.max(...risks) <= 0.12 ? 'low' : Math.max(...risks) <= 0.22 ? 'mid' : 'high';
-    const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(c.win)).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
+    const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(this.winOf(c))).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
     return `<div class="mpills"><span title="${tr('Habitants dans l’équipe')}">${ic('team', 15, 2)} ${range(cs.map((c) => c.party), String)}</span><span title="${tr('Durée')}">${ic('clock', 15, 2)} ${['courte', 'moyenne', 'longue'].filter((l) => cs.some((c) => workLabel(c.work) === l)).map((l) => tr(l)).join('–')}</span><span class="crisk ${lvl}" title="${tr('Risque d’échec')}">${ic('alert', 14, 2.2)} ${range(risks, (r) => `${Math.round(r * 100)}`)} %</span></div>
       ${gains.length ? `<div class="mgains">${gains.map((c) => `<span class="chip" title="${attr(c.title)}">${pic(c.icon, 26)}</span>`).join('')}</div>` : ''}`;
+  }
+
+  /**
+   * Ce qu'une expédition des îles apporte au dénouement de l'archipel (demande de l'auteur, 20 nov. 2026 : l'avantage
+   * affiché clairement) : « Pour la bataille : +4 troupes alliées · Pour la paix : +10 % de chances ». Le plus fort de ses
+   * choix pour chaque avantage. Pour un pourparler de la paix : son risque, et ce que la bonne volonté en a ôté. Rien une fois
+   * le conflit réglé, ni pour une mission déjà réussie (refaite, elle ne rapporte plus d'avantage)
+   */
+  /** Les gains d'un choix à montrer : sans les avantages du dénouement une fois le conflit réglé (ils ne serviraient plus) */
+  private winOf(c: Mission['choices'][number]) { return boonsMatter(this.host.world) ? c.win : c.win.filter((e) => e.t !== 'boon'); }
+
+  private boonHtml(m: Mission) {
+    const w = this.host.world;
+    if (!boonsMatter(w)) return '';
+    if (m.talks) {
+      const r = Math.round(talkRisk(w.diplo) * 100), base = Math.round(TALK_RISK * 100);
+      return `<p class="mboon">${ic('alert', 14, 2.2)} ${r === base ? tr('Les pourparlers peuvent échouer ({r} %) : les expéditions sur les îles rendent la paix plus sûre.', { r }) : tr('Risque d’échec : {base} % → {r} %, grâce à vos expéditions sur les îles.', { base, r })}</p>`;
+    }
+    if (this.host.expeditions.done(m)) return '';
+    const best = new Map<string, number>();
+    for (const c of m.choices) for (const e of c.win) if (e.t === 'boon') { const v = best.get(e.kind); if (v === undefined || Math.abs(e.n) > Math.abs(v)) best.set(e.kind, e.n); }
+    if (!best.size) return '';
+    const war = ['allies', 'ours', 'foes'].filter((k) => best.has(k)).map((k) => boonText(k as 'allies', best.get(k)!, true));
+    const peace = best.get('peace');
+    const parts = [war.length ? `<span>${pic('⚔', 16)} <b>${tr('Pour la bataille :')}</b> ${war.join(' · ')}</span>` : '', peace ? `<span class="${peace < 0 ? 'neg' : ''}">${pic('📜', 16)} <b>${tr('Pour la paix :')}</b> ${boonText('peace', peace, true)}</span>` : ''];
+    return `<p class="mboon">${parts.filter(Boolean).join('')}</p>`;
   }
 
   /** Ouvre les expéditions sur une mission : l'onglet des missions, sa carte amenée sous les yeux et mise en avant */
@@ -2150,6 +2176,7 @@ export class UI {
           ${tags ? `<div class="mtags">${tags}</div>` : ''}
           <p class="mtext">${splitIntro(m.intro).head}</p>
           ${this.missionPills(m)}
+          ${this.boonHtml(m)}
           ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
           ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m, true)}</p>` : ''}
           <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${SEND_ICON} ${label}</button>
@@ -2408,7 +2435,7 @@ export class UI {
     const card = (k: number) => {
       const x = cs[k], sk = styles[k].style, name = sk ? tr(STYLE[sk]) : x.label, off = !!ex.why(m, x);
       const px = ex.preview(x), lv = px.risk <= 0.12 ? 'low' : px.risk <= 0.22 ? 'mid' : 'high';
-      const wx = done ? redoEffects(x.win) : x.win, sn = new Set<string>(), gx = effectChips(wx).filter((e) => (sn.has(e.icon) ? false : (sn.add(e.icon), true))).slice(0, 3);
+      const wx = done ? redoEffects(x.win) : this.winOf(x), sn = new Set<string>(), gx = effectChips(wx).filter((e) => (sn.has(e.icon) ? false : (sn.add(e.icon), true))).slice(0, 3);
       const phrase = cardPhrase(x.text), text = sk && x.label ? `<b>${x.label}</b>${phrase ? ` — ${phrase}` : ''}` : phrase;
       return `<button type="button" role="radio" data-pick="${k}" class="sCard ${k === i ? 'on' : ''} ${sk ?? ''} ${off ? 'off' : ''}" aria-checked="${k === i}" title="${attr(x.label)}">
         <span class="scHead">${sk ? `<img class="scEmb" src="./expeditions/depart/embleme-${EMB[sk]}.webp" alt="" decoding="async">` : pic(m.icon, 44)}<span class="scName"><b>${name}</b>${styles[k].effect ? `<small>${tr(EFFECT[styles[k].effect!])}</small>` : ''}</span></span>
@@ -2442,7 +2469,7 @@ export class UI {
     const L = './expeditions/depart/';
     return `<div class="sScroll">
       <div class="sTop mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" decoding="async">` : art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}</div>
-      <div class="sCap"><h3>${MISSION_DIO.has(m.id) ? '' : pic(m.icon, 28) + ' '}${m.title}</h3><span class="sEraRow"><img class="sLaur" src="${L}laurier-g.webp" alt="" decoding="async"><span class="sEra">${hudPic(AGE_PIC[m.age] ?? AGE_PIC[0], 16)} ${AGES[m.age].name}</span><img class="sLaur" src="${L}laurier-d.webp" alt="" decoding="async"></span><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div>
+      <div class="sCap"><h3>${MISSION_DIO.has(m.id) ? '' : pic(m.icon, 28) + ' '}${m.title}</h3><span class="sEraRow"><img class="sLaur" src="${L}laurier-g.webp" alt="" decoding="async"><span class="sEra">${hudPic(AGE_PIC[m.age] ?? AGE_PIC[0], 16)} ${AGES[m.age].name}</span><img class="sLaur" src="${L}laurier-d.webp" alt="" decoding="async"></span><p>${si.head}</p>${this.boonHtml(m)}${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div>
       ${cards}
       ${gearBox}
     </div>

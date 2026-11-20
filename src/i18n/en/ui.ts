@@ -399,4 +399,17 @@ registerDict('ui', {
   "La paix par deux pourparlers, ou la guerre aux côtés de notre allié. Il faut régler ce conflit pour passer à l’âge industriel.": "Peace through two rounds of talks, or war at our ally’s side. This conflict must be settled to reach the Industrial age.",
   "Paix : un comptoir, une fête, un monument": "Peace: a trading post, a feast, a monument",
   "Guerre : une bataille, butin et tribut d’or": "War: a battle, gold spoils and tribute",
+  // les expéditions facultatives sur les îles de l’archipel (20 nov. 2026)
+  "Seulement sur la voie de la guerre.": "Only on the path of war.",
+  "Pour la bataille :": "For the battle:",
+  "Pour la paix :": "For peace:",
+  "Les pourparlers peuvent échouer ({r} %) : les expéditions sur les îles rendent la paix plus sûre.": "The talks can fail ({r}%): expeditions to the islands make peace safer.",
+  "Risque d’échec : {base} % → {r} %, grâce à vos expéditions sur les îles.": "Risk of failure: {base}% → {r}%, thanks to your expeditions to the islands.",
+  "deux pourparlers, {r} % d’échec chacun : un comptoir, un monument, une fête": "two rounds of talks, {r}% chance of failure each: a trading post, a monument, a feast",
+  "Paix : risque des pourparlers {base} % → {r} %, grâce à vos expéditions sur les îles.": "Peace: risk of the talks {base}% → {r}%, thanks to your expeditions to the islands.",
+  "Guerre : {l}": "War: {l}",
+  "Les expéditions facultatives sur les îles (Expéditions, au Médiéval) donnent des troupes pour la bataille ou des chances pour la paix.": "Optional expeditions to the islands (Expeditions, in the Medieval age) give troops for the battle or better chances of peace.",
+  "🛡️ Renforts alliés gagnés sur les îles : +{n} troupes": "🛡️ Allied reinforcements won on the islands: +{n} troops",
+  "⚔️ Armés chez les forgerons alliés : +{n} de nos soldats": "⚔️ Armed by the allied smiths: +{n} of our soldiers",
+  "🎯 Flotte et garnison rivales affaiblies : −{n} ennemis": "🎯 Rival fleet and garrison weakened: −{n} enemies",
 });

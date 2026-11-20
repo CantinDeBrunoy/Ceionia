@@ -227,6 +227,11 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 .expModal .mpills { margin-top: 8px; gap: 6px; }
 .expModal .mpills span { padding: 3px 10px; border-radius: 999px; background: #FFFDF6; border: 1px solid rgba(225, 195, 140, 0.7); font-size: 13px; color: var(--hInk); }
 .expModal .mpills .crisk { padding: 3px 10px; border: 1px solid rgba(220, 120, 110, 0.35); }
+/* l’avantage d’une expédition des îles pour le dénouement de l’archipel (la bataille, la paix) */
+.expModal .mboon { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0 0; padding: 5px 10px; border-radius: 10px; background: rgba(90, 150, 110, 0.12); border: 1px solid rgba(90, 150, 110, 0.4); font-size: 13px; line-height: 1.4; color: #2f5a3c; }
+.expModal .mboon span { display: inline-flex; align-items: center; gap: 4px; }
+.expModal .mboon .neg { color: #9a3b2e; }
+.expModal .mboon .pic { width: 16px; height: 16px; }
 .expModal .mbody { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-content: start; padding: 0; }
 .expModal .mbody > * { grid-column: 1 / -1; }
 .expModal .mbody > .mgains { grid-column: 1; grid-row: 10; align-self: center; justify-self: start; margin: 10px 0 0; padding: 3px 5px; gap: 3px; border-radius: 999px; min-width: 0; overflow: hidden; flex-wrap: nowrap; }
@@ -920,6 +925,8 @@ body.hell #resPanel { display: none !important; }
 /* ce que les éclaireurs ont appris (la carte « Lancer l'assaut ») */
 #diploChoice .dcIntel { margin: 0 0 6px; padding: 8px 14px; list-style: none; border-radius: 10px; background: rgba(255, 250, 238, 0.6); border: 1px solid rgba(200, 160, 95, 0.45); font-size: 13.5px; line-height: 1.5; color: var(--hInk); }
 #diploChoice .dcWhy { margin: 0 0 4px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(200, 160, 95, 0.6); background: rgba(232, 192, 74, 0.14); font-weight: 700; font-size: 13.5px; color: var(--hInk); text-align: center; }
+#diploChoice .dcBoons { margin: 2px 0 0; padding: 7px 12px; border-radius: 10px; background: rgba(90, 150, 110, 0.12); border: 1px solid rgba(90, 150, 110, 0.45); font-size: 13px; line-height: 1.45; color: var(--hInk); text-align: left; }
+#diploChoice .dcIntel .dcBoon { color: #2f6a44; font-weight: 600; }
 #diploChoice button[disabled] { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
 #diploChoice .pcNote { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-family: var(--hSerif); font-style: italic; font-size: 13px; color: var(--hInk2); }
 #diploChoice .pcNote::before, #diploChoice .pcNote::after { content: ''; flex: 1; height: 1px; background: rgba(200, 160, 95, 0.5); }
