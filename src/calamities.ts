@@ -3,6 +3,7 @@ import { World, N, VEG_FIELD } from './world/world';
 import type { GameTime } from './core/time';
 import type { Environment } from './render/env';
 import { rulesOf } from './sim/difficulty';
+import { hasPerk, SAT_CALAM_WARN } from './sim/legacy';
 import { CALAMITIES, CalamityKind, FloodSite, REPAIR_DAYS, QUAKE_R, STAR_ORE, STAR_PERK, floodSite, harmOf, impacts, nameOf, planAge, quakeCenter, quakeVictims, rockfalls, ruinedFields } from './sim/calamity';
 import { FloodView } from './render/flood';
 import { RepairsView } from './render/repairs';
@@ -158,9 +159,9 @@ export class Calamities {
     if (k === 'meteor') {
       // au soir, les astronomes l'annoncent (s'il y a un observatoire) ; elle vient en pleine nuit
       const hr = this.h.time.hour;
-      if (!this.foretold && hr >= 17.5 && hr < 21 && this.h.astronomers()) {
+      if (!this.foretold && hr >= 17.5 && hr < 21 && (this.h.astronomers() || this.sat)) {
         this.foretold = true;
-        this.h.toast(tr('🔭 Les astronomes annoncent une pluie de météorites pour cette nuit.'), undefined, 'info');
+        this.h.toast(this.h.astronomers() ? tr('🔭 Les astronomes annoncent une pluie de météorites pour cette nuit.') : tr('🛰️ Les satellites annoncent une pluie de météorites pour cette nuit.'), undefined, 'info');
       }
       return env.night > METEOR_NIGHT;
     }
@@ -178,7 +179,7 @@ export class Calamities {
     } else if (k === 'quake') {
       const [x, z] = quakeCenter(this.h.world);
       this.quake = { x, z, t: 0, shaking: false, hit: false, hurt: 0, falls: 0 };
-      this.h.toast(tr('🐾 Les bêtes s’agitent, les oiseaux s’envolent : la terre va trembler ! Cliquez ici pour voir.'), () => this.h.goTo(x, z, 34), 'danger');
+      this.h.toast(this.sat ? tr('🛰️ Les satellites voient la terre se tendre : un séisme dans une demi-minute ! Cliquez ici pour voir.') : tr('🐾 Les bêtes s’agitent, les oiseaux s’envolent : la terre va trembler ! Cliquez ici pour voir.'), () => this.h.goTo(x, z, 34), 'danger');
     } else if (k === 'meteor') {
       const w = this.h.world, list = impacts(w, harmOf(w));
       if (!list.length) return false;
@@ -212,23 +213,24 @@ export class Calamities {
     if (f.phase === 'rain' && f.t >= FLOOD_RAIN) {
       f.phase = 'warn'; f.t = 0;
     }
-    if (f.phase === 'warn' && !f.told) f.told = true, this.h.toast(tr('🌊 Les eaux montent : {where} va déborder ! Cliquez ici pour voir.', { where }), go, 'danger');
-    if (f.phase === 'warn' && f.t >= FLOOD_WARN) {
+    if (f.phase === 'warn' && !f.told) f.told = true, this.h.toast(this.sat ? tr('🛰️ Les satellites voient les eaux monter : {where} va déborder dans une minute ! Cliquez ici pour voir.', { where }) : tr('🌊 Les eaux montent : {where} va déborder ! Cliquez ici pour voir.', { where }), go, 'danger');
+    if (f.phase === 'warn' && f.t >= this.floodWarn) {
       f.phase = 'rise'; f.t = 0;
       this.floodView.set(s);
       this.h.audio.sfxSplash(1);
       // les champs sous l'eau ne donnent plus rien (pas au bac à sable : le spectacle seul)
-      if (harm !== 'none') { for (const k of s.cells) if (w.veg[k] === VEG_FIELD) { w.flooded[k] = 1; f.drowned++; } w.ageVersion++; }
+      // (les digues et tranchées de l'expédition « Le village sous le volcan » gardent les champs et les bâtiments au sec)
+      if (harm !== 'none' && !this.dikes) { for (const k of s.cells) if (w.veg[k] === VEG_FIELD) { w.flooded[k] = 1; f.drowned++; } w.ageVersion++; }
     }
     if (f.phase === 'rise' && f.t >= FLOOD_RISE) {
       f.phase = 'hold'; f.t = 0;
       // les bâtiments de la berge sont abîmés (dégâts complets)
-      if (harm === 'full') for (const id of s.buildings) if (this.damage(id)) f.hurt++;
+      if (harm === 'full' && !this.dikes) for (const id of s.buildings) if (this.damage(id)) f.hurt++;
     }
     if (f.phase === 'hold' && f.t >= FLOOD_HOLD) { f.phase = 'ebb'; f.t = 0; }
     if (f.phase === 'ebb' && f.t >= FLOOD_EBB) {
       // l'eau partie : un champ noyé sur trois est à resemer (dégâts complets)
-      if (harm === 'full' && w.disasters) for (const k of ruinedFields(w, s.cells)) {
+      if (harm === 'full' && w.disasters && !this.dikes) for (const k of ruinedFields(w, s.cells)) {
         w.veg[k] = 0; f.ruined++;
         const x = k % N, z = Math.floor(k / N);
         w.markVeg(x, z, x, z);
@@ -250,13 +252,13 @@ export class Calamities {
     const q = this.quake, w = this.h.world;
     if (!q) return;
     q.t += gdt;
-    if (!q.shaking && q.t >= QUAKE_WARN) {
+    if (!q.shaking && q.t >= this.quakeWarn) {
       q.shaking = true;
       this.h.audio.sfxRumble(QUAKE_SHAKE);
       this.quakeView.crack(q.x, q.z);
     }
     if (!q.shaking) return;
-    const s = q.t - QUAKE_WARN;
+    const s = q.t - this.quakeWarn;
     // de la poussière monte des bâtiments secoués
     for (const b of w.buildings.values()) {
       const sz = sizeOf(b), cx = b.x + sz / 2, cz = b.z + sz / 2;
@@ -329,7 +331,7 @@ export class Calamities {
   shakeAt(x: number, z: number) {
     const q = this.quake;
     if (!q || !q.shaking) return 0;
-    const s = q.t - QUAKE_WARN, env = Math.min(1, s) * (s > QUAKE_SHAKE - 3 ? Math.max(0, (QUAKE_SHAKE - s) / 3) : 1);
+    const s = q.t - this.quakeWarn, env = Math.min(1, s) * (s > QUAKE_SHAKE - 3 ? Math.max(0, (QUAKE_SHAKE - s) / 3) : 1);
     return env * Math.max(0, 1 - Math.hypot(x - q.x, z - q.z) / 70);
   }
 
@@ -348,22 +350,30 @@ export class Calamities {
   }
 
   /** Le compte rendu de la crue */
+  /** Les savoir-faire des expéditions (`legacy.ts`) : les satellites annoncent plus tôt, les digues gardent le village au sec */
+  private get sat() { return hasPerk(this.h.world, 'satellites'); }
+  private get dikes() { return hasPerk(this.h.world, 'dikes'); }
+  /** Secondes entre l'annonce et la montée des eaux, entre les bêtes qui s'agitent et la secousse (×3 avec les satellites) */
+  private get floodWarn() { return FLOOD_WARN * (this.sat ? SAT_CALAM_WARN : 1); }
+  private get quakeWarn() { return QUAKE_WARN * (this.sat ? SAT_CALAM_WARN : 1); }
+
   private floodReport(f: Flood) {
     const parts: string[] = [];
     if (f.drowned) parts.push(nplural(f.drowned, 'champ noyé', 'champs noyés'));
     if (f.ruined) parts.push(tr('{n} à resemer', { n: f.ruined }));
     if (f.hurt) parts.push(nplural(f.hurt, 'bâtiment abîmé', 'bâtiments abîmés'));
     const tip = f.ruined || f.hurt ? ' ' + tr('Un rempart le long de la berge, ou une berge relevée à l’outil de terrain, arrête l’eau.') : '';
+    if (!parts.length && this.dikes) return tr('🌊 La crue s’est retirée : les digues ont tenu, rien n’est abîmé.');
     return parts.length ? tr('🌊 La crue s’est retirée : {what}.', { what: parts.join(', ') }) + tip : tr('🌊 La crue s’est retirée sans dégâts.');
   }
 
   /** Les catastrophes et réparations en cours, pour leurs cartes à gauche (l'œil y mène la vue) */
   incidents(): Incident[] {
     const out: Incident[] = [], w = this.h.world, f = this.flood, q = this.quake;
-    if (q) out.push({ key: 'calam:quake', icon: '🌍', title: tr('Séisme'), status: q.shaking ? tr('La terre tremble') : tr('Les bêtes s’agitent'), progress: Math.min(1, q.t / (QUAKE_WARN + QUAKE_SHAKE)), x: q.x, z: q.z });
+    if (q) out.push({ key: 'calam:quake', icon: '🌍', title: tr('Séisme'), status: q.shaking ? tr('La terre tremble') : tr('Les bêtes s’agitent'), progress: Math.min(1, q.t / (this.quakeWarn + QUAKE_SHAKE)), x: q.x, z: q.z });
     if (f && f.phase !== 'rain') {
       const st = f.phase === 'warn' ? tr('Les eaux montent') : f.phase === 'rise' ? tr('L’eau gagne les berges') : f.phase === 'hold' ? tr('Les berges sont sous l’eau') : tr('L’eau se retire');
-      const progress = f.phase === 'warn' ? f.t / FLOOD_WARN : f.phase === 'ebb' ? f.t / FLOOD_EBB : f.phase === 'hold' ? f.t / FLOOD_HOLD : f.t / FLOOD_RISE;
+      const progress = f.phase === 'warn' ? f.t / this.floodWarn : f.phase === 'ebb' ? f.t / FLOOD_EBB : f.phase === 'hold' ? f.t / FLOOD_HOLD : f.t / FLOOD_RISE;
       out.push({ key: 'calam:flood', icon: '🌊', title: f.site.lake ? tr('Crue : le lac déborde') : f.site.pond ? tr('Crue : l’étang déborde') : tr('Crue : la rivière déborde'), status: st, progress: Math.min(1, progress), x: f.site.x, z: f.site.z });
     }
     // les fers célestes à ramasser : une carte, l'œil mène au premier

@@ -124,6 +124,11 @@ registerDict('misc', {
   'Les bêtes s’agitent': 'The animals are restless',
   // pluie de météorites (calamities.ts)
   '🔭 Les astronomes annoncent une pluie de météorites pour cette nuit.': '🔭 The astronomers announce a meteor shower tonight.',
+  // les satellites et les digues des expéditions (`legacy.ts`)
+  '🛰️ Les satellites annoncent une pluie de météorites pour cette nuit.': '🛰️ Satellites announce a meteor shower for tonight.',
+  '🛰️ Les satellites voient la terre se tendre : un séisme dans une demi-minute ! Cliquez ici pour voir.': '🛰️ Satellites see the ground straining: an earthquake in half a minute! Click here to see.',
+  '🛰️ Les satellites voient les eaux monter : {where} va déborder dans une minute ! Cliquez ici pour voir.': '🛰️ Satellites see the waters rising: {where} will overflow in a minute! Click here to see.',
+  '🌊 La crue s’est retirée : les digues ont tenu, rien n’est abîmé.': '🌊 The flood has receded: the dikes held, nothing is damaged.',
   '☄️ Une pluie de météorites traverse le ciel ! Cliquez ici pour lever les yeux.': '☄️ A meteor shower is crossing the sky! Click here to look up.',
   'impact': 'impact',
   'impacts': 'impacts',

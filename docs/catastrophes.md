@@ -1,7 +1,7 @@
 # Catastrophes naturelles
 
 > Fichiers : `src/sim/calamity.ts` (logique pure : programme, où déborde une crue, constantes), `src/calamities.ts` (classe `Calamities` : programme en jeu, annonces, étapes, dégâts, comptes rendus, cartes d'incident, réparations), `src/render/flood.ts` (`FloodView` : la nappe de la crue), `src/render/repairs.ts` (`RepairsView` : échafaudages et poussière des bâtiments abîmés), `src/render/quake.ts` (`QuakeView` : rochers qui dévalent, fissures, poussière du séisme), `src/render/meteors.ts` (`MeteorView` : bolides, impacts, cratères, fers célestes), `src/render/trophies.ts` (la pierre étoilée), `src/build/tools.ts` (clic sur un fer céleste), `src/world/world.ts` (`damaged`, `flooded`, `calam`, `starIron`, sauvegarde), `src/sim/sim.ts` (bâtiments abîmés et champs noyés dans les capacités), `src/sim/difficulty.ts` (champ `calamity`), `src/main.ts` (câblage, réglages, `__game.calamity`), `src/ui/ui.ts` (interrupteurs des réglages).
-> Tests : `tests/catastrophes.test.ts`.
+> Tests : `tests/catastrophes.test.ts`, `tests/diguesSatellites.test.ts`.
 > Voir aussi : [incidents.md](incidents.md) (incendies, cartes d'incident, volcan qui se réveille), [ciel-meteo.md](ciel-meteo.md) (la pluie), [eau-rivieres.md](eau-rivieres.md), [difficulte.md](difficulte.md), [sauvegarde.md](sauvegarde.md).
 
 ## En bref
@@ -53,6 +53,11 @@ Des catastrophes naturelles rares : la **crue** (une rivière, un étang ou un l
 - **Mise en scène** (`MeteorView`) : chaque bolide part 2,6 s avant l'impact, à 26 cases de côté et 34 de haut, tête incandescente et traînée de braises ; à l'impact, éclair (lumière ponctuelle créée au départ, éteinte), onde de choc au sol, gerbe de terre et de braises, grand boum (`sfxBang`), arbres couchés à 1,2 case. Le cratère (disque brûlé penché selon la pente, rebord de mottes et de pierres) fume 150 s de jeu, s'estompe à 260 s.
 - **Le fer céleste** : un cratère de nature sur deux (`STAR_IRON`, au moins un par pluie) garde un éclat de métal sombre veiné de bleu qui luit et scintille. `World.starIron` (cases, sauvegardé) ; carte « Un fer céleste à ramasser », dont l'œil y mène. Un clic dessus (outil « Voir », curseur main) le ramasse : `STAR_ORE` = +3 minerai, son d'or. Le premier ramassé de la partie donne le bonus `starstone` (`exp.perks`) : la **pierre étoilée** rejoint les trophées de la grande place (sans cinématique, comme le roi des Enfers).
 - **Compte rendu** : « ☄️ La pluie de météorites est passée : n impacts, n incendies. » et, s'il y a un fer céleste, comment le ramasser ; un clic mène au cratère.
+
+### Les savoir-faire des expéditions (`legacy.ts`, voir [expeditions.md](expeditions.md))
+- **Digues et tranchées** (`dikes`, « Le village sous le volcan ») : la crue ne noie aucun champ, n'abîme aucun bâtiment et ne laisse rien à resemer (l'eau monte quand même, pour le spectacle). Compte rendu : « 🌊 La crue s'est retirée : les digues ont tenu, rien n'est abîmé. »
+- **Satellites** (`satellites`, « Premier vol de fusée ») : la crue et le séisme sont annoncés trois fois plus tôt (`SAT_CALAM_WARN` : 60 s avant la montée des eaux au lieu de 20, 24 s avant la secousse au lieu de 8), par un message des satellites ; la pluie de météorites est annoncée au soir comme avec un observatoire. Getters `sat`, `dikes`, `floodWarn`, `quakeWarn` de `Calamities`.
+- Test : `diguesSatellites.test.ts` (crue sur la petite carte à rivière, avec un hôte réduit).
 
 ### Réglages
 - Réglages › Partie › Règles : sous « Catastrophes », la rangée « Catastrophes naturelles » : Crues, Séismes, Météorites, chacun allumé ou éteint (`Calamities.enabled`). Retenus dans les réglages : `noFlood`, `noQuake`, `noMeteor` (absents : allumés).

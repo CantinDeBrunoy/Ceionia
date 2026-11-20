@@ -117,11 +117,11 @@ Demande de l'auteur : une expédition qui ne donne que des ressources ou un bonu
 | `wolf` Le loup des bois | `hounds`, des chiens de garde | un chien au pied de chaque patrouille ; police et tours de garde gardent 4 cases plus loin (`HOUND_RANGE`) ; risque ×0,9 face aux bêtes (`HOUND_BEAST`) |
 | `coal` Prospection de charbon | `coalfire`, fourneaux au charbon | équipement fabriqué ×1,25 (`COAL_CRAFT`), briqueteries ×1,3 (`COAL_BRICKS`) |
 | `railway` Le tracé du chemin de fer | `railfast`, le grand tracé | trains ×1,25 (`RAIL_SPEED`), gare de marchandises ×2 au lieu de ×1,75 (`RAIL_FREIGHT`) |
-| `eruption` Le village sous le volcan | `dikes`, digues et tranchées | les bombes de lave n'enflamment plus rien |
+| `eruption` Le village sous le volcan | `dikes`, digues et tranchées | les bombes de lave n'enflamment plus rien ; la crue ne noie ni n'abîme plus rien (voir [catastrophes.md](catastrophes.md)) |
 | `summit` Expédition au sommet | `meteo`, la station météo | risque ×0,8 face aux intempéries (`METEO_WEATHER`), clubs alpins +3 bien-être (`METEO_ALPINE`) |
 | `trawl` La pêche en haute mer | `trawlers`, des chalutiers | pontons, ports et halles aux poissons ×1,3 de nourriture (`TRAWL_FOOD`) |
 | `seafarm` Les îles flottantes | `cropisles`, des îles de culture | fermes marines ×1,5 de nourriture (`ISLES_FOOD`) |
-| `rocket` Premier vol de fusée | `satellites` | volcan qui se réveille annoncé une minute avant (`SAT_WAKE_WARN`, 18 s sinon), risque ×0,9 en mer (`SAT_SEA`) |
+| `rocket` Premier vol de fusée | `satellites` | volcan qui se réveille annoncé une minute avant (`SAT_WAKE_WARN`, 18 s sinon) ; crue et séisme annoncés trois fois plus tôt, météorites au soir (`SAT_CALAM_WARN`) ; risque ×0,9 en mer (`SAT_SEA`) |
 | `spice` Les épices | `spices` (qui n'était que du texte) | tavernes +2 bien-être (`SPICE_TAVERN`) ; le choix prudent le rapporte aussi |
 
 - **Où** : `src/sim/legacy.ts` (`LEGACIES` : savoir-faire, mission, émoji, nom court ; les nombres ; `perkYield`, `perkFood`, `perkJoy`, `guardReach`). Lus par `Expeditions.yields` et `flowOfBuilding` (mines, briqueteries), `railBoost` et `freightBonus` (`freight.ts`), `Railway.step`, `Sim.recalc` (nourriture, bien-être, couverture), `Expeditions.riskOf` (`legacyK`), `craftStep`, `computeCoverage`, `rangeOf` et `reaches` (paramètre `guard`), `Game.wakeVolcano` et `eruptions.onImpact` (`main.ts`). Les chiens : `Patrols.hound`, `HoundView` (voir [habitants.md](habitants.md)).

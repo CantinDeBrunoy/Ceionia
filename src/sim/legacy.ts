@@ -85,6 +85,9 @@ export function perkFood(w: Perks, kind: KindId) {
 export const SAT_SEA = 0.9;
 /** Le volcan qui se réveille tremble d'abord : 18 s, ou une minute avec les satellites */
 export const WAKE_WARN = 18, SAT_WAKE_WARN = 60;
+/** Les crues et les séismes (`calamities.ts`) : annoncés trois fois plus tôt avec les satellites ; la pluie de météorites, au soir
+ * comme avec un observatoire */
+export const SAT_CALAM_WARN = 3;
 
 /**
  * Anciennes sauvegardes : une partie qui a déjà réussi une de ces expéditions en reçoit le savoir-faire au chargement
