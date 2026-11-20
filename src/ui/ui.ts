@@ -1690,7 +1690,7 @@ export class UI {
   goalWon(g: GoalDef) {
     this.goalWin = { g, until: performance.now() + GOAL_WIN_MS };
     this.goalKey = '';
-    this.toast(`${tr('Objectif atteint : {goal}.', { goal: tr(g.text) })} ${tr(g.praise)} ${rewardWords(g.reward)}`.trim(), undefined, 'notice');
+    this.toast(`${tr('Objectif atteint : {goal}.', { goal: tr(g.text) })} ${tr(g.praise)} ${this.host.world.unlimited ? '' : rewardWords(g.reward)}`.trim(), undefined, 'notice');
     this.renderGoals();
   }
 
@@ -1707,18 +1707,20 @@ export class UI {
     const g = win ? win.g : act[this.goalIdx];
     this.goalShown = g;
     const [have, need] = win ? [1, 1] : progressOf(g, h.world.goals, ctx!);
+    // (ressources illimitées, au bac à sable : pas de récompense à montrer)
+    const reward = h.world.unlimited ? {} : g.reward;
     const dots = act.length > 1 && !win ? `<span class="gd">${act.map((x, i) => `<i data-gi="${i}" class="${i === this.goalIdx ? 'on' : ''}" title="${attr(tr(x.text))}"></i>`).join('')}</span>` : '';
     const ico = win ? hudPic('etoile', 30) : g.pic ? hudPic(g.pic, 30) : pic(KINDS[g.kinds![0]].icon, 30);
     // (le texte sur deux lignes au plus, puis une ligne : la jauge et le compte, ou le mot de félicitation, et la récompense)
     const html = `<span class="gi">${ico}</span><span class="gt"><b class="g1">${win ? tr('Bravo !') : tr(g.text)}</b><span class="g2">`
       + (win ? `<span class="gp">${tr(g.praise)}</span>` : `<span class="gb"><i style="width:${Math.round(Math.min(1, have / Math.max(1, need)) * 100)}%"></i></span><em>${Math.min(have, need)}/${need}</em>`)
-      + `${rewardChips(g.reward)}</span></span>${dots}`;
+      + `${rewardChips(reward)}</span></span>${dots}`;
     const key = `${html}|${getLang()}`;
     if (key === this.goalKey) return;
     this.goalKey = key;
     box.innerHTML = html;
     box.classList.toggle('won', !!win);
-    const rw = rewardWords(g.reward);
+    const rw = rewardWords(reward);
     box.title = win ? '' : `${tr('Objectif : {goal}', { goal: tr(g.text) })} (${Math.min(have, need)}/${need})${rw ? ` — ${rw}` : ''}`;
   }
 

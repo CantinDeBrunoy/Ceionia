@@ -1948,12 +1948,13 @@ class Game implements UIHost {
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
   setHideGoals(on: boolean) { this.hideGoals = on; this.applySettings(); this.ui.update(); }
   /** Les petits objectifs n'avancent pas au bac à sable ni pendant le tutoriel guidé (ils viennent après) */
-  get goalsOn() { return !this.world.sandbox && !!this.tutorial && !(this.tutorial.on && this.tutorial.guiding); }
+  // (au bac à sable aussi, à la demande de l'auteur : « ça ne rapporte rien, mais ça peut donner un objectif au joueur »)
+  get goalsOn() { return !!this.tutorial && !(this.tutorial.on && this.tutorial.guiding); }
   /** Ce que les objectifs lisent du village */
   goalCtx(): GoalCtx {
     const s = this.sim, w = this.world;
     return {
-      age: s.age, pop: s.pop, day: this.time.days, season: this.time.season, counts: s.counts, brick: w.brick, missions: w.exp.done, security: s.coverage.share,
+      age: s.age, pop: s.pop, day: this.time.days, season: this.time.season, counts: s.counts, brick: w.brick, missions: w.exp.done, security: s.coverage.share, unlimited: w.unlimited,
       ok: { food: s.food.ok, water: s.water.ok, jobs: s.jobs.ok, joy: s.joy.ok, health: s.health.ok, housing: s.housing.ok },
     };
   }
@@ -1962,7 +1963,8 @@ class Game implements UIHost {
     // (masqués : ils attendent, rien ne se gagne ni ne se dit)
     if (!this.goalsOn || this.hideGoals) return;
     for (const g of stepGoals(this.world.goals, this.goalCtx())) {
-      const r = g.reward, w = this.world;
+      // ressources illimitées (bac à sable) : ni ressources ni bien-être, le mot de félicitation et la fête seulement
+      const w = this.world, r = w.unlimited ? {} : g.reward;
       w.wood += r.wood ?? 0; w.stone += r.stone ?? 0;
       const fx = rewardEffects(r);
       if (fx.length) applyEffects(w, fx, this.time.dayLen); else w.version++;

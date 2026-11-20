@@ -10,7 +10,7 @@ Entre deux passages d'âge, le joueur a toujours trois petits objectifs en cours
 ## Règles du jeu
 - Chaque âge a sa liste (`GOALS`, champ `age`), de cinq à six objectifs, dans l'ordre où ils arrivent. `activeGoals` en prend les `GOALS_SHOWN` = 3 premiers non faits.
 - Un objectif qui demande un bâtiment encore fermé par une expédition (`reqMission`, ou `minAge` au-dessus de l'âge) **attend** : il ne compte pas parmi les trois, le suivant passe devant. Exemple : « Une taverne au village » attend l'expédition du brasseur.
-- Au passage d'âge, les objectifs de l'âge d'avant qui ne sont pas faits ne sont plus proposés (ils restent possibles si l'on revenait à cet âge au bac à sable, mais les objectifs n'y sont pas montrés).
+- Au passage d'âge, les objectifs de l'âge d'avant qui ne sont pas faits ne sont plus proposés (au bac à sable, revenir à un âge d'avant ramène ceux de cet âge qui ne sont pas faits).
 - Quatre façons de mesurer (`Measure`) :
   - `state` : un état du village (habitants, bâtiments, part des maisons protégées, briques en réserve, expéditions réussies). Un bâtiment amélioré compte pour son genre d'origine (`lineOf`).
   - `streak` : une condition tenue plusieurs jours de suite (nourriture et eau, tous les besoins). La série part du jour où la condition devient vraie pendant que l'objectif est en cours, et repart de zéro si elle casse.
@@ -18,7 +18,8 @@ Entre deux passages d'âge, le joueur a toujours trois petits objectifs en cours
   - `event` : un événement compté à partir du moment où l'objectif est en cours (`base`) : expédition réussie sans blessé (`safeExp`, sans les pourparlers), expédition légendaire réussie (`legend`, `isLegendary`). Il en faut une de plus qu'à son arrivée.
 - Récompenses (`reward`) : bois et pierre ajoutés directement ; minerai et bien-être passent par `applyEffects` (le bien-être est un bonus temporaire de `world.exp.temp`, comme ceux des expéditions). Le cosmodrome n'en a pas : c'est la fin.
 - Atteint : un son de fête (`sfxFeast`), un message (`notice`) « Objectif atteint : … » avec la félicitation et la récompense, et la pastille dorée « Bravo ! » pendant `GOAL_WIN_MS` = 5 s.
-- Pas d'objectifs au bac à sable ni pendant le tutoriel guidé (suite principale) : `Game.goalsOn`. Ils ne progressent pas non plus pendant ce temps.
+- Pas d'objectifs pendant le tutoriel guidé (suite principale) : `Game.goalsOn` ; ils ne progressent pas non plus pendant ce temps.
+- **Bac à sable** (et plus largement ressources illimitées, `world.unlimited`) : les objectifs sont là aussi, à la demande de l'auteur (« ça ne rapporte rien, mais ça peut donner un objectif au joueur »), **sans récompense** : ni ressources ni bien-être, ni pastilles de récompense, ni « Récompense : … » dans le message. Le mot de félicitation, le son et la pastille dorée restent. Les objectifs de stock (`stock: true`, « 20 briques en réserve ») ne sont pas proposés : `activeGoals` les saute quand `GoalCtx.unlimited`.
 - Option : Paramètres › Partie › « Objectifs : Affichés / Masqués » (`hideGoals`, sauvegardé avec les réglages). Masqués, ils attendent : rien ne se gagne ni ne se dit ; réaffichés, ce qui est rempli entre-temps se gagne aussitôt.
 
 ### La liste

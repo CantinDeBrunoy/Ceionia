@@ -73,6 +73,19 @@ describe('petits objectifs', () => {
     expect(s.quiet).toBe(false);
   });
 
+  it('protéger les maisons : sans maison, rien n’est protégé', () => {
+    const sec = GOALS.find((g) => g.id === 'm-sec')!;
+    expect(progressOf(sec, newGoalState(), ctx({ age: 2, security: 1 }))).toEqual([0, 50]);
+    expect(progressOf(sec, newGoalState(), ctx({ age: 2, security: 0.6, counts: { house: 4 } }))).toEqual([60, 50]);
+  });
+
+  it('ressources illimitées (bac à sable) : les objectifs de stock ne sont pas proposés', () => {
+    const s = { ...newGoalState(), done: ['i-pop80', 'i-station'] };
+    expect(activeGoals(s, ctx({ age: 3 })).map((g) => g.id)).toContain('i-brick');
+    expect(activeGoals(s, ctx({ age: 3, unlimited: true })).map((g) => g.id)).not.toContain('i-brick');
+    expect(activeGoals(s, ctx({ age: 3, unlimited: true })).length).toBe(GOALS_SHOWN);
+  });
+
   it('se sauvegarde avec le monde et se relit ; un état abîmé ne casse rien', () => {
     const w = new World();
     w.goals.done.push('p-pop12');
