@@ -11,7 +11,7 @@ import type { Rider } from './riders';
  * les dégâts restent ceux de l'unité
  */
 
-const WHITE = 0xeef2f6, WHITE2 = 0xdde3ea, ANTHRA = 0x2e333b, ANTHRA2 = 0x464d58, CYAN = 0x5af0ff, VIOLET = 0xb070ff, RED = 0xff3a4a;
+const BLUE = 0x3a6ab8, GOLD = 0xe8c66a, WHITE = 0xeef2f6, WHITE2 = 0xdde3ea, ANTHRA = 0x2e333b, ANTHRA2 = 0x464d58, CYAN = 0x5af0ff, VIOLET = 0xb070ff, RED = 0xff3a4a;
 /** hauteur du ventre du char au-dessus du sol (unités du modèle) */
 const HOVER = 0.075;
 
@@ -93,6 +93,20 @@ export function makeHoverTank(v = 0): Rider {
     p.add(new THREE.CylinderGeometry(0.024, 0.024, 0.006, 8).rotateX(Math.PI / 2), s * 0.07, 0.045, -0.303, VIOLET, 0, 'neon');
   }
   p.box(0.12, 0.006, 0.006, 0, 0.083, 0.2, CYAN, 0, 'neon');
+  // phares du nez, dôme du capteur avant, trappes du pilote
+  for (const s of [-1, 1]) p.box(0.03, 0.008, 0.01, s * 0.1, 0.05, 0.2, 0xf4fbff, 0, 'neon');
+  p.sphere(0.022, 0, 0.088, 0.2, ANTHRA2, 1, 0.6);
+  p.box(0.012, 0.004, 0.004, 0, 0.098, 0.218, RED, 0, 'neon');
+  for (const x of [-0.04, 0.04]) { p.box(0.05, 0.006, 0.05, x, 0.104, 0.07, WHITE2); p.box(0.01, 0.004, 0.01, x + 0.012, 0.11, 0.08, ANTHRA); }
+  // grilles de refroidissement du pont arrière, joints des plaques
+  for (let k = 0; k < 5; k++) p.box(0.14, 0.004, 0.008, 0, 0.104, -0.13 - k * 0.018, ANTHRA2);
+  for (const z of [-0.04, 0.02]) p.box(0.205, 0.002, 0.003, 0, 0.104, z, ANTHRA2);
+  for (const s of [-1, 1]) {
+    // emblème du village sur les flancs, poignées, patins de remorquage
+    p.box(0.004, 0.026, 0.034, s * 0.136, 0.034, -0.12, BLUE); p.box(0.005, 0.01, 0.012, s * 0.137, 0.042, -0.12, GOLD);
+    for (const z of [0.05, -0.02]) p.box(0.004, 0.004, 0.03, s * 0.137, 0.068, z, ANTHRA);
+    p.box(0.02, 0.012, 0.02, s * 0.11, 0.012, 0.2, ANTHRA2);
+  }
   // antennes (pointes lumineuses)
   for (const [x, z, h] of [[0.1, -0.2, 0.16], [-0.1, -0.15, 0.1]]) {
     p.box(0.004, h, 0.004, x, 0.09, z, ANTHRA);
@@ -119,6 +133,18 @@ export function makeHoverTank(v = 0): Rider {
   t.box(0.06, 0.012, 0.006, 0, 0.022, 0.112, CYAN, 0, 'neon');
   t.sphere(0.026, 0.045, 0.062, -0.05, ANTHRA2, 1, 0.7);
   t.box(0.01, 0.01, 0.004, 0.045, 0.066, -0.026, RED, 0, 'neon');
+  // nacelles à missiles sur les joues de la tourelle : quatre tubes et leurs ogives lumineuses
+  for (const s of [-1, 1]) {
+    t.box(0.036, 0.034, 0.07, s * 0.14, 0.014, -0.01, ANTHRA2);
+    for (const [dx, dy] of [[-0.008, 0.022], [0.008, 0.022], [-0.008, 0.038], [0.008, 0.038]]) t.box(0.012, 0.012, 0.004, s * 0.14 + dx, dy, 0.026, VIOLET, 0, 'neon');
+    t.box(0.016, 0.008, 0.03, s * 0.12, 0.014, -0.01, ANTHRA);
+  }
+  // trappe du chef et périscope, caméra de visée
+  t.cyl(0.024, 0.026, 0.008, 8, -0.035, 0.064, -0.04, WHITE2);
+  t.box(0.016, 0.012, 0.012, -0.035, 0.072, -0.02, ANTHRA);
+  t.box(0.012, 0.006, 0.002, -0.035, 0.076, -0.0135, CYAN, 0, 'neon');
+  t.box(0.026, 0.022, 0.026, 0, 0.042, 0.075, ANTHRA2);
+  t.box(0.014, 0.014, 0.004, 0, 0.046, 0.089, RED, 0, 'neon');
   hang(t, turret);
   // l'antenne radar : disque incliné sur un mât, qui tourne
   const dish = new THREE.Group(), dp = new Parts();
@@ -241,14 +267,26 @@ export function makeCombatDrone(color: number): CombatDrone {
   for (const [x, z] of arms) {
     p.add(new THREE.BoxGeometry(0.014, 0.006, 0.07), x * 0.5, 0.004, z * 0.5, ANTHRA, Math.atan2(x, z));
     p.cyl(0.011, 0.011, 0.012, 6, x, 0.002, z, ANTHRA2);
+    // carénage de l'hélice, feu de position (vert à droite, rouge à gauche), pied d'atterrissage
+    p.add(new THREE.TorusGeometry(0.038, 0.003, 3, 10).rotateX(Math.PI / 2), x, 0.016, z, WHITE2);
+    p.box(0.005, 0.005, 0.005, x + Math.sign(x) * 0.012, 0.0, z, x > 0 ? 0x5aff8a : RED, 0, 'neon');
+    p.box(0.004, 0.022, 0.004, x * 0.55, -0.02, z * 0.55, ANTHRA);
   }
+  for (const x of [-0.033, 0.033]) p.box(0.004, 0.004, 0.07, x, -0.031, 0, ANTHRA2);
+  // caméra sur sa nacelle sous le ventre, antenne sur le dos, plaque de batterie
+  p.sphere(0.012, 0, -0.022, 0.014, ANTHRA2, 1);
+  p.box(0.008, 0.008, 0.004, 0, -0.022, 0.026, color, 0, 'neon');
+  p.box(0.003, 0.024, 0.003, -0.012, 0.03, -0.024, ANTHRA);
+  p.box(0.006, 0.006, 0.006, -0.012, 0.042, -0.024, color, 0, 'neon');
+  p.box(0.03, 0.006, 0.04, 0, 0.018, -0.008, WHITE2);
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
   hang(p, body);
   const rotors: THREE.Object3D[] = [];
   for (const [x, z] of arms) {
     const rp = new Parts();
-    rp.box(0.07, 0.002, 0.01, 0, 0, 0, ANTHRA);
+    for (let k = 0; k < 3; k++) rp.add(new THREE.BoxGeometry(0.034, 0.002, 0.009).translate(0.017, 0, 0), 0, 0, 0, ANTHRA, (k * Math.PI * 2) / 3);
+    rp.cyl(0.006, 0.006, 0.006, 6, 0, -0.002, 0, WHITE2);
     rp.add(new THREE.CylinderGeometry(0.036, 0.036, 0.001, 10), 0, 0.001, 0, 0xcfd6de);
     const r = new THREE.Mesh(rp.build(false).body, mats.body);
     r.position.set(x, 0.016, z);
