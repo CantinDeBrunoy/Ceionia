@@ -133,6 +133,8 @@ export class Festivities {
   private bedMat = new THREE.MeshBasicMaterial({ color: 0xff5a1a, fog: false });
   /** l'horloge des fêtes (le lit de braises rougeoie) */
   private clock = 0;
+  /** feux d'artifice sans fête (un petit objectif réussi au bac à sable) : quelques fusées au-dessus d'un lieu, l'une après l'autre */
+  private shows: { x: number; y: number; z: number; left: number; next: number }[] = [];
 
   constructor(private world: World) {
     const mk = (n: number) => {
@@ -395,7 +397,15 @@ export class Festivities {
     if (age === 2) for (const u of [-0.32, 0.32]) { const [x, z] = put(u, 0); p.cyl(0.04, 0.04, 0.09, 8, x, at(x, z), z, 0x9a6a44); p.cyl(0.042, 0.042, 0.008, 8, x, at(x, z) + 0.06, z, 0x6f5640); }
   }
 
-  get active() { return this.fests.length > 0 || this.sparks.length > 0 || this.flakes.length > 0 || this.embers.length > 0 || this.flashes.length > 0; }
+  /**
+   * Un court feu d'artifice au-dessus de (x, z) : `n` fusées tirées l'une après l'autre en quelques secondes, aux couleurs vives
+   * des derniers âges, sans fête ni caméra (un petit objectif réussi au bac à sable, voir `docs/objectifs.md`)
+   */
+  fireworks(x: number, z: number, n = 5) {
+    this.shows.push({ x, y: this.world.surfaceAt(x, z) + 0.2, z, left: n, next: 0 });
+  }
+
+  get active() { return this.shows.length > 0 || this.fests.length > 0 || this.sparks.length > 0 || this.flakes.length > 0 || this.embers.length > 0 || this.flashes.length > 0; }
 
   update(dt: number) {
     if (!this.active) return;
@@ -403,6 +413,16 @@ export class Festivities {
     this.clock += dt;
     // le lit de braises rougeoie
     this.bedMat.color.setRGB(1, 0.34 + Math.sin(this.clock * 3) * 0.06 + Math.sin(this.clock * 7.7) * 0.04, 0.1);
+    // les feux d'artifice sans fête : une ou deux fusées à la fois, toutes les 0,4 à 0,8 s
+    for (let i = this.shows.length - 1; i >= 0; i--) {
+      const sh = this.shows[i];
+      if ((sh.next -= dt) > 0) continue;
+      const salvo = Math.min(sh.left, 1 + (Math.random() < 0.4 ? 1 : 0));
+      for (let n = 0; n < salvo; n++) this.rocket(sh.x + (Math.random() - 0.5) * 1.4, sh.y, sh.z + (Math.random() - 0.5) * 1.4, BURSTS[4], 4);
+      sh.left -= salvo;
+      sh.next = 0.4 + Math.random() * 0.4;
+      if (sh.left <= 0) this.shows.splice(i, 1);
+    }
     for (let i = this.fests.length - 1; i >= 0; i--) {
       const f = this.fests[i];
       f.t += dt;
