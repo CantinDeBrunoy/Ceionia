@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GameTime } from '../core/time';
 import { SeasonState } from './season';
 import { mats, LIGHTS, SHADOW_LAYER } from './materials';
+import { BEAM } from './beacon';
 import { clamp, lerp, smoothstep, mulberry32 } from '../core/rng';
 import { N } from '../world/world';
 import { SNOW_SUN } from './snow';
@@ -213,6 +214,7 @@ export class Environment {
     const fogK = this.weatherKind === 'fog' && this.show.fog ? wk : 0;
     const overcast = clamp(rainK * 0.8 + snowK * 0.6 + fogK * 0.5, 0, 1);
     this.shownRain = rainK; this.shownSnow = snowK; this.shownFog = fogK; this.shownOvercast = overcast;
+    BEAM.fog.value = fogK;
 
     // ---- soleil / lune
     const ang = ((time.hour - 6) / 24) * Math.PI * 2;
