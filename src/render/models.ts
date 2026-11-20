@@ -12271,6 +12271,17 @@ function futureTemple(p: Parts) {
   waterRect(p, 0, 0.04 + 0.012, 0.26, 0.6, 0.2, 0);
   p.box(0.62, 0.02, 0.012, 0, 0.04, 0.36, F.white); p.box(0.62, 0.02, 0.012, 0, 0.04, 0.16, F.white);
   for (const s of [-1, 1]) tree(p, s * 0.4, 0.3, 0.6, F.leaf);
+  // au pied de chaque coque, un socle de verre allumé
+  for (const [x, z, r, a, sy] of [[-0.2, -0.12, 0.3, 0.2, 3.1], [0.08, -0.08, 0.25, -0.1, 3.0], [0.3, -0.02, 0.18, -0.4, 2.8]] as number[][]) {
+    p.cyl(r * 0.9, r * 0.95, 0.03, 10, x, 0.04, z, F.glass2, true);
+  }
+  // le parvis : marches devant le bassin, bornes lumineuses, bancs, une sculpture sur son socle, les visiteurs
+  for (let k = 0; k < 3; k++) p.box(0.66 - k * 0.04, 0.012, 0.04, 0, 0.04 - k * 0.013, 0.39 + k * 0.03, F.white);
+  for (const x of [-0.36, -0.12, 0.12, 0.36]) { p.cyl(0.01, 0.012, 0.06, 6, x, 0.04, 0.12, F.white); p.cyl(0.011, 0.011, 0.01, 6, x, 0.1, 0.12, F.neon, 'neon'); }
+  for (const s of [-1, 1]) { p.box(0.12, 0.02, 0.04, s * 0.38, 0.05, 0.05, F.white); p.box(0.1, 0.004, 0.03, s * 0.38, 0.046, 0.05, F.neon, 0, 'neon'); }
+  p.box(0.06, 0.08, 0.06, 0.4, 0.04, -0.3, F.pearl);
+  p.add(new THREE.TorusKnotGeometry(0.035, 0.008, 24, 4), 0.4, 0.17, -0.3, 0xd8a840);
+  for (const [x, z, c, r] of [[-0.1, 0.42, 0xf4f6f8, 0.3], [0.2, 0.4, 0x3a6ab8, 2.8], [0.05, 0.14, 0xff8ad8, 1.4]] as number[][]) figure(p, x, z, c, r);
 }
 
 /**
@@ -12610,6 +12621,22 @@ function research(p: Parts) {
   p.add(new THREE.SphereGeometry(0.16, 10, 4, 0, Math.PI * 2, 0, Math.PI / 3).rotateX(Math.PI).rotateX(-0.9), 0.75, 0.42, -0.7, F.white, 0.8);
   for (const s of [-1, 1]) tree(p, s * 0.75, 0.72, 0.7, F.leaf);
   for (const [x, z, c, r] of [[0.3, 0.8, 0xf4f6f8, 0.4], [-0.25, 0.85, 0xf4f6f8, 2.8]] as number[][]) figure(p, x, z, c, r);
+  // l'anneau : montants blancs sur son bandeau de verre, quatre entrées sous leurs auvents
+  for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; p.box(0.01, 0.12, 0.02, Math.cos(a) * 0.765, 0.1, Math.sin(a) * 0.765, F.white, Math.PI / 2 - a); }
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2 + Math.PI / 4, x = Math.cos(a) * 0.8, z = Math.sin(a) * 0.8;
+    p.box(0.16, 0.012, 0.1, x, 0.2, z, F.white, Math.PI / 2 - a); p.box(0.08, 0.12, 0.012, Math.cos(a) * 0.772, 0.03, Math.sin(a) * 0.772, F.smoke, Math.PI / 2 - a);
+    p.box(0.1, 0.004, 0.012, Math.cos(a) * 0.79, 0.16, Math.sin(a) * 0.79, F.neon, Math.PI / 2 - a, 'neon');
+  }
+  // la cour : allées en croix, bassin, bancs, arbres ; dehors, les allées vers les entrées, bornes, vélos, robots livreurs
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2 + Math.PI / 4;
+    for (let d = 0.84; d < 0.95; d += 0.05) p.box(0.1, 0.004, 0.04, Math.cos(a) * d, 0.012, Math.sin(a) * d, F.pearl, Math.PI / 2 - a);
+    p.cyl(0.008, 0.01, 0.06, 6, Math.cos(a + 0.2) * 0.9, 0.012, Math.sin(a + 0.2) * 0.9, F.white); p.cyl(0.009, 0.009, 0.01, 6, Math.cos(a + 0.2) * 0.9, 0.072, Math.sin(a + 0.2) * 0.9, F.neon, 'neon');
+  }
+  for (let k = 0; k < 3; k++) { const a = k * 2.094 + 0.5; tree(p, Math.cos(a) * 0.32, Math.sin(a) * 0.32, 0.45, F.leaf2); p.box(0.1, 0.02, 0.035, Math.cos(a + 1) * 0.36, 0.03, Math.sin(a + 1) * 0.36, F.white, Math.PI / 2 - a - 1); }
+  for (const [x, z] of [[0.55, 0.62], [-0.6, -0.55]]) { p.box(0.05, 0.04, 0.06, x, 0.012, z, F.white); p.box(0.03, 0.006, 0.03, x, 0.054, z, F.neon, 0, 'neon'); for (const s of [-1, 1]) p.cyl(0.012, 0.012, 0.01, 6, x + s * 0.03, 0.012, z, F.dark); }
+  for (let k = 0; k < 3; k++) bike(p, -0.7 + k * 0.06, 0.62, [0x3c7fd8, 0xd84a3e, 0xf2c23a][k], 0.3);
 }
 
 /**
