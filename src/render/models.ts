@@ -7085,6 +7085,37 @@ function pier(p: Parts, age: number, o: ModelOpts) {
   // bouée de sauvetage au port moderne, poisson qui sèche sinon
   if (age >= 4) p.add(new THREE.TorusGeometry(0.045, 0.014, 6, 14), 0.16, 0.14, hz + hd / 2 + 0.012, C.red);
   else for (let k = 0; k < 3; k++) fish(0.15 + k * 0.045, 0.2, hz + hd / 2 + 0.03, k === 1 ? 0xe8925a : 0xc8d4dc);
+  if (age <= 3) {
+    // la cabane : planches verticales (ou chaînages de brique), avant-toit et ses chevrons, faîtage, volet de la fenêtre ronde,
+    // filet pendu au mur, rames et gaffe appuyées ; poteaux d'amarrage et leurs cordages, échelle qui descend dans l'eau,
+    // nasses, rouleau de corde, panier de poissons, filet qui sèche sur le garde-corps
+    const zf = hz + hd / 2, board = dark(wall, 0.84);
+    if (age < 3) for (let x = -hw / 2 + 0.03; x < hw / 2 - 0.01; x += 0.045) { p.box(0.004, hh, 0.004, x, 0.03, zf + 0.002, board); for (const s of [-1, 1]) p.box(0.004, hh, 0.004, s * (hw / 2 + 0.002), 0.03, hz - hd / 2 + 0.03 + (x + hw / 2), board); }
+    else for (const s of [-1, 1]) for (let y = 0.05; y < hh; y += 0.06) p.box(0.03, 0.02, 0.006, s * (hw / 2 - 0.012), y, zf + 0.002, C.darkbrick);
+    for (const s of [-1, 1]) p.box(0.012, hh, 0.012, s * (hw / 2 - 0.004), 0.03, zf, C.darkwood);
+    p.box(hw + 0.1, 0.014, 0.012, 0, hh + 0.026, zf + 0.04, C.darkwood);
+    for (let k = 0; k < 5; k++) p.box(0.012, 0.012, 0.05, -hw / 2 + k * (hw / 4), hh + 0.032, zf + 0.02, C.darkwood);
+    p.box(hw + 0.1, 0.02, 0.03, 0, hh + 0.19, hz, dark(roof, 0.75));
+    p.box(0.012, 0.08, 0.008, 0.125, 0.11, zf + 0.008, dark(C.door, 1.1), 0.25);
+    p.box(0.1, 0.012, 0.03, -0.07, 0.03, zf + 0.02, C.stone);
+    // filet pendu au mur, ses flotteurs
+    for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.003, 0.12, 0.002), -0.13 + k * 0.012, 0.08, zf + 0.008, 0x8a7a5a, 0, false, (k - 2) * 0.08);
+    for (let k = 0; k < 3; k++) p.box(0.008, 0.008, 0.008, -0.142 + k * 0.024, 0.2, zf + 0.01, 0xe8553c);
+    // rames et gaffe contre le pignon
+    for (const [z, c] of [[-0.3, C.wood], [-0.24, C.wood], [-0.18, 0x6a5a40]] as [number, number][]) { p.add(new THREE.BoxGeometry(0.008, 0.3, 0.008).translate(0, 0.15, 0), hw / 2 + 0.02, 0.03, hz + z + 0.24, c, 0, false, -0.2); if (c === C.wood) p.add(new THREE.BoxGeometry(0.004, 0.06, 0.024), hw / 2 + 0.05, 0.05, hz + z + 0.24, c, 0, false, -0.2); }
+    // poteaux d'amarrage et cordages, échelle, garde-corps et filet qui sèche
+    for (const z of [0.38, 0.62]) { p.cyl(0.016, 0.018, 0.12, 6, -w / 2 - 0.02, -0.02, z, C.darkwood); p.add(new THREE.TorusGeometry(0.018, 0.004, 3, 8).rotateX(Math.PI / 2), -w / 2 - 0.02, 0.07, z, 0xc8b080); }
+    rod(p, [-w / 2 - 0.02, 0.07, 0.38], [-w / 2 - 0.02, 0.07, 0.62], 0.002, 0xc8b080);
+    for (const s of [-1, 1]) p.box(0.008, 0.2, 0.008, w / 2 - 0.02 + s * 0.03, -0.17, 0.79, C.darkwood);
+    for (let k = 0; k < 4; k++) p.box(0.06, 0.006, 0.008, w / 2 - 0.02, -0.15 + k * 0.05, 0.79, C.darkwood);
+    for (const z of [0.3, 0.5]) p.box(0.008, 0.08, 0.008, w / 2 - 0.004, 0.025, z, C.darkwood);
+    p.box(0.006, 0.006, 0.22, w / 2 - 0.004, 0.105, 0.4, C.darkwood);
+    for (let k = 0; k < 6; k++) p.box(0.002, 0.07, 0.03, w / 2 - 0.002, 0.035, 0.31 + k * 0.035, 0x8a7a5a, 0.1);
+    // nasses d'osier, rouleau de corde, panier de poissons
+    for (const [x, z] of [[-0.09, 0.46], [-0.06, 0.52]]) { p.cyl(0.025, 0.03, 0.045, 7, x, 0.025, z, 0xb8945a); p.cyl(0.01, 0.025, 0.012, 7, x, 0.07, z, 0x8a6a3e); }
+    p.add(new THREE.TorusGeometry(0.022, 0.008, 3, 8).rotateX(Math.PI / 2), 0.06, 0.033, 0.48, 0xc8b080);
+    p.cyl(0.03, 0.025, 0.035, 7, 0.08, 0.025, 0.66, 0x9a7a4a); for (let k = 0; k < 3; k++) p.add(new THREE.ConeGeometry(0.006, 0.026, 4).rotateZ(Math.PI / 2), 0.07 + k * 0.01, 0.064, 0.66, [0xc8d4dc, 0xe8925a, 0x9ab0c0][k]);
+  }
   if (age >= 4) {
     // la boutique d'appâts : enseigne en drapeau au poisson orange, panneau solaire ; râtelier de kayaks, vélo contre le mur
     p.box(0.012, 0.012, 0.05, -0.17, 0.215, hz + hd / 2 + 0.01, C.metal);
