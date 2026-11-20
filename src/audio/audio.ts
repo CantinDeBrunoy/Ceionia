@@ -234,7 +234,11 @@ export class AudioEngine {
       return { g, f };
     };
     // pas de vent : son souffle continu couvrait les autres ambiances
-    const rain = noiseLoop('highpass', 1800, 0.4); this.rainG = rain.g;
+    // pluie : un souffle de médium (400 à 3 200 Hz), comme une averse sur les feuilles et les toits. Avant, le bruit gardé
+    // au-dessus de 1 800 Hz seulement (aigus jusqu'à 18 kHz) faisait un grésillement de friture (retour de l'auteur, 20 nov. 2026)
+    const rain = noiseLoop('highpass', 400, 0.5); this.rainG = rain.g;
+    const rainLow = ctx.createBiquadFilter(); rainLow.type = 'lowpass'; rainLow.frequency.value = 3200; rainLow.Q.value = 0.6;
+    rain.f.disconnect(); rain.f.connect(rainLow); rainLow.connect(rain.g);
     const water = noiseLoop('lowpass', 520, 0.8); this.waterG = water.g;
     const wl = ctx.createOscillator(); wl.frequency.value = 0.3;
     const wlg = ctx.createGain(); wlg.gain.value = 0.012; wl.connect(wlg); wlg.connect(water.g.gain); wl.start();
