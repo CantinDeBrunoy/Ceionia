@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { World, VEG_FOREST } from '../world/world';
 import { Parts, Glow } from './parts';
 import { mats, LIGHTS } from './materials';
+import { TEAM_A, TEAM_B } from './teamPaint';
 import { makeFolk, folkStep, holdFolk, Folk } from './folk';
 
 /**
@@ -24,8 +25,11 @@ const BURSTS: number[][] = [
 ];
 const CONFETTI = [0xff5a6a, 0x4aa8ff, 0x6ad86a, 0xffd04a, 0xd06aff, 0xffffff];
 const PETALS = [0xf8c8d8, 0xffffff, 0xf2a6c8];
-/** couleurs des fanions selon l'âge (les guirlandes de la Préhistoire et de l'Antiquité sont de feuillage et de fleurs) */
-const FLAGS: number[][] = [[], [], [0xc83a32, 0xe8b84a, 0x3a6ab8, 0x4a8a3e, 0xf2ece0], [0x2a4a9a, 0xf4f2ee, 0xd23a32], [0xff5a6a, 0x4aa8ff, 0x6ad86a, 0xffd04a, 0xd06aff], [0x40e8ff, 0xff4ad8, 0x8a6aff, 0x4affb0]];
+/**
+ * couleurs des fanions selon l'âge (les guirlandes de la Préhistoire et de l'Antiquité sont de feuillage et de fleurs) : au
+ * Moyen Âge et à l'âge industriel, celles du blason du village (voir teamPaint.ts) mêlées de blanc
+ */
+const FLAGS: number[][] = [[], [], [TEAM_A, TEAM_B, 0xf2ece0, TEAM_A, TEAM_B], [TEAM_A, 0xf4f2ee, TEAM_B], [0xff5a6a, 0x4aa8ff, 0x6ad86a, 0xffd04a, 0xd06aff], [0x40e8ff, 0xff4ad8, 0x8a6aff, 0x4affb0]];
 /** mâts : leur bois (ou leur métal) et leur hauteur, selon l'âge */
 const MAST = [0x6a4a30, 0x7a5a3e, 0x6a4a30, 0x5a4a3e, 0xeceae4, 0xc8d0dc];
 const MAST_H = [0.5, 0.52, 0.6, 0.6, 0.62, 0.66];

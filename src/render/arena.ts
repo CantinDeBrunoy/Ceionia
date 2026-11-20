@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Parts, type Glow } from './parts';
+import { TEAM_B, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG } from './teamPaint';
 import { hash2 } from '../core/rng';
 
 /**
@@ -191,6 +192,8 @@ function fighter(f: Fr, kit: ArenaKit, x: number, y: number, z: number, ry: numb
 /** Fanion accroché en (x, y, z) (le mât n'est pas dessiné) : il flotte au vent */
 function flag(f: Fr, kit: ArenaKit, x: number, y: number, z: number, w: number, h: number, color: number, trim: number, glow: Glow = false) {
   const s = kit.sway(f.w(x, y, z), [0, 1, 0], 0.4, 0.9);
+  // au blason du village : une toile entière, sans queue (la forme du blason la découpe), ni liseré sur l'emblème
+  if (color === TEAM_FLAG) { s.box(w * 1.25, h, 0.006, w * 0.625, -h, 0, TEAM_FLAG); return; }
   s.box(w, h, 0.006, w / 2, -h, 0, color, 0, glow);
   s.box(w, 0.012, 0.008, w / 2, -0.012, 0, trim, 0, glow);
   s.box(w * 0.3, h * 0.6, 0.006, w + w * 0.12, -h * 0.8, 0, color, 0, glow, PI / 4);
@@ -420,10 +423,9 @@ function lists(f: Fr, kit: ArenaKit) {
     g.p.pyramid(0.56, 0.2, 0.48, g.X(0, 0.02), g.base + 0.615, g.Z(0, 0.02), BLUE, g.ry);
     g.ball(0.018, 0, 0.83, 0.02, GOLD);
     g.cyl(0.004, 0.004, 0.1, 4, 0, 0.82, 0.02, DWOOD);
-    flag(f, kit, g.X(0, 0.02), 0.92, g.Z(0, 0.02), 0.12, 0.06, BLUE, YEL);
+    flag(f, kit, g.X(0, 0.02), 0.92, g.Z(0, 0.02), 0.12, 0.06, TEAM_FLAG, TEAM_B);
     for (const s of [-1, 1]) {
-      g.box(0.09, 0.19, 0.006, s * 0.31, 0.3, 0.395, BLUE); g.box(0.03, 0.03, 0.008, s * 0.31, 0.4, 0.396, YEL);
-      g.add(new THREE.ConeGeometry(0.045, 0.04, 3).rotateX(PI).scale(1, 1, 0.15), s * 0.31, 0.28, 0.395, BLUE);
+      g.box(0.09, 0.21, 0.006, s * 0.31, 0.28, 0.395, TEAM_BANNER);
     }
     g.box(0.3, 0.004, 0.2, 0, 0.08, 0.25, RED);
     person(g, -0.07, 0.25, 0, 0x2a3a8a, { y: 0.082, hat: 'cap', hatColor: GOLD, arms: 'one', legs: 0x2a3a8a });
@@ -462,7 +464,7 @@ function lists(f: Fr, kit: ArenaKit) {
     bunting(f, [x, 0.44, z], [s * 1.06, 0.3, 1.06], 6, 0.05, [RED, CREAM, BLUE, YEL]);
   }
   f.box(0.4, 0.05, 0.05, 0, 0.32, 0.55, DWOOD);
-  f.box(0.08, 0.09, 0.012, 0, 0.23, 0.58, BLUE); f.box(0.08, 0.02, 0.013, 0, 0.27, 0.581, YEL); f.box(0.02, 0.09, 0.013, 0, 0.23, 0.581, YEL);
+  f.box(0.08, 0.09, 0.012, 0, 0.23, 0.58, TEAM_EMBLEM);
 
   // les pavillons des jouteurs, leurs écus pendus à un poteau, le râtelier de lances ; héraut et écuyer
   pavilion(f, kit, -1.08, 1.06, 0.2, 0.16, BLUE, YEL);

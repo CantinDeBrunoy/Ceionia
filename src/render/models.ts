@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Parts, type Glow } from './parts';
+import { TEAM_A, TEAM_B, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG } from './teamPaint';
 import { KindId, KINDS, smallSize, isRampart, isLinear } from '../build/catalog';
 import { decorModel, DecorKit } from './decor';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -846,7 +847,7 @@ function modernOffice(p: Parts, v: number) {
   p.cyl(0.005, 0.005, 0.24, 4, -0.24, H + 0.04, -0.14, 0x8a8f96); p.box(0.012, 0.012, 0.012, -0.24, H + 0.28, -0.14, 0xd84a3e, 0, true);
   // parvis : jardinières, mâts, vélos
   for (const s of [-1, 1]) { p.box(0.14, 0.05, 0.06, s * 0.3, 0.012, 0.36, 0x8a8f96); p.sphere(0.05, s * 0.3, 0.07, 0.36, 0x6fa85a, 0, 0.8); }
-  for (const [x, c] of [[-0.12, 0x3a6ab8], [0, 0xf4f2ee], [0.12, 0xd84a3e]] as number[][]) { p.cyl(0.004, 0.005, 0.36, 4, x, 0.012, 0.4, 0xc4cad2); p.box(0.004, 0.05, 0.07, x, 0.3, 0.435, c); }
+  for (const x of [-0.12, 0, 0.12]) { p.cyl(0.004, 0.005, 0.36, 4, x, 0.012, 0.4, 0xc4cad2); p.box(0.004, 0.05, 0.07, x, 0.3, 0.435, TEAM_FLAG); }
   for (let k = 0; k < 3; k++) p.add(new THREE.TorusGeometry(0.02, 0.003, 3, 8, Math.PI), 0.38 + k * 0.03, 0.012, 0.2, 0x8a8f96, Math.PI / 2);
 }
 
@@ -928,7 +929,7 @@ function villageChurch(p: Parts) {
  * d'une échauguette ; dans la cour, le puits, une charrette, des bottes de paille
  */
 function castle(p: Parts) {
-  const st = 0xc8c0b0, dk = 0xa89e8c, roofC = 0x5d6a80, banner = 0x3a6ab8;
+  const st = 0xc8c0b0, dk = 0xa89e8c, roofC = 0x5d6a80, banner = TEAM_A;
   p.cyl(0.9, 0.96, 0.06, 4, 0, 0, 0, 0x8fb87e, false, Math.PI / 4);
   const merlons = (x0: number, z0: number, x1: number, z1: number, y: number) => {
     const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(2, Math.floor(len / 0.1)), ry = Math.atan2(x1 - x0, z1 - z0);
@@ -956,14 +957,14 @@ function castle(p: Parts) {
     p.cyl(0.235, 0.2, 0.06, 12, x, 0.66, z, dk);
     for (let k = 0; k < 12; k += 2) p.box(0.05, 0.05, 0.05, x + Math.sin(k * 0.5236) * 0.215, 0.72, z + Math.cos(k * 0.5236) * 0.215, st, k * 0.5236);
     p.cone(0.25, 0.42, 12, x, 0.74, z, roofC);
-    p.cyl(0.005, 0.005, 0.16, 4, x, 1.14, z, C.darkwood); p.box(0.004, 0.06, 0.1, x, 1.24, z + 0.05, banner); p.box(0.005, 0.015, 0.1, x, 1.255, z + 0.05, C.gold);
+    p.cyl(0.005, 0.005, 0.16, 4, x, 1.14, z, C.darkwood); p.box(0.004, 0.06, 0.1, x, 1.24, z + 0.05, TEAM_FLAG);
   }
   // le châtelet d'entrée : deux tourelles, la herse, le pont-levis, les blasons
   for (const s of [-1, 1]) {
     p.cyl(0.1, 0.11, 0.62, 10, s * 0.16, 0.06, 0.82, st);
     p.cyl(0.125, 0.1, 0.05, 10, s * 0.16, 0.62, 0.82, dk);
     p.cone(0.14, 0.28, 10, s * 0.16, 0.67, 0.82, roofC);
-    p.box(0.05, 0.06, 0.006, s * 0.16, 0.34, 0.925, banner); p.box(0.02, 0.06, 0.007, s * 0.16, 0.34, 0.926, C.gold);
+    p.box(0.05, 0.06, 0.006, s * 0.16, 0.34, 0.925, TEAM_EMBLEM);
   }
   p.box(0.22, 0.48, 0.18, 0, 0.06, 0.8, st);
   merlons(-0.11, 0.88, 0.11, 0.88, 0.54);
@@ -980,7 +981,7 @@ function castle(p: Parts) {
   p.box(0.54, 0.03, 0.54, 0, 0.94, -0.18, dk);
   merlons(-0.25, 0.06, 0.25, 0.06, 0.97); merlons(-0.25, -0.42, 0.25, -0.42, 0.97); merlons(-0.25, -0.42, -0.25, 0.06, 0.97); merlons(0.25, -0.42, 0.25, 0.06, 0.97);
   p.cyl(0.07, 0.04, 0.2, 8, 0.25, 0.82, 0.06, st); p.cone(0.09, 0.2, 8, 0.25, 1.02, 0.06, roofC);
-  p.cyl(0.006, 0.006, 0.3, 4, -0.1, 0.97, -0.3, C.darkwood); p.box(0.005, 0.1, 0.16, -0.1, 1.15, -0.22, banner); p.box(0.006, 0.03, 0.16, -0.1, 1.17, -0.22, C.gold);
+  p.cyl(0.006, 0.006, 0.3, 4, -0.1, 0.97, -0.3, C.darkwood); p.box(0.005, 0.1, 0.16, -0.1, 1.15, -0.22, TEAM_FLAG);
   // la cour : le puits, une charrette, des bottes de paille
   p.cyl(0.07, 0.07, 0.07, 10, -0.45, 0.06, 0.35, C.stone); waterPool(p, -0.45, 0.13 + 0.005, 0.35, 0.055, 10, false);
   for (const s of [-1, 1]) p.box(0.012, 0.14, 0.012, -0.45 + s * 0.06, 0.13, 0.35, C.darkwood); p.box(0.14, 0.012, 0.012, -0.45, 0.27, 0.35, C.darkwood);
@@ -1004,11 +1005,11 @@ function castle(p: Parts) {
   p.add(new THREE.BoxGeometry(0.26, 0.014, 0.38), sx, 0.3, sz, 0x8a5a44, 0, false, 0.35);
   for (const [x, z] of [[sx + 0.05, sz - 0.1], [sx + 0.07, sz + 0.02]]) p.cyl(0.035, 0.035, 0.05, 7, x, 0.06, z, 0xd8c06a);
   horse(p, sx - 0.16, sz + 0.24, Math.PI, 0xe8e0d0, 0.06);
-  p.box(0.11, 0.05, 0.062, sx - 0.16, 0.13, sz + 0.24, banner); p.box(0.112, 0.012, 0.064, sx - 0.16, 0.13, sz + 0.24, C.gold);
+  p.box(0.11, 0.05, 0.062, sx - 0.16, 0.13, sz + 0.24, banner); p.box(0.112, 0.012, 0.064, sx - 0.16, 0.13, sz + 0.24, TEAM_B);
   figure(p, sx - 0.3, sz + 0.3, 0x8a6a4a, 0.4, false, 0xc8a070, 'idle', 0.048);
   // la quintaine où s'exercent les cavaliers : poteau, bras tournant, écu et sac de sable
   p.box(0.025, 0.24, 0.025, 0.22, 0.06, 0.52, C.darkwood);
-  { const q = spinner([0.22, 0.29, 0.52], [0, 1, 0], 0.4); q.box(0.24, 0.016, 0.016, 0.0, 0, 0, C.wood); q.box(0.06, 0.07, 0.01, -0.12, -0.04, 0, banner); q.box(0.025, 0.05, 0.01, -0.12, -0.03, 0.006, C.gold); q.add(new THREE.IcosahedronGeometry(0.025, 0).scale(1, 1.3, 1), 0.12, -0.04, 0, 0xc8b890); }
+  { const q = spinner([0.22, 0.29, 0.52], [0, 1, 0], 0.4); q.box(0.24, 0.016, 0.016, 0.0, 0, 0, C.wood); q.box(0.06, 0.07, 0.01, -0.12, -0.04, 0, TEAM_EMBLEM); q.add(new THREE.IcosahedronGeometry(0.025, 0).scale(1, 1.3, 1), 0.12, -0.04, 0, 0xc8b890); }
   // la garnison : les guetteurs sur le chemin de ronde et leurs piques, les torches de la porte
   for (const [x, z, r] of [[-0.78, 0.05, Math.PI / 2], [0.78, -0.25, -Math.PI / 2], [0.3, -0.78, Math.PI], [0.5, 0.76, 0]] as number[][]) {
     figure(p, x, z, 0x6a6a72, r, false, 0x8a8f96, 'idle', 0.49);
@@ -3970,8 +3971,7 @@ function tradepost(p: Parts, age: number) {
   const mx = 0.75, mz = -0.55;
   p.cyl(0.012, 0.016, 0.9, 6, mx, g, mz, old ? C.darkwood : 0xc8ccd2);
   p.sphere(0.02, mx, g + 0.91, mz, C.gold);
-  p.box(0.004, 0.16, 0.26, mx, g + 0.72, mz + 0.13, A1);
-  p.box(0.005, 0.05, 0.05, mx, g + 0.775, mz + 0.13, A2);
+  p.box(0.004, 0.16, 0.26, mx, g + 0.72, mz + 0.13, TEAM_FLAG);
 }
 
 /**
@@ -3984,7 +3984,7 @@ function tradepost(p: Parts, age: number) {
  * la flamme du souvenir brûle sous l'arche, cerclée de bornes et d'une chaîne, et les visiteurs la photographient
  */
 function triumph(p: Parts, age: number) {
-  const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.8), FOE = 0xc0392e, OURS = 0x3a6ab8, ALLY = 0x2aa8a0, LAUREL = 0x5f8f4a;
+  const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.8), FOE = 0xc0392e, OURS = TEAM_A, ALLY = 0x2aa8a0, LAUREL = 0x5f8f4a;
   p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
   // l'esplanade pavée, sa bordure, et l'avenue d'avant en arrière
   p.box(1.42, 0.012, 1.42, 0, 0.002, 0, dark(STONE, 0.86));
@@ -4100,8 +4100,9 @@ function triumph(p: Parts, age: number) {
     p.cyl(0.007, 0.009, 0.62, 5, x, 0.012, z, C.metal);
     p.sphere(0.012, x, 0.645, z, C.gold);
     const f = sway([x, 0.6, z], [0, 1, 0], 0.25, 0.7);
-    f.box(0.004, 0.1, 0.13, 0, -0.1, 0.065, col);
-    f.box(0.005, 0.02, 0.13, 0, -0.1, 0.065, C.gold);
+    // la nôtre au blason du village (emblème, forme), celle de l'allié à son liseré d'or
+    f.box(0.004, 0.1, 0.13, 0, -0.1, 0.065, col === OURS ? TEAM_FLAG : col);
+    if (col !== OURS) f.box(0.005, 0.02, 0.13, 0, -0.1, 0.065, C.gold);
   }
   // des braseros de part et d'autre du monument (au Médiéval), puis des vasques fleuries
   for (const x of [-0.5, 0.5]) {
@@ -4120,8 +4121,8 @@ function triumph(p: Parts, age: number) {
  * mâts aux couleurs des nations, des délégués et des visiteurs ; à l'âge futuriste, un globe holographique au-dessus du bassin
  */
 function embassy(p: Parts, age: number) {
-  const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.8), OURS = 0x3a6ab8, ALLY = 0x2aa8a0, OTHER = 0xc0392e;
-  const FLAGS = [OURS, ALLY, OTHER, 0xe8c04a, 0x6aa84f, 0x8e5bb4, 0xe0803a, 0xf2f2f2, 0x2a2a30];
+  const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.8), OURS = TEAM_A, ALLY = 0x2aa8a0, OTHER = 0xc0392e;
+  const FLAGS = [TEAM_FLAG, ALLY, OTHER, 0xe8c04a, 0x6aa84f, 0x8e5bb4, 0xe0803a, 0xf2f2f2, 0x2a2a30];
   p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
   // une rangée de mâts, un drapeau par peuple ; `arc` : en demi-cercle autour d'un point
   const mast = (x: number, z: number, h: number, col: number, k: number) => {
@@ -4175,7 +4176,7 @@ function embassy(p: Parts, age: number) {
       p.box(0.07, 0.012, 0.012, x, y + 0.115, 0.155, STONE);
     }
     // les bannières des trois peuples sur la façade
-    [OURS, ALLY, OTHER].forEach((col, k) => { const x = -0.48 + k * 0.48; if (Math.abs(x) < 0.1) return; p.box(0.08, 0.16, 0.004, x, top - 0.2, 0.155, col); p.box(0.09, 0.012, 0.01, x, top - 0.04, 0.156, C.gold); });
+    [OURS, ALLY, OTHER].forEach((col, k) => { const x = -0.48 + k * 0.48; if (Math.abs(x) < 0.1) return; p.box(0.08, 0.16, 0.004, x, top - 0.2, 0.155, col === OURS ? TEAM_BANNER : col); p.box(0.09, 0.012, 0.01, x, top - 0.04, 0.156, C.gold); });
     if (age >= 3) {
       // le palais des nations : un tambour à fenêtres, le dôme vert-de-gris, son lanternon
       p.cyl(0.18, 0.19, 0.13, 14, 0, top + 0.03, -0.15, PALE);
@@ -4287,7 +4288,7 @@ function concord(p: Parts, age: number) {
   p.sphere(0.016, 0, 0.395, 0.03, C.white);
   for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.09, 0.006, 0.035), s * 0.045, 0.39, -0.005, C.white, 0, false, s * 0.45);
   // les mâts aux couleurs des trois peuples, entre les piliers
-  [0x3a6ab8, TURQ, LACQ].forEach((col, k) => {
+  [TEAM_FLAG, TURQ, LACQ].forEach((col, k) => {
     const a = Math.PI / 2 + Math.PI / 3 + k * (Math.PI * 2) / 3, x = Math.cos(a) * 0.68, z = Math.sin(a) * 0.68;
     p.cyl(0.007, 0.009, 0.62, 5, x, 0.03, z, C.metal);
     p.sphere(0.012, x, 0.65, z, C.gold);
@@ -4337,7 +4338,7 @@ function landmark(p: Parts, age: number, v = 0) {
       hedge(p, sx * 0.5, 0.58, 0.5, 0.04, 0.05, 0.026); hedge(p, sx * 0.5, 0.9, 0.5, 0.04, 0.05, 0.026);
       for (let k = 0; k < 4; k++) p.sphere(0.02, sx * (0.32 + k * 0.12), 0.04, 0.74, [C.pink, 0xd84a3e, C.butter, C.lav][k], 0, 0.8);
       p.cyl(0.007, 0.009, 0.7, 5, sx * 0.24, 0.012, 0.5, C.metal);
-      p.box(0.005, 0.16, 0.1, sx * 0.24, 0.5, 0.55, 0x3a6ab8); p.box(0.006, 0.03, 0.1, sx * 0.24, 0.5, 0.55, C.gold);
+      p.box(0.005, 0.16, 0.1, sx * 0.24, 0.5, 0.55, TEAM_BANNER); p.box(0.006, 0.012, 0.1, sx * 0.24, 0.648, 0.55, TEAM_B);
     }
     if (age === 3) for (const sx of [-1, 1]) { p.cyl(0.012, 0.012, 0.38, 5, sx * 0.2, 0.012, 0.92, 0x3c4a44); p.box(0.04, 0.05, 0.04, sx * 0.2, 0.39, 0.92, 0xffe2a0, 0, true); p.box(0.05, 0.014, 0.05, sx * 0.2, 0.44, 0.92, 0x3c4a44); }
     else {
@@ -5092,7 +5093,7 @@ function health(p: Parts, age: number) {
     p.box(0.46, 0.06, 0.02, 0.1, 0.32, 0.17, 0xd84a3e); p.box(0.38, 0.03, 0.006, 0.1, 0.335, 0.181, 0xfff4e0, 0, true);
     p.box(0.562, 0.02, 0.342, 0.1, 0.3, 0.0, 0xd84a3e);
     for (const x of [-0.24, -0.34, 0.5, 0.6]) p.cyl(0.012, 0.012, 0.06, 6, x, 0.03, 0.22, 0x5d6878);
-    for (const [x, c] of [[-0.6, 0x3c7fd8], [-0.5, C.white], [-0.4, 0xd84a3e]] as [number, number][]) { p.cyl(0.005, 0.005, 0.5, 4, x, 0.03, 0.12, 0xd8dde2); p.box(0.07, 0.045, 0.004, x + 0.035, 0.47, 0.12, c); }
+    for (const x of [-0.6, -0.5, -0.4]) { p.cyl(0.005, 0.005, 0.5, 4, x, 0.03, 0.12, 0xd8dde2); p.box(0.07, 0.045, 0.004, x + 0.035, 0.47, 0.12, TEAM_FLAG); }
     p.box(0.16, 0.02, 0.05, 0.62, 0.07, 0.05, C.wood); for (const d of [-0.06, 0.06]) p.box(0.016, 0.04, 0.04, 0.62 + d, 0.03, 0.05, 0x5d6878);
     // haie du parking, passage piéton, voitures des visiteurs
     hedge(p, -0.15, 0.86, 1.5, 0.06, 0.06);
@@ -5288,7 +5289,7 @@ function school(p: Parts, age: number) {
     for (const s of [-1, 1]) { p.cyl(0.007, 0.009, 0.3, 5, s * 0.16, 0.025, 0.86, 0x3c4a44); p.box(0.04, 0.045, 0.04, s * 0.16, 0.32, 0.86, 0xffe2a0, 0, true); }
     // cour : marelle, grille, mât, arbres
     for (let i = 0; i < 4; i++) p.box(0.07, 0.003, 0.07, -0.2, 0.027, 0.0 + i * 0.09, C.white);
-    p.cyl(0.008, 0.008, 0.7, 5, -0.82, 0.025, 0.25, C.metal); p.box(0.14, 0.08, 0.005, -0.75, 0.62, 0.25, 0x4f7fc4); p.box(0.05, 0.08, 0.006, -0.77, 0.62, 0.25, C.white);
+    p.cyl(0.008, 0.008, 0.7, 5, -0.82, 0.025, 0.25, C.metal); p.box(0.14, 0.08, 0.005, -0.75, 0.62, 0.25, TEAM_FLAG);
     for (let x = -0.9; x <= 0.9; x += 0.08) if (Math.abs(x - 0.0) > 0.12) p.box(0.012, 0.1, 0.012, x, 0.025, 0.9, C.white);
     for (const s of [-1, 1]) p.box(0.78, 0.012, 0.012, s * 0.51, 0.1, 0.9, C.white);
     for (const [x, z] of [[0.5, 0.5], [0.3, 0.75], [-0.6, 0.65]]) tree(p, x, z, 1.15, 0x8fbf72);
@@ -5392,7 +5393,7 @@ function school(p: Parts, age: number) {
       for (let k = 0; k < 6; k++) p.sphere(0.028, sx * 0.3, 0.06, 0.18 + k * 0.12, [C.pink, C.butter, 0xd84a3e, C.lav, C.white, 0xe8a83c][k], 0, 0.8);
       for (const [x, z] of [[0.5, 0.32], [0.5, 0.68], [0.75, 0.5]]) tree(p, sx * x, z, x > 0.6 ? 0.9 : 1.05);
     }
-    for (const [x, c] of [[-0.06, 0x3c4a8a], [0.06, 0xd8a83c]] as [number, number][]) { p.cyl(0.005, 0.005, 0.55, 4, x, 0.04, 0.9, 0xd8dde2); p.box(0.07, 0.045, 0.004, x + 0.035, 0.53, 0.9, c); }
+    for (const x of [-0.06, 0.06]) { p.cyl(0.005, 0.005, 0.55, 4, x, 0.04, 0.9, 0xd8dde2); p.box(0.07, 0.045, 0.004, x + 0.035, 0.53, 0.9, TEAM_FLAG); }
     for (let k = 0; k < 4; k++) { const x = 0.62 + k * 0.07; for (const d of [-0.03, 0.03]) p.add(new THREE.TorusGeometry(0.025, 0.005, 4, 10).rotateY(Math.PI / 2), x, 0.07, 0.06 + d, 0x3c3c40); p.box(0.005, 0.005, 0.06, x, 0.08, 0.06, [0xd8553c, 0x3c7fd8, 0x4fa860, 0xe8c66a][k]); }
   }
 }
@@ -5495,7 +5496,7 @@ function firehouse(p: Parts, age: number, v: number) {
       p.pyramid(T + 0.22, 0.4, T + 0.22, tx, top + 0.28, tz, C.slate);
       p.cyl(0.006, 0.006, 0.12, 4, tx, top + 0.66, tz, 0x3c3c40); p.sphere(0.012, tx, top + 0.7, tz, C.gold);
       p.box(0.07, 0.004, 0.02, tx + 0.03, top + 0.76, tz, 0x3c3c40);
-      { const f = sway([tx + 0.006, top + 0.76, tz], [0, 1, 0], 0.5, 0.7); f.box(0.1, 0.06, 0.004, 0.05, -0.03, 0, 0x3a5a9a); f.box(0.1, 0.012, 0.005, 0.05, -0.03, 0, C.gold); }
+      { const f = sway([tx + 0.006, top + 0.76, tz], [0, 1, 0], 0.5, 0.7); f.box(0.1, 0.06, 0.004, 0.05, -0.03, 0, TEAM_FLAG); }
       // le guetteur appuyé au garde-corps, sa corne ; le pot à feu sur sa potence qui rougeoie, les torches de la porte
       figure(p, tx + 0.12, tz + 0.14, 0x8a3a2a, 0.6, false, 0x4a3426, 'idle', top + 0.023);
       p.add(new THREE.ConeGeometry(0.012, 0.06, 5).rotateZ(-Math.PI / 2), tx + 0.17, top + 0.16, tz + 0.18, 0xe8dcc0);
@@ -7009,7 +7010,7 @@ function lamp(p: Parts, age: number) {
     p.box(0.18, 0.025, 0.04, 0.07, 0.65, 0, C.metal); p.box(0.1, 0.02, 0.05, 0.14, 0.64, 0, 0xfaf6e6, 0, true);
     p.box(0.12, 0.014, 0.06, 0.14, 0.66, 0, 0x5d6168);
     p.box(0.07, 0.008, 0.008, -0.035, 0.52, 0, 0x5d6168);
-    { const f = sway([-0.045, 0.516, 0], [1, 0, 0], 0.14, 0.9); f.box(0.055, 0.16, 0.004, -0.014, -0.165, 0, 0x3a6ab8); f.box(0.055, 0.03, 0.005, -0.014, -0.12, 0, 0xf2c23a); f.box(0.055, 0.012, 0.005, -0.014, -0.165, 0, C.white); }
+    { const f = sway([-0.045, 0.516, 0], [1, 0, 0], 0.14, 0.9); f.box(0.055, 0.16, 0.004, -0.014, -0.165, 0, TEAM_BANNER); }
     p.box(0.008, 0.008, 0.07, 0, 0.42, 0.035, 0x5d6168); p.box(0.004, 0.04, 0.004, 0, 0.38, 0.07, 0x3c3c40);
     p.cyl(0.032, 0.02, 0.03, 8, 0, 0.35, 0.07, 0x3c4a44);
     for (let k = 0; k < 6; k++) p.sphere(0.014, Math.cos(k * 1.05) * 0.024, 0.385, 0.07 + Math.sin(k * 1.05) * 0.024, [0xf2a6c8, 0xd84a3e, 0xf2d24a][k % 3]);
@@ -7378,7 +7379,7 @@ function police(p: Parts, age: number) {
     p.add(new THREE.BoxGeometry(1.06, 0.03, 0.34), -0.15, 0.4, -0.12, C.terracotta, 0, false, 0, 0.2);
     p.box(0.14, 0.24, 0.02, -0.15, 0.012, -0.195, C.door);
     p.cyl(0.008, 0.008, 0.62, 5, 0.6, 0.012, 0.05, C.wood); p.box(0.012, 0.012, 0.16, 0.6, 0.6, 0.05, C.wood);
-    { const f = sway([0.6, 0.6, 0.05], [0, 0, 1], 0.18, 0.8); f.box(0.006, 0.16, 0.13, 0, -0.17, 0, 0xb8322c); f.box(0.007, 0.02, 0.13, 0, -0.17, 0, C.gold); }
+    { const f = sway([0.6, 0.6, 0.05], [0, 0, 1], 0.18, 0.8); f.box(0.006, 0.16, 0.13, 0, -0.17, 0, TEAM_BANNER); f.box(0.007, 0.012, 0.13, 0, -0.022, 0, TEAM_B); }
     // râtelier : lances et boucliers rouges à l'umbo d'or
     p.box(0.4, 0.02, 0.02, -0.6, 0.25, 0.2, C.darkwood); for (const d of [-0.18, 0.18]) p.box(0.02, 0.26, 0.02, -0.6 + d, 0.012, 0.2, C.darkwood);
     for (let k = 0; k < 5; k++) { p.cyl(0.005, 0.005, 0.36, 4, -0.76 + k * 0.08, 0.012, 0.22, C.wood); p.cone(0.012, 0.04, 4, -0.76 + k * 0.08, 0.372, 0.22, C.metal); }
@@ -7443,7 +7444,7 @@ function police(p: Parts, age: number) {
     p.box(0.22, 0.05, 0.012, -0.1, 0.32, -0.172, 0x2c3e6a); for (let k = 0; k < 6; k++) p.box(0.022, 0.024, 0.006, -0.18 + k * 0.032, 0.333, -0.164, 0xf4f2ee);
     // drapeau tricolore, fourgon de police et son cheval, agent en képi, réverbère
     p.cyl(0.006, 0.008, 0.9, 5, 0.62, 0.012, -0.12, C.metal);
-    { const f = sway([0.62, 0, -0.12], [0, 1, 0], 0.4, 1.1); [0x2c4a9a, 0xf4f2ee, 0xd84a3e].forEach((c, k) => f.box(0.004, 0.1, 0.05, 0, 0.78, 0.025 + k * 0.05, c)); }
+    { const f = sway([0.62, 0, -0.12], [0, 1, 0], 0.4, 1.1); f.box(0.004, 0.1, 0.15, 0, 0.78, 0.075, TEAM_FLAG); }
     p.box(0.2, 0.16, 0.32, 0.5, 0.06, 0.4, 0x2c3e6a); p.box(0.21, 0.02, 0.33, 0.5, 0.22, 0.4, 0x1e2a48);
     for (const z of [0.3, 0.5]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 10).rotateZ(Math.PI / 2), 0.5 + s * 0.11, 0.06, z, 0x7a6355);
     p.box(0.006, 0.04, 0.12, 0.6, 0.12, 0.4, 0xf4f2ee);
@@ -7489,7 +7490,7 @@ function police(p: Parts, age: number) {
     p.box(0.02, 0.02, 0.02, 0.35, 1.29, -0.7, 0xff4a3a, 0, true);
     // drapeau, parking et voitures de patrouille, barrière rouge et blanche, guérite, bornes, banc
     p.cyl(0.006, 0.008, 0.9, 5, 0.7, 0.012, -0.12, C.metal);
-    { const f = sway([0.7, 0, -0.12], [0, 1, 0], 0.4, 1.1); [0x2c4a9a, 0xf4f2ee, 0xd84a3e].forEach((c, k) => f.box(0.004, 0.1, 0.05, 0, 0.78, 0.025 + k * 0.05, c)); }
+    { const f = sway([0.7, 0, -0.12], [0, 1, 0], 0.4, 1.1); f.box(0.004, 0.1, 0.15, 0, 0.78, 0.075, TEAM_FLAG); }
     p.box(1.0, 0.012, 0.6, 0.25, 0.012, 0.42, 0x6f747a);
     for (let x = -0.15; x <= 0.7; x += 0.24) p.box(0.012, 0.004, 0.32, x, 0.025, 0.5, C.white);
     policeCar(p, -0.03, 0.5, 0); policeCar(p, 0.21, 0.5, 0); p.box(0.15, 0.08, 0.3, 0.45, 0.04, 0.5, 0x3c4a6a); p.box(0.13, 0.05, 0.14, 0.45, 0.12, 0.48, 0x9fc4dc);
@@ -7862,7 +7863,7 @@ function harbor(p: Parts, age: number) {
     p.add(new THREE.BoxGeometry(0.94, 0.03, 0.66), -0.45, 0.47, -0.6, 0x6a7a8a, 0, false, 0, -0.08);
     p.box(0.3, 0.32, 0.02, -0.45, 0.02, -0.285, 0x5d6878);
     p.box(0.22, 0.3, 0.22, 0.72, 0.02, -0.72, 0xf4f2ee); p.box(0.24, 0.06, 0.24, 0.72, 0.32, -0.72, C.glass, 0, true); p.box(0.25, 0.02, 0.25, 0.72, 0.38, -0.72, 0x3a6ab8);
-    p.cyl(0.006, 0.008, 0.6, 5, 0.86, 0.02, -0.55, C.metal); p.box(0.004, 0.08, 0.12, 0.86, 0.5, -0.5, 0x3a6ab8);
+    p.cyl(0.006, 0.008, 0.6, 5, 0.86, 0.02, -0.55, C.metal); p.box(0.004, 0.08, 0.12, 0.86, 0.5, -0.5, TEAM_FLAG);
     const cols = [0xd84a3e, 0x3c7fd8, 0xf2c23a, 0x4fa860, 0xf28a3c, 0x8a5ad8, 0xe8e4dc];
     for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) for (let k = 0; k < 1 + ((i * 7 + j * 3) % 3); k++)
       p.box(0.24, 0.1, 0.1, 0.25 + j * 0.26 - 0.26, 0.02 + k * 0.102, -0.1 + i * 0.11, cols[(i * 5 + j * 3 + k) % cols.length]);
@@ -8207,7 +8208,7 @@ function lighthouse(p: Parts, age: number) {
   // le mât du drapeau, près du logis : le drapeau flotte
   p.cyl(0.006, 0.008, 0.5, 5, 0.85, 0.0, 0.1, C.metal);
   p.sphere(0.012, 0.85, 0.5, 0.1, C.gold);
-  { const f = sway([0.85, 0, 0.1], [0, 1, 0], 0.4, 0.8); f.box(0.2, 0.11, 0.004, 0.1, 0.38, 0, fut ? 0x6ae4ff : 0xd84a3e); f.box(0.2, 0.025, 0.006, 0.1, 0.425, 0, C.white); }
+  { const f = sway([0.85, 0, 0.1], [0, 1, 0], 0.4, 0.8); f.box(0.2, 0.11, 0.004, 0.1, 0.38, 0, TEAM_FLAG); }
   // l'enclos : potager derrière le logis, clôture de piquets et lisses, rangs de légumes, quelques poules
   const ex = 0.6, ez = -0.4, ew = 0.62, ed = 0.46;
   p.box(ew - 0.06, 0.008, ed - 0.06, ex, 0.012, ez, old ? 0x6b4a2e : 0x5e4630);
@@ -8501,7 +8502,7 @@ function shipyard(p: Parts, age: number) {
   const flag = (x: number, y: number, z: number, c: number, w = 0.12, h = 0.07) => { const f = sway([x, y, z], [0, 1, 0], 0.35, 0.7); f.box(w, h, 0.006, w / 2, -h / 2 - 0.0, 0, c); p.cyl(0.004, 0.004, 0.14, 4, x, y - 0.1, z, dwood); };
   flag(X, slip(ZC + 0.2) + hy0 + (old ? 0.7 : 0.32), ZC + 0.2, fut ? 0x6ae4ff : 0xc8443a);
   flag(X, slip(zs - 0.05) + hy0 + 0.4, zs - 0.05, 0xf4ecdc, 0.1, 0.06);
-  flag(hx, old ? 0.86 : 0.74, hz, old ? 0x3a6ab8 : 0xc8443a);
+  flag(hx, old ? 0.86 : 0.74, hz, TEAM_FLAG);
   // les ouvriers au travail sur les plateaux et au pied de la cale
   for (const [x, z, c, y] of [[X + 0.34, 0.0, 0x6a8ac8, 0.38], [X - 0.34, 0.55, 0xc8a04a, 0.2], [X + 0.4, 0.8, 0x8a6a48, 0.0], [X - 0.55, -0.1, 0xc87a4a, 0.0]] as [number, number, number, number][])
     figure(p, x, z, c, Math.PI / 2, false, 0x4a3426, 'idle', y === 0 ? 0 : slip(z) + y - 0.012);
@@ -9742,8 +9743,8 @@ function stadiumFoot(p: Parts, age: number) {
   p.box(0.92, 0.07, 0.1, 0, 0.34, 1.24, fut ? 0x4ab8e0 : 0x3a6ab8);
   for (let k = 0; k < 8; k++) p.box(0.06, 0.035, 0.006, -0.28 + k * 0.08, 0.355, 1.292, fut ? 0xbff4ff : 0xffe8b0, 0, fut ? 'neon' : true);
   // mâts à drapeaux sur le parvis, passants
-  ([[-0.7, 1.42, 0x3a6ab8], [-0.35, 1.44, 0xf4f2ee], [0.35, 1.44, 0xd84a3e], [0.7, 1.42, 0x3a6ab8], [-1.44, 0.2, 0xf4f2ee], [1.44, 0.2, 0xd84a3e], [-1.44, -0.3, 0x3a6ab8], [1.44, -0.3, 0xf4f2ee]] as number[][]).forEach(([x, z, c]) => {
-    p.cyl(0.005, 0.006, 0.42, 5, x, y0, z, 0xbcc4cc); sway([x, 0.42, z], [0, 1, 0], 0.45, 1.2).box(0.1, 0.06, 0.004, 0.05, 0, 0, c);
+  ([[-0.7, 1.42], [-0.35, 1.44], [0.35, 1.44], [0.7, 1.42], [-1.44, 0.2], [1.44, 0.2], [-1.44, -0.3], [1.44, -0.3]] as number[][]).forEach(([x, z]) => {
+    p.cyl(0.005, 0.006, 0.42, 5, x, y0, z, 0xbcc4cc); sway([x, 0.42, z], [0, 1, 0], 0.45, 1.2).box(0.1, 0.06, 0.004, 0.05, 0, 0, TEAM_FLAG);
   });
   ([[-0.2, 1.1, 0xd84a3e, 0.3], [0.1, 1.15, 0x3a6ab8, 2.5], [0.55, 1.12, 0xf2c23a, 1], [-0.6, 1.14, 0x4fa860, 0.4], [-1.2, 1.2, 0x3a6ab8, 1], [1.15, 1.1, 0xf4f2ee, 2]] as number[][]).forEach(([x, z, c, r]) => figure(p, x, z, c, r));
 }
@@ -10198,7 +10199,7 @@ function alpine(p: Parts, age: number) {
     p.box(0.08, 0.24, 0.08, cx + 0.22, 0.6, cz - 0.15, C.stone); smoke(cx + 0.22, 0.86, cz - 0.15, 1);
     // mât du club (bleu et or), râtelier de skis de bois, luge, bois de chauffe, terrasse
     p.cyl(0.008, 0.01, 0.82, 5, 0.6, 0.012, -0.7, C.metal);
-    p.box(0.004, 0.09, 0.15, 0.6, 0.72, -0.62, 0x3a6ab8); p.box(0.005, 0.025, 0.15, 0.6, 0.752, -0.62, 0xe8c66a);
+    p.box(0.004, 0.09, 0.15, 0.6, 0.72, -0.62, TEAM_FLAG);
     p.box(0.3, 0.014, 0.02, 0.4, 0.2, 0.02, C.darkwood); for (const d of [-0.14, 0.14]) p.box(0.016, 0.21, 0.016, 0.4 + d, 0.012, 0.02, C.darkwood);
     for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.018, 0.34, 0.006), 0.29 + k * 0.055, 0.17, 0.05, k % 2 ? C.wood : dark(C.wood, 0.85), 0, false, 0, -0.18);
     p.box(0.07, 0.02, 0.18, -0.62, 0.04, 0.3, C.wood); for (const d of [-0.03, 0.03]) p.box(0.008, 0.035, 0.2, -0.62 + d, 0.012, 0.3, C.darkwood);
@@ -10470,7 +10471,7 @@ function theater(p: Parts, age: number) {
     // mâts à fanions, torches de part et d'autre de l'estrade
     for (const s of [-1, 1]) {
       p.cyl(0.008, 0.01, 0.78, 5, s * 0.66, 0.02, -0.3, C.darkwood);
-      sway([s * 0.66, 0, -0.3], [0, 1, 0], 0.45, 1.3).box(0.012, 0.08, 0.1, 0, 0.68, 0.05, s > 0 ? 0x3a6ab8 : 0xd84a3e);
+      sway([s * 0.66, 0, -0.3], [0, 1, 0], 0.45, 1.3).box(0.012, 0.08, 0.1, 0, 0.68, 0.05, TEAM_FLAG);
       p.cyl(0.008, 0.01, 0.3, 5, s * 0.55, 0.02, -0.18, C.darkwood);
       p.cone(0.02, 0.05, 5, s * 0.55, 0.32, -0.18, C.flame, true);
     }
@@ -10956,7 +10957,7 @@ function senate(p: Parts, age: number) {
     for (const s of [-1, 1]) {
       const x = s * 0.38;
       p.cyl(0.006, 0.008, 0.5, 5, x, 0.02, 0.42, C.darkwood);
-      { const f = sway([x, 0.46, 0.425], [1, 0, 0], 0.18, 0.8); f.box(0.08, 0.1, 0.006, 0, -0.1, 0, 0xb8443a); f.box(0.08, 0.012, 0.008, 0, -0.11, 0, C.gold); }
+      { const f = sway([x, 0.46, 0.425], [1, 0, 0], 0.18, 0.8); f.box(0.08, 0.1, 0.006, 0, -0.1, 0, TEAM_BANNER); f.box(0.08, 0.012, 0.008, 0, -0.006, 0, TEAM_B); }
       p.box(0.02, 0.025, 0.02, x, 0.52, 0.42, C.gold); for (const t of [-1, 1]) p.add(new THREE.BoxGeometry(0.04, 0.006, 0.016), x + t * 0.022, 0.545, 0.42, C.gold, 0, false, t * 0.5);
     }
     for (const s of [-1, 1]) { cypress(p, s * 0.76, -0.72, 0.3); tree(p, s * 0.76, 0.76, 0.9, 0x6f9f6a); }
@@ -10999,7 +11000,7 @@ function senate(p: Parts, age: number) {
     p.box(W + 0.02, 0.025, 0.57, -0.15, 0.23, -0.3, 0xece4d4);
     for (let i = 0; i < 5; i++) { const x = -0.63 + i * 0.24; p.box(0.07, 0.12, 0.014, x, 0.29, zf + 0.004, C.win, 0, true); p.add(new THREE.ConeGeometry(0.036, 0.06, 4).rotateY(Math.PI / 4).scale(1, 1, 0.3), x, 0.41, zf + 0.004, C.win, 0, true); }
     roof(p, -0.15, 0.52, -0.33, { w: W - 0.06, d: 0.48, h: 0.24, color: C.slate, wall: st, courses: true });
-    for (const x of [-0.5, 0.2]) { p.box(0.07, 0.2, 0.006, x, 0.25, zf + 0.012, 0xb8443a); p.box(0.07, 0.025, 0.008, x, 0.43, zf + 0.012, C.gold); }
+    for (const x of [-0.5, 0.2]) { p.box(0.07, 0.2, 0.006, x, 0.25, zf + 0.012, TEAM_BANNER); p.box(0.07, 0.016, 0.008, x, 0.44, zf + 0.012, TEAM_B); }
     // le beffroi : horloge, chambre des cloches, flèche et girouette dorée
     const bx = 0.6, bz = -0.36;
     p.box(0.26, 1.0, 0.26, bx, 0.02, bz, st);
@@ -11027,7 +11028,7 @@ function senate(p: Parts, age: number) {
     for (const x of [-0.84, 0.36]) { p.box(0.1, 0.06, 0.1, x, 0.02, 0.06, C.stone); p.sphere(0.05, x, 0.1, 0.06, C.darkgreen, 0, 0.8); for (let k = 0; k < 3; k++) p.sphere(0.014, x - 0.025 + k * 0.025, 0.14, 0.08, [0xd84a3e, 0xf2d24a, 0xf2a6c8][k]); }
     for (const d of [-0.08, 0.08]) p.box(0.016, 0.24, 0.016, 0.55 + d, 0.02, 0.2, C.darkwood);
     p.box(0.2, 0.12, 0.012, 0.55, 0.12, 0.2, C.wood); for (const [dx, c] of [[-0.05, 0xf2ead8], [0.04, 0xe8dcc0]] as [number, number][]) p.box(0.06, 0.08, 0.004, 0.55 + dx, 0.135, 0.208, c);
-    p.cyl(0.008, 0.01, 0.62, 5, 0.42, 0.02, 0.66, C.darkwood); { const f = sway([0.42, 0, 0.67], [0, 1, 0], 0.4, 1); f.box(0.004, 0.16, 0.12, 0, 0.44, 0.06, 0xb8443a); f.box(0.005, 0.05, 0.05, 0, 0.5, 0.06, C.gold); }
+    p.cyl(0.008, 0.01, 0.62, 5, 0.42, 0.02, 0.66, C.darkwood); { const f = sway([0.42, 0, 0.67], [0, 1, 0], 0.4, 1); f.box(0.004, 0.16, 0.12, 0, 0.44, 0.06, TEAM_FLAG); }
     verge(p, 26, 72, 0.025, (x, z) => z > -0.02 && !(x > 0.6 && z > 0.6));
     // la façade : balcon des proclamations sur consoles au-dessus de l'arcade du milieu, écus peints de la commune entre
     // les baies, corniche à modillons sous le toit ; le lion de la ville sur sa colonne
@@ -11035,10 +11036,10 @@ function senate(p: Parts, age: number) {
     for (let k = 0; k < 7; k++) p.add(new THREE.CylinderGeometry(0.006, 0.008, 0.05, 4, 1, true), -0.26 + k * 0.037, 0.295, zf + 0.085, 0xece4d4);
     p.box(0.26, 0.012, 0.012, -0.15, 0.32, zf + 0.085, 0xece4d4);
     for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.02, 0.05, 0.06).translate(0, -0.025, 0), -0.15 + s * 0.1, 0.25, zf + 0.03, st, 0, false, 0, -0.5);
-    for (const [x, c] of [[-0.27, 0xd8c040], [-0.03, 0x3a6ab8], [0.21, 0xd8c040]] as [number, number][]) {
+    for (const [x, c] of [[-0.27, TEAM_B], [-0.03, TEAM_A], [0.21, TEAM_B]] as [number, number][]) {
       p.add(slab(0.05, 0.05, 0.008, F_PZ | F_PY), x, 0.345, zf + 0.006, c);
       p.add(new THREE.ConeGeometry(0.025, 0.03, 4).rotateZ(Math.PI).rotateY(Math.PI / 4).scale(1, 1, 0.3), x, 0.305, zf + 0.006, c);
-      p.add(slab(0.014, 0.035, 0.004, F_PZ), x, 0.34, zf + 0.012, x < 0 && x > -0.1 ? C.gold : 0xb8443a);
+      p.add(slab(0.014, 0.035, 0.004, F_PZ), x, 0.34, zf + 0.012, x < 0 && x > -0.1 ? TEAM_B : TEAM_A);
     }
     for (let k = 0; k < 13; k++) p.add(slab(0.018, 0.018, 0.03, F_PZ | F_PX | F_NX), -0.72 + k * 0.095, 0.505, zf + 0.012, 0xece4d4);
     p.cyl(0.03, 0.035, 0.36, 8, -0.78, 0.02, 0.42, 0xece4d4); p.box(0.08, 0.025, 0.08, -0.78, 0.38, 0.42, 0xece4d4);
@@ -11089,10 +11090,10 @@ function senate(p: Parts, age: number) {
     p.add(new THREE.SphereGeometry(0.24, 16, 7, 0, Math.PI * 2, 0, Math.PI / 2), 0, 0.61, -0.4, dome);
     for (let i = 0; i < 8; i++) p.add(new THREE.TorusGeometry(0.242, 0.006, 3, 6, Math.PI / 2).rotateY((i / 8) * Math.PI * 2), 0, 0.61, -0.4, dark(dome, 0.85));
     p.cyl(0.04, 0.04, 0.08, 8, 0, 0.84, -0.4, cream); p.cone(0.045, 0.06, 8, 0, 0.92, -0.4, dome);
-    p.cyl(0.004, 0.004, 0.2, 4, 0, 0.98, -0.4, C.metal); { const f = sway([0, 0, -0.4], [0, 1, 0], 0.45, 1.2); f.box(0.09, 0.055, 0.004, 0.047, 1.12, 0, 0x3a6ab8); f.box(0.045, 0.055, 0.005, 0.07, 1.12, 0, 0xf2c23a); }
+    p.cyl(0.004, 0.004, 0.2, 4, 0, 0.98, -0.4, C.metal); { const f = sway([0, 0, -0.4], [0, 1, 0], 0.45, 1.2); f.box(0.09, 0.055, 0.004, 0.047, 1.12, 0, TEAM_FLAG); }
     for (const s of [-1, 1]) lampPost(p, s * 0.34, 0.2);
     // les drapeaux de part et d'autre du palais (dès l'âge industriel), les projecteurs ensuite
-    for (const s of [-1, 1]) { p.cyl(0.005, 0.005, 0.42, 4, s * 0.82, 0.02, 0.05, C.metal); p.sphere(0.008, s * 0.82, 0.44, 0.05, C.gold); sway([s * 0.82, 0, 0.05], [0, 1, 0], 0.4, 1.2).box(0.1, 0.06, 0.004, 0.05, 0.36, 0, s > 0 ? 0x3a6ab8 : age >= 4 ? 0xf2c23a : 0xd84a3e); }
+    for (const s of [-1, 1]) { p.cyl(0.005, 0.005, 0.42, 4, s * 0.82, 0.02, 0.05, C.metal); p.sphere(0.008, s * 0.82, 0.44, 0.05, C.gold); sway([s * 0.82, 0, 0.05], [0, 1, 0], 0.4, 1.2).box(0.1, 0.06, 0.004, 0.05, 0.36, 0, TEAM_FLAG); }
     if (age >= 4) for (const [x, z] of [[-0.75, 0.84], [0.75, 0.84]]) floodlight(p, x, z, 0.1);
     // le fronton sculpté du péristyle, l'inscription dorée de l'entablement, la statue de la Loi au sommet ; deux lions
     // couchés de part et d'autre des marches
@@ -11200,8 +11201,8 @@ function stadiumBig(p: Parts, age: number) {
     // charpente de bois sur poteaux, toit à un pan, lambrequin peint
     for (let i = 0; i <= 6; i++) p.box(0.022, 0.5, 0.022, -1.02 + i * 0.34, y0, sz + 0.04, C.darkwood);
     p.add(new THREE.BoxGeometry(2.16, 0.025, 0.66), 0, 0.53, sz - 0.22, 0x8a5a44, 0, false, 0, -0.1);
-    for (let i = 0; i < 27; i++) p.box(0.06, 0.04, 0.008, -1.04 + i * 0.08, 0.48, sz + 0.11, i % 2 ? C.white : 0x3a6ab8);
-    for (const s of [-1, 0, 1]) { p.cyl(0.005, 0.005, 0.3, 4, s * 0.7, 0.55, sz - 0.2, C.metal); sway([s * 0.7, 0.55, sz - 0.2], [0, 1, 0], 0.4, 1.1).box(0.12, 0.07, 0.004, 0.06, 0.24, 0, [0x3a6ab8, 0xf4f2ee, 0xd84a3e][s + 1]); }
+    for (let i = 0; i < 27; i++) p.box(0.06, 0.04, 0.008, -1.04 + i * 0.08, 0.48, sz + 0.11, i % 2 ? TEAM_B : TEAM_A);
+    for (const s of [-1, 0, 1]) { p.cyl(0.005, 0.005, 0.3, 4, s * 0.7, 0.55, sz - 0.2, C.metal); sway([s * 0.7, 0.55, sz - 0.2], [0, 1, 0], 0.4, 1.1).box(0.12, 0.07, 0.004, 0.06, 0.24, 0, TEAM_FLAG); }
   }
   // gradins de virage, en face, plus bas
   for (let r = 0; r < 3; r++) {
@@ -11606,7 +11607,7 @@ function aerodrome(p: Parts, age: number) {
   windows(p, [-0.2, -0.05, 0.1], 0.08, -0.946, 0.07, 0.09, C.white);
   if (modern) p.box(0.52, 0.03, 0.32, -0.05, 0.25, -1.1, 0x5a5d62); else roof(p, -0.05, 0.252, -1.1, { w: 0.5, d: 0.3, h: 0.12, color: 0xb8644a, wall: 0xd8c8a8, tiles: true });
   for (const x of [-0.2, 0.1]) { p.cyl(0.04, 0.04, 0.006, 8, x, 0.08, -0.82, C.white); p.cyl(0.005, 0.005, 0.07, 4, x, y0, -0.82, 0x3c3c40); p.cyl(0.003, 0.003, 0.18, 3, x, 0.08, -0.82, 0x3c3c40); p.cone(0.07, 0.04, 8, x, 0.25, -0.82, x < 0 ? 0xd84a3e : 0xf2c23a); }
-  p.cyl(0.004, 0.004, 0.5, 4, 0.3, y0, -1.1, C.metal); sway([0.3, 0.5, -1.1], [0, 1, 0], 0.4, 1.1).box(0.1, 0.06, 0.004, 0.05, 0, 0, 0x3a6ab8);
+  p.cyl(0.004, 0.004, 0.5, 4, 0.3, y0, -1.1, C.metal); sway([0.3, 0.5, -1.1], [0, 1, 0], 0.4, 1.1).box(0.1, 0.06, 0.004, 0.05, 0, 0, TEAM_FLAG);
   for (const [x, z] of [[-0.25, -0.45], [-0.18, -0.48], [-0.22, -0.38]]) { p.cyl(0.026, 0.026, 0.07, 8, x, y0, z, 0xb83a32); p.cyl(0.027, 0.027, 0.006, 8, x, y0 + 0.05, z, 0x3c3c40); }
   // barrière blanche et les curieux
   for (let k = 0; k <= 12; k++) p.box(0.01, 0.06, 0.01, -1.4 + k * 0.233, y0, 1.35, C.white);
@@ -11937,7 +11938,7 @@ function harborBig(p: Parts, age: number) {
     }
     p.box(0.5, 0.42, 0.4, 1.05, y0, -1.0, 0xe8dcc4); roof(p, 1.05, 0.44, -1.0, { w: 0.5, d: 0.4, h: 0.16, color: C.slate, wall: 0xe8dcc4 });
     windows(p, [0.92, 1.18], 0.2, -0.796, 0.06, 0.1, C.white);
-    p.cyl(0.005, 0.005, 0.4, 4, 1.25, 0.6, -1.0, C.metal); sway([1.25, 0.6, -1.0], [0, 1, 0], 0.45, 1.1).box(0.12, 0.07, 0.004, 0.06, 0.32, 0, 0x3a6ab8);
+    p.cyl(0.005, 0.005, 0.4, 4, 1.25, 0.6, -1.0, C.metal); sway([1.25, 0.6, -1.0], [0, 1, 0], 0.45, 1.1).box(0.12, 0.07, 0.004, 0.06, 0.32, 0, TEAM_FLAG);
     for (const z of [0.95, 1.08]) p.box(2.9, 0.01, 0.016, 0, y0 + 0.002, z, 0x8a8e96);
     for (let k = 0; k < 24; k++) p.box(0.03, 0.006, 0.2, -1.42 + k * 0.124, y0, 1.015, C.darkwood);
     for (const x of [-1.0, -0.62]) { p.box(0.32, 0.14, 0.16, x, 0.04, 1.015, 0x5a3a2e); p.box(0.3, 0.06, 0.14, x, 0.18, 1.015, x < -0.8 ? 0x2a2826 : 0xb48a5e); for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.025, 0.025, 0.01, 8).rotateZ(Math.PI / 2), x + s * 0.1, 0.03, 1.015 + 0.07, 0x2a2a2e); }
@@ -11961,7 +11962,7 @@ function harborBig(p: Parts, age: number) {
     p.box(0.66, 0.08, 0.14, -0.3, 1.03, 1.95, 0xf2c23a); p.box(0.005, 0.4, 0.005, -0.3, 0.63, 1.95, 0x2a2a2e); p.box(0.32, 0.12, 0.13, -0.3, 0.52, 1.95, 0xd84a3e);
     p.box(0.66, 0.012, 0.012, -0.3, 0.6, 0.75, 0x3c7fd8);
     p.box(0.3, 0.38, 0.3, 1.05, y0, -1.05, 0xf4f2ee); p.box(0.32, 0.08, 0.32, 1.05, 0.4, -1.05, C.glass, 0, true); p.box(0.34, 0.02, 0.34, 1.05, 0.48, -1.05, 0x3a6ab8);
-    p.cyl(0.008, 0.01, 0.7, 5, 1.25, y0, -0.8, C.metal); sway([1.25, 0.66, -0.8], [0, 1, 0], 0.4, 1.1).box(0.1, 0.06, 0.004, 0.05, 0, 0, 0x3a6ab8);
+    p.cyl(0.008, 0.01, 0.7, 5, 1.25, y0, -0.8, C.metal); sway([1.25, 0.66, -0.8], [0, 1, 0], 0.4, 1.1).box(0.1, 0.06, 0.004, 0.05, 0, 0, TEAM_FLAG);
     p.box(0.36, 0.06, 0.36, 0.75, y0, 0.6, 0x3c3c40);
     const cr = spinner([0.75, 0.08, 0.6], [0, 1, 0], 0.25);
     cr.box(0.22, 0.16, 0.22, 0, 0, 0, 0xf2c23a); cr.box(0.1, 0.12, 0.1, 0.06, 0.16, -0.06, 0x9fc4dc);
@@ -12757,11 +12758,8 @@ function spaceport(p: Parts) {
   for (const y of [0.5, 1.0, 1.4]) p.box(0.08, 0.016, 0.34, dx + 0.06, y, hz, 0xf2c23a);
   p.box(0.12, HH * 0.86 + 0.04, 0.02, dx - 0.01, 0.006, hz - 0.29, 0x9aa0a8); p.box(0.12, HH * 0.86 + 0.04, 0.02, dx - 0.01, 0.006, hz + 0.29, 0x9aa0a8);
   // l'emblème sur la façade (vers +z) et le drapeau peint, le liseré lumineux, la grue du toit
-  p.box(0.4, 0.4, 0.008, hx - 0.2, 1.3, hz + hd / 2 + 0.02, 0x2a4a8a); p.cyl(0.14, 0.14, 0.01, 16, hx - 0.2, 1.5, hz + hd / 2 + 0.024, F.white, false, 0);
-  p.add(new THREE.CylinderGeometry(0.14, 0.14, 0.012, 16).rotateX(Math.PI / 2), hx - 0.2, 1.5, hz + hd / 2 + 0.026, F.white);
-  p.add(new THREE.TorusGeometry(0.1, 0.012, 4, 16, Math.PI * 1.4), hx - 0.2, 1.5, hz + hd / 2 + 0.034, 0xd8443a, 0, false, 0.6);
-  p.add(new THREE.ConeGeometry(0.03, 0.12, 4).rotateZ(-0.7), hx - 0.14, 1.53, hz + hd / 2 + 0.034, 0x2a4a8a);
-  for (let k = 0; k < 3; k++) p.box(0.1, 0.28, 0.008, hx + 0.22 + k * 0.1, 1.12, hz + hd / 2 + 0.02, [0x2a4a8a, F.white, 0xd8443a][k]);
+  p.box(0.4, 0.4, 0.008, hx - 0.2, 1.3, hz + hd / 2 + 0.02, TEAM_EMBLEM);
+  p.box(0.3, 0.28, 0.008, hx + 0.32, 1.12, hz + hd / 2 + 0.02, TEAM_BANNER);
   p.box(hw, 0.012, 0.008, hx, 0.3, hz + hd / 2 + 0.024, F.neon, 0, 'neon');
   for (const [x, z] of [[hx + 0.2, hz - 0.3], [hx + 0.35, hz + 0.25]]) hvac(p, x, HH + 0.05, z, 0.14);
   // l'annexe basse des bureaux du hall

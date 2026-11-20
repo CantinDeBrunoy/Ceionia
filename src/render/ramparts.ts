@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Parts } from './parts';
+import { TEAM_B, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG } from './teamPaint';
 import { hash2 } from '../core/rng';
 import { flag, type DefKit } from './defenses';
 import { WALL_N, WALL_E, WALL_S, WALL_W, gateAlongX } from './hellBase';
@@ -155,21 +156,19 @@ function lantern(p: Parts, x: number, y: number, z: number, metal = IRON, light 
   p.box(0.036, 0.05, 0.036, x, y - 0.062, z - 0.09, light, 0, true);
   p.cone(0.03, 0.025, 4, x, y - 0.012, z - 0.09, metal, false, PI / 4);
 }
-/** Bouclier rond rouge à bordure et ombilic d'or, accroché de face vers +z */
+/** Bouclier rond au blason du village, bordure et ombilic d'or, accroché de face vers +z */
 function shield(p: Parts, x: number, y: number, z: number, r: number) {
-  p.add(new THREE.CylinderGeometry(r, r, 0.014, 10).rotateX(PI / 2), x, y, z, RED);
+  p.add(new THREE.CylinderGeometry(r, r, 0.014, 10).rotateX(PI / 2), x, y, z, TEAM_EMBLEM);
   p.add(new THREE.TorusGeometry(r, 0.006, 4, 12), x, y, z + 0.008, GOLD);
   p.sphere(r * 0.3, x, y, z + 0.012, GOLD);
 }
 
-/** Bannière pendue à une tringle sur une face tournée vers +z : toile rouge, liseré et losange d'or, pointe fendue */
+/** Bannière pendue à une tringle sur une face tournée vers +z : toile au blason du village (emblème, forme du bas), liseré du haut */
 function banner(p: Parts, x: number, y: number, z: number, w: number, h: number, rod = IRON) {
   p.box(w + 0.03, 0.012, 0.012, x, y, z + 0.006, rod);
-  p.box(w, h, 0.006, x, y - h, z + 0.01, RED);
-  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(w * 0.5, w * 0.5, 0.006).rotateZ(PI / 4).scale(1, 0.6, 1), x + s * w * 0.25, y - h, z + 0.01, RED);
-  p.box(w, 0.012, 0.008, x, y - h + 0.03, z + 0.012, GOLD);
-  p.box(w, 0.012, 0.008, x, y - 0.03, z + 0.012, GOLD);
-  p.add(new THREE.BoxGeometry(w * 0.36, w * 0.36, 0.008).rotateZ(PI / 4), x, y - h * 0.5 - 0.005, z + 0.013, GOLD);
+  // un peu plus longue que l'ancienne toile (sa pointe fendue) : la forme du blason se découpe en bas
+  p.box(w, h + w * 0.15, 0.006, x, y - h - w * 0.15, z + 0.01, TEAM_BANNER);
+  p.box(w, 0.012, 0.008, x, y - 0.03, z + 0.012, TEAM_B);
 }
 /** Pierre posée au sol, aplatie (un icosaèdre) */
 function rock(p: Parts, x: number, z: number, r: number, color: number) {
@@ -416,10 +415,10 @@ function nodeEnergy(p: Parts, kit: DefKit, k: NodeKind) {
   p.add(new THREE.TorusGeometry(0.18, 0.016, 5, 16).rotateX(PI / 2), 0, 1.1, 0, white); p.add(new THREE.TorusGeometry(0.18, 0.006, 3, 16).rotateX(PI / 2), 0, 1.12, 0, cyan, 0, 'neon');
   p.sphere(0.06, 0, 1.08, 0, cyan); p.sphere(0.07, 0, 1.08, 0, 0x9af4ff, 1);
   p.box(0.02, 0.02, 0.02, 0, 1.2, 0, cyan, 0, 'neon');
-  // l'étendard : la faction en lumière, rouge à liseré d'or, qui flotte
+  // l'étendard au blason du village, à liseré lumineux, qui flotte
   p.cyl(0.008, 0.01, 0.34, 5, 0.14, 0.98, -0.1, dkc);
   const f = kit.sway([0.14, 0, -0.1], [0, 1, 0], 0.3, 0.9);
-  f.box(0.16, 0.09, 0.006, 0.09, 1.2, 0, RED, 0, 'neon'); f.box(0.16, 0.012, 0.008, 0.09, 1.2, 0, GOLD, 0, 'neon'); f.box(0.16, 0.012, 0.008, 0.09, 1.278, 0, GOLD, 0, 'neon');
+  f.box(0.16, 0.09, 0.006, 0.09, 1.2, 0, TEAM_FLAG); f.box(0.16, 0.008, 0.008, 0.09, 1.286, 0, GOLD, 0, 'neon');
   // les projecteurs du pylône, vers la rue
   p.box(0.08, 0.04, 0.05, 0, 0.9, 0.12, dkc); p.box(0.06, 0.02, 0.01, 0, 0.9, 0.145, 0xfff0b0, 0, true);
   void k;
@@ -485,7 +484,7 @@ function gatePalisade(p: Parts, kit: DefKit) {
   p.box(0.6, 0.06, 0.12, 0, 0.72, -0.02, dark);
   p.box(0.6, 0.02, 0.16, 0, 0.78, -0.02, dk(wd, 0.85));
   p.box(0.6, 0.012, 0.012, 0, 0.9, 0.06, dark); for (const x of [-0.2, 0, 0.2]) p.box(0.012, 0.12, 0.012, x, 0.78, 0.06, dark);
-  p.box(0.24, 0.1, 0.02, 0, 0.6, 0.06, RED); p.box(0.24, 0.014, 0.024, 0, 0.6, 0.062, GOLD); p.box(0.24, 0.014, 0.024, 0, 0.686, 0.062, GOLD); p.box(0.03, 0.03, 0.026, 0, 0.635, 0.064, GOLD, 0, false, PI / 4);
+  p.box(0.24, 0.1, 0.02, 0, 0.6, 0.06, TEAM_EMBLEM); p.box(0.24, 0.014, 0.024, 0, 0.6, 0.062, TEAM_B); p.box(0.24, 0.014, 0.024, 0, 0.686, 0.062, TEAM_B);
   for (const s of [-1, 1]) banner(p, s * 0.2, 0.71, 0.05, 0.07, 0.15, dark);
   // le talus au pied des tours, ses pierres, et le crâne de bœuf cloué au-dessus du passage
   for (const s of [-1, 1]) {
@@ -550,7 +549,7 @@ function gateBrick(p: Parts, kit: DefKit) {
   for (let i = -2; i <= 2; i++) p.box(0.01, 0.14, 0.01, i * 0.1, 0.62 + Math.abs(i) * 0.02, 0.06, iron);
   for (const y of [0.92, 1.0]) p.box(0.6, 0.01, 0.01, 0, y, 0.09, iron);
   for (let i = -3; i <= 3; i++) p.box(0.01, 0.1, 0.01, i * 0.09, 0.92, 0.09, iron);
-  p.box(0.3, 0.07, 0.02, 0, 0.7, 0.09, 0xd8dde2); p.box(0.28, 0.05, 0.024, 0, 0.71, 0.092, RED); p.box(0.26, 0.012, 0.026, 0, 0.73, 0.094, GOLD);
+  p.box(0.3, 0.07, 0.02, 0, 0.7, 0.09, 0xd8dde2); p.box(0.28, 0.05, 0.024, 0, 0.71, 0.092, TEAM_EMBLEM);
   flag(p, kit, 0, 0.92, -0.06, 0.34, 0.18, 0.1, iron);
   // les vantaux de fonte à lames, bandes rivetées
   for (const s of [-1, 1]) leaf(p, s, 0.27, 0.66, 0.04, cast, (q) => { for (const y of [0.12, 0.36, 0.6]) { q.box(0.27, 0.04, 0.044, 0, y, 0, iron); for (let i = 0; i < 4; i++) q.sphere(0.009, -0.1 + i * 0.066, y + 0.02, 0.024, 0x16161a); } for (let i = 0; i < 5; i++) q.box(0.004, 0.66, 0.042, -0.108 + i * 0.054, 0.02, 0, iron); });
@@ -574,7 +573,7 @@ function gateConcrete(p: Parts, kit: DefKit) {
   p.box(0.6, 0.14, 0.22, 0, 0.84, 0, conc2); p.box(0.64, 0.03, 0.26, 0, 0.98, 0, steel);
   for (const y of [1.06, 1.12]) p.box(0.6, 0.01, 0.01, 0, y, 0.12, steel);
   for (let i = -2; i <= 2; i++) p.box(0.012, 0.12, 0.012, i * 0.14, 1.01, 0.12, steel);
-  p.box(0.3, 0.08, 0.02, 0, 0.88, 0.11, 0x2a2a2e); p.box(0.28, 0.06, 0.012, 0, 0.89, 0.12, RED, 0, true); p.box(0.26, 0.01, 0.014, 0, 0.915, 0.122, GOLD);
+  p.box(0.3, 0.08, 0.02, 0, 0.88, 0.11, 0x2a2a2e); p.box(0.28, 0.06, 0.012, 0, 0.89, 0.12, TEAM_EMBLEM);
   for (const s of [-1, 1]) { p.box(0.03, 0.08, 0.03, s * 0.2, 0.74, 0.1, steel); p.box(0.02, 0.02, 0.012, s * 0.2, 0.79, 0.115, 0x5ae08a, 0, true); p.box(0.02, 0.02, 0.012, s * 0.2, 0.755, 0.115, 0xd84a3e); }
   flag(p, kit, 0, 0.98, -0.08, 0.36, 0.18, 0.1, steel);
   // les panneaux blindés ouverts, lames et poignée jaune
@@ -620,10 +619,10 @@ function gateEnergy(p: Parts, kit: DefKit) {
   p.add(new THREE.TorusGeometry(0.4, 0.008, 4, 20, PI), 0, 0.7, 0.02, cyan, 0, 'neon');
   p.box(0.6, 0.03, 0.06, 0, 1.0, 0, white); p.box(0.6, 0.012, 0.07, 0, 1.03, 0, cyan, 0, 'neon');
   for (const x of [-0.2, 0, 0.2]) p.box(0.012, 0.3, 0.012, x, 0.7, 0, dkc);
-  p.box(0.24, 0.1, 0.006, 0, 1.08, 0, RED, 0, 'neon'); p.box(0.24, 0.012, 0.008, 0, 1.08, 0, GOLD, 0, 'neon'); p.box(0.24, 0.012, 0.008, 0, 1.168, 0, GOLD, 0, 'neon');
+  p.box(0.24, 0.1, 0.006, 0, 1.08, 0, TEAM_EMBLEM); p.box(0.24, 0.008, 0.008, 0, 1.072, 0, GOLD, 0, 'neon'); p.box(0.24, 0.008, 0.008, 0, 1.18, 0, GOLD, 0, 'neon');
   p.cyl(0.008, 0.01, 0.34, 5, 0, 1.04, -0.06, dkc);
   const f = kit.sway([0, 0, -0.06], [0, 1, 0], 0.3, 0.9);
-  f.box(0.16, 0.09, 0.006, 0.09, 1.26, 0, RED, 0, 'neon'); f.box(0.16, 0.012, 0.008, 0.09, 1.26, 0, GOLD, 0, 'neon'); f.box(0.16, 0.012, 0.008, 0.09, 1.338, 0, GOLD, 0, 'neon');
+  f.box(0.16, 0.09, 0.006, 0.09, 1.26, 0, TEAM_FLAG); f.box(0.16, 0.008, 0.008, 0.09, 1.346, 0, GOLD, 0, 'neon');
   // les voiles d'énergie ouverts, en lamelles lumineuses sur leur cadre
   for (const s of [-1, 1]) leaf(p, s, 0.27, 0.72, 0.012, white, (q) => { for (let i = 0; i < 5; i++) q.box(0.25, 0.012, 0.016, 0, 0.1 + i * 0.14, 0, cyan, 0, 'neon'); q.box(0.012, 0.72, 0.016, -0.128, 0.02, 0, dkc); });
   // le portique de contrôle dans le passage : cadre fin, barre de balayage, et les balises au sol qui guident vers lui
