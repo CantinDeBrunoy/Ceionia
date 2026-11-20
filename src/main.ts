@@ -112,7 +112,7 @@ import { troopPortrait } from './render/troopPortraits';
 import { PortalChoice } from './ui/portalChoice';
 import { WorldChoice } from './ui/worldChoice';
 import { PopupGate } from './ui/popupGate';
-import { canExpand, expandWorld } from './world/expand';
+import { canExpand, expandWorld, repairCoast } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
 import type { ConflictWay } from './ui/ways';
@@ -474,7 +474,8 @@ class Game implements UIHost {
     if (save) {
       try {
         w.mapId = save.map; w.seed = save.seed;
-        w.fromJSON(save.world);
+        // (une partie agrandie avant le 21 nov. 2026 : sa côte, abîmée près du bord de l'ancienne carte, est réparée une fois)
+        w.fromJSON(repairCoast(save.world, save.map, save.seed));
         this.sim.age = save.age; this.sim.pop = save.pop;
         readClock(this.time, save);
         addDefaultDecor(w, save.seed);

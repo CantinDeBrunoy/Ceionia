@@ -15,6 +15,9 @@ import { smoothstep, lerp } from '../core/rng';
  * L'archipel est-il ouvert dans cette partie ? (le joueur a accepté d'explorer le monde : la carte a ses îles). L'âge où il a
  * accepté : `World.exploredAt`
  */
+/** Sous cette hauteur, la case de l'ancienne carte est en pleine mer : l'agrandissement peut la creuser ; au-dessus (terre, côte, hauts-fonds, rivières, lacs), elle reste telle quelle */
+export const OPEN_SEA = -0.5;
+
 export const archipelagoOn = (w: { isles: unknown }) => !!w.isles;
 
 /**
@@ -47,15 +50,29 @@ export function expandWorld(old: any, map: number, seed: number): any {
     if (Array.isArray(a)) for (let i = 0; i + 1 < a.length; i += 2) out.push(cell(a[i]), a[i + 1]);
     return out;
   };
-  // relief : l'ancien dans le cadre ; sur ses 12 dernières cases (déjà en mer), sa mer rejoint le fond du large comme dans une
-  // partie neuve de l'archipel (`archHeights`)
+  // relief : l'ancien dans le cadre, tel quel. Seule sa pleine mer (sous `OPEN_SEA`) peut descendre vers le fond du large
+  // d'une partie neuve de l'archipel (`archHeights`), sur ses 12 dernières cases et sous -1, jamais monter. Avant (bug de
+  // l'auteur, 21 nov. 2026), ces 12 cases étaient fondues vers la carte neuve en les croyant en mer : une presqu'île bâtie
+  // près du bord de l'ancienne carte s'enfonçait ou montait en gradins, ses remparts et pontons restés sur place
   const S0 = n0 + 1, S = n + 1, heights: number[] = neu.heights.slice();
+  // (un sommet n'est en pleine mer que si ses voisins à deux sommets le sont aussi : une case de côte garde tous ses coins,
+  // et le relief affiché, lissé entre voisins, ne bouge pas sur la côte)
+  const openSea = (x: number, z: number) => {
+    for (let dz = -2; dz <= 2; dz++)
+      for (let dx = -2; dx <= 2; dx++) {
+        const a = x + dx, b = z + dz;
+        if (a >= 0 && b >= 0 && a <= n0 && b <= n0 && old.heights[b * S0 + a] / 100 > OPEN_SEA) return false;
+      }
+    return true;
+  };
   for (let z = 0; z <= n0; z++)
     for (let x = 0; x <= n0; x++) {
-      const i = (z + f.z) * S + x + f.x, hm = old.heights[z * S0 + x] / 100, deep = neu.heights[i] / 100;
-      // (la pleine mer seulement : rivières, lacs et hauts-fonds, au-dessus de -1, ne bougent pas)
+      const i = (z + f.z) * S + x + f.x, raw = old.heights[z * S0 + x], hm = raw / 100;
+      if (!openSea(x, z)) { heights[i] = raw; continue; }
+      const deep = Math.min(hm, neu.heights[i] / 100);
+      // (sous -0,98, la mer rejoint déjà le fond du large ; près du bord, elle s'y fond tout à fait)
       const hs = hm > -0.98 ? hm : lerp(hm, deep, smoothstep(-0.98, -1.1, hm));
-      heights[i] = Math.round(lerp(deep, hs, smoothstep(0, 12, Math.min(x, z, n0 - x, n0 - z))) * 100);
+      heights[i] = Math.round(Math.min(hm, lerp(deep, hs, smoothstep(0, 12, Math.min(x, z, n0 - x, n0 - z)))) * 100);
     }
   const move = (p: { x: number; z: number } | null | undefined) => (p ? { ...p, x: p.x + f.x, z: p.z + f.z } : p ?? null);
   const war = old.war && typeof old.war === 'object' ? { ...old.war } : old.war;
@@ -69,6 +86,8 @@ export function expandWorld(old: any, map: number, seed: number): any {
     // (l'île garde la version de son générateur : son climat, sa rivière et ses biomes ne changent pas)
     ...(base !== GEN_VAR ? { mainGen: base } : {}),
     heights,
+    // (agrandie avec la côte gardée telle quelle : `repairCoast` n'a rien à faire)
+    coast: 1,
     roads: list(old.roads, neu.roads),
     veg: pairs(old.veg, neu.veg),
     biomes: pairs(old.biomes, neu.biomes),
@@ -86,4 +105,39 @@ export function expandWorld(old: any, map: number, seed: number): any {
     // routes en courbe : points au centième, (x, z) à la suite
     curves: (old.curves ?? []).map((c: number[]) => c.map((v, i) => v + (i % 2 ? f.z : f.x) * 100)),
   };
+}
+
+/**
+ * Répare une partie agrandie avant le 21 nov. 2026 (sans `coast`), dont la côte proche du bord de l'ancienne carte a été
+ * abîmée : l'agrandissement d'alors y avait fondu le relief vers celui d'une partie neuve de l'archipel, sur 12 cases
+ * (`h = lerp(neuve, ancienne, w)`, `w = smoothstep(0, 12, distance au bord)`). La carte neuve se refait à l'identique depuis
+ * la graine : l'ancien relief se retrouve en défaisant ce fondu. Sur les deux sommets du bord même (w trop petit, l'erreur
+ * d'arrondi y serait trop grande), c'est le relief du continent d'origine, refait lui aussi (ce que le joueur y avait
+ * sculpté est perdu). Seules la terre, la côte et les hauts-fonds sont rétablis (au-dessus de `OPEN_SEA`). Rend la sauvegarde
+ * du monde réparée et marquée (`coast`), ou telle quelle si elle n'a rien à réparer. Change la taille de la carte le temps
+ * des deux générations, puis la remet à celle de l'archipel
+ */
+export function repairCoast(d: any, map: number, seed: number): any {
+  if (!d || d.coast || d.gen !== GEN_ARCH || !d.isles || d.exploredAt === undefined || d.exploredAt === null || d.n !== ARCH_N) return d;
+  const n0 = MAIN_N, n = ARCH_N, f = archLayout(seed, n).main, S0 = n0 + 1, S = n + 1;
+  setMapSize(n0);
+  const orig = new World();
+  orig.seed = seed;
+  newWorld(orig, map, seed, d.mainGen ?? GEN_VAR);
+  const first = Array.from(orig.heights);
+  setMapSize(n);
+  const fresh = new World();
+  fresh.seed = seed;
+  newWorld(fresh, map, seed, GEN_ARCH);
+  const heights: number[] = Array.from(d.heights as number[]);
+  for (let z = 0; z <= n0; z++)
+    for (let x = 0; x <= n0; x++) {
+      const w = smoothstep(0, 12, Math.min(x, z, n0 - x, n0 - z));
+      if (w >= 1) continue;
+      const i = (z + f.z) * S + x + f.x, cur = heights[i] / 100, deep = Math.round(fresh.heights[i] * 100) / 100;
+      const was = w >= 0.07 ? (cur - (1 - w) * deep) / w : first[z * S0 + x];
+      if (!(was > OPEN_SEA) || Math.abs(was - cur) < 0.01) continue;
+      heights[i] = Math.round(was * 100);
+    }
+  return { ...d, heights, coast: 1 };
 }
