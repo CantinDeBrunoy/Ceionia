@@ -1214,12 +1214,21 @@ export class UI {
   /** la raison du refus montrée par la fiche (elle se redessine quand le curseur passe sur un endroit refusé pour une autre raison) */
   private infoWhy: string | null = null;
   private infoStage = 0;
+  private infoHave = '';
+  /** ce que montre la ligne du coût de la fiche : le prix payable ou non, et ce qu'on a quand il manque quelque chose */
+  private haveNow() {
+    const tl = this.host.tools, k = this.hover ? this.hover.kind ?? null : tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null;
+    if (!k) return '';
+    const w = this.host.world, c = priceIn(w, k, this.host.sim.age);
+    return c && !canPay(w, c) ? haveLabel(w, c) : '';
+  }
 
   /** Fiche de l'outil ou du bâtiment survolé, sinon du bâtiment qu'on s'apprête à poser */
   private renderInfo() {
     const tl = this.host.tools, box = $('#info');
     this.infoWhy = tl.placeWhy;
     this.infoStage = tl.placeStage;
+    this.infoHave = this.haveNow();
     const held = tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null;
     const k = this.hover ? this.hover.kind ?? null : held, tool = this.hover?.tool;
     box.classList.toggle('show', !!(k || tool));
@@ -1685,7 +1694,8 @@ export class UI {
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
     else if (!this.press && this.tilesNow() !== this.tilesKey) this.renderItems(true);
     this.markFirst();
-    if (this.host.tools.placeWhy !== this.infoWhy || this.host.tools.placeStage !== this.infoStage) this.renderInfo();
+    // (et quand les stocks bougent, une fiche qui dit « vous avez 15 bois » : elle restait à l'ancien compte, testeuse v6)
+    if (this.host.tools.placeWhy !== this.infoWhy || this.host.tools.placeStage !== this.infoStage || this.haveNow() !== this.infoHave) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
     // le logo de la carte du village change avec l'âge (picto et teinte du fond)
     const logo = $('#vLogo');
