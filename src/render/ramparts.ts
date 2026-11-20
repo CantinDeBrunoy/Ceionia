@@ -88,6 +88,30 @@ export const TOWER_R = [0.25, 0.25, 0.263, 0.25, 0.15, 0.15];
 export const TOWER_SHIFT = 4;
 /** Dans le masque d'un pan, le choix du joueur : une tour même en ligne droite, ou un simple pilier même au bout ou à l'angle */
 export const NODE_TOWER = 1 << 8, NODE_PLAIN = 1 << 9;
+/**
+ * Dans le masque d'un rempart, son côté intérieur (calculé par `rampartInside`, `build/rampart.ts`) : sans ces bits, le chemin
+ * de ronde est au nord (−z) des bras est-ouest et à l'ouest (−x) des bras nord-sud ; `NODE_FLIP_Z` le passe au sud,
+ * `NODE_FLIP_X` à l'est. Les créneaux, les bannières et les drapeaux regardent toujours le dehors
+ */
+export const NODE_FLIP_Z = 1 << 10, NODE_FLIP_X = 1 << 11;
+
+/** Retourne en miroir (x ou z) toutes les pièces de `q` */
+function mirrorAll(q: Parts, axis: 'x' | 'z') {
+  for (const g of q.body) mirror(g, axis);
+  for (const g of q.glow) mirror(g, axis);
+}
+/**
+ * Un jeu d'outils dont les pièces qui flottent au vent (drapeaux) sont posées en miroir : le pied du mât passe de l'autre
+ * côté, et `done()` retourne leur dessin une fois fini
+ */
+function mirroredKit(kit: DefKit, mx: boolean, mz: boolean): { kit: DefKit; done: () => void } {
+  if (!mx && !mz) return { kit, done: () => {} };
+  const out: Parts[] = [];
+  return {
+    kit: { ...kit, sway: (pv, axis, amp, freq) => { const q = kit.sway([mx ? -pv[0] : pv[0], pv[1], mz ? -pv[2] : pv[2]], axis, amp, freq); out.push(q); return q; } },
+    done: () => { for (const q of out) { if (mx) mirrorAll(q, 'x'); if (mz) mirrorAll(q, 'z'); } },
+  };
+}
 
 /** Le nœud d'un pan, choix du joueur compris (`mask` complet, bits NODE_TOWER et NODE_PLAIN) */
 export function rampartNode(mask: number): NodeKind {
@@ -411,12 +435,21 @@ export const rampartAge = (age: number) => Math.max(1, Math.min(5, age));
  */
 export function rampartWall(p: Parts, age: number, mask: number, kit: DefKit) {
   const a = rampartAge(age), m = mask & 15 ? mask & 15 : WALL_E | WALL_W, towers = (mask >> TOWER_SHIFT) & 15;
-  NODES[a](p, kit, rampartNode(mask));
+  const fz = !!(mask & NODE_FLIP_Z), fx = !!(mask & NODE_FLIP_X);
+  // le nœud, en miroir du côté où est le dedans (sa torche, sa bannière et son drapeau regardent le dehors)
+  const node = new Parts(), mk = mirroredKit(kit, fx, fz);
+  NODES[a](node, mk.kit, rampartNode(mask));
+  mk.done();
+  if (fx) mirrorAll(node, 'x');
+  if (fz) mirrorAll(node, 'z');
+  p.body.push(...node.body); p.glow.push(...node.glow);
   for (const [bit] of DIRS) {
     if (!(m & bit)) continue;
     const sub = new Parts();
     ARMS[a](sub, bit);
     if (towers & bit) towerJoin(a, sub);
+    // (le bras est dessiné vers +x, dedans vers −z : un miroir en z avant de l'orienter passe son dedans de l'autre côté)
+    if ((bit === WALL_E || bit === WALL_W) ? fz : fx) mirrorAll(sub, 'z');
     orient(p, sub, bit);
   }
 }
@@ -623,16 +656,26 @@ function gateJoin(a: number, p: Parts, s: number) {
  */
 export function rampartGate(p: Parts, age: number, mask: number, kit: DefKit) {
   const a = rampartAge(age), towers = (mask >> TOWER_SHIFT) & 15;
+  // la porte est dessinée le long de x, battants ouverts vers le dedans (−z) : un miroir en z la retourne
   if (gateAlongX(mask)) {
-    GATES[a](p, kit);
-    if (towers & WALL_E) gateJoin(a, p, 1);
-    if (towers & WALL_W) gateJoin(a, p, -1);
+    const sub = new Parts(), mk = mirroredKit(kit, false, !!(mask & NODE_FLIP_Z));
+    GATES[a](sub, mk.kit);
+    mk.done();
+    if (towers & WALL_E) gateJoin(a, sub, 1);
+    if (towers & WALL_W) gateJoin(a, sub, -1);
+    if (mask & NODE_FLIP_Z) mirrorAll(sub, 'z');
+    pour(p, sub, 0);
     return;
   }
-  // le mur court du nord au sud : la porte tourne d'un quart de tour (+x devient le sud), et le pied de ses drapeaux avec elle
-  const sub = new Parts(), rk: DefKit = { ...kit, sway: (pv, axis, amp, freq) => kit.sway([-pv[2], pv[1], pv[0]], axis, amp, freq) };
-  GATES[a](sub, rk);
+  // le mur court du nord au sud : la porte tourne d'un quart de tour (+x devient le sud, −z l'est), et le pied de ses drapeaux
+  // avec elle ; son dedans est donc à l'est sans miroir, à l'ouest avec
+  const flip = !(mask & NODE_FLIP_X);
+  const rk: DefKit = { ...kit, sway: (pv, axis, amp, freq) => kit.sway([-pv[2], pv[1], pv[0]], axis, amp, freq) };
+  const sub = new Parts(), mk = mirroredKit(rk, false, flip);
+  GATES[a](sub, mk.kit);
+  mk.done();
   if (towers & WALL_S) gateJoin(a, sub, 1);
   if (towers & WALL_N) gateJoin(a, sub, -1);
+  if (flip) mirrorAll(sub, 'z');
   pour(p, sub, -PI / 2);
 }

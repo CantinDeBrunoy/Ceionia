@@ -430,6 +430,10 @@ export class BuildingView implements WorldListener {
   }
 
   refreshNear(b: Building) {
+    // un rempart posé ou démoli peut fermer ou ouvrir une enceinte : le côté intérieur de tous les remparts se recalcule
+    if (isRampart(b.kind) || b.kind === 'watchtower') {
+      for (const n of this.world.buildings.values()) if (n.id !== b.id && isRampart(n.kind)) this.refresh(n);
+    }
     const s = sizeOf(b);
     for (let dz = -1; dz <= s; dz++)
       for (let dx = -1; dx <= s; dx++) {
