@@ -312,9 +312,99 @@ function tank5(p: Parts, line: number) {
   for (const z of [-0.06, 0.06]) { p.cyl(0.008, 0.008, 0.02, 6, 0.074, 0.1, z, 0x5a6270); p.add(new THREE.TorusGeometry(0.008, 0.003, 3, 6).rotateY(Math.PI / 2), 0.086, 0.12, z, 0xd84a3e); }
 }
 
+/**
+ * Tombereau moderne : caisse d'acier rouille évasée, ranches et rebord, bouts en pente, trémie de vidange, échelle, volant de
+ * frein, plaque à la couleur de la ligne ; bogies, châssis, tampons ; chargé, un tas de pierres et de minerai qui brille
+ */
+function wagon4(p: Parts, loaded: boolean, line: number) {
+  const side = 0x9a5a44, rib = dark(side, 0.72), l = 0.3;
+  frame4(p, l, 0, 0x3c3c40);
+  for (const z of [-0.1, 0.1]) bogie4(p, z);
+  for (const e of [-1, 1]) buffers4(p, e * (l / 2));
+  p.box(0.13, 0.012, 0.27, 0, 0.068, 0, dark(side, 0.8));
+  for (const s of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(0.012, 0.11, 0.29), s * 0.072, 0.125, 0, side, 0, false, s * 0.16);
+    p.add(new THREE.BoxGeometry(0.016, 0.012, 0.3), s * 0.081, 0.181, 0, rib, 0, false, s * 0.16);
+    for (let k = 0; k < 6; k++) p.add(new THREE.BoxGeometry(0.008, 0.11, 0.01), s * 0.079, 0.125, -0.125 + k * 0.05, rib, 0, false, s * 0.16);
+    p.add(new THREE.BoxGeometry(0.004, 0.03, 0.06), s * 0.08, 0.135, 0.04, line, 0, false, s * 0.16);
+  }
+  for (const e of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(0.15, 0.12, 0.012), 0, 0.125, e * 0.14, side, 0, false, 0, -e * 0.25);
+    p.box(0.16, 0.012, 0.016, 0, 0.18, e * 0.155, rib);
+  }
+  p.add(new THREE.ConeGeometry(0.045, 0.035, 4).rotateY(Math.PI / 4).rotateX(Math.PI), 0, 0.045, 0, 0x6a6e76);
+  // échelle et volant de frein à un bout
+  for (const x of [0.03, 0.06]) p.box(0.004, 0.12, 0.004, x, 0.06, 0.165, 0x8a8f96);
+  for (let k = 0; k < 4; k++) p.box(0.034, 0.004, 0.004, 0.045, 0.08 + k * 0.03, 0.165, 0x8a8f96);
+  p.add(new THREE.TorusGeometry(0.018, 0.003, 3, 10), -0.04, 0.15, 0.168, 0xd8a03a);
+  if (loaded) {
+    p.sphere(0.075, 0, 0.16, -0.06, 0x6a6660, 0, 0.55); p.sphere(0.07, 0, 0.16, 0.07, 0x7a746c, 0, 0.55);
+    for (let i = 0; i < 6; i++) p.sphere(0.016, (hash2(i, 1, 91) - 0.5) * 0.08, 0.19 + hash2(i, 2, 91) * 0.02, (hash2(i, 3, 91) - 0.5) * 0.22, [0xe8c66a, 0xd84a5a, 0x6ad8e8, 0x4a6ad8][i % 4], 0);
+  }
+}
+
+/** Un conteneur (long de `l`, centré en z) : parois nervurées, toit, pièces de coin, portes au bout `door` (+1 ou -1) et leurs barres, bandeau */
+function container(p: Parts, z: number, l: number, color: number, door: number, line: number) {
+  const rib = dark(color, 0.78), y = 0.065, h = 0.14;
+  p.box(0.148, h, l, 0, y, z, color);
+  p.box(0.14, 0.006, l - 0.01, 0, y + h, z, dark(color, 1.12));
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 6; k++) p.box(0.004, h - 0.02, 0.008, s * 0.075, y + 0.01, z - l / 2 + 0.02 + (k * (l - 0.04)) / 5, rib);
+    p.box(0.004, 0.022, l * 0.5, s * 0.0755, y + 0.09, z, line);
+    for (const e of [-1, 1]) for (const yy of [y, y + h - 0.012]) p.box(0.012, 0.012, 0.012, s * 0.07, yy, z + e * (l / 2 - 0.006), 0x3c3c40);
+  }
+  const ez = z + door * (l / 2 + 0.002);
+  p.box(0.004, h - 0.01, 0.004, 0, y + 0.005, ez, rib);
+  for (const x of [-0.05, -0.02, 0.02, 0.05]) p.box(0.004, h - 0.02, 0.006, x, y + 0.01, ez + door * 0.002, 0x8a8f96);
+}
+
+/** Wagon porte-conteneurs : plateau, deux conteneurs (bleu et rouge) portes aux bouts, bogies, tampons */
+function van4(p: Parts, line: number) {
+  const l = 0.38;
+  frame4(p, l, 0, 0x3c3c40);
+  for (const z of [-0.13, 0.13]) bogie4(p, z);
+  for (const e of [-1, 1]) buffers4(p, e * (l / 2));
+  container(p, 0.093, 0.178, 0x3a6ab8, 1, line);
+  container(p, -0.093, 0.178, 0xb84a3a, -1, line);
+}
+
+/**
+ * Wagon-citerne moderne : citerne blanche couchée sur ses berceaux, aux bouts bombés, cerclée de rouge, bandeau à la couleur
+ * de la ligne, plaque orange de danger, dôme et trou d'homme, passerelle et garde-corps, échelles, vanne de vidange ; bogies,
+ * châssis, tampons
+ */
+function tank4(p: Parts, line: number) {
+  const tank = 0xe8e8e4, l = 0.3, rail = 0x8a8f96;
+  frame4(p, l, 0, 0x3c3c40);
+  for (const z of [-0.1, 0.1]) bogie4(p, z);
+  for (const e of [-1, 1]) buffers4(p, e * (l / 2));
+  for (const z of [-0.08, 0.08]) p.box(0.12, 0.03, 0.03, 0, 0.06, z, 0x5a5e66);
+  p.add(new THREE.CylinderGeometry(0.068, 0.068, 0.28, 14).rotateX(Math.PI / 2), 0, 0.15, 0, tank);
+  for (const z of [-1, 1]) p.add(new THREE.SphereGeometry(0.068, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX((z * Math.PI) / 2).scale(1, 1, 0.35), 0, 0.15, z * 0.14, tank);
+  for (const z of [-0.1, 0.1]) p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.012, 14).rotateX(Math.PI / 2), 0, 0.15, z, 0xd8553c);
+  for (const s of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(0.004, 0.018, 0.17), s * 0.067, 0.145, 0, line, 0, false, 0);
+    p.box(0.004, 0.026, 0.034, s * 0.068, 0.17, -0.05, 0xf08a2a);
+    p.box(0.005, 0.004, 0.034, s * 0.0685, 0.182, -0.05, 0x26262a);
+  }
+  // dôme, trou d'homme, passerelle et garde-corps, échelles des deux côtés
+  p.cyl(0.026, 0.026, 0.03, 10, 0, 0.205, 0, tank); p.cyl(0.02, 0.02, 0.008, 10, 0, 0.235, 0, 0x8a8f96);
+  p.box(0.06, 0.005, 0.12, 0, 0.215, 0, rail);
+  for (const s of [-1, 1]) {
+    for (const z of [-0.055, 0, 0.055]) p.box(0.003, 0.035, 0.003, s * 0.03, 0.218, z, rail);
+    p.box(0.003, 0.003, 0.12, s * 0.03, 0.252, 0, rail);
+    for (const z of [0.05, 0.075]) p.box(0.004, 0.15, 0.004, s * 0.074, 0.065, z, rail);
+    for (let k = 0; k < 5; k++) p.box(0.004, 0.004, 0.025, s * 0.074, 0.08 + k * 0.03, 0.0625, rail);
+  }
+  // la vanne de vidange sous le ventre et son volant
+  p.cyl(0.008, 0.008, 0.03, 6, 0, 0.065, 0, 0x5a5e66);
+  p.add(new THREE.TorusGeometry(0.012, 0.003, 3, 8).rotateX(Math.PI / 2), 0, 0.068, 0, 0xd84a3e);
+}
+
 /** Wagon de minerai (tombereau) ; chargé, un tas de pierres et de minerai qui brille */
 function wagonGeo(age: number, loaded: boolean, line = 0x2ab0b0) {
   if (age >= 5) { const p = new Parts(); hopper5(p, line, loaded); return p.build(false); }
+  if (age === 4) { const p = new Parts(); wagon4(p, loaded, line); return p.build(false); }
   const p = new Parts(), side = age >= 4 ? 0x9a5a44 : 0x6f5640;
   p.box(0.15, 0.03, 0.32, 0, 0.05, 0, 0x3c3c40);
   p.box(0.13, 0.012, 0.28, 0, 0.08, 0, dark(side, 0.8));
@@ -335,6 +425,7 @@ function wagonGeo(age: number, loaded: boolean, line = 0x2ab0b0) {
  */
 function vanGeo(age: number, line: number) {
   if (age >= 5) { const p = new Parts(); van5(p, line); return p.build(false); }
+  if (age === 4) { const p = new Parts(); van4(p, line); return p.build(false); }
   const p = new Parts();
   p.box(0.16, 0.03, 0.4, 0, 0.05, 0, 0x3c3c40);
   if (age >= 4) {
@@ -358,6 +449,7 @@ function vanGeo(age: number, line: number) {
 /** Wagon-citerne : la citerne couchée sur son châssis, cerclée, son dôme et son échelle (noire, puis blanche à l'époque moderne) */
 function tankGeo(age: number, line = 0x2ab0b0) {
   if (age >= 5) { const p = new Parts(); tank5(p, line); return p.build(false); }
+  if (age === 4) { const p = new Parts(); tank4(p, line); return p.build(false); }
   const p = new Parts(), tank = age >= 4 ? 0xe8e8e4 : 0x2a2a2e;
   p.box(0.15, 0.03, 0.32, 0, 0.05, 0, 0x3c3c40);
   p.add(new THREE.CylinderGeometry(0.068, 0.068, 0.3, 12).rotateX(Math.PI / 2), 0, 0.15, 0, tank);
