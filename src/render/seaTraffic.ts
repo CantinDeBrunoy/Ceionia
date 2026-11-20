@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World, SEA } from '../world/world';
 import { Parts } from './parts';
+import { TEAM_A, TEAM_B, TEAM_FLAG_R } from './teamPaint';
 import { mats } from './materials';
 import { Puffs } from './particles';
 import { freighter } from './models';
@@ -28,6 +29,8 @@ export function fisherKind(age: number): VesselKind {
 
 const SMOKE = new THREE.Color(0.32, 0.3, 0.3);
 const WOOD = 0x7a5236, DARK = 0x5a3e2e, TAR = 0x2e241c, DECK = 0xb08458, PLANK = 0x8a6040, SAIL = 0xf2e6d0, SAIL2 = 0xe6d8bc;
+/** le navire en cours de dessin est-il du village (pavillon au blason) ou d'une île rivale (voir `vesselModel`) */
+let ours = true;
 const RED = 0xb8322c, GOLD = 0xe8c66a, ROPE = 0x4a3a2c, IRON = 0x2a2a2c, PANE = 0xe8b860;
 type Hull = ReturnType<typeof shipHull>;
 
@@ -126,9 +129,9 @@ function caravel(p: Parts) {
   p.cyl(0.004, 0.006, 0.32, 5, 0, hull(az) + 0.02, az, DARK);
   p.cyl(0.02, 0.014, 0.018, 7, 0, 0.465, mz, PLANK);
   // les voiles : grand-voile et misaine à croix rouge, hunier, artimon latin
-  course(p, 0.29, 0.2, 0.44, mz + 0.008, 0.04, RED);
+  course(p, 0.29, 0.2, 0.44, mz + 0.008, 0.04, ours ? TEAM_A : RED);
   course(p, 0.16, 0.075, 0.57, mz + 0.006, 0.02);
-  course(p, 0.2, 0.14, 0.37, fz + 0.008, 0.032, RED);
+  course(p, 0.2, 0.14, 0.37, fz + 0.008, 0.032, ours ? TEAM_A : RED);
   rod(p, [0.012, 0.19, -0.02], [0.012, 0.47, -0.32], 0.0045, DARK);
   sail3(p, [0.014, 0.2, -0.035], [0.014, 0.46, -0.31], [0.012, hull(-0.26) + 0.06, -0.27], SAIL, 0.035);
   // le gréement : haubans, étais, bras de la grand-vergue
@@ -144,10 +147,10 @@ function caravel(p: Parts) {
   p.cyl(0.012, 0.016, 0.022, 6, 0, hull(-0.07) - 0.022, -0.07, DARK);
   sailor(p, -0.04, hull(-0.02) - 0.022, -0.02, 0x8a3a2a, SAIL2);
   sailor(p, 0.01, hull(-0.22) + 0.03, -0.22, 0x3a5a8a, RED);
-  // pavillon bleu et or au grand mât, flamme rouge à la misaine
-  p.box(0.004, 0.035, 0.07, 0, 0.58, mz - 0.035, 0x3a6ab8);
-  p.box(0.005, 0.012, 0.07, 0, 0.592, mz - 0.035, GOLD);
-  pennant(p, 0.41, fz, 0.08, RED);
+  // pavillon au grand mât (au blason du village pour nos navires), flamme à la misaine
+  if (ours) p.box(0.004, 0.035, 0.07, 0, 0.58, mz - 0.035, TEAM_FLAG_R);
+  else { p.box(0.004, 0.035, 0.07, 0, 0.58, mz - 0.035, 0x3a6ab8); p.box(0.005, 0.012, 0.07, 0, 0.592, mz - 0.035, GOLD); }
+  pennant(p, 0.41, fz, 0.08, ours ? TEAM_A : RED);
 }
 
 /**
@@ -197,10 +200,10 @@ function galleon(p: Parts) {
   p.cyl(0.006, 0.009, 0.5, 5, 0, hull(az) + 0.05, az, DARK);
   for (const [z, y, r] of [[fz, 0.53, 0.026], [mz, 0.61, 0.03], [az, hull(az) + 0.42, 0.018]]) p.cyl(r, r * 0.7, 0.02, 7, 0, y, z, PLANK);
   // les voiles : basses voiles à croix rouge, huniers, perroquet au grand mât ; artimon latin
-  course(p, 0.4, 0.22, 0.58, mz + 0.01, 0.05, RED);
+  course(p, 0.4, 0.22, 0.58, mz + 0.01, 0.05, ours ? TEAM_A : RED);
   course(p, 0.3, 0.16, 0.79, mz + 0.008, 0.035);
   course(p, 0.18, 0.08, 0.94, mz + 0.006, 0.02);
-  course(p, 0.34, 0.19, 0.5, fz + 0.01, 0.045, RED);
+  course(p, 0.34, 0.19, 0.5, fz + 0.01, 0.045, ours ? TEAM_A : RED);
   course(p, 0.26, 0.14, 0.71, fz + 0.008, 0.03);
   rod(p, [0.014, 0.3, -0.12], [0.014, 0.7, -0.46], 0.005, DARK);
   sail3(p, [0.016, 0.31, -0.135], [0.016, 0.69, -0.45], [0.014, hull(-0.42) + 0.17, -0.42], SAIL, 0.04);
@@ -220,11 +223,11 @@ function galleon(p: Parts) {
   sailor(p, 0.06, hull(0) - 0.022, 0, 0x8a3a2a, SAIL2);
   sailor(p, -0.05, hull(-0.12) - 0.022, -0.12, 0x3a5a8a, RED);
   sailor(p, 0.02, hull(-0.4) + 0.115, -0.4, 0x2e2018, GOLD);
-  // pavillon rouge et or au grand mât, flammes à la misaine et à l'artimon
-  p.box(0.004, 0.05, 0.09, 0, 0.96, mz - 0.045, RED);
-  p.box(0.005, 0.016, 0.09, 0, 0.977, mz - 0.045, GOLD);
-  pennant(p, 0.82, fz, 0.12, RED);
-  pennant(p, hull(az) + 0.55, az, 0.09, GOLD);
+  // pavillon au grand mât (au blason du village pour nos navires), flammes à la misaine et à l'artimon
+  if (ours) p.box(0.004, 0.05, 0.09, 0, 0.96, mz - 0.045, TEAM_FLAG_R);
+  else { p.box(0.004, 0.05, 0.09, 0, 0.96, mz - 0.045, RED); p.box(0.005, 0.016, 0.09, 0, 0.977, mz - 0.045, GOLD); }
+  pennant(p, 0.82, fz, 0.12, ours ? TEAM_A : RED);
+  pennant(p, hull(az) + 0.55, az, 0.09, ours ? TEAM_B : GOLD);
 }
 
 /** Ajoute à `p` ce que dessine `make`, décalé de x (un flotteur de catamaran) */
@@ -283,15 +286,19 @@ function hydrofoil(p: Parts) {
 const BUILD: Record<VesselKind, (p: Parts) => [number, number, number] | null> = {
   caravel: (p) => { caravel(p); return null; },
   galleon: (p) => { galleon(p); return null; },
-  steamer: (p) => freighter(p, 3),
-  cargo: (p) => freighter(p, 4),
+  steamer: (p) => freighter(p, 3, ours),
+  cargo: (p) => freighter(p, 4, ours),
   hydro: (p) => { hydrofoil(p); return null; },
 };
-const vessels = new Map<VesselKind, { geo: THREE.BufferGeometry; funnel: [number, number, number] | null }>();
-/** Le modèle d'un navire de commerce (géométrie partagée, et la bouche de sa cheminée s'il en a une) : sert aussi au commerce entre les îles rivales */
-export function vesselModel(kind: VesselKind) {
-  let g = vessels.get(kind);
-  if (!g) { const p = new Parts(); const f = BUILD[kind](p); g = { geo: p.build(false).body, funnel: f }; vessels.set(kind, g); }
+const vessels = new Map<string, { geo: THREE.BufferGeometry; funnel: [number, number, number] | null }>();
+/**
+ * Le modèle d'un navire de commerce (géométrie partagée, et la bouche de sa cheminée s'il en a une) : sert aussi au commerce
+ * entre les îles rivales (`ours` faux : leurs navires ne portent pas le pavillon du village)
+ */
+export function vesselModel(kind: VesselKind, mine = true) {
+  const key = `${kind}|${mine ? 1 : 0}`;
+  let g = vessels.get(key);
+  if (!g) { ours = mine; const p = new Parts(); const f = BUILD[kind](p); ours = true; g = { geo: p.build(false).body, funnel: f }; vessels.set(key, g); }
   return g;
 }
 /** Vitesse (cases par seconde) : la voile est lente, le vapeur plus vif, le cargo et le navire à foils filent */

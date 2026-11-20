@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { paint, merge } from './battleUnits';
+import { TEAM_A, TEAM_B, TEAM_BANNER, TEAM_EMBLEM } from './teamPaint';
 
 /**
  * La boîte à outils des bâtiments de la base avancée (voir hellBaseAges.ts) : primitives (boîte, cylindre, toit à deux pans, tente à
@@ -12,7 +13,9 @@ import { paint, merge } from './battleUnits';
 export type V3 = [number, number, number];
 type G = THREE.BufferGeometry;
 
-export const WOOD = 0x9a6a3c, DARKWOOD = 0x6a4426, CLOTH = 0xefe4c8, STONE = 0x8f8a98, DARK = 0x4a4650, BLUE = 0x2e6ad8, GOLD = 0xf0c040;
+export const WOOD = 0x9a6a3c, DARKWOOD = 0x6a4426, CLOTH = 0xefe4c8, STONE = 0x8f8a98, DARK = 0x4a4650, GOLD = 0xf0c040;
+/** la couleur principale du blason du village (voir teamPaint.ts) : étendards, écus, bandes des tentes */
+export const BLUE = TEAM_A;
 export const FIRE = 0xffa040, EMBER = 0xff6a20, WARM = 0xffc060, CYAN = 0x40f0ff, MAGENTA = 0xff50d0, WHITE = 0xf8f4ea, RED = 0xd8443a;
 export const IRON = 0x7a8088, SKIN = 0xf0c8a0, GREEN = 0x70ff90, NAVY = 0x1e3f8a;
 
@@ -146,7 +149,7 @@ export function makeKit(a: number) {
   const bunting = (x0: number, z0: number, x1: number, z1: number, y: number, n = 7, sag = 0.07) => {
     for (let i = 0; i <= n; i++) {
       const t = i / n, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t, yy = y - Math.sin(t * Math.PI) * sag;
-      const c = a === 5 ? (i % 2 ? CYAN : MAGENTA) : i % 3 === 0 ? WHITE : i % 3 === 1 ? S.acc : GOLD;
+      const c = a === 5 ? (i % 2 ? CYAN : MAGENTA) : i % 3 === 0 ? WHITE : i % 3 === 1 ? S.acc : TEAM_B;
       (a === 5 ? shine : solid).push(paint(new THREE.ConeGeometry(0.035, 0.09, 3).rotateX(Math.PI).translate(x, yy - 0.045, z), c));
     }
     rod(x0, y, z0, x1, y, z1, 0xd8d0b8, 0.008);
@@ -192,15 +195,19 @@ export function makeKit(a: number) {
     const zz = z + dir * 0.02;
     if (a === 5) { gtor(0.1 * s, 0.012, x, y, zz, CYAN, 0, 16); shine.push(paint(new THREE.CircleGeometry(0.095 * s, 14).translate(x, y, zz + dir * 0.002).rotateY(dir > 0 ? 0 : Math.PI), 0x3a8ad8)); return; }
     if (a === 2) { solid.push(paint(new THREE.ConeGeometry(0.1 * s, 0.22 * s, 3).rotateZ(Math.PI).rotateX(Math.PI / 2 * dir).translate(x, y, zz), c, shade)); bx(0.015, 0.2 * s, 0.015, x, y - 0.1 * s, zz + dir * 0.015, GOLD); bx(0.15 * s, 0.015, 0.015, x, y + 0.02 * s, zz + dir * 0.015, GOLD); return; }
-    const r = (a === 3 ? 0.085 : 0.1) * s;
-    solid.push(paint(new THREE.CylinderGeometry(r, r, 0.025, 12).rotateX(Math.PI / 2).translate(x, y, zz), a === 4 ? 0x5a6a7a : c, shade));
-    solid.push(paint(new THREE.CylinderGeometry(r * 0.3, r * 0.3, 0.04, 6).rotateX(Math.PI / 2).translate(x, y, zz + dir * 0.012), a === 1 ? GOLD : 0xd8d8d8, shade));
+    const r = (a === 3 ? 0.085 : 0.1) * s, ours = c === TEAM_A && a !== 4;
+    // l'écu du village porte l'emblème du blason (sans ombilic, qui le cacherait)
+    solid.push(paint(new THREE.CylinderGeometry(r, r, 0.025, 12).rotateX(Math.PI / 2).translate(x, y, zz), a === 4 ? 0x5a6a7a : ours ? TEAM_EMBLEM : c, shade));
+    if (!ours) solid.push(paint(new THREE.CylinderGeometry(r * 0.3, r * 0.3, 0.04, 6).rotateX(Math.PI / 2).translate(x, y, zz + dir * 0.012), a === 1 ? GOLD : 0xd8d8d8, shade));
     solid.push(paint(new THREE.TorusGeometry(r, 0.01, 4, 12).translate(x, y, zz + dir * 0.008), GOLD));
   };
   /** bannière verticale suspendue (tissu, liseré et motif doré) */
   const banner = (x: number, y: number, z: number, w = 0.22, h = 0.5, c = S.acc, dir = -1) => {
     bx(w + 0.06, 0.03, 0.04, x, y + h, z, a <= 2 ? DARKWOOD : 0xb8bcc4);
-    bx(w, h, 0.02, x, y, z + dir * 0.025, c); bx(w * 0.14, h * 0.8, 0.012, x - w * 0.5, y, z + dir * 0.035, GOLD); bx(w * 0.14, h * 0.8, 0.012, x + w * 0.5, y, z + dir * 0.035, GOLD);
+    // l'étendard du village : la toile au blason (emblème, forme du bas), sans la pointe ni le médaillon
+    const ours = c === TEAM_A;
+    bx(w, ours ? h + 0.08 : h, 0.02, x, ours ? y - 0.08 : y, z + dir * 0.025, ours ? TEAM_BANNER : c); bx(w * 0.14, h * 0.8, 0.012, x - w * 0.5, y, z + dir * 0.035, GOLD); bx(w * 0.14, h * 0.8, 0.012, x + w * 0.5, y, z + dir * 0.035, GOLD);
+    if (ours) return;
     cn(w * 0.5, 0.1, 3, x, y - 0.08, z + dir * 0.025, c, 0);
     (a === 5 ? shine : solid).push(paint(new THREE.CylinderGeometry(0.05, 0.05, 0.012, 6).rotateX(Math.PI / 2).translate(x, y + h * 0.55, z + dir * 0.042), a === 5 ? CYAN : GOLD));
   };

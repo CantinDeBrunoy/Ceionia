@@ -161,4 +161,10 @@ export function addTeamPaint<T extends THREE.Material>(mat: T): T {
   return mat;
 }
 
+/** Un matériau d'une seule couleur (le drapeau de la base des Enfers) qui prend la couleur principale du blason, et la suit */
+export function teamFlagColor<T extends THREE.MeshStandardMaterial>(mat: T): T {
+  mat.color = TEAM.uTeamA.value;
+  return mat;
+}
+
 setTeamBlason(DEFAULT_BLASON);

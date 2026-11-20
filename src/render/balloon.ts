@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TEAM_FLAG } from './teamPaint';
 import { Parts } from './parts';
 
 /**
@@ -81,7 +82,7 @@ export function balloonBasketGeo(crew = false) {
     const ox = x * 0.068 + z * 0.03, oz = z * 0.068 + x * 0.03;
     p.box(0.003, 0.02, 0.003, ox, 0.065, oz, 0xc9b48a); p.sphere(0.012, ox, 0.055, oz, 0xd8c8a0, 0, 1.2);
   }
-  p.box(0.003, 0.05, 0.003, 0.05, 0.2, 0.05, metal); p.box(0.003, 0.02, 0.03, 0.05, 0.235, 0.065, 0xd84a3e);
+  p.box(0.003, 0.05, 0.003, 0.05, 0.2, 0.05, metal); p.box(0.003, 0.02, 0.03, 0.05, 0.235, 0.065, TEAM_FLAG);
   if (crew) for (const [x, c] of [[-0.03, 0x8a3a3a], [0.03, 0x3a5a8a]] as number[][]) { p.box(0.03, 0.04, 0.03, x, 0.08, 0, c); p.box(0.024, 0.024, 0.024, x, 0.125, 0, 0xe8b894); p.box(0.026, 0.008, 0.026, x, 0.145, 0, 0x4a3426); }
   return p.build(false).body;
 }

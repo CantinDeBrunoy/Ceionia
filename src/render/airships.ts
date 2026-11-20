@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TEAM_A, TEAM_EMBLEM } from './teamPaint';
 import { wrapAngle } from '../core/rng';
 import { World, N } from '../world/world';
 import { Building } from '../build/catalog';
@@ -117,8 +118,7 @@ function shipGeo(modern: boolean) {
     for (const s of [-1, 1]) {
       nameOn(p, s, 0.06, 0.36, 0x2a2e36);
       onFlank(p, s, 0.012, 0.3, 0.006, 0.008, 0.5, red);
-      p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.006, 12).rotateZ(Math.PI / 2), flank(s, 0.06, -0.45), 0.06, -0.45, red, 0, false, s * 0.21);
-      p.add(new THREE.CylinderGeometry(0.024, 0.024, 0.008, 12).rotateZ(Math.PI / 2), flank(s, 0.06, -0.45) + s * 0.001, 0.06, -0.45, 0xf4f2ee, 0, false, s * 0.21);
+      p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.006, 12).rotateZ(Math.PI / 2), flank(s, 0.06, -0.45), 0.06, -0.45, TEAM_EMBLEM, 0, false, s * 0.21);
     }
     // la nacelle de commandement : coque à nez arrondi, rang de vitres, verrière du nez, carénage, guide-rope et sa boule
     const gy = -0.36, gz = 0.42;
@@ -144,7 +144,7 @@ function shipGeo(modern: boolean) {
     p.box(0.012, 0.012, 0.012, 0, 0.4, -0.86, 0xfff4e0, 0, true);
     return p.build(false);
   }
-  const white = 0xf4f2ee, white2 = 0xe6e4de, blue = 0x3a6ab8, navy = 0x22305a, gold = 0xf2c23a;
+  const white = 0xf4f2ee, white2 = 0xe6e4de, blue = TEAM_A, navy = 0x22305a, gold = 0xf2c23a;
   // l'enveloppe souple : fuseaux blancs, bandeau bleu liseré d'or sous l'équateur, le nez bleu nuit et ses baleines
   for (let k = 0; k < 16; k++) p.add(hullSlice(-0.96, 0.965, 1, (k * Math.PI) / 8, Math.PI / 8, 1), 0, 0, 0, k % 2 ? white : white2);
   for (const [a0, a1] of [[0.3, 0.48], [1.52, 1.7]]) {

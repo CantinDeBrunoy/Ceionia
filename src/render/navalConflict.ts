@@ -717,7 +717,7 @@ export class NavalConflict {
         const p = mid && waterPath(w, from, mid);
         if (!p) continue;
         sh = this.ship(warshipKind(winner, a, i), winner, p);
-      } else sh = this.ship(null, i ? 'asie' : 'orient', path, vesselModel(merchantKind(a, i)));
+      } else sh = this.ship(null, i ? 'asie' : 'orient', path, vesselModel(merchantKind(a, i), false));
       sh.t = -i * 25 - rnd() * 10;
       ships.push(sh);
     }

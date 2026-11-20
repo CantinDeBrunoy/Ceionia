@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addTeamPaint, teamFlagColor } from './teamPaint';
 import type { BaseKind } from '../sim/hell';
 import type { ThumbModel } from './thumbs';
 import { baseGeo, BASE_FLAG, GATE_HINGE, WALL_E, WALL_W } from './hellBase';
@@ -14,10 +15,10 @@ import { wallPartsAged, gatePartsAged } from './hellWallAges';
 
 let M: { lit: THREE.Material; glow: THREE.Material; field: THREE.Material; flag: THREE.Material } | null = null;
 const mats = () => (M ??= {
-  lit: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true }),
+  lit: addTeamPaint(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true })),
   glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
   field: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide }),
-  flag: new THREE.MeshStandardMaterial({ color: BASE_FLAG, side: THREE.DoubleSide, roughness: 0.9 }),
+  flag: teamFlagColor(new THREE.MeshStandardMaterial({ color: BASE_FLAG, side: THREE.DoubleSide, roughness: 0.9 })),
 });
 
 export function hellThumb(id: string, age: number): ThumbModel {

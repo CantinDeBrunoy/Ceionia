@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TEAM_A } from './teamPaint';
 import type { BaseKind } from '../sim/hell';
 import { paint, merge } from './battleUnits';
 import { baseAgeGeo, BaseParts } from './hellBaseAges';
@@ -144,7 +145,7 @@ export function gateGeo(): { solid: THREE.BufferGeometry; leaf: THREE.BufferGeom
     solid.push(paint(new THREE.ConeGeometry(0.13, 0.22, 4).rotateY(Math.PI / 4).translate(x, 1.41, 0), 0xc89a6a));
   }
   solid.push(paint(new THREE.BoxGeometry(1, 0.09, 0.12).translate(0, 1.22, 0), DARKWOOD));
-  solid.push(paint(new THREE.BoxGeometry(0.34, 0.07, 0.06).translate(0, 1.04, 0), BLUE));
+  solid.push(paint(new THREE.BoxGeometry(0.34, 0.07, 0.06).translate(0, 1.04, 0), TEAM_A));
   // le battant : planches debout, deux barres, une croix de renfort
   const L = 0.7;
   for (let i = 0; i < 5; i++) {

@@ -1,4 +1,5 @@
 ﻿import * as THREE from 'three';
+import { addTeamPaint, teamFlagColor } from './teamPaint';
 import { VR } from '../world/world';
 import { HellMap, HW, HL, HVW, HVL, HWALL, HPOOL_LAVA, HPOOL_CHASM, HLAVA_Y, HCHASM_Y, HELL_ZONES, Z_PORTAL, Z_EMBER, Z_BONES, Z_CRYSTAL, Z_KINGDOM, HellSiteKind } from '../world/hell';
 import { ROCK_ISO, FLOOR_ISO } from '../world/underground';
@@ -476,9 +477,9 @@ export class HellView {
 
   private mats() {
     return (this.baseMats ??= {
-      lit: caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true }), 'hell-base'),
+      lit: addTeamPaint(caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true }), 'hell-base')),
       glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
-      flag: caveLit(new THREE.MeshStandardMaterial({ color: BASE_FLAG, side: THREE.DoubleSide, roughness: 0.9 }), 'hell-base-flag'),
+      flag: teamFlagColor(caveLit(new THREE.MeshStandardMaterial({ color: BASE_FLAG, side: THREE.DoubleSide, roughness: 0.9 }), 'hell-base-flag')),
       ruin: caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), 'hell-ruin'),
       field: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }),
     });

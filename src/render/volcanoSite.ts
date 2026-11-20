@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TEAM_FLAG } from './teamPaint';
 import type { World } from '../world/world';
 import type { ActiveExpedition } from '../sim/expeditions';
 import type { Act } from '../sim/agents';
@@ -71,7 +72,7 @@ const netGeo = () => geo('vnet', (p) => {
 /** Un drapeau planté au bord du cratère */
 const flagGeo = () => geo('vflag', (p) => {
   p.cyl(0.005, 0.006, 0.3, 4, 0, 0, 0, 0x6a4a30);
-  p.box(0.11, 0.065, 0.004, 0.055, 0.23, 0, 0xc83a2a);
+  p.box(0.11, 0.065, 0.004, 0.055, 0.23, 0, TEAM_FLAG);
 });
 
 interface Villager { folk: Folk; home: [number, number]; x: number; z: number; face: number; pose: FolkPose; off: number }

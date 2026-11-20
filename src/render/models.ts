@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Parts, type Glow } from './parts';
-import { TEAM_A, TEAM_B, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG } from './teamPaint';
+import { TEAM_A, TEAM_B, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG, TEAM_FLAG_R } from './teamPaint';
 import { KindId, KINDS, smallSize, isRampart, isLinear } from '../build/catalog';
 import { decorModel, DecorKit } from './decor';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -7628,7 +7628,7 @@ export function airliner(p: Parts, x: number, y: number, z: number, ry = 0, S = 
  * charge, canots sur leurs bossoirs (âge industriel), porte-conteneurs à bulbe, château blanc à la poupe et ses piles de
  * conteneurs (époque moderne) ; renvoie le haut de sa cheminée
  */
-export function freighter(p: Parts, age: number): [number, number, number] | null {
+export function freighter(p: Parts, age: number, ours = true): [number, number, number] | null {
   /** coque effilée : pont de largeur w, profondeur d sous la flottaison, longueur L ; proue en pointe, poupe arrondie */
   const hull = (w: number, d: number, L: number, top: number, color: number, band: number | null, deck: number) => {
     // flancs droits au-dessus, carène plus étroite en dessous
@@ -7686,7 +7686,7 @@ export function freighter(p: Parts, age: number): [number, number, number] | nul
     for (let k = 0; k < 6; k++) p.add(new THREE.BoxGeometry(0.42, 0.055, 0.01), 0, 0.27 + k * 0.055, 0.03, sail[k % 2], 0, false, 0, -0.06);
     p.box(0.46, 0.012, 0.012, 0, 0.6, 0.03, 0x5a3e2e); p.box(0.4, 0.012, 0.012, 0, 0.26, 0.04, 0x5a3e2e);
     p.cyl(0.03, 0.025, 0.04, 6, 0, 0.66, 0.01, 0x6a4430);
-    p.box(0.07, 0.04, 0.004, 0.035, 0.74, 0.01, 0x3a6ab8); p.box(0.07, 0.012, 0.005, 0.035, 0.75, 0.01, 0xe8c66a);
+    if (ours) p.box(0.07, 0.04, 0.004, 0.035, 0.74, 0.01, TEAM_FLAG); else { p.box(0.07, 0.04, 0.004, 0.035, 0.74, 0.01, 0x3a6ab8); p.box(0.07, 0.012, 0.005, 0.035, 0.75, 0.01, 0xe8c66a); }
     for (const s of [-1, 1]) { p.add(new THREE.BoxGeometry(0.003, 0.003, 0.5), s * 0.1, 0.38, 0.0, 0x3a3030, 0, false, 0, s * 0.0); p.add(new THREE.BoxGeometry(0.003, 0.62, 0.003), s * 0.08, 0.38, -0.12, 0x3a3030, 0, false, s * 0.13); }
     for (const z of [-0.08, 0.06]) p.box(0.06, 0.05, 0.06, 0.05, 0.08, z, 0x9a6a44);
     return null;
@@ -7757,7 +7757,7 @@ export function freighter(p: Parts, age: number): [number, number, number] | nul
     }
     p.box(0.03, 0.04, 0.02, 0.07, h(0.3) - 0.022, 0.3, 0x5a4a3a);
     p.cyl(0.003, 0.003, 0.08, 4, 0, h(-0.42) - 0.01, -0.42, 0x8a8f96);
-    p.box(0.004, 0.035, 0.06, 0, h(-0.42) + 0.035, -0.45, 0x2c4a9a);
+    p.box(0.004, 0.035, 0.06, 0, h(-0.42) + 0.035, -0.45, ours ? TEAM_FLAG_R : 0x2c4a9a);
     for (const s of [-1, 1]) p.box(0.006, 0.03, 0.006, s * h.beam(0.36) * 1.02, h(0.36) - 0.05, 0.36, 0x2a2a2c, 0, false, s * 0.25);
     return top;
   }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TEAM_A, TEAM_B, TEAM_EMBLEM, TEAM_FLAG } from './teamPaint';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents, type Act, type Ride } from '../sim/agents';
 import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntSpot, PEACE_TRIPS, TRIP_OUT, TRIP_MEET, TRIP_LEAVE, TRIP_BOARD, TRIP_HOME } from '../sim/expeditions';
@@ -194,12 +195,12 @@ const BOAT_MAKE: Record<BoatKind, (p: Parts) => void> = {
     p.box(0.06, 0.04, 0.03, 0, 0.1, -0.28, 0xe8c04a);
     p.box(0.15, 0.008, 0.46, 0, 0.045, 0, 0xc9a46c);
     for (let i = 0; i < 6; i++) for (const s of [-1, 1]) {
-      p.add(new THREE.CylinderGeometry(0.02, 0.02, 0.006, 8).rotateZ(Math.PI / 2), s * 0.095, 0.062, -0.2 + i * 0.075, i % 2 ? 0xc8443a : 0xe8c04a);
+      p.add(new THREE.CylinderGeometry(0.02, 0.02, 0.006, 8).rotateZ(Math.PI / 2), s * 0.095, 0.062, -0.2 + i * 0.075, i % 2 ? TEAM_A : TEAM_B);
       p.box(0.12, 0.004, 0.008, s * 0.15, 0.03, -0.2 + i * 0.075, 0xb08458, 0, false, s * 0.35);
     }
     p.cyl(0.006, 0.009, 0.32, 5, 0, 0.05, 0.04, 0x5a3e2e);
     p.box(0.22, 0.008, 0.008, 0, 0.3, 0.04, 0x5a3e2e);
-    for (let k = 0; k < 3; k++) p.box(0.21, 0.05, 0.006, 0, 0.18 + k * 0.05, 0.04, k % 2 ? 0xc8443a : 0xf4ecdc);
+    for (let k = 0; k < 3; k++) p.box(0.21, 0.05, 0.006, 0, 0.18 + k * 0.05, 0.04, k % 2 ? TEAM_A : 0xf4ecdc);
   },
 };
 export const boatGeo = (kind: BoatKind = 'rowboat') => geo(`boat:${kind}`, BOAT_MAKE[kind]);
@@ -517,7 +518,7 @@ const mapTableGeo = () => geo('maptable', (p) => {
   p.box(0.22, 0.014, 0.14, 0, 0.1, 0, 0x9a7a5a); p.box(0.16, 0.003, 0.1, 0, 0.114, 0, 0xf2e8d0, 0.12);
   for (const [x, z, c] of [[-0.04, 0.02, 0xc8443a], [0.03, -0.02, 0x3c3530], [0.05, 0.03, 0xc8443a]] as [number, number, number][]) p.box(0.01, 0.01, 0.01, x, 0.117, z, c);
 });
-const flagGeo = () => geo('flag', (p) => { p.cyl(0.006, 0.008, 0.42, 5, 0, 0, 0, 0xd8d8d8); p.box(0.006, 0.08, 0.13, 0, 0.32, 0.065, 0xd8443a); p.sphere(0.012, 0, 0.43, 0, 0xe8c66a); });
+const flagGeo = () => geo('flag', (p) => { p.cyl(0.006, 0.008, 0.42, 5, 0, 0, 0, 0xd8d8d8); p.box(0.006, 0.08, 0.13, 0, 0.32, 0.065, TEAM_FLAG); p.sphere(0.012, 0, 0.43, 0, 0xe8c66a); });
 const stationGeo = () => geo('station', (p) => {
   p.box(0.012, 0.36, 0.012, 0, 0, 0, 0xd8d8d8);
   p.box(0.1, 0.08, 0.08, 0.08, 0.14, 0, 0xf7f3ec); for (let i = 0; i < 3; i++) p.box(0.1, 0.005, 0.082, 0.08, 0.155 + i * 0.02, 0.0, 0xd8d0c0);
@@ -664,7 +665,7 @@ const chestGeo = () => geo('chest', (p) => { p.box(0.09, 0.05, 0.06, 0, 0, 0, 0x
 /** Une ancre de fer */
 const anchorGeo = () => geo('anchor', (p) => { p.box(0.012, 0.11, 0.012, 0, 0, 0, 0x4a4e58); p.box(0.05, 0.01, 0.012, 0, 0.085, 0, 0x4a4e58); p.box(0.08, 0.012, 0.012, 0, 0.004, 0, 0x4a4e58); for (const x of [-0.04, 0.04]) p.cone(0.012, 0.03, 4, x, 0.01, 0, 0x4a4e58); });
 /** Un bouclier rond (les boucliers levés) */
-const roundShieldGeo = () => geo('rshield', (p) => { p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.008, 10).rotateX(Math.PI / 2), 0, 0.04, 0, 0xc8443a); p.sphere(0.012, 0, 0.04, 0.006, 0xe8c04a); });
+const roundShieldGeo = () => geo('rshield', (p) => { p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.008, 10).rotateX(Math.PI / 2), 0, 0.04, 0, TEAM_EMBLEM); });
 /** Une table basse et ronde, ou longue (les pourparlers) */
 const tableGeo = (round: boolean) => geo(`table${+round}`, (p) => { if (round) p.cyl(0.14, 0.14, 0.012, 14, 0, 0.07, 0, 0xb08458); else p.box(0.32, 0.012, 0.11, 0, 0.07, 0, 0xb08458); for (const [x, z] of round ? [[0.08, 0], [-0.08, 0], [0, 0.08], [0, -0.08]] : [[0.13, 0.04], [-0.13, 0.04], [0.13, -0.04], [-0.13, -0.04]]) p.box(0.012, 0.07, 0.012, x, 0, z, 0x6a4a34); });
 /** Un gâteau à trois étages */
