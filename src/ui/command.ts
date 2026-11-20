@@ -145,17 +145,17 @@ const PORTAL_ART = `<svg class="tpi" viewBox="0 0 120 60" preserveAspectRatio="x
 
 /** Le rappel des contrôles (le bouton « ? » de la barre des troupes) : touche ou geste, ce qu'il fait */
 export const CONTROLS_HELP: [string, string][] = [
-  ['Clic', 'choisir une troupe (double-clic : toutes celles de la même sorte ; Maj : ajouter)'],
+  ['Clic', 'choisir une troupe (double-clic : toutes celles de la même sorte, Maj : ajouter)'],
   ['Glisser', 'tracer un cadre autour des troupes à choisir'],
   ['Clic droit', 'aller là, ou attaquer l’ennemi visé (au doigt : appui long)'],
   ['Clic droit sur le portail', 'les troupes choisies passent de l’autre côté'],
   ['A puis clic', 'attaquer en marchant : on combat ce qu’on croise'],
   ['H · R', 'tenir la position · se replier'],
-  ['Clic droit glissé', 'tourner la vue ; en le montant ou le descendant, incliner la caméra (clavier : Page haut / Page bas)'],
+  ['Clic droit glissé', 'tourner la vue, et en le montant ou le descendant, incliner la caméra (clavier : Page haut / Page bas)'],
   ['Flèches · ZQSD', 'déplacer la vue (aussi : Maj + clic droit glissé, ou clic milieu glissé)'],
   ['Molette', 'zoomer'],
   ['Espace', 'pause active : les ordres se donnent en pause'],
-  ['🌀 · 🔥', 'passer le portail ; « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île'],
+  ['🌀 · 🔥', 'passer le portail. « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île'],
 ];
 
 export class CommandUI implements ToolInput {
@@ -392,7 +392,7 @@ export class CommandUI implements ToolInput {
       // le tracé de A au pointeur (un ruban de pans raccordés), son coût
       const pv = this.wall.preview(this.host.war, kind, p);
       line = pv.cells;
-      this.wallInfo = !this.wall.a ? tr('Mur : cliquez pour choisir le début (A), puis la fin (B) ; ou glissez de A à B. G : porte ici.')
+      this.wallInfo = !this.wall.a ? tr('Mur : cliquez pour choisir le début (A), puis la fin (B), ou glissez de A à B. G : porte ici.')
         : pv.why ? pv.why : tr('Mur de {len} : {cost}. Clic : poser jusqu’ici · G : porte ici · Échap : arrêter.', { len: nplural(pv.cells.length, 'case', 'cases'), cost: pv.n ? pv.cost : tr('rien à poser') });
       this.showInfo();
     } else if (kind === 'gate') {
@@ -441,7 +441,7 @@ export class CommandUI implements ToolInput {
   /** Touche G, pendant le tracé d'un mur : il s'arrête au pointeur par une porte (une ouverture que franchissent les nôtres) */
   private gateHere() {
     const p = this.lastP;
-    if (this.placing !== 'palisade' || !this.wall.a || !p) { this.host.toast(tr('Porte : commencez un mur (clic au point A), puis G au point voulu ; ou choisissez « Porte » et survolez un pan.')); return; }
+    if (this.placing !== 'palisade' || !this.wall.a || !p) { this.host.toast(tr('Porte : commencez un mur (clic au point A), puis G au point voulu, ou choisissez « Porte » et survolez un pan.')); return; }
     const msg = this.wall.buildWithGate(this.host.war, p);
     if (msg.startsWith(`${BASE_DEFS.gate.icon} `)) { this.host.click(); this.host.toast(msg); } else this.deny(msg);
     this.ghostAt(p);
@@ -552,7 +552,7 @@ export class CommandUI implements ToolInput {
       this.cmd.armed = null; this.wall.reset();
       this.tool = 'select'; this.moving = null; this.razeAsk = null; this.placeWhy = null;
       if (kind === 'camp' && this.campHint()) { this.render(); return; }
-      this.host.toast(kind === 'palisade' ? tr('{icon} Palissade : un clic au point A, un clic au point B (ou glissez) : le mur se pose en ligne libre, droite ou en diagonale ({cost} le pan). B devient le début du suivant ; G : porte ici ; Échap ou clic droit : arrêter.', { icon: BASE_DEFS.palisade.icon, cost: costText(BASE_DEFS.palisade.cost) }) : kind === 'gate' ? tr('{icon} Porte : survolez un pan de mur (elle s’y insère, en le remplaçant) et cliquez ({cost}). Échap ou clic droit : arrêter.', { icon: BASE_DEFS.gate.icon, cost: costText(BASE_DEFS.gate.cost) }) : tr('{icon} {name} : cliquez au sol pour le poser ({cost}). Échap ou clic droit : arrêter.', { icon: BASE_DEFS[kind!].icon, name: BASE_DEFS[kind!].name, cost: costText(BASE_DEFS[kind!].cost) }));
+      this.host.toast(kind === 'palisade' ? tr('{icon} Palissade : un clic au point A, un clic au point B (ou glissez) : le mur se pose en ligne libre, droite ou en diagonale ({cost} le pan). B devient le début du suivant. G : porte ici. Échap ou clic droit : arrêter.', { icon: BASE_DEFS.palisade.icon, cost: costText(BASE_DEFS.palisade.cost) }) : kind === 'gate' ? tr('{icon} Porte : survolez un pan de mur (elle s’y insère, en le remplaçant) et cliquez ({cost}). Échap ou clic droit : arrêter.', { icon: BASE_DEFS.gate.icon, cost: costText(BASE_DEFS.gate.cost) }) : tr('{icon} {name} : cliquez au sol pour le poser ({cost}). Échap ou clic droit : arrêter.', { icon: BASE_DEFS[kind!].icon, name: BASE_DEFS[kind!].name, cost: costText(BASE_DEFS[kind!].cost) }));
     }
     this.render();
   }
@@ -1170,7 +1170,7 @@ export class CommandUI implements ToolInput {
         const p = this.hellPlan(k), fm = troopForm(k, age);
         return this.troopCard(`rech:${k}`, k, age, p.state === 'ready' ? 'go' : p.state === 'craft' ? 'craft' : 'off', `${troopLabel(k, age)}. ${fm.desc} — ${p.tip}`, p.sub, Math.round(TROOPS[k].time * 0.75));
       }).join('')}</div></div>`;
-    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5 title="${tr('La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’{zone}', { zone: zoneTo(zi) })}">${pic('⛺', 20)}<span class="tmt">${tr('Ma base')}</span></h5>${this.hellQueue()}</div><div class="tmbody"><div class="tmrow">${inner}</div></div></div>`;
+    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5 title="${tr('La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise, et la brume s’ouvre jusqu’{zone}', { zone: zoneTo(zi) })}">${pic('⛺', 20)}<span class="tmt">${tr('Ma base')}</span></h5>${this.hellQueue()}</div><div class="tmbody"><div class="tmrow">${inner}</div></div></div>`;
   }
 
   /**
@@ -1236,7 +1236,7 @@ export class CommandUI implements ToolInput {
     const g = this.goal, goal = g ? (g.x !== undefined ? `<button data-a="goal" class="tfg" title="${tr('Centrer la vue sur l’objectif')}">${hudPic('militaire', 18)}<span class="tgo">${goalLine(g, null)}<b class="tgd"></b></span></button>` : `<span class="tfg">${pic('🔒', 18)}<span class="tgo">${goalLine(g, null)}</span></span>`) : '';
     // dessous, seulement quand les démons menacent la base
     const row = al ? `<div class="tgoal"><span class="tfa" title="${al.text.replace(/"/g, '&quot;')}">${pic('⚠️', 16)} ${al.text}</span></div>` : '';
-    return `<div class="tstate tfcol"><div class="tfrise hellf">${zn ? `<span class="tfn" title="${tr('La zone où se trouve la vue ; un clic sur le portail ramène au village')}"><img class="tfb" src="./icons/hell/banniere.webp" alt="" draggable="false" decoding="async"><span class="tft"><b>${tr('Les Enfers')}</b><small>${zn}</small></span></span>` : ''}<div class="tfz">${nodes}</div>${goal}</div>${row}</div>`;
+    return `<div class="tstate tfcol"><div class="tfrise hellf">${zn ? `<span class="tfn" title="${tr('La zone où se trouve la vue. Un clic sur le portail ramène au village')}"><img class="tfb" src="./icons/hell/banniere.webp" alt="" draggable="false" decoding="async"><span class="tft"><b>${tr('Les Enfers')}</b><small>${zn}</small></span></span>` : ''}<div class="tfz">${nodes}</div>${goal}</div>${row}</div>`;
   }
 
   /** Les recrues en route vers le camp (équipement en fabrication comprises) */

@@ -507,7 +507,7 @@ export const EVENTS: ExpEvent[] = [
   },
   {
     id: 'lamb', where: ['plain'], missions: ['herd'], scenes: ['herd'], title: 'Un agneau dans les ronces',
-    text: 'Un agneau s’est pris dans un buisson de ronces et bêle à fendre l’âme ; sa mère tourne autour, affolée.',
+    text: 'Un agneau s’est pris dans un buisson de ronces et bêle à fendre l’âme. Sa mère tourne autour, affolée.',
     options: [
       { label: 'Le libérer doucement', risk: 0.85, work: 4, bonus: [{ t: 'herd', kinds: ['sheep'] }], text: 'Libéré des ronces, l’agneau ne nous a plus quittés.' },
       { wait: true, label: 'Laisser la mère s’en charger', risk: 1, text: 'La brebis a fini par tirer son petit des ronces.' },

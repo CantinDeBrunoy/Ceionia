@@ -48,7 +48,7 @@ registerDict('gear', {
   'Bouclier de champ': 'Field shield', 'Boucliers de champ': 'Field shields',
   'Une bulle d’énergie : vent, pluie et éboulis rebondissent.': 'A bubble of energy: wind, rain and rockfalls bounce off.',
   'Trousse de soins': 'First-aid kit', 'Trousses de soins': 'First-aid kits',
-  'Un peu plus sûr partout ; les blessés guérissent deux fois plus vite.': 'A little safer everywhere; the injured heal twice as fast.',
+  'Un peu plus sûr partout. Les blessés guérissent deux fois plus vite.': 'A little safer everywhere. The injured heal twice as fast.',
 
   // ---- prix et raisons ----
   '{n} bois': '{n} wood',

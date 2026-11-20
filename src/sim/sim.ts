@@ -345,7 +345,7 @@ export class Sim {
     if (w.buildings.size === 0) return about('gather', tr('Pour commencer, posez {name} au centre : c’est la place du village.', { name: quote('gather') }));
     if (!this.counts.house) return about('house', tr('Autour de la place, le centre du village : {house}, {farm} et {well}.', { house: quote('house'), farm: quote('farm'), well: quote('well') }));
     if (!this.food.ok && this.fled >= 1) return need('farm', DIFF_TEXT.famine(say('farm')));
-    if (!this.food.ok) return need('farm', this.drought ? tr('Sécheresse : les champs donnent moins ; {farm} ou {pier} de plus aiderait.', { farm: say('farm'), pier: quote('pier') }) : tr('Il manque de quoi manger : {farm} ou un champ.', { farm: say('farm') }));
+    if (!this.food.ok) return need('farm', this.drought ? tr('Sécheresse : les champs donnent moins, mais {farm} ou {pier} de plus aiderait.', { farm: say('farm'), pier: quote('pier') }) : tr('Il manque de quoi manger : {farm} ou un champ.', { farm: say('farm') }));
     if (!this.water.ok) return need('well', tr('Il manque de l’eau : {k}.', { k: say('well') }));
     // à la Préhistoire, dans les premières minutes, les premiers bâtiments qui travaillent pour le village : le bûcheron (bois), puis le pierrier (pierre) ; le séchoir à grains nourrit déjà
     const young = this.age === 0 && p < 8;
@@ -399,7 +399,7 @@ export class Sim {
         // le minerai vient des mines, creusées dans la montagne (la mine se débloque par une expédition)
         const n = miss.need - miss.have, m = KINDS.mine.reqMission;
         if (m && !w.exp.done.includes(m)) { this.messageExp = true; return tr('Pour l’âge suivant : il faut encore {n} minerai : l’expédition « {title} » débloque la mine (menu Expéditions).', { n, title: title(m) }); }
-        return this.counts.mine ? tr('Pour l’âge suivant : il faut encore {n} minerai (la mine en extrait chaque jour ; une autre mine irait plus vite).', { n }) : build('mine', tr('Pour l’âge suivant : il faut encore {n} minerai : bâtissez {k}.', { n, k: say('mine') }));
+        return this.counts.mine ? tr('Pour l’âge suivant : il faut encore {n} minerai (la mine en extrait chaque jour, et une autre mine irait plus vite).', { n }) : build('mine', tr('Pour l’âge suivant : il faut encore {n} minerai : bâtissez {k}.', { n, k: say('mine') }));
       }
     }
     if (full) return room();
@@ -427,7 +427,7 @@ export class Sim {
     if (this.age < 3) return null;
     // l'ordre du chemin de fer : la briqueterie (les briques), puis la gare centrale, puis les petites gares
     if (!this.built('brickworks')) { this.messageKind = 'brickworks'; return tr('Pour le chemin de fer : bâtissez d’abord « {name} » ({where}), il faudra des briques pour la gare centrale.', { name: this.nameOf('brickworks'), where: this.whereOf('brickworks') }); }
-    if (!this.built('terminal')) { this.messageKind = 'terminal'; return tr('Pour le chemin de fer : bâtissez « {name} » ({where}), la grande gare d’où partiront les lignes ; les petites gares viendront ensuite.', { name: this.nameOf('terminal'), where: this.whereOf('terminal') }); }
+    if (!this.built('terminal')) { this.messageKind = 'terminal'; return tr('Pour le chemin de fer : bâtissez « {name} » ({where}), la grande gare d’où partiront les lignes. Les petites gares viendront ensuite.', { name: this.nameOf('terminal'), where: this.whereOf('terminal') }); }
     const st = allServed(w), prod = [...w.buildings.values()].filter((b) => railWant(b.kind) === 'freight');
     if (!prod.length || prod.some((b) => railStation(w, b, st))) return null;
     this.messageKind = 'station';

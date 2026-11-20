@@ -180,12 +180,12 @@ function railStat(h: UIHost, b: Building): [string, string] | null {
   // [pastille courte, explication complète en info-bulle]
   if (want === 'freight') {
     const st = railStation(w, b);
-    return st ? [`${t} ${pic('⚡', 14)} ${tr('+{n} % par le rail', { n: bonus })}`, tr('Boosté : servi par la gare de marchandises voisine ({name}), dont le chariot fait la navette ; produit {n} % de plus', { name: r.stopName(st), n: bonus })]
+    return st ? [`${t} ${pic('⚡', 14)} ${tr('+{n} % par le rail', { n: bonus })}`, tr('Boosté : servi par la gare de marchandises voisine ({name}), dont le chariot fait la navette. Il produit {n} % de plus', { name: r.stopName(st), n: bonus })]
       : [`${t} ${tr('+{n} % avec une gare', { n: bonus })}`, tr('Une gare à {r} cases au plus, desservie par un train de marchandises, le ferait produire {n} % de plus', { r: RAIL_REACH, n: bonus })];
   }
   if (want === 'passenger') {
     const st = railStation(w, b);
-    return st ? [`${t} ${pic('⚡', 14)} ${tr('Servi par le train')}`, tr('Boosté : servi par la gare de voyageurs voisine ({name}) ; les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite', { name: r.stopName(st) })]
+    return st ? [`${t} ${pic('⚡', 14)} ${tr('Servi par le train')}`, tr('Boosté : servi par la gare de voyageurs voisine ({name}). Les équipes arrivent en train, les expéditions spatiales sont plus sûres et les lancements préparés plus vite', { name: r.stopName(st) })]
       : [`${t} ${tr('À relier au train')}`, tr('Une gare à {r} cases au plus, desservie par un train de voyageurs, y amènerait les équipes : expéditions spatiales plus sûres et lancements préparés plus vite', { r: RAIL_REACH })];
   }
   if (!isStation(b)) return null;
@@ -240,14 +240,14 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
 const TOOL_DESC: Record<string, string> = {
   none: 'Regarder le village. Un clic sur un volcan le réveille.',
   raise: 'Monter le terrain sous le pinceau.', lower: 'Baisser le terrain sous le pinceau.', flatten: 'Aplanir à la hauteur du premier clic.',
-  cliff: 'Tailler des falaises : en glissant, le sol se dresse d’un gradin à paroi de roche franche ; sur une pente, en gradins. Maj : creuser d’un gradin.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
-  mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut. Pour le retirer : la Gomme ou Démolir sur son cône ; Ctrl+Z annule.',
+  cliff: 'Tailler des falaises : en glissant, le sol se dresse d’un gradin à paroi de roche franche, ou en gradins sur une pente. Maj : creuser d’un gradin.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
+  mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut. Pour le retirer : la Gomme ou Démolir sur son cône. Ctrl+Z annule.',
   forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.',
   biome: 'Peindre un biome (tempéré, taïga, désert, tropical, marais) ou rendre la terre à son climat : le sol, les arbres, l’herbe, les bêtes et la neige suivent.',
   rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte dans la roche (un clic) : les expéditions vers une grotte s’y rendent.', fissure: 'Creuser une faille : en glissant, un ravin se creuse le long du tracé (le pinceau en règle la largeur). La Gomme le comble.',
-  erase: 'Effacer forêts, champs, rochers et les arbres isolés de la carte ; combler une faille.',
-  road: 'Tracer une route : en ligne, en glissant case par case ; en libre, d’un clic au point A puis au point B, une belle courbe qui contourne les obstacles (R pour changer de mode). Sur l’eau peu profonde, elle devient un pont.',
-  bulldoze: 'Démolir un bâtiment, une route ou un décor. Élargissez le pinceau pour effacer d’un coup tout un parc, une forêt ou des routes (les petits bâtiments partent aussi ; les grands se démolissent un à un).', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
+  erase: 'Effacer forêts, champs, rochers et les arbres isolés de la carte, ou combler une faille.',
+  road: 'Tracer une route : en ligne, en glissant case par case. En libre, d’un clic au point A puis au point B, une belle courbe qui contourne les obstacles (R pour changer de mode). Sur l’eau peu profonde, elle devient un pont.',
+  bulldoze: 'Démolir un bâtiment, une route ou un décor. Élargissez le pinceau pour effacer d’un coup tout un parc, une forêt ou des routes (les petits bâtiments partent aussi, les grands se démolissent un à un).', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
 };
 
 /** Biomes que peint le pinceau, et leur teinte de pastille (null : rendre la terre à son climat) */
@@ -352,10 +352,10 @@ const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon
 const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string; use: string; more: string; kind: KindId }> = {
   wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Paysage › Nature › Forêt).' },
   stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Paysage › Nature › Rochers). La mine en donne aussi.' },
-  ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; certaines expéditions en rapportent aussi.' },
-  brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’âge futuriste et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
+  ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour. Certaines expéditions en rapportent aussi.' },
+  brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’âge futuriste et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour. Elle se pose où l’on veut, l’argile ne manque jamais.' },
   crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
-  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage).', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 75 % de plus.' },
+  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile). Sans carburant, elles restent au garage.', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 75 % de plus.' },
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
@@ -376,7 +376,7 @@ const signed = (v: number) => `${v < 0 ? '−' : '+'}${num(Math.abs(v))}`;
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
 const NEED_RULE: Record<NeedId, string> = {
   housing: 'Chaque habitant occupe une place. Le village grandit tant qu’il reste des places libres et que les autres besoins sont comblés.',
-  food: 'Chaque habitant mange une part (une part et quart en Normal), plus une part de réserve pour le village ; on compte en parts entières.',
+  food: 'Chaque habitant mange une part (une part et quart en Normal), plus une part de réserve pour le village. On compte en parts entières.',
   water: 'Chaque habitant boit une part, plus une part de réserve pour le village.',
   jobs: 'À partir de 6 habitants, la moitié d’entre eux cherche du travail.',
   joy: 'À partir de 6 habitants, chacun demande 0,3 de bien-être.',
@@ -405,8 +405,8 @@ function qualityInfo(qual: Quality, g: UIHost['gfxShown']) {
   const say = qual === 'auto'
     ? `${tr('S’ajuste tout seul : part du plus beau, baisse par paliers si le jeu saccade, et remonte quand tout redevient fluide.')} ${g.level ? tr('En ce moment : palier {n} sur {max}, l’image est allégée.', { n: g.level, max: g.max }) : tr('En ce moment : rien n’est allégé.')}`
     : qual === 'high' ? tr('Tout au plus beau, avec le halo lumineux des lampes et des feux la nuit. Pour un ordinateur solide.')
-    : qual === 'medium' ? tr('Sans halo de nuit ; ombres, détails au loin et particules un peu allégés.')
-    : tr('Sans halo ni brume ; ombres, détails au loin et particules réduits. Pour un ordinateur modeste ou un portable sur batterie.');
+    : qual === 'medium' ? tr('Sans halo de nuit. Ombres, détails au loin et particules un peu allégés.')
+    : tr('Sans halo ni brume. Ombres, détails au loin et particules réduits. Pour un ordinateur modeste ou un portable sur batterie.');
   const yes = (on: boolean) => `<b class="${on ? 'on' : 'off'}">${tr(on ? 'Oui' : 'Non')}</b>`;
   const items: [string, string][] = [
     [tr('Halo de nuit'), yes(g.glow)],
@@ -576,7 +576,7 @@ const tabOfTool = (tool: ToolId, current: string) =>
 /** Ce que change un bâtiment débloqué par une expédition, dit au retour de l'équipe */
 const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
   pen: ' Les bêtes ramenées y vivront.', stable: ' Les chevaux ramenés y vivront.', mine: ' Elle rapportera du minerai chaque jour.',
-  carworks: ' Les automobiles remplacent désormais les charrettes sur les routes ; les écuries gardent leurs chevaux pour la cavalerie.',
+  carworks: ' Les automobiles remplacent désormais les charrettes sur les routes. Les écuries gardent leurs chevaux pour la cavalerie.',
   aerodrome: ' Montgolfières et dirigeable prendront l’air depuis son terrain.',
 };
 
@@ -1475,7 +1475,7 @@ export class UI {
     const upChk = `<label class="upchk" title="${attr(tr('Montre ou cache la flèche au-dessus de chaque bâtiment qui peut être amélioré, pour tous les bâtiments.'))}"><input type="checkbox" data-act="badges" ${h.hideUpBadges ? '' : 'checked'}> ${tr('Afficher les flèches d’amélioration')}</label>`;
     // un pan de rempart : passer de tour à simple pan, ou l'inverse (la tour vient seule aux bouts et aux angles)
     const towered = b.kind === 'wall' && rampartTower(h.world, b);
-    const node = b.kind === 'wall' ? `<div class="acts ups"><button data-act="tower" class="primary" title="${attr(tr('Une tour vient seule aux bouts et aux angles du mur ; ici, on choisit pour ce pan.'))}">${ic('upgrade', 16, 2)} ${tr(towered ? 'Changer en simple pan' : 'Changer en tour')}</button></div>` : '';
+    const node = b.kind === 'wall' ? `<div class="acts ups"><button data-act="tower" class="primary" title="${attr(tr('Une tour vient seule aux bouts et aux angles du mur. Ici, on choisit pour ce pan.'))}">${ic('upgrade', 16, 2)} ${tr(towered ? 'Changer en simple pan' : 'Changer en tour')}</button></div>` : '';
     const upgrades = (ups ? `<div class="acts ups">${ups}</div>${upChk}` : '') + node;
     // ce qu'il produit ou consomme par jour, gare de marchandises comprise
     const flow = flowChips(flowOfBuilding(h.world, b));
@@ -1566,7 +1566,7 @@ export class UI {
     box.innerHTML = `<div class="rhead">${dot(e.color)}<b>${tr(e.line !== null ? 'Modifier la ligne' : 'Nouvelle ligne')}</b></div>
       <p class="rroute">${ic('train', 18, 2)}<span>${names.length ? names.join(' → ') : '—'}</span></p>
       <small>${tr(e.stops.length < 2 ? 'Cliquez la gare suivante.' : 'Cliquez d’autres arrêts pour prolonger la ligne, ou validez.')} ${tr('Recliquer le dernier arrêt le retire.')}</small>
-      ${e.stops.length >= 2 ? `<small class="rtip">${ic('hand', 13, 2)} ${tr('Saisissez la voie prévue et glissez-la pour la faire passer où vous voulez ; glissez un point pour le déplacer, un clic sur un point le retire.')}${points ? ` ${tr(points > 1 ? '{n} points de passage.' : '{n} point de passage.', { n: points })}` : ''}</small>` : ''}
+      ${e.stops.length >= 2 ? `<small class="rtip">${ic('hand', 13, 2)} ${tr('Saisissez la voie prévue et glissez-la pour la faire passer où vous voulez. Glissez un point pour le déplacer, un clic sur un point le retire.')}${points ? ` ${tr(points > 1 ? '{n} points de passage.' : '{n} point de passage.', { n: points })}` : ''}</small>` : ''}
       ${trouble ? `<small class="rbad">${ic('alert', 13, 2)} ${trouble}</small>` : ''}
       <div class="acts"><button data-r="undo" ${e.stops.length ? '' : 'disabled'}>${ic('undo', 15, 2)} ${tr('Retirer le dernier')}</button><button data-r="auto" ${points ? '' : 'disabled'} title="${tr('Retirer tous les points de passage : la voie se pose d’elle-même')}">${ic('restart', 15, 2)} ${tr('Tracé auto')}</button><button data-r="cancel">${ic('close', 15, 2)} ${tr('Annuler')} <kbd>${tr('Échap')}</kbd></button><button data-r="ok" class="primary" ${e.stops.length >= 2 && !trouble ? '' : 'disabled'}>${ic('check', 15, 2)} ${tr('Valider')} <kbd>${tr('Entrée')}</kbd></button></div>`;
     // le paysage de l'âge du village derrière le titre, comme les fenêtres des expéditions
@@ -1816,7 +1816,7 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}${tr('/j')}`;
-    const use: Partial<Record<Resource, string>> = { wood: tr(' — pour bâtir les grands bâtiments'), stone: tr(' — pour bâtir les grands bâtiments'), ore: tr(' — pour passer les âges et s’équiper ; la mine en extrait chaque jour'), brick: tr(' — pour passer à l’âge futuriste et bâtir gares, usines et raffineries'), crude: tr(' — la raffinerie en fait du carburant'), fuel: tr(' — pour les automobiles'), gold: tr(' — pour passer les âges ; cliquez pour échanger au comptoir des voisins') };
+    const use: Partial<Record<Resource, string>> = { wood: tr(' — pour bâtir les grands bâtiments'), stone: tr(' — pour bâtir les grands bâtiments'), ore: tr(' — pour passer les âges et s’équiper. La mine en extrait chaque jour'), brick: tr(' — pour passer à l’âge futuriste et bâtir gares, usines et raffineries'), crude: tr(' — la raffinerie en fait du carburant'), fuel: tr(' — pour les automobiles'), gold: tr(' — pour passer les âges. Cliquez pour échanger au comptoir des voisins') };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'gold' ? '' : r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
@@ -2285,7 +2285,7 @@ export class UI {
     const html = `
       <h4>${pic('💰', 20)} ${tr('Les voisins')}<em class="ok">${inf ? '∞' : Math.floor(w.gold)}</em></h4>
       <div class="sub">${tr('comptoir d’échange · or en réserve')}</div>
-      <p class="hint">${tr('L’or ne vient que de l’échange avec le peuple allié ; il sert à passer les âges. Chaque vente fait baisser le cours de la ressource (jusqu’à −{max} %) ; il remonte de {up} % par jour.', { max: Math.round(SAT_MAX * 100), up: Math.round(SAT_RECOVER * 100) })}</p>
+      <p class="hint">${tr('L’or ne vient que de l’échange avec le peuple allié. Il sert à passer les âges. Chaque vente fait baisser le cours de la ressource (jusqu’à −{max} %), puis il remonte de {up} % par jour.', { max: Math.round(SAT_MAX * 100), up: Math.round(SAT_RECOVER * 100) })}</p>
       <div class="tlot">${tr('Par lot de')} <button data-lot="1" class="${lot === 1 ? 'on' : ''}">1 ${pic('💰', 14)}</button><button data-lot="10" class="${lot === 10 ? 'on' : ''}">10 ${pic('💰', 14)}</button></div>
       <div class="tradeRows">${rows}</div>
       ${w.trade.legacy ? `<p class="hint">${tr('Bâtissez un comptoir sur l’île de votre allié : l’échange passera par lui.')}</p>` : ''}`;
@@ -2301,7 +2301,7 @@ export class UI {
     const html = `
       <h4>${pic('💰', 20)} ${tr('Les voisins')}<em class="warn">${Math.floor(w.gold)}</em></h4>
       <div class="sub">${tr('comptoir d’échange · or en réserve')}</div>
-      <p class="hint">${tr('L’or ne vient que de l’échange avec le peuple allié ; il sert à passer les âges.')}</p>
+      <p class="hint">${tr('L’or ne vient que de l’échange avec le peuple allié. Il sert à passer les âges.')}</p>
       <p class="hint warn">${why}</p>
       ${ally ? `<div class="row2"><button data-ally="1">${ic('eye', 15, 2.2)} ${tr('Voir l’île alliée')}</button>${lock ? '' : `<button class="primary" data-kind="tradepost">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}</div>` : ''}`;
     const box = $('#needInfo');
@@ -2598,7 +2598,7 @@ export class UI {
       </nav>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}
-          <details class="cdet"><summary>${tr('En savoir plus')}</summary><p class="hint">${tr('Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.')}</p></details></div>
+          <details class="cdet"><summary>${tr('En savoir plus')}</summary><p class="hint">${tr('Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant. En cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.')}</p></details></div>
         <div class="missions">${cards}</div>
         <p class="emptyMsg" hidden></p>
       </section>
@@ -2899,7 +2899,7 @@ export class UI {
     const head = (sub: string) => `<div class="rlTop">${hudPic('train', 58)}<div><h4>${tr('Chemin de fer')}</h4><p>${sub}</p></div></div>`;
     // sous les lignes, une carte en pointillé rappelle comment en tracer une autre (au lieu d'un grand vide)
     const more = `<div class="rlMore"><span class="rlPlus">+</span><p><b>${tr('Nouvelle ligne :')}</b> ${tr('choisissez une gare, puis « Nouvelle ligne ».')}</p></div>`;
-    const how = tr('Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares ; un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.');
+    const how = tr('Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares. Un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.');
     if (age < 3) return head(tr('Le chemin de fer viendra avec les gares, à l’âge industriel.'));
     if (!h.world.lines.length) return `${head(how)}<p class="hint rlNone">${tr('Aucune ligne pour l’instant : bâtissez deux gares (petite gare, ou la gare centrale).')}</p>${more}`;
     const lines = h.world.lines.map((l) => {
@@ -3394,7 +3394,7 @@ export function showCredits(root: HTMLElement) {
       <ul class="credits">
         <li>${tr('{author}, licence {lic} : {titles}.', { author: a('https://incompetech.com', 'Kevin MacLeod (incompetech.com)'), lic: a(tr('https://creativecommons.org/licenses/by/4.0/deed.fr'), 'CC BY 4.0'), titles: q('The Sky of our Ancestors', 'Thunderbird', 'Temple of the Manes', 'Enchanted Journey', 'Suonatore di Liuto', 'Peaceful Desolation', 'Teller of the Tales') + `, ${q('Toccata and Fugue in D Minor')} (Jean-Sébastien Bach), ${q('Gymnopedie No 1', 'Gymnopedie No 3')} (Erik Satie), ${q('Danse Morialta', 'Frost Waltz', 'The Parting')}, ${q('Thaxted')} (Gustav Holst), ${q('Oppressive Gloom', 'Crusade', 'Ritual')}` })}</li>
         <li>${tr('{author}, licence {lic} : {titles}.', { author: a('https://opengameart.org/users/matthew-pablo', 'Matthew Pablo'), lic: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC BY 3.0'), titles: q('Beyond The Clouds', 'Theme of Com-Mecha') })}</li>
-        <li>${tr('Via {src}, en CC0 : {list}.', { src: a('https://opengameart.org', 'OpenGameArt'), list: [[q('Tribal'), 'Of Far Different Nature'], [q('Medieval: Exploration', 'Medieval: The Old Tower Inn'), 'RandomMind'], [q('A cup of tea', 'Florist', 'Bartender', 'Cat caffe'), 'TAD'], [q('Calm Ambient 1 (Synthwave 4k)', 'Another August', 'Calm Ambient 3 (Lifewave 2k)'), 'The Cynic Project']].map(([t, by]) => tr('{titles} par {author}', { titles: t, author: by })).join(' ; ') })}</li>
+        <li>${tr('Via {src}, en CC0 : {list}.', { src: a('https://opengameart.org', 'OpenGameArt'), list: [[q('Tribal'), 'Of Far Different Nature'], [q('Medieval: Exploration', 'Medieval: The Old Tower Inn'), 'RandomMind'], [q('A cup of tea', 'Florist', 'Bartender', 'Cat caffe'), 'TAD'], [q('Calm Ambient 1 (Synthwave 4k)', 'Another August', 'Calm Ambient 3 (Lifewave 2k)'), 'The Cynic Project']].map(([t, by]) => tr('{titles} par {author}', { titles: t, author: by })).join('. ') })}</li>
       </ul>
     </section>
     <section class="credCard">
@@ -3576,7 +3576,7 @@ const keyCaps = (l: KbLayout) => { const k = layoutKeys(l); return `<span class=
 export const controlText = (m: CamControl, l: KbLayout) => {
   const k = layoutKeys(l);
   return m === 'mouse'
-    ? tr('Approchez la souris du bord de l’écran pour faire défiler la vue ; avec l’outil Voir, faites glisser le terrain.')
+    ? tr('Approchez la souris du bord de l’écran pour faire défiler la vue. Avec l’outil Voir, faites glisser le terrain.')
     : tr('{move} déplacent la vue, {turn} la tournent.', { move: k.move.join(''), turn: k.turn.join(' / ') });
 };
 

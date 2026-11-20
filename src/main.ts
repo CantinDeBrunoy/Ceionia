@@ -898,7 +898,7 @@ class Game implements UIHost {
     const why = this.loadError;
     if (!why) return;
     this.loadError = null;
-    this.ui.toast(tr('⚠️ Votre sauvegarde n’a pas pu être lue ({why}) : une nouvelle partie commence. L’ancienne est gardée de côté ; cliquez ici pour la télécharger.', { why }), () => exportAside(this.world.mapId), 'danger');
+    this.ui.toast(tr('⚠️ Votre sauvegarde n’a pas pu être lue ({why}) : une nouvelle partie commence. L’ancienne est gardée de côté. Cliquez ici pour la télécharger.', { why }), () => exportAside(this.world.mapId), 'danger');
   }
   exportSave() { exportSave(this.buildSave()); }
   async importFile(f: File) {
@@ -980,7 +980,7 @@ class Game implements UIHost {
   private portalArrived() {
     const hm = this.hellMode;
     if (!hm || this.mode !== 'hell') return;
-    this.ui.banner(tr('Monde des Enfers'), tr('{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.', { zone: hm.zoneName(this.cam.target.z) }), 'hell');
+    this.ui.banner(tr('Monde des Enfers'), tr('{zone} : le royaume démoniaque est tout au fond. L’expédition est facultative, et le portail ramène sur l’île.', { zone: hm.zoneName(this.cam.target.z) }), 'hell');
     // la première entrée : le chapitre du tutoriel sur les Enfers (la cible, les troupes, l'attaque, le retour)
     this.tutorial.chapter('hell');
     this.ui.update();
