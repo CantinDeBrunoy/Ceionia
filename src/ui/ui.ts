@@ -546,6 +546,8 @@ const MISSION_DIO = new Set([
   'herd', 'berries', 'flint', 'honey', 'mammoth', 'seeds', 'horses', 'fishing', 'springs', 'pugilat', 'kraken', 'portal',
   'megalodon', 'mine', 'wolf', 'fair', 'brewer', 'dragon', 'caravel', 'spice', 'railway', 'coal', 'motorcar', 'flight', 'oil',
   'galleon', 'summit', 'reef', 'stars', 'games', 'trawl', 'seafarm', 'rocket', 'moon', 'colony', 'allywar', 'envoys', 'truce',
+  'obsidian', 'ascent', 'eruption', 'stag', 'isleFair', 'isleRebuild', 'isleSmiths', 'isleRegatta', 'isleSpy', 'isleDefector',
+  'isleSabotage', 'isleSeeds',
 ]);
 /** Équipements illustrés (`public/icons/gear/`) : `{id}.webp` sans décor (cases, file), `{id}-bg.webp` avec décor (cartes) */
 const GEAR_ART = new Set<GearId>([
