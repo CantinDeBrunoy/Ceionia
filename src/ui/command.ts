@@ -250,7 +250,9 @@ export class CommandUI implements ToolInput {
   private showHeld() {
     if (this.hovering) return;
     const held = this.placing ? `build:${this.placing}` : this.theater?.kind === 'isle' && this.host.isleHeld?.() ? `ibuild:${this.host.isleHeld()}` : null;
-    const tile = held ? this.bar.querySelector<HTMLElement>(`[data-a="${held}"]`) : null;
+    // (la tuile qui porte la carte : la liste « à faire » de l'île a aussi un bouton « ibuild:… », sans nom ni texte, et la
+    // carte de la caserne en main s'intitulait « undefined », testeurs v6)
+    const tile = held ? this.bar.querySelector<HTMLElement>(`[data-a="${held}"][data-xn]`) : null;
     this.showCard(tile, tile ? this.hint() : '');
   }
 
