@@ -28,18 +28,39 @@ interface Ship {
 /** Cases d'eau où un navire peut passer : près du quai, la moindre eau ; plus loin, de l'eau profonde (ou un lac) */
 const NAV_SHALLOW = -0.08, NAV_DEEP = -0.35;
 /** Longueur au plus du chenal (en cases) et pas entre deux points du chemin */
-const ROUTE_MAX = 70, ROUTE_STEP = 0.5;
+const ROUTE_MAX = 90, ROUTE_STEP = 0.5;
+/**
+ * La pleine mer où le navire s'efface : à `OPEN_MIN` cases de route au moins, de l'eau profonde tout autour sur `OPEN_R` cases.
+ * Le bord de la carte ne compte qu'à cette distance aussi (une île qui touche un bord : sinon, aller-retour de quelques cases)
+ */
+const OPEN_MIN = 45, OPEN_R = 8;
+/** Hauteur libre qu'il faut sous un pont : plus que tous les tabliers, les navires (mâts, château) ne passent sous aucun */
+const SHIP_AIR = 1.2;
+/** Rayon autour du quai où la moindre eau suffit (au-delà, de l'eau profonde, `NAV_DEEP`) */
+const NEAR = 12;
 /** Sur les derniers points du chemin (huit : quatre cases), le navire s'amenuise */
 const FADE_STEPS = 8;
 
 /**
  * Le chemin d'un navire depuis son poste d'amarrage `berth` (x, z) vers le large, en suivant l'eau : on explore le chenal
- * (rivière, côte, golfe) de proche en proche depuis le quai, et l'on prend le trajet vers le bord de la carte s'il y en a
- * un, sinon jusqu'à l'eau la plus lointaine ; (fx, fz) : la direction du quai vers l'eau, où le navire part d'abord. Le
- * tracé est lissé et rééchantillonné tous les `ROUTE_STEP` ; il ne compte qu'un point si le navire n'a nulle part où aller
+ * (rivière, côte, golfe) de proche en proche depuis le quai, sans passer sous un pont, et l'on prend le plus court trajet
+ * vers la pleine mer (`OPEN_MIN`, `OPEN_R`) ; sans pleine mer à portée (`ROUTE_MAX`), vers le bord de la carte à cette
+ * distance, sinon jusqu'à l'eau la plus lointaine ; (fx, fz) : la direction du quai vers l'eau, où le navire part d'abord. Le tracé est lissé et rééchantillonné
+ * tous les `ROUTE_STEP` ; il ne compte qu'un point si le navire n'a nulle part où aller
  */
 export function shipRoute(w: World, berth: [number, number], fx: number, fz: number): [number, number][] {
-  const nav = (cx: number, cz: number, near: boolean) => w.inCells(cx, cz) && (w.lake[w.ci(cx, cz)] === 1 || w.cellAvg(cx, cz) < (near ? NAV_SHALLOW : NAV_DEEP));
+  const deep = (cx: number, cz: number) => w.inCells(cx, cz) && (w.lake[w.ci(cx, cz)] === 1 || w.cellAvg(cx, cz) < NAV_DEEP);
+  // sous un pont trop bas, on ne passe pas
+  const low = (cx: number, cz: number) => { const y = w.bridgeY(cx, cz), k = w.ci(cx, cz); return y !== null && y - (w.lake[k] ? w.lakeLevel[k] : SEA) < SHIP_AIR; };
+  const nav = (cx: number, cz: number, near: boolean) => w.inCells(cx, cz) && (w.lake[w.ci(cx, cz)] === 1 || w.cellAvg(cx, cz) < (near ? NAV_SHALLOW : NAV_DEEP)) && !low(cx, cz);
+  // la pleine mer : de l'eau profonde tout autour, loin du bord de la carte (au-delà, rien n'est dessiné)
+  const open = (cx: number, cz: number) => {
+    for (let dz = -OPEN_R; dz <= OPEN_R; dz++) for (let dx = -OPEN_R; dx <= OPEN_R; dx++) {
+      const x = cx + dx, z = cz + dz;
+      if (dx * dx + dz * dz <= OPEN_R * OPEN_R && !deep(x, z)) return false;
+    }
+    return true;
+  };
   const sx = Math.floor(berth[0]), sz = Math.floor(berth[1]);
   // le départ : deux pas droit devant le quai tant que l'eau le permet
   let x0 = berth[0], z0 = berth[1];
@@ -54,22 +75,25 @@ export function shipRoute(w: World, berth: [number, number], fx: number, fz: num
   // exploration en largeur à travers les cases d'eau
   const dist = new Int16Array(N * N).fill(-1), from = new Int32Array(N * N).fill(-1), queue: number[] = [start];
   dist[start] = 0;
-  let far = start, edge = -1;
+  let far = start, edge = -1, sea = -1;
   for (let h = 0; h < queue.length; h++) {
     const k = queue[h], cx = k % N, cz = Math.floor(k / N);
     if (dist[k] > dist[far]) far = k;
-    if (edge < 0 && (cx < 3 || cz < 3 || cx > N - 4 || cz > N - 4) && dist[k] > 2) { edge = k; break; }
+    if (dist[k] >= OPEN_MIN) {
+      if (open(cx, cz)) { sea = k; break; }
+      if (edge < 0 && (cx < 3 || cz < 3 || cx > N - 4 || cz > N - 4)) edge = k;
+    }
     if (dist[k] >= ROUTE_MAX) continue;
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = cx + dx, nz = cz + dz;
       if (!w.inCells(nx, nz)) continue;
       const nk = w.ci(nx, nz);
-      // près du quai (quatre cases), la moindre eau suffit
-      if (dist[nk] >= 0 || !nav(nx, nz, Math.max(Math.abs(nx - sx), Math.abs(nz - sz)) <= 4)) continue;
+      // près du quai (`NEAR` cases : un port au fond d'une lagune peu profonde en sort), la moindre eau suffit
+      if (dist[nk] >= 0 || !nav(nx, nz, Math.max(Math.abs(nx - sx), Math.abs(nz - sz)) <= NEAR)) continue;
       dist[nk] = dist[k] + 1; from[nk] = k; queue.push(nk);
     }
   }
-  const goal = edge >= 0 ? edge : far;
+  const goal = sea >= 0 ? sea : edge >= 0 ? edge : far;
   if (goal === start) return lead;
   // du but au quai, puis lissage (deux passes de coupe de coins) et rééchantillonnage
   const cells: [number, number][] = [];
