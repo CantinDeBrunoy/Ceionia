@@ -102,7 +102,7 @@ function loneChance(w: World, cx: number, cz: number, b: number) {
  */
 export function loneTreeAt(w: World, cx: number, cz: number) {
   const k = w.ci(cx, cz);
-  return !w.veg[k] && !w.cleared[k] && !w.occ[k] && !w.road[k] && !w.town?.[k] && w.cellSlope(cx, cz) < 1 && hash2(cx, cz, 820) < loneChance(w, cx, cz, w.biome[k]);
+  return !w.veg[k] && !w.cleared[k] && !w.occ[k] && !w.road[k] && !w.paving[k] && !w.town?.[k] && w.cellSlope(cx, cz) < 1 && hash2(cx, cz, 820) < loneChance(w, cx, cz, w.biome[k]);
 }
 
 /** Fleurs sauvages par biome (teintes ; 0.58 = blanc) */
@@ -1281,7 +1281,8 @@ export class VegView {
    */
   private meadow(cx: number, cz: number, s: SeasonState) {
     const w = this.world, col = this.col, k = w.ci(cx, cz);
-    if (w.occ[k] || w.road[k] || w.lake[k] || w.town?.[k]) return;
+    // (une case pavée n'a ni herbe ni fleurs sauvages : le pavé les couvre)
+    if (w.occ[k] || w.road[k] || w.lake[k] || w.town?.[k] || w.paving[k]) return;
     const avg = w.cellAvg(cx, cz), slope = w.cellSlope(cx, cz), b = w.biome[k];
     // lit de cailloux de l'amont de la rivière : seulement là où il est peu profond (pas sur un chenal creusé, ni sur une
     // ancienne partie au chenal profond) ; la rive garde ensuite son herbe

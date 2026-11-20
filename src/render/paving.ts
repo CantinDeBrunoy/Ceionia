@@ -7,19 +7,28 @@ import { hash2 } from '../core/rng';
 
 /** Hauteur des pavés au-dessus du relief affiché (assez pour ne pas se mêler à l'herbe, sous les routes et les bâtiments) */
 const LIFT = 0.004;
+/** Le lit des pavés : une grille de `G` × `G` carreaux par case qui épouse le relief (un seul carré, plat entre ses coins,
+ * laissait l'herbe percer là où le relief se bombe), de la teinte des joints de l'âge ; à la Préhistoire, aucun : les
+ * pierres sont posées dans l'herbe */
+const G = 6;
+const BED = [0, 0xc8bca4, 0x8a847a, 0x8a5a4a, 0x8a8884, 0x2a7a8a];
+/** Le lit passe sous les routes (leur matériau a un décalage de profondeur plus fort) et au-dessus de l'herbe du relief */
+const bedMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
 
 /**
  * Les cases pavées (`World.paving`) : un habillage du sol, dessiné à part des bâtiments. Chaque case reçoit le modèle des pavés
  * de l'âge du village (`decor.ts` › `paving` : pierres plates, dallage de marbre, pavés, briques, dalles, dalles lumineuses),
  * qui couvre toute la case bord à bord et épouse le relief (chaque sommet suit `hAt`), si bien que deux cases voisines se
- * suivent sans couture. Les bâtiments et les décorations se posent par-dessus ; sous une route, le pavé ne se dessine pas (la
- * route le couvre). Tout tient en un maillage (et un pour les lumières futuristes), refait quand les pavés, les routes, le
- * relief ou l'âge changent
+ * suivent sans couture, posé sur un lit qui suit le relief au plus près (`bedOf`). Les bâtiments et les décorations se posent
+ * par-dessus ; sous une route, seul le lit se dessine, au ras du sol (la route le couvre, ses bords ne montrent pas d'herbe).
+ * Tout tient en trois maillages (pierres, lumières futuristes, lit), refaits quand les pavés, les routes, le relief ou l'âge
+ * changent
  */
 export class PavingView {
   group = new THREE.Group();
   private body: THREE.Mesh | null = null;
   private glow: THREE.Mesh | null = null;
+  private bed: THREE.Mesh | null = null;
   private key = '';
 
   constructor(private world: World) {}
@@ -32,10 +41,14 @@ export class PavingView {
   }
 
   private rebuild(age: number) {
-    const w = this.world, bodies: THREE.BufferGeometry[] = [], glows: THREE.BufferGeometry[] = [];
+    const w = this.world, bodies: THREE.BufferGeometry[] = [], glows: THREE.BufferGeometry[] = [], beds: THREE.BufferGeometry[] = [];
+    const bed = BED[Math.max(0, Math.min(5, age))];
     for (let k = 0; k < N * N; k++) {
-      if (!w.paving[k] || w.road[k]) continue;
+      if (!w.paving[k]) continue;
       const cx = k % N, cz = Math.floor(k / N);
+      // sous une route, seulement le lit, au ras du sol : la route le couvre, sans liseré d'herbe sur ses bords
+      if (bed) beds.push(this.bedOf(cx, cz, bed, w.road[k] ? 0 : LIFT));
+      if (w.road[k]) continue;
       // (trois variantes, tirées de la case : les pierres ne se répètent pas d'une case à l'autre)
       const m = getModel('paving', age, { v: Math.floor(hash2(cx, cz, 7) * 6), L: false, R: false, F: false });
       bodies.push(this.place(m.body, cx, cz));
@@ -43,6 +56,22 @@ export class PavingView {
     }
     this.set('body', bodies, mats.body);
     this.set('glow', glows, mats.glow);
+    this.set('bed', beds, bedMat);
+  }
+
+  /** Le lit d'une case : `G` × `G` carreaux, chaque sommet à la hauteur du relief (plus `lift`) */
+  private bedOf(cx: number, cz: number, color: number, lift: number) {
+    const g = new THREE.PlaneGeometry(1, 1, G, G).rotateX(-Math.PI / 2).toNonIndexed(), p = g.attributes.position, c = new THREE.Color(color);
+    const col = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i) + cx + 0.5, z = p.getZ(i) + cz + 0.5;
+      p.setXYZ(i, x, this.world.hAt(x, z) + lift, z);
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    g.deleteAttribute('uv');
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    return g;
   }
 
   /** Une copie du modèle posée sur sa case, chaque sommet à la hauteur du relief sous lui */
@@ -56,7 +85,7 @@ export class PavingView {
     return g;
   }
 
-  private set(which: 'body' | 'glow', list: THREE.BufferGeometry[], mat: THREE.Material) {
+  private set(which: 'body' | 'glow' | 'bed', list: THREE.BufferGeometry[], mat: THREE.Material) {
     const old = this[which];
     if (old) { this.group.remove(old); old.geometry.dispose(); this[which] = null; }
     if (!list.length) return;

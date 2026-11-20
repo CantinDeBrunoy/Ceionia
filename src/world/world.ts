@@ -1504,6 +1504,11 @@ export class World {
     const k = this.ci(x, z), v = on ? 1 : 0;
     if (this.paving[k] === v) return false;
     this.paving[k] = v;
+    // paver défriche la case : plantation, arbres isolés et buissons s'en vont (la vue de la végétation saute les cases pavées)
+    if (on && this.veg[k] && this.veg[k] < VEG_CAVE) this.setVeg(x, z, 0);
+    if (on && !this.cleared[k]) this.cleared[k] = 1;
+    this.markVeg(x, z, x, z);
+    this.vegDirty = true;
     this.pavingVersion++;
     this.version++;
     return true;
