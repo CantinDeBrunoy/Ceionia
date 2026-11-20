@@ -117,8 +117,8 @@ registerDict('ui', {
   'Aucun bâtiment n’en produit encore.': 'No building produces it yet.',
   'Raffinerie (du pétrole brut)': 'Refinery (from crude oil)',
   'Sert à bâtir les grands bâtiments.': 'Used to build large buildings.',
-  'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Nature › Forêt).': 'A lumberjack placed at the edge of or inside a forest cuts some every day. No forest? Plant one (Nature › Forest).',
-  'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Nature › Rochers). La mine en donne aussi.': 'A quarry placed near rocks or in the mountain cuts some every day. No rocks? Place some (Nature › Rocks). The mine yields some too.',
+  'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Paysage › Nature › Forêt).': 'A lumberjack placed at the edge of or inside a forest cuts some every day. No forest? Plant one (Paysage › Nature › Forest).',
+  'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Paysage › Nature › Rochers). La mine en donne aussi.': 'A quarry placed near rocks or in the mountain cuts some every day. No rocks? Place some (Paysage › Nature › Rocks). The mine yields some too.',
   'Sert à passer les âges et à fabriquer l’équipement des expéditions.': 'Used to advance through the ages and to craft expedition gear.',
   'La mine, creusée dans la montagne, en donne chaque jour ; certaines expéditions en rapportent aussi.': 'The mine, dug into the mountain, yields some every day; some expeditions bring it back too.',
   'Sert à passer à l’âge futuriste et à bâtir gares, usines et raffineries.': 'Used to reach the futuristic age and to build stations, factories and refineries.',
@@ -180,6 +180,7 @@ registerDict('ui', {
   'En cas d’échec : {what}': 'If it fails: {what}',
   'Une expédition peut échouer : l’équipement la rend plus sûre.': 'An expedition can fail: equipment makes it safer.',
   'Lancer l’expédition': 'Launch the expedition',
+  'peut-être une pièce d’équipement perdue': 'maybe one piece of gear lost',
   'Retour': 'Back',
   // ---- explorer le monde (l'archipel, en option)
   'Explorer le monde ?': 'Explore the world?',

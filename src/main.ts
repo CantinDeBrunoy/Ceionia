@@ -687,6 +687,8 @@ class Game implements UIHost {
     this.tools.pickStop = (b) => this.railPick(b);
     this.tools.overlay = this.trackEdit;
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
+    // sans réponse, l'équipe a choisi d'elle-même : on le dit (l'imprévu disparaissait sans un mot, testeur v6)
+    this.expeditions.onAuto = (a, ev, i) => this.ui.toast(tr('{icon} « {mission} » : sans réponse, l’équipe a choisi d’elle-même « {option} ».', { icon: a.m.icon, mission: a.m.title, option: ev.options[i].label }));
     this.expeditions.onReport = (r) => {
       // (en attente jusqu'à ce que le récit s'ouvre : le grand choix l'attend, la traversée le garde)
       this.reportsDue.add(r);

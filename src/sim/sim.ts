@@ -305,7 +305,7 @@ export class Sim {
       const c = priceIn(w, k, this.age);
       for (const [r, prod] of [['stone', 'quarry'], ['wood', 'lumber'], ['brick', 'brickworks']] as const) {
         if (!c || w.unlimited || w[r] >= (c[r] ?? 0) || this.producing(r)) continue;
-        const what = { stone: tr('de la pierre'), wood: tr('du bois'), brick: tr('des briques') }[r], where = { stone: tr('près des rochers (Nature › Rochers) ou dans la montagne'), wood: tr('en lisière ou dans une forêt'), brick: tr('elle se pose où l’on veut et cuit ses briques toute seule') }[r];
+        const what = { stone: tr('de la pierre'), wood: tr('du bois'), brick: tr('des briques') }[r], where = { stone: tr('près des rochers (Paysage › Nature › Rochers) ou dans la montagne'), wood: tr('en lisière ou dans une forêt'), brick: tr('elle se pose où l’on veut et cuit ses briques toute seule') }[r];
         return about(prod, tr('Il manque {what} pour {name} : {prod}, {where}.', { what, name: quote(k), prod: say(prod), where }));
       }
       return about(k, text);

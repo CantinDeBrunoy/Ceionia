@@ -31,6 +31,7 @@ export class SpaceCast {
   constructor(root: HTMLElement) {
     this.el = document.createElement('div');
     this.el.className = 'spacecast panel';
+    this.el.setAttribute('aria-hidden', 'true');
     this.el.innerHTML = `<div class="sc-head"><i class="rec"></i>${tr('En direct de la Lune')}</div><canvas></canvas><div class="sc-cap"></div>`;
     this.cv = this.el.querySelector('canvas')!;
     this.cv.width = W * 2; this.cv.height = H * 2;

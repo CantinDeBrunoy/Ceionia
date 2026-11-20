@@ -1331,8 +1331,9 @@ button.bgo:hover { background: #0f9270; }
 .report .sum { font-weight: 800; font-size: 14px; }
 
 /* Âge futuriste : la retransmission en direct de la Lune, l'écran de fin de partie */
-.spacecast { position: absolute; right: 14px; top: calc(var(--hudB, 82px) + 14px); width: 380px; padding: 10px; opacity: 0; transform: translateY(12px) scale(0.96); transition: opacity 0.4s ease, transform 0.4s ease; pointer-events: none !important; z-index: 6; }
-.spacecast.show { opacity: 1; transform: none; }
+/* (cachée, elle n'est plus dans le texte de la page : les lecteurs d'écran lisaient « En direct de la Lune » dès la Préhistoire) */
+.spacecast { position: absolute; right: 14px; top: calc(var(--hudB, 82px) + 14px); width: 380px; padding: 10px; opacity: 0; visibility: hidden; transform: translateY(12px) scale(0.96); transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s linear 0.4s; pointer-events: none !important; z-index: 6; }
+.spacecast.show { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .spacecast canvas { display: block; width: 360px; height: 216px; border-radius: 10px; background: #05070d; }
 .sc-head { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
 .sc-head .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); animation: rec 1s steps(2) infinite; }

@@ -30,7 +30,7 @@
 Constantes de `expeditionScenes.ts` : `L_BOARD` 0,16 (l'équipage marche vers la fusée), `L_IN` 0,26 (il monte), `L_FIRE` 0,30 (allumage), `L_LIFT` 0,35 (décollage), `L_GONE` 0,60 (la fusée sort du ciel ; altitude `70 × u^2,2`). La scène (`launchpad`, `rocketMesh`) pose la fusée sur `padSpot(w, pad)` : le pas de tir du cosmodrome le plus proche, repère du modèle (`SPACEPAD` dans `models.ts`) tourné avec le bâtiment, hauteur médiane des coins de l'emprise.
 
 ### Retransmission lunaire (`SpaceCast`, `spaceViews.ts`)
-- Seulement pendant `moon` en phase `work`, pour `k` entre `CAST_FROM` = `L_GONE + 0,02` et `CAST_TO` = 0,985. Un petit panneau (`.spacecast`) montre un canevas 2D (360 × 216, ×2) : descente du module (jusqu'à 40 % de la séquence), poussière, astronaute qui descend l'échelle (dès 55 %), bondit, plante le drapeau (80 %) et salue ; légendes `tr()` selon l'avancement. Appelé chaque image par `main.ts` (`spaceCast.update(expeditions.active)`).
+- Seulement pendant `moon` en phase `work`, pour `k` entre `CAST_FROM` = `L_GONE + 0,02` et `CAST_TO` = 0,985. Un petit panneau (`.spacecast`) montre un canevas 2D (360 × 216, ×2) : descente du module (jusqu'à 40 % de la séquence), poussière, astronaute qui descend l'échelle (dès 55 %), bondit, plante le drapeau (80 %) et salue ; légendes `tr()` selon l'avancement. Appelé chaque image par `main.ts` (`spaceCast.update(expeditions.active)`). Hors de la retransmission, le panneau est `visibility: hidden` et `aria-hidden` : son titre « En direct de la Lune » se lisait dans le texte de la page dès la Préhistoire (testeurs v6).
 - Le choix « cratères » est reconnu par la regex `/cratères|craters/i` sur le **libellé** du choix (`a.c.label`) : renommer le choix casse le décor lunaire.
 
 ### Parade (`Parade`, `parade.ts`, pilotée par `Game.stepFarewell`)
@@ -54,7 +54,7 @@ Fenêtre modale `.victoryCard` : planète bleue animée (`drawPlanet`), titre, t
 Elle ne tient pas qu'à la fin de partie : `main.ts` déclenche `festAt` pour toute expédition qui rentre avec succès (`phase === 'home' && ok`, une seule fois par `a.id` via `feted`), et la chute du roi des Enfers l'appelle aussi (`kingStage`). Voir [expeditions.md](expeditions.md) pour le retour. Résumé :
 - Lieu : la grande place la plus proche (`plazaNear`, bâtiment `gather` de taille ≥ 3 ; `fire: true` à la Préhistoire, le feu du clan flambe), sinon une case dégagée près du cœur (`spot`).
 - Durée `dur` : 28 s avant l'âge 3, 34 s ensuite. Une autre fête à moins de 4 cases **prolonge** la même (`dur ≥ t + 28`, `boost` jusqu'à 3, plus de salves).
-- Décor et effets par âge : guirlandes de feuillage, fleurs et pétales, fusées d'or, confettis, grand feu d'artifice multicolore (`BURSTS`, `FLAGS`, `MAST`). `onBang` / `onFeast` jouent les sons. Une danse (ronde de `dancers`), un orchestre (`band`), un festin.
+- Décor et effets par âge : guirlandes de feuillage, fleurs et pétales, fusées d'or, confettis, grand feu d'artifice multicolore (`BURSTS`, `FLAGS`, `MAST`). Pétales et confettis qui tombent sur la place : des points en forme de pétale (`petalTexture`, `alphaTest`) ; sans texture, c'étaient des carrés blancs au-dessus de l'agora (testeurs v6). `onBang` / `onFeast` jouent les sons. Une danse (ronde de `dancers`), un orchestre (`band`), un festin.
 - `fest.update(dt)` est appelé avec le temps **réel** (`dt`), non le temps de jeu : la vitesse du jeu ne l'accélère pas et la pause ne l'arrête pas.
 
 ## Liens avec les autres systèmes

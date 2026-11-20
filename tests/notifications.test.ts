@@ -117,4 +117,16 @@ describe('la file des notifications', () => {
     expect(levelOf('🔥 Incursion ! 3 démons attaquent', true)).toBe('danger');
     expect(levelOf('Une décision vous attend', true)).toBe('action');
   });
+
+  it('une décision prise retire son message de l’écran, de la file et de la cloche', () => {
+    const n = q();
+    const it1 = n.push('« Bêtes » : un agneau — une décision vous attend (cliquez ici).', 0, { level: 'action', act: () => {} })!;
+    n.push('Autre chose', 0, { level: 'notice' });
+    expect(n.history).toHaveLength(2);
+    expect(n.unread).toBe(2);
+    n.retire(it1.id);
+    expect(n.visible.map((v) => v.text)).toEqual(['Autre chose']);
+    expect(n.history.map((h) => h.text)).toEqual(['Autre chose']);
+    expect(n.unread).toBe(1);
+  });
 });

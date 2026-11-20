@@ -281,6 +281,8 @@ export class Expeditions {
   onNews: ((msg: string) => void) | null = null;
   /** une équipe attend une décision */
   onEvent: ((a: ActiveExpedition) => void) | null = null;
+  /** l'équipe a tranché seule un imprévu resté sans réponse (`AUTO_DECIDE`) : `i`, l'option prise */
+  onAuto: ((a: ActiveExpedition, ev: ExpEvent, i: number) => void) | null = null;
   /** population du village, donnée par le jeu */
   pop: () => number = () => 0;
   private nextId = 1;
@@ -504,7 +506,7 @@ export class Expeditions {
       // une décision attendue : l'équipe patiente, puis tranche d'elle-même
       if (a.wait) {
         a.waitT += dt / Math.max(1, this.speed);
-        if (a.waitT >= AUTO_DECIDE) this.decide(a, this.safest(a));
+        if (a.waitT >= AUTO_DECIDE) { const ev = a.wait, i = this.safest(a); if (this.decide(a, i)) this.onAuto?.(a, ev, i); }
         continue;
       }
       // une attente choisie : le travail est suspendu, l'équipe reste là à attendre (elle ne fait pas l'action d'une autre option)
