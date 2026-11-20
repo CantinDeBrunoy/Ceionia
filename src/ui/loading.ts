@@ -1,5 +1,6 @@
 import { tr } from '../i18n';
 import { VoyageFilm } from './voyage';
+import { OpeningFilm } from './opening';
 
 /** les sommets au-dessus du titre (vectoriels, nets à toute taille) : une ombre décalée, puis le crème */
 const PEAK_SHAPES = [
@@ -48,7 +49,8 @@ const TIP_MS = 4500;
  * une barre et un conseil qui change. Il couvre la vue pendant le chargement des modèles et la préparation du monde
  * (construction, shaders du jour et de la nuit, premières images), puis s'efface en fondu : la partie tourne déjà dessous.
  * En mode traversée (`voyage`, le monde qui s'agrandit), il n'a ni emblème ni conseil : c'est le film de la cinématique
- * « Explorer le monde » (`VoyageFilm`, la brume dessous ; l'avancée en mince filet doré). Prêt avant la fin du film, il
+ * « Explorer le monde » (`VoyageFilm`, la brume dessous ; l'avancée en mince filet doré). En mode ouverture (`opening`, une
+ * partie neuve), c'est le film de la cinématique d'ouverture (`OpeningFilm`, la nuée dessous). Prêt avant la fin du film, il
  * attend qu'il finisse (classe `ready`) avant de s'effacer
  */
 export class LoadingScreen {
@@ -58,14 +60,25 @@ export class LoadingScreen {
   /** avancée affichée (la barre ne recule jamais) */
   private k = 0;
   private tipTimer = 0;
-  /** le film de la traversée (mode `voyage`) */
-  readonly film: VoyageFilm | null = null;
+  /** le film de la traversée (mode `voyage`) ou de l'ouverture (mode `opening`) */
+  readonly film: VoyageFilm | OpeningFilm | null = null;
 
-  /** `hold` (la traversée, avant le rechargement) : la brume seule, le film attend la page d'après */
-  constructor(root: HTMLElement, voyage = false, hold = false) {
+  /**
+   * `voyage` : la traversée (`true`) ou l'ouverture d'une partie neuve (`'opening'`) ; `hold` (la traversée, avant le
+   * rechargement) : la brume seule, le film attend la page d'après
+   */
+  constructor(root: HTMLElement, voyage: boolean | 'opening' = false, hold = false) {
     const el = (this.el = document.createElement('div'));
     el.id = 'loadScreen';
     el.setAttribute('role', 'status');
+    if (voyage === 'opening') {
+      el.className = 'opening';
+      this.film = new OpeningFilm(el);
+      this.label = el.querySelector('.ldStep')!;
+      this.bar = el.querySelector('.ldBar i')!;
+      root.appendChild(el);
+      return;
+    }
     if (voyage) {
       el.className = 'voyage';
       this.film = new VoyageFilm(el, hold);
@@ -98,7 +111,7 @@ export class LoadingScreen {
   done(now = false) {
     clearInterval(this.tipTimer);
     if (this.film && !now && !this.el.classList.contains('ready')) {
-      // (la traversée : le film va au bout, ou jusqu'à « Passer », avant que l'écran ne s'efface)
+      // (la traversée, l'ouverture : le film va au bout, ou jusqu'à « Passer », avant que l'écran ne s'efface)
       this.k = 1;
       this.bar.style.width = '100%';
       this.el.classList.add('ready');

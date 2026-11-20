@@ -144,4 +144,15 @@ registerDict('misc', {
   '{n} fers célestes à ramasser': '{n} pieces of sky iron to pick up',
   'Un fer céleste à ramasser': 'A piece of sky iron to pick up',
   'Cliquez dessus au fond du cratère': 'Click it at the bottom of the crater',
+  // la cinématique d'ouverture (openingCine.ts) et son réglage
+  'Il y a très longtemps…': 'Long, long ago…',
+  'La terre était sauvage': 'The land was wild',
+  'Un peuple errait': 'A people wandered',
+  'cherchant sa terre': 'in search of a home',
+  'Ici, ils allaient bâtir leur foyer': 'Here, they would build their home',
+  'Cinématique d’ouverture': 'Opening cinematic',
+  'Au début d’une partie': 'At the start of a game',
+  'Activée': 'On',
+  'Désactivée': 'Off',
+  'Un court film au début de chaque nouvelle partie : la vallée sauvage, un peuple nomade, le premier foyer.': 'A short film at the start of every new game: the wild valley, a nomad people, the first hearth.',
 });

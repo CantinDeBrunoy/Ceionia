@@ -852,6 +852,22 @@ export class Fauna {
     }
     return pick && { kind: pick.kind, x: pick.x, z: pick.z };
   }
+  /**
+   * La bête sauvage visible la plus proche de (x, z), à terre, à moins de `r` cases, parmi `kinds` (dans l'ordre de
+   * préférence : la première espèce présente l'emporte) ; la cinématique d'ouverture passe au-dessus (`openingStage.ts`)
+   */
+  wildNear(x: number, z: number, r: number, kinds: readonly string[]): { x: number; z: number } | null {
+    for (const k of kinds) {
+      let best: Critter | null = null, bd = r * r;
+      for (const c of this.critters) {
+        if (c.kind !== k || c.hidden || c.dead > 0) continue;
+        const d = (c.x - x) ** 2 + (c.z - z) ** 2;
+        if (d < bd) { bd = d; best = c; }
+      }
+      if (best) return { x: best.x, z: best.z };
+    }
+    return null;
+  }
   /** villageois, que les bêtes sauvages évitent */
   people: () => Person[] = () => [];
   /** volcan en éruption : tous les animaux qui craignent quelque chose s'en éloignent en courant */

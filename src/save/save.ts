@@ -41,6 +41,8 @@ export interface Settings {
   noFlood?: boolean;
   noQuake?: boolean;
   noMeteor?: boolean;
+  /** la cinématique d'ouverture coupée (une partie neuve commence sans elle) ; absent : elle se joue */
+  noIntro?: boolean;
 }
 
 /** « auto » : la qualité s'ajuste d'elle-même aux images qui traînent (voir `render/adaptive`) */
