@@ -96,7 +96,7 @@ const r2 = (n: number) => Math.round(n * 50) / 50;
 /** Joue l'imprévu avec l'option `pick` et relève ce que montre la scène pendant les secondes qui suivent la décision */
 function play(ev: ExpEvent, fx: { m: Mission; ci: number; age: number }, pick: number): { sig: string; staged: boolean; took: boolean; seen: string } | null {
   const w = fresh(fx.age);
-  if (fx.m.id === 'allywar') { w.diplo.path = 'war'; w.diplo.conflict = 'open'; w.diplo.battle = 'none'; } else if (fx.m.talks) { w.diplo.path = 'peace'; w.diplo.conflict = 'open'; }
+  if (fx.m.id === 'allywar' || fx.m.isle?.when === 'war') { w.diplo.path = 'war'; w.diplo.conflict = 'open'; w.diplo.battle = 'none'; } else if (fx.m.talks) { w.diplo.path = 'peace'; w.diplo.conflict = 'open'; }
   // tout se rejoue à l'identique : même hasard, mêmes habitants
   const rnd = mulberry32(99);
   const spy = vi.spyOn(Math, 'random').mockImplementation(rnd);

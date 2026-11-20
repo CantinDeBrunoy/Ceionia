@@ -64,7 +64,7 @@ const joy = (n: number, days?: number): Effect => ({ t: 'need', need: 'joy', n, 
 
 export const EVENTS: ExpEvent[] = [
   // ---------------- La diplomatie de l'archipel : le premier contact, puis les pourparlers de la paix ----------------
-  // (les pourparlers ne peuvent pas échouer : leurs options changent le récit et les petits gains, jamais le risque)
+  // (les options des pourparlers changent le récit et les petits gains, jamais le risque : il ne dépend que de la bonne volonté, voir `talkRisk`)
   {
     id: 'patrolboat', where: ['river'], missions: ['allywar'], water: 'sea', title: 'Une patrouille rivale',
     text: 'Une galère rivale passe au ras de l’eau, lanternes masquées. Elle vient droit sur la barque des éclaireurs.',
@@ -79,6 +79,71 @@ export const EVENTS: ExpEvent[] = [
     options: [
       { label: 'Approcher pour écouter', risk: 1.2, bonus: [{ t: 'diplo', act: 'scoutChief' }], text: 'On a approché sans bruit : on sait où se tiendra le chef rival.' },
       { label: 'Noter l’endroit et passer', risk: 0.9, text: 'On a noté l’endroit sur la carte et poursuivi la reconnaissance.' },
+    ],
+  },
+  // ---------------- Les visites sur les îles (expéditions facultatives de l'archipel, voir `isleMissions.ts`) ----------------
+  {
+    id: 'pickpocket', where: ['river'], missions: ['isleFair'], water: 'sea', from: 0.4, title: 'Un coupe-bourse',
+    text: 'Dans la foule de la foire, un gamin vif comme l’éclair vient de nous prendre une bourse.',
+    options: [
+      { label: 'Le poursuivre dans la foule', risk: 1.1, bonus: [{ t: 'gold', n: 3 }], text: 'Un garde de la foire l’a rattrapé : la bourse est revenue, et le marchand d’à côté nous en a donné une autre pour la peine.' },
+      { wait: true, label: 'Laisser filer, garder l’œil', risk: 0.9, work: 6, text: 'On l’a laissé filer, et l’on a gardé l’œil sur nos étoffes jusqu’au soir.' },
+    ],
+  },
+  {
+    id: 'aftershock', where: ['river'], missions: ['isleRebuild'], water: 'sea', from: 0.4, title: 'Une seconde bourrasque',
+    text: 'Le ciel se noircit de nouveau sur le port : une seconde bourrasque arrive, et la jetée tient à peine.',
+    options: [
+      { label: 'Étayer la jetée', risk: 0.9, work: 4, text: 'On a dressé des étais sous la jetée : elle a tenu sous la rafale.' },
+      { label: 'Mettre leurs barques à l’abri', risk: 1, bonus: [{ t: 'boon', kind: 'allies', n: 1 }], text: 'On a tiré leurs barques sur le rivage : les pêcheurs nous en sont reconnaissants.' },
+    ],
+  },
+  {
+    id: 'masterTest', where: ['river'], missions: ['isleSmiths'], water: 'sea', from: 0.4, title: 'L’épreuve du maître',
+    text: 'Le vieux maître croise les bras : avant de montrer ses secrets, il veut voir ce que nous savons faire.',
+    options: [
+      { label: 'Forger une lame devant lui', risk: 1.1, bonus: [{ t: 'need', need: 'jobs', n: 1, days: 6 }], text: 'Nos apprentis ont forgé une lame sous ses yeux : il a hoché la tête, et ouvert son atelier.' },
+      { label: 'Lui montrer nos lingots', risk: 0.9, text: 'Nos lingots l’ont fait sourire : de quoi parler métier jusqu’au soir.' },
+    ],
+  },
+  {
+    id: 'capsized', where: ['river'], missions: ['isleRegatta'], water: 'sea', from: 0.4, title: 'Un concurrent chavire',
+    text: 'Devant nous, un voilier allié a chaviré sur une risée : un marin se débat dans l’eau.',
+    options: [
+      { label: 'Le secourir', risk: 0.9, work: 6, bonus: [{ t: 'boon', kind: 'allies', n: 1 }, { t: 'boon', kind: 'peace', n: 5 }], text: 'On s’est arrêté pour repêcher le marin. Course perdue, mais toute l’île en parle.' },
+      { label: 'Filer vers la ligne', risk: 1.1, bonus: [{ t: 'gold', n: 4 }], text: 'Leurs barques de garde se sont occupées du marin : on a filé droit vers la ligne.' },
+    ],
+  },
+  {
+    id: 'lantern', where: ['river'], missions: ['isleSpy'], water: 'sea', from: 0.4, title: 'Un fanal approche',
+    text: 'Une barque de garde sort du port rival, sa lanterne au bout d’une perche. Elle vient de notre côté.',
+    options: [
+      { wait: true, label: 'Éteindre nos feux et se taire', risk: 0.85, work: 6, text: 'Feux éteints, couchés au fond du bateau : la garde est passée sans nous voir.' },
+      { label: 'Se faire passer pour des pêcheurs', risk: 1.15, bonus: [{ t: 'boon', kind: 'foes', n: 1 }], text: 'Le filet à l’eau, on a bavardé avec la garde : elle nous a même dit où mouillent les navires.' },
+    ],
+  },
+  {
+    id: 'family', where: ['river'], missions: ['isleDefector'], water: 'sea', from: 0.4, title: 'Il n’est pas seul',
+    text: 'Le transfuge n’est pas venu seul : sa femme et son fils attendent un peu plus loin.',
+    options: [
+      { label: 'Prendre toute la famille', risk: 1.15, bonus: [{ t: 'need', need: 'jobs', n: 1 }, { t: 'boon', kind: 'peace', n: 5 }], text: 'Toute la famille est montée à bord : chez eux, on parle de notre bonté.' },
+      { label: 'Lui seul, et vite', risk: 0.9, text: 'Il les a embrassés : ils viendront plus tard, quand la paix sera faite.' },
+    ],
+  },
+  {
+    id: 'sentry', where: ['river'], missions: ['isleSabotage'], water: 'sea', from: 0.4, title: 'Une sentinelle',
+    text: 'Une sentinelle fait sa ronde sur le quai rival, sa torche à la main. Elle vient vers nous.',
+    options: [
+      { wait: true, label: 'Attendre qu’elle passe', risk: 0.9, work: 7, text: 'Tapis dans l’ombre, on a attendu que la sentinelle passe son chemin.' },
+      { label: 'Une diversion : un caillou dans l’eau', risk: 1.1, text: 'Un caillou dans l’eau, plus loin : la sentinelle est partie voir, et nous avons eu le champ libre.' },
+    ],
+  },
+  {
+    id: 'gardener', where: ['river'], missions: ['isleSeeds'], water: 'sea', from: 0.4, title: 'Le jardinier vous voit',
+    text: 'Le jardinier du palais vient vers nous, sa bêche à l’épaule. Il nous a vus.',
+    options: [
+      { label: 'Lui glisser une pièce', risk: 0.85, text: 'Une petite bourse a changé de main : le jardinier a regardé ailleurs.' },
+      { wait: true, label: 'Se cacher dans les massifs', risk: 1.1, work: 6, text: 'Cachés dans les massifs, on a attendu que le jardinier passe.' },
     ],
   },
   {

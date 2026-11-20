@@ -2,7 +2,8 @@ import type { World } from '../world/world';
 import { Danger, GearId, Stock, emptyStock, GEAR_BY } from './gear';
 import type { KindId } from '../build/catalog';
 import { tr, plural } from '../i18n';
-import { applyDiplo, claimVictory, DiploAct } from './diplomacy';
+import { applyDiplo, claimVictory, DiploAct, addBoon, BoonKind, IsleWhen } from './diplomacy';
+import { ISLE_MISSIONS } from './isleMissions';
 
 /**
  * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant, deux à la
@@ -68,7 +69,14 @@ export type Effect =
   /** bêtes perdues en route */
   | { t: 'unherd'; kind: HerdKind; n: number }
   /** la diplomatie de l'archipel avance : peuples rencontrés, comptoir chez le rival, trêve, fête (voir `diplomacy.ts`) */
-  | { t: 'diplo'; act: DiploAct };
+  | { t: 'diplo'; act: DiploAct }
+  /**
+   * un avantage pour le dénouement de l'archipel (expéditions facultatives des îles, voir `Boons`) : troupes alliées, nos
+   * soldats, ennemis en moins à la bataille, chances de la paix
+   */
+  | { t: 'boon'; kind: BoonKind; n: number }
+  /** de l'or (l'archipel : il sert à passer les âges) */
+  | { t: 'gold'; n: number };
 
 
 export interface Choice {
@@ -114,10 +122,22 @@ export interface Choice {
    * scaphandrier qui descend à l'épave ; `smoke`, le grand feu devant la grotte du dragon
    */
   variant?: 'craters' | 'warp' | 'diver' | 'smoke' | 'ally' | 'islet' | 'ship';
+  /**
+   * une visite sur les îles de l'archipel (expéditions facultatives, `isleMissions.ts`) : chez qui, où (un point de sa ville,
+   * `offport` : au large de son port, sans débarquer ; `islet` : la petite île la plus proche), et ce qu'on y voit (`look`)
+   */
+  visit?: IsleVisit;
   win: Effect[];
   lose: Effect[];
   winText: string;
   loseText: string;
+}
+
+/** Où va une visite sur les îles, et ce qu'on y voit (voir `ExpeditionScene.tripSetup`) */
+export interface IsleVisit {
+  to: 'ally' | 'rival';
+  at: 'marche' | 'port' | 'temple' | 'palais' | 'plage' | 'gate' | 'islet' | 'offport';
+  look: 'fair' | 'dice' | 'cargo' | 'carpentry' | 'forge' | 'swap' | 'race' | 'reef' | 'spyglass' | 'eavesdrop' | 'beach' | 'escort' | 'ropes' | 'fireship' | 'buy' | 'steal';
 }
 
 export interface Mission {
@@ -139,10 +159,15 @@ export interface Mission {
    */
   farewell?: boolean;
   /**
-   * des pourparlers (la paix de l'archipel) : seulement des choix, jamais d'échec ni de blessé ; seuls les imprévus propres à
+   * des pourparlers (la paix de l'archipel) : jamais de blessé, un échec qui ne coûte rien (son risque : `talkRisk`, la bonne volonté gagnée sur les îles) ; seuls les imprévus propres à
    * la mission surviennent. Une étape réussie ne se refait pas
    */
   talks?: boolean;
+  /**
+   * une expédition facultative sur les îles de l'archipel (voir `isleMissions.ts`) : quand elle est proposée (`IsleWhen`) ;
+   * `to` : chez l'allié ou chez le rival
+   */
+  isle?: { when: IsleWhen; to: 'ally' | 'rival' };
 }
 
 /**
@@ -602,7 +627,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   // le dénouement de l'archipel (au Médiéval, une fois l'allié choisi et installé chez lui) : la paix en deux pourparlers
-  // sans échec possible (les émissaires, puis l'ambassade, suivie de la cinématique de la paix) ; la guerre, une expédition
+  // à 30 % d'échec chacun, moins la bonne volonté gagnée sur les îles (les émissaires, puis l'ambassade, suivie de la cinématique de la paix) ; la guerre, une expédition
   // militaire qui débarque les troupes pour la bataille
   {
     id: 'envoys', age: 2, mandatory: false, talks: true, icon: '📜', title: 'Les émissaires',
@@ -666,6 +691,8 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  // les expéditions facultatives sur les îles des deux peuples (voir `isleMissions.ts`)
+  ...ISLE_MISSIONS,
   // ---------------- Âge industriel ----------------
   {
     id: 'railway', age: 3, mandatory: true, icon: '🚂', title: 'Le tracé du chemin de fer',
@@ -991,7 +1018,7 @@ export const REDO_DAYS = 4;
  * durables (travail, bien-être) ne durent plus que quelques jours, et son savoir-faire est déjà acquis
  */
 export function redoEffects(effects: Effect[]): Effect[] {
-  return effects.filter((e) => e.t !== 'perk' && e.t !== 'diplo').map((e) => (e.t === 'need' && !e.days ? { ...e, days: REDO_DAYS } : e));
+  return effects.filter((e) => e.t !== 'perk' && e.t !== 'diplo' && e.t !== 'boon').map((e) => (e.t === 'need' && !e.days ? { ...e, days: REDO_DAYS } : e));
 }
 
 /** Bêtes par enclos, chevaux par écurie, au plus */
@@ -1109,6 +1136,8 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
     else if (e.t === 'injured') { injured += e.n; days = Math.max(days, e.days); }
     else if (e.t === 'unherd') for (let i = 0; i < e.n; i++) { const j = s.herd.lastIndexOf(e.kind); if (j >= 0) s.herd.splice(j, 1); }
     else if (e.t === 'diplo') { if (e.act === 'victory') claimVictory(w); else applyDiplo(w.diplo, e.act); }
+    else if (e.t === 'boon') addBoon(w.diplo, e.kind, e.n);
+    else if (e.t === 'gold') w.gold += e.n;
   }
   w.version++;
   return { injured, days };
@@ -1123,11 +1152,28 @@ PERK_NAME.spices = 'les épices des îles lointaines garnissent les tables du vi
 PERK_NAME.galleon = 'le trésor du galion englouti est au village';
 PERK_NAME.portal = 'le portail de l’autre rive est ouvert : tours de garde et caserne sur son île';
 PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place du village';
+PERK_NAME.isleSmiths = 'les outils des forgerons alliés : l’équipement se fabrique 30 % plus vite';
+PERK_NAME.isleSeeds = 'les semences des jardins rivaux : champs +15 %';
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** Ce que la diplomatie gagne, en clair et en pastille */
 const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la paix des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', landing: 'la côte reconnue : la bataille peut commencer', victory: 'la guerre gagnée : butin et tribut d’or', scoutBeach: 'la plage de débarquement repérée', scoutGarrison: 'la garnison rivale comptée', scoutChief: 'le chef rival repéré', scoutGate: 'la porte faible repérée' };
 const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', landing: '🔭', victory: '🏆', scoutBeach: '🏖️', scoutGarrison: '🛡️', scoutChief: '👑', scoutGate: '🚪' };
+
+/** Un avantage pour le dénouement, en clair (« +4 troupes alliées pour la bataille », « +10 % de chances pour la paix ») */
+export function boonText(kind: BoonKind, n: number, short = false) {
+  if (short) {
+    if (kind === 'allies') return tr('+{n} troupes alliées', { n });
+    if (kind === 'ours') return tr('+{n} de nos soldats', { n });
+    if (kind === 'foes') return tr('−{n} ennemis', { n });
+    return n >= 0 ? `+${n} %` : `−${-n} %`;
+  }
+  if (kind === 'allies') return tr('+{n} troupes alliées pour la bataille', { n });
+  if (kind === 'ours') return tr('+{n} de nos soldats pour la bataille', { n });
+  if (kind === 'foes') return tr('−{n} ennemis à la bataille', { n });
+  return n >= 0 ? tr('+{n} % de chances pour la paix', { n }) : tr('−{n} % de chances pour la paix', { n: -n });
+}
+export const BOON_ICON: Record<BoonKind, string> = { allies: '🛡', ours: '⚔', foes: '🎯', peace: '📜' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';
@@ -1146,6 +1192,8 @@ export function effectSummary(effects: Effect[]) {
     else if (e.t === 'injured') out.push(`${e.n} ${plural(e.n, 'blessé', 'blessés')} (${tr('{n} j', { n: e.days })})`);
     else if (e.t === 'unherd') out.push(`−${e.n} ${plural(e.n, ...HERD_NAME[e.kind])}`);
     else if (e.t === 'diplo') out.push(tr(DIPLO_NAME[e.act]));
+    else if (e.t === 'boon') out.push(boonText(e.kind, e.n));
+    else if (e.t === 'gold') out.push(tr('+{n} or', { n: e.n }));
   }
   return out.join(' · ') || tr('rien');
 }
@@ -1167,6 +1215,8 @@ export function effectChips(effects: Effect[]): { icon: string; n: string; title
     else if (e.t === 'injured') out.push({ icon: '🤕', n: `${e.n}`, title });
     else if (e.t === 'unherd') out.push({ icon: HERD_ICON[e.kind], n: `−${e.n}`, title });
     else if (e.t === 'diplo') out.push({ icon: DIPLO_ICON[e.act], n: '', title });
+    else if (e.t === 'boon') out.push({ icon: BOON_ICON[e.kind], n: e.kind === 'peace' ? `${e.n > 0 ? '+' : '−'}${Math.abs(e.n)} %` : `${e.kind === 'foes' ? '−' : '+'}${e.n}`, title });
+    else if (e.t === 'gold') out.push({ icon: '💰', n: `+${e.n}`, title });
   }
   return out;
 }

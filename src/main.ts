@@ -1344,7 +1344,7 @@ class Game implements UIHost {
     const w = this.world, d = w.diplo;
     if (this.rivalBattle || !battleReady(d, w.exp.clock) || !d.ally || this.mode !== 'surface') return false;
     let b: RivalBattle;
-    try { b = new RivalBattle(w, rivalOf(d.ally), Math.max(1, this.sim.age), w.difficulty === 'easy' || w.sandbox, undefined, d.intel); } catch { return false; }
+    try { b = new RivalBattle(w, rivalOf(d.ally), Math.max(1, this.sim.age), w.difficulty === 'easy' || w.sandbox, undefined, d.intel, d.boons); } catch { return false; }
     this.leaveIsle(true);
     this.follow(null); this.trainCam = null; this.incidentCam = null;
     this.tools.setTool('none');

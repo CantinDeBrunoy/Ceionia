@@ -44,9 +44,66 @@ export interface DiploState {
   cine: boolean;
   /** guerre : ce que les éclaireurs ont appris (il prépare la bataille) */
   intel: Intel[];
+  /**
+   * ce que les expéditions facultatives des îles ont gagné pour le dénouement (voir `Boons`) : des troupes pour la bataille,
+   * des chances pour la paix
+   */
+  boons: Boons;
 }
 
-export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [] });
+/**
+ * Les avantages des expéditions facultatives des îles (`ISLE_MISSIONS`), pour la voie qu'on choisira (demande de l'auteur,
+ * 20 nov. 2026 : « un avantage concret pour la voie choisie ») : `allies`, des troupes alliées en plus à la bataille ; `ours`,
+ * des soldats à nous en plus ; `foes`, des ennemis en moins ; `peace`, des points de pourcentage ôtés au risque des
+ * pourparlers (négatif : on les a fâchés). Sauvegardés, bornés par `BOON_MAX`
+ */
+export interface Boons { allies: number; ours: number; foes: number; peace: number }
+export type BoonKind = keyof Boons;
+export const BOON_KINDS: BoonKind[] = ['allies', 'ours', 'foes', 'peace'];
+export const BOON_MAX: Boons = { allies: 12, ours: 6, foes: 15, peace: 45 };
+/** La bonne volonté ne descend pas plus bas (le vol des semences, refait, ne ferme pas la paix pour de bon) */
+export const PEACE_MIN = -20;
+const noBoons = (): Boons => ({ allies: 0, ours: 0, foes: 0, peace: 0 });
+
+/**
+ * Le risque d'échec des pourparlers de la paix (décision de l'auteur, 20 nov. 2026 : 30 %, pour que la bonne volonté
+ * compte) : sans blessé, l'étape se retente. Chaque point de `boons.peace` en ôte un point de pourcentage
+ */
+export const TALK_RISK = 0.3;
+export function talkRisk(d: Pick<DiploState, 'boons'>) { return Math.max(0, Math.min(0.6, TALK_RISK - d.boons.peace / 100)); }
+
+/** Ajoute un avantage, borné ; rien une fois le conflit réglé (il ne servirait plus) */
+export function addBoon(d: DiploState, kind: BoonKind, n: number) {
+  if (d.conflict !== 'open') return;
+  d.boons[kind] = Math.max(kind === 'peace' ? PEACE_MIN : 0, Math.min(BOON_MAX[kind], d.boons[kind] + n));
+}
+
+/** Les avantages comptent-ils encore ? Seulement tant que le conflit dure (avec l'archipel et un allié) */
+export function boonsMatter(w: Pick<World, 'isles' | 'diplo'>) { return archipelagoOn(w) && !!w.diplo.ally && w.diplo.conflict === 'open'; }
+
+/**
+ * Quand une expédition des îles est proposée (`Mission.isle`) : `ally`, dès l'allié choisi ; `open`, tant que le conflit dure
+ * (et réussie, elle reste dans la liste) ; `war`, sur la voie de la guerre, avant la victoire
+ */
+export type IsleWhen = 'ally' | 'open' | 'war';
+export function isleWhy(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string, when: IsleWhen): string | null {
+  if (!archipelagoOn(w)) return tr('Il faut d’abord explorer le monde.');
+  const d = w.diplo;
+  if (!d.ally) return tr('Il faut d’abord choisir votre allié.');
+  if (when === 'ally') return null;
+  if (d.conflict !== 'open') return tr('Le conflit des deux îles est déjà réglé.');
+  if (when === 'war' && d.path !== 'war') return tr('Seulement sur la voie de la guerre.');
+  void id;
+  return null;
+}
+export function isleOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string, when: IsleWhen): boolean {
+  if (!archipelagoOn(w) || !w.diplo.ally) return false;
+  if (w.exp.done.includes(id)) return true;
+  if (when === 'war') return w.diplo.path === 'war' && w.diplo.conflict === 'open';
+  return when === 'ally' || w.diplo.conflict === 'open';
+}
+
+export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [], boons: noBoons() });
 
 const PEOPLES: People[] = ['orient', 'asie'];
 const PATHS: Path[] = ['peace', 'war'];
@@ -71,6 +128,8 @@ export function readDiplo(d: any): DiploState {
   s.retry = Number.isFinite(+d.retry) ? Math.max(0, +d.retry) : 0;
   s.cine = d.cine === true;
   s.intel = Array.isArray(d.intel) ? INTELS.filter((x) => d.intel.includes(x)) : [];
+  // (les avantages des expéditions des îles : nouveaux le 20 nov. 2026, à zéro dans les anciennes parties)
+  for (const k of BOON_KINDS) { const v = Math.round(+d.boons?.[k] || 0); s.boons[k] = Math.max(k === 'peace' ? PEACE_MIN : 0, Math.min(BOON_MAX[k], v)); }
   return s;
 }
 

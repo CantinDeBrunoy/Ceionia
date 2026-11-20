@@ -9,6 +9,7 @@ import { goldNeed, goldSince, tradeOpen } from './trade';
 import { archipelagoOn, canExpand } from '../world/expand';
 import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from './crossroads';
 import { CONFLICT_LABEL, conflictItem } from './diplomacy';
+import { SEEDS_PERK, SEEDS_FIELDS } from './isleMissions';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -212,7 +213,7 @@ export class Sim {
   get yieldK() { return 0.55 + 0.55 * this.moisture; }
 
   /** Récolte des champs, en parts entières (selon la pluie ; le blé des collines l'enrichit) */
-  private get fieldsFood() { return down(this.fieldFood * this.yieldK * (this.world.exp.perks.includes('seeds') ? 1.3 : 1)); }
+  private get fieldsFood() { return down(this.fieldFood * this.yieldK * (this.world.exp.perks.includes('seeds') ? 1.3 : 1) * (this.world.exp.perks.includes(SEEDS_PERK) ? SEEDS_FIELDS : 1)); }
 
   get drought() { return this.moisture < 0.25 && this.fieldFood > 0; }
 

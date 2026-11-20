@@ -5,7 +5,8 @@ import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummar
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
-import { missionOffered, missionWhy, tributePerDay, isleOf, rivalOf } from './diplomacy';
+import { missionOffered, missionWhy, tributePerDay, isleOf, rivalOf, talkRisk, isleOffered, isleWhy } from './diplomacy';
+import { SMITHS_PERK, SMITHS_CRAFT } from './isleMissions';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { recover } from './trade';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
@@ -344,11 +345,20 @@ export class Expeditions {
   /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux, carburant), et son risque avec cet équipement */
   preview(c: Choice) {
     const l = loadout(c, this.world.exp.gear), n = this.mountsFor(c) ? this.need(c) : 0;
-    return { take: l.take, label: [packLabel(l.take), n ? `${n} ${plural(n, 'cheval', 'chevaux')}` : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
+    // (les pourparlers de la paix : leur risque est celui de la bonne volonté gagnée, voir `talkRisk`)
+    const talk = MISSIONS.find((m) => m.talks && m.choices.includes(c));
+    return { take: l.take, label: [packLabel(l.take), n ? `${n} ${plural(n, 'cheval', 'chevaux')}` : ''].filter(Boolean).join(' · '), risk: talk ? talkRisk(this.world.diplo) : this.riskOf(c) * l.k };
   }
 
-  /** Risque d'une équipe en route : celui du choix, équipement et décisions compris */
-  chance(a: ActiveExpedition) { return !a.m.talks && this.riskOf(a.c) > 0 ? Math.min(0.95, Math.max(0.02, this.riskOf(a.c) * a.riskK)) : 0; }
+  /**
+   * Risque d'une équipe en route : celui du choix, équipement et décisions compris. Les pourparlers de la paix : 30 %
+   * (`TALK_RISK`) moins la bonne volonté gagnée par les expéditions des îles (décision de l'auteur, 20 nov. 2026 ; ils ne
+   * pouvaient pas échouer avant), sans plancher (la bonne volonté peut tout ôter)
+   */
+  chance(a: ActiveExpedition) {
+    if (a.m.talks) return Math.min(0.95, talkRisk(this.world.diplo) * a.riskK);
+    return this.riskOf(a.c) > 0 ? Math.min(0.95, Math.max(0.02, this.riskOf(a.c) * a.riskK)) : 0;
+  }
 
   /** Le travail sur place est fini tout de suite (le grand voyage des colons a été vu, ou passé) */
   landNow(a: ActiveExpedition) { if (a.phase === 'work') a.t = Math.max(a.t, a.c.work + a.extra); }
@@ -358,7 +368,7 @@ export class Expeditions {
    * de l'archipel seulement quand la partie en est là (`missionOffered`) ; celle du portail, plus proposée depuis le grand
    * choix, seulement si une ancienne partie l'a en route
    */
-  list(age: number) { return MISSIONS.filter((m) => m.age <= age && missionOffered(this.world, m.id) && (m.id !== 'portal' || this.running(m))); }
+  list(age: number) { return MISSIONS.filter((m) => m.age <= age && missionOffered(this.world, m.id) && (!m.isle || isleOffered(this.world, m.id, m.isle.when)) && (m.id !== 'portal' || this.running(m))); }
 
   /** Ce qui manque avant de pouvoir tenter la mission : missions à réussir, bâtiments à bâtir (vide : rien) */
   missing(m: Mission): string[] {
@@ -377,7 +387,7 @@ export class Expeditions {
     // une partie commencée avant l'île du portail n'en a pas
     if (c.scene === 'portal' && !this.world.portal) return tr('Cette carte n’a pas d’île du portail : la partie a commencé avant elle. Une nouvelle partie en aura une.');
     // la diplomatie de l'archipel : une étape à son heure, et une seule fois
-    const diplo = missionWhy(this.world, m.id);
+    const diplo = missionWhy(this.world, m.id) ?? (m.isle ? isleWhy(this.world, m.id, m.isle.when) : null);
     if (diplo) return diplo;
     const miss = this.missing(m);
     if (miss.length) return tr('Il faut d’abord {list}.', { list: miss.join(', ') });
@@ -418,7 +428,7 @@ export class Expeditions {
     // un aller simple vers l'île rivale (les éclaireurs) : une côte sur la mer reliée au large, pas une lagune fermée d'où la
     // barque ne sortirait pas
     // (les pourparlers de la paix aussi : ils traversent jusqu'aux îles)
-    const outer = (c.oneWay || PEACE_TRIPS.has(m.id)) && sea ? openWater(this.world) : null;
+    const outer = (c.oneWay || PEACE_TRIPS.has(m.id) || c.visit) && sea ? openWater(this.world) : null;
     while (kind && !dest) {
       const monster = sea && kind === 'river' && OPEN_SEA.has(c.scene);
       // la chasse au monstre des mers se fait en haute mer : une côte d'où l'on gagne une vaste étendue d'eau profonde, sans
@@ -465,7 +475,7 @@ export class Expeditions {
     // filait d'une rive à l'autre en quelques secondes, et l'on croyait l'équipe téléportée)
     if (c.scene === 'portal') a.extra = Math.max(a.extra, this.portalCrossing(dest) / (PORTAL_SAIL * PORTAL_RETURN) - c.work);
     // les pourparlers de la paix traversent jusqu'aux îles (voir `TRIP_OUT`) : le travail s'allonge avec la traversée
-    if (PEACE_TRIPS.has(m.id)) a.extra = Math.max(a.extra, this.peaceCrossing(dest, c) / (TRIP_SAIL * TRIP_OUT) - c.work);
+    if (PEACE_TRIPS.has(m.id) || c.visit) a.extra = Math.max(a.extra, this.peaceCrossing(dest, c) / (TRIP_SAIL * TRIP_OUT) - c.work);
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval (tous en selle, ou tous à pied) ; on part en selle
     const kits = party.map((): Kit => ({}));
     for (const g of ['plasma', 'assault', 'rifle', 'crossbow', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
@@ -911,7 +921,7 @@ export class Expeditions {
     const s = this.world.exp;
     if (!s.craft.length) return;
     const g = GEAR_BY[s.craft[0]];
-    s.craftT += dt * (this.has('workshop') ? 1.5 : 1) * (s.perks.includes(FORGE_PERK) ? FORGE_CRAFT : 1);
+    s.craftT += dt * (this.has('workshop') ? 1.5 : 1) * (s.perks.includes(FORGE_PERK) ? FORGE_CRAFT : 1) * (s.perks.includes(SMITHS_PERK) ? SMITHS_CRAFT : 1);
     if (s.craftT < g.time) return;
     s.craftT = 0;
     s.craft.shift();
@@ -1105,6 +1115,11 @@ export class Expeditions {
     const rv = isleOf(w, rivalOf(ally))?.village, al = isleOf(w, ally)?.village, d = (p: { x: number; z: number }, q: { x: number; z: number }) => Math.hypot(p.x - q.x, p.z - q.z);
     const from = { x: dest[0], z: dest[1] };
     if (!rv || !al) return 0;
+    // (une visite sur les îles : jusqu'à la ville visitée, ou jusqu'à la plus proche des petites îles)
+    if (c.visit) {
+      const town = c.visit.to === 'ally' ? al : rv;
+      return (c.visit.at === 'islet' ? Math.min(...w.isles.small.map((q) => d(from, q)), d(from, town)) : d(from, town)) * 1.25;
+    }
     let L = c.variant === 'ally' ? d(from, al) + d(al, rv) : d(from, rv);
     if (c.variant === 'ship') L = d(from, { x: (rv.x + al.x) / 2, z: (rv.z + al.z) / 2 });
     if (c.variant === 'islet') L = Math.min(...w.isles.small.map((q) => d(from, q)), L);

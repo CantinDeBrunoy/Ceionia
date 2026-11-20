@@ -22,6 +22,24 @@ import { townPlans } from '../world/rivalTown';
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
 export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34], wolf: ['wolf', 0.3] };
 
+/** Le décor d'une visite sur les îles : agrandi (les villes des îles sont bâties grand), et ses places écartées d'autant */
+const VISIT_K = 1.6, VISIT_GAP = 1.3;
+/** Un tour fermé sur l'eau (la régate autour d'une petite île) : ses points et leurs longueurs cumulées */
+type TripLoop = { route: [number, number][]; len: number[] };
+/** Longueurs cumulées d'une ligne brisée */
+function lengthsOf(route: [number, number][]) {
+  const len = [0];
+  for (let i = 1; i < route.length; i++) len.push(len[i - 1] + Math.hypot(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1]));
+  return len;
+}
+/** Le point d'un tour à la distance `d` du départ, et son cap */
+function alongLoop(lp: TripLoop, d: number): [number, number, number] {
+  let j = 1;
+  while (j < lp.len.length - 1 && lp.len[j] < d) j++;
+  const a = lp.route[j - 1], b = lp.route[j], u = Math.min(1, Math.max(0, (d - lp.len[j - 1]) / Math.max(0.001, lp.len[j] - lp.len[j - 1])));
+  return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, Math.atan2(b[0] - a[0], b[1] - a[1])];
+}
+
 /** Longueur du loup articulé à l'échelle 1 (de la truffe au bout de la queue) */
 const WOLF_LEN = 0.34;
 /**
@@ -940,7 +958,12 @@ export class ExpeditionScene {
   /** l'île du portail : où l'équipe débarque, et le portail qu'elle va réveiller */
   private isle: { land: [number, number]; gate: [number, number] } | null = null;
   /** les éclaireurs : la route de la barque sur l'eau (jusqu'au mouillage de la plage rivale), puis la marche sur l'île */
-  private scout: { route: [number, number][]; len: number[]; walk: [number, number][]; post: [number, number]; walls: [number, number]; trip?: { kind: 'envoy' | 'islet' | 'ship'; props: THREE.Object3D[] } } | null = null;
+  /**
+   * la traversée vers les îles (éclaireurs, pourparlers, visites) : la route sur l'eau, la marche à terre (`walk`, en ligne
+   * brisée), le lieu (`post`) et ce qu'on y regarde (`walls`) ; `trip` : un aller-retour, son décor (`props`, animé par `anim`
+   * selon l'avancement), le tour d'une petite île (`loop`, la régate) et le geste de l'équipe sur place (`act`)
+   */
+  private scout: { route: [number, number][]; len: number[]; walk: [number, number][]; post: [number, number]; walls: [number, number]; trip?: { kind: 'envoy' | 'islet' | 'ship' | 'visit'; props: THREE.Object3D[]; anim?: (k: number, dt: number) => void; loop?: TripLoop; act?: Act } } | null = null;
   /** les îles flottantes (scène `isles`) : l'archipel, que l'équipe visite à pied */
   private float: FloatIsles | null = null;
   /**
@@ -1630,6 +1653,9 @@ export class ExpeditionScene {
       // la diplomatie de l'archipel : au large, contre le bateau de l'équipe
       mistrust: () => this.stageMistrust(s, a), grievance: () => this.stageGrievance(s, a), seat: () => this.stageSeat(s, a), menu: () => this.stageMenu(s, a),
       patrolboat: () => this.stagePatrol(s), cliffire: () => this.stageCliffire(s, a),
+      // les visites sur les îles (expéditions facultatives de l'archipel)
+      pickpocket: () => this.stagePickpocket(s, a), aftershock: () => this.stageAftershock(s), masterTest: () => this.stageMasterTest(s, a), capsized: () => this.stageCapsized(s, a),
+      lantern: () => this.stageLantern(s), family: () => this.stageFamily(s, a), sentry: () => this.stageSentry(s, a), gardener: () => this.stageGardener(s, a),
       music: () => this.stageMusic(s, a), blockade: () => this.stageBlockade(s, a), parley: () => this.stageParley(s, a), maelstrom: () => this.stageMaelstrom(s),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
@@ -2722,6 +2748,241 @@ export class ExpeditionScene {
     };
   }
 
+  // ---------------- Les imprévus des visites sur les îles (expéditions facultatives de l'archipel) ----------------
+  /** Où poser un imprévu des visites : près de l'équipe (ce que regarde la caméra), et une direction de référence */
+  private isleSpot(): { x: number; z: number; fx: number; fz: number; sx: number; sz: number } {
+    const [x, z] = this.focus, sc = this.scout;
+    const ang = sc ? Math.atan2(sc.walls[0] - sc.post[0], sc.walls[1] - sc.post[1]) : this.boat ? this.boat.obj.rotation.y : 0;
+    return { x, z, fx: Math.sin(ang), fz: Math.cos(ang), sx: Math.cos(ang), sz: -Math.sin(ang) };
+  }
+  /** Pose un habitant de l'imprévu en (x, z), au sol, tourné vers `face` */
+  private sPlace(n: { folk: Folk; pose: FolkPose }, x: number, z: number, face: number, pose?: FolkPose) {
+    n.folk.root.position.set(x, this.world.surfaceAt(x, z), z);
+    n.folk.root.rotation.y = face;
+    if (pose) n.pose = pose;
+  }
+
+  /**
+   * Le coupe-bourse de la foire : un voleur, la bourse à la main, tout près de l'équipe. Le poursuivre : il file dans la foule,
+   * un garde de la foire le rattrape et la bourse revient. Laisser filer : il s'éloigne au pas avec la bourse, l'équipe reste
+   * sur ses gardes, assise près de ses étoffes
+   */
+  private stagePickpocket(s: Staging, a: ActiveExpedition) {
+    const o = this.isleSpot(), x0 = o.x + o.sx * 0.9, z0 = o.z + o.sz * 0.9;
+    const thief = this.sNpc(s, 'thief', a.age, x0, z0, 0, 'idle');
+    const guard = this.sNpc(s, 'villager', a.age, o.x - o.sx * 1.2, o.z - o.sz * 1.2, 0, 'idle');
+    const purse = this.sPut(s, sacksGeo(), x0, z0, 0, 0.12);
+    purse.scale.setScalar(0.4);
+    return () => {
+      const p = s.pick, t = s.after;
+      if (p === 0) {
+        const u = Math.min(1, t / 2.5), back = Math.max(0, Math.min(1, (t - 3) / 2));
+        const tx = x0 + o.sx * 2.2 * u - o.fx * 0.6 * u, tz = z0 + o.sz * 2.2 * u - o.fz * 0.6 * u;
+        this.sPlace(thief, tx, tz, Math.atan2(o.sx, o.sz), t < 3 ? 'run' : 'idle');
+        const gx = o.x - o.sx * 1.2 + (tx - 0.3 * o.sx - (o.x - o.sx * 1.2)) * Math.min(1, t / 3), gz = o.z - o.sz * 1.2 + (tz - 0.3 * o.sz - (o.z - o.sz * 1.2)) * Math.min(1, t / 3);
+        this.sPlace(guard, gx, gz, Math.atan2(tx - gx, tz - gz), t < 3 ? 'run' : 'cheer');
+        purse.position.set(tx + (o.x - tx) * back, this.world.surfaceAt(tx, tz) + 0.12, tz + (o.z - tz) * back);
+        this.crewAct = t < 3 ? 'cheer' : null;
+      } else if (p === 1) {
+        const u = Math.min(1, t / 6);
+        const tx = x0 + o.fx * 2.5 * u, tz = z0 + o.fz * 2.5 * u;
+        this.sPlace(thief, tx, tz, Math.atan2(o.fx, o.fz), u < 1 ? 'walk' : 'idle');
+        purse.position.set(tx, this.world.surfaceAt(tx, tz) + 0.12, tz);
+        purse.visible = u < 1;
+        this.crewAct = t < 6 ? 'sit' : null;
+      } else this.sPlace(thief, x0, z0, Math.atan2(o.x - x0, o.z - z0), 'talk');
+      return p < 0 || t < 7;
+    };
+  }
+
+  /**
+   * La seconde bourrasque, au port allié : un nuage noir, des rafales d'écume. Étayer la jetée : trois étais se dressent l'un
+   * après l'autre, l'équipe à l'ouvrage. Mettre les barques à l'abri : deux barques glissent de l'eau jusqu'au rivage
+   */
+  private stageAftershock(s: Staging) {
+    const o = this.isleSpot(), y = this.world.surfaceAt(o.x, o.z);
+    const cloud = this.sPut(s, stormGeo(false), o.x + o.fx * 1.5, o.z + o.fz * 1.5, 0, 2.2);
+    cloud.scale.setScalar(0.6);
+    const posts = [-0.6, 0, 0.6].map((k) => { const m = this.sPut(s, postGeo(), o.x - o.fx * 0.5 + o.sx * k, o.z - o.fz * 0.5 + o.sz * k, 0); m.visible = false; return m; });
+    const boats = [-1, 1].map((k) => { const m = this.sPut(s, boatGeo('rowboat'), o.x - o.fx * 2 + o.sx * k, o.z - o.fz * 2 + o.sz * k, Math.atan2(o.fx, o.fz)); m.position.y = y - 0.05; return m; });
+    let pt = 0;
+    return (dt: number) => {
+      const p = s.pick, t = s.after;
+      cloud.position.y = y + 2.2 + Math.sin(this.t * 0.8) * 0.05;
+      if ((pt -= dt) <= 0 && (p < 0 || t < 4)) { pt = 0.25; this.puffAt(o.x + o.fx * 1.2 + (Math.random() - 0.5), y + 0.1, o.z + o.fz * 1.2, 'puff', -o.fx * 0.4, -o.fz * 0.4); }
+      if (p === 0) { posts.forEach((m, i) => { m.visible = t > 0.8 + i * 1.2; m.scale.setScalar(Math.min(1, Math.max(0.01, (t - 0.8 - i * 1.2) * 2))); }); this.crewAct = t < 5 ? 'work' : null; }
+      if (p === 1) boats.forEach((m, i) => { const u = Math.min(1, t / 4), k = i ? 1 : -1; m.position.set(o.x - o.fx * (2 - 1.3 * u) + o.sx * k, y - 0.05 + 0.05 * u, o.z - o.fz * (2 - 1.3 * u) + o.sz * k); m.rotation.z = u * 0.3 * k; });
+      return p < 0 || t < 6;
+    };
+  }
+
+  /**
+   * L'épreuve du maître artisan : le vieux maître, bras croisés devant l'équipe. Forger une lame : l'enclume, le feu, des
+   * étincelles, l'équipe à l'ouvrage. Montrer nos outils : une table où l'on étale nos lingots, le maître qui applaudit
+   */
+  private stageMasterTest(s: Staging, a: ActiveExpedition) {
+    const o = this.isleSpot(), mx = o.x + o.fx * 0.9 - o.sx * 0.6, mz = o.z + o.fz * 0.9 - o.sz * 0.6;
+    const master = this.sNpc(s, 'sage', a.age, mx, mz, Math.atan2(o.x - mx, o.z - mz), 'idle');
+    const anvil = this.sPut(s, stoneGeo(), o.x + o.sx * 0.5, o.z + o.sz * 0.5, 0, 0);
+    anvil.visible = false;
+    const table = this.sPut(s, tableGeo(false), o.x - o.sx * 0.6, o.z - o.sz * 0.6, Math.atan2(o.sx, o.sz));
+    table.visible = false;
+    const bars = this.sPut(s, ingotsGeo(), o.x - o.sx * 0.6, o.z - o.sz * 0.6, 0, 0.12);
+    bars.visible = false;
+    let pt = 0;
+    return (dt: number) => {
+      const p = s.pick, t = s.after;
+      master.pose = p === 1 && t > 2 ? 'cheer' : p === 0 && t > 4 ? 'talk' : 'idle';
+      if (p === 0) {
+        anvil.visible = true;
+        this.crewAct = t < 5 ? 'work' : null;
+        if (t < 5 && (pt -= dt) <= 0) { pt = 0.18; this.puffAt(anvil.position.x, anvil.position.y + 0.15, anvil.position.z, 'puff', (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4); }
+      }
+      if (p === 1) { table.visible = true; bars.visible = t > 1; this.crewAct = t < 3 ? 'cheer' : null; }
+      return p < 0 || t < 6;
+    };
+  }
+
+  /**
+   * Un concurrent chavire pendant la régate : sa coque retournée, un marin à l'eau, devant notre voilier. Le secourir : on
+   * s'arrête bord à bord, le marin monte à bord. Filer vers la ligne : à toutes rames, on le laisse derrière
+   */
+  private stageCapsized(s: Staging, a: ActiveExpedition) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    const [bx, bz] = this.boatBase(), h = bt.obj.rotation.y, fx = Math.sin(h), fz = Math.cos(h), px = Math.cos(h), pz = -Math.sin(h);
+    const wx = bx + fx * 1.4 + px * 0.7, wz = bz + fz * 1.4 + pz * 0.7;
+    const hull = this.sAdd(s, new THREE.Mesh(boatGeo('sail'), mats.body));
+    hull.position.set(wx, bt.y - 0.03, wz); hull.rotation.set(0, h + 1.2, 2.7);
+    const man = this.sNpc(s, 'fisher', a.age, wx - px * 0.3, wz - pz * 0.3, h + Math.PI, 'cheer');
+    return () => {
+      const p = s.pick, t = s.after;
+      man.folk.root.position.y = bt.y - 0.12 + Math.sin(this.t * 3) * 0.01;
+      if (p === 0) {
+        this.moor = t < 6;
+        if (t < 4) this.steerTo(wx - px * 0.6, wz - pz * 0.6);
+        const u = Math.min(1, Math.max(0, (t - 2) / 2)), b = bt.obj.position;
+        man.folk.root.position.set(wx - px * 0.3 + (b.x - wx) * u, bt.y - 0.12 + 0.17 * u, wz - pz * 0.3 + (b.z - wz) * u);
+        man.folk.root.visible = t < 4.5;
+        this.crewAct = t < 5 ? 'work' : null;
+      }
+      if (p === 1) { this.rowing = t < 5; if (t < 5) { const [cx, cz] = this.boatBase(); this.steerTo(cx + fx * Math.min(1.5, t * 0.5), cz + fz * Math.min(1.5, t * 0.5)); } }
+      return p < 0 || t < 7;
+    };
+  }
+
+  /**
+   * Un fanal approche, au large du port rival : une barque de garde, sa lanterne au bout d'une perche. Éteindre nos feux :
+   * immobiles, assis au fond du bateau, on la laisse passer. Se faire passer pour des pêcheurs : le filet à l'eau, debout à
+   * l'ouvrage ; la garde vient bord à bord, regarde, et repart
+   */
+  private stageLantern(s: Staging) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    const [bx, bz] = this.boatBase(), h = bt.obj.rotation.y, fx = Math.sin(h), fz = Math.cos(h), px = Math.cos(h), pz = -Math.sin(h);
+    const guard = this.sAdd(s, new THREE.Mesh(boatGeo('rowboat'), mats.body));
+    const lamp = this.flameAt(0, 0, 0, 0.7);
+    s.objs.push(lamp);
+    const net = this.sAdd(s, new THREE.Mesh(netGeo(), mats.body));
+    net.visible = false;
+    return () => {
+      const p = s.pick, t = s.after;
+      let x = bx + fx * 2 + px * 1.6, z = bz + fz * 2 + pz * 1.6, r = h - Math.PI / 2;
+      if (p === 0) { const u = Math.min(1, t / 6); x -= px * 3.4 * u; z -= pz * 3.4 * u; this.moor = t < 6; this.crewAct = t < 6 ? 'sit' : null; }
+      if (p === 1) { const u = Math.min(1, t / 3), v = Math.max(0, (t - 4) / 3); x = bx + fx * (2 - 1.4 * u + 2 * v) + px * (1.6 - 0.9 * u); z = bz + fz * (2 - 1.4 * u + 2 * v) + pz * (1.6 - 0.9 * u); r = h; net.visible = true; net.position.set(bx - px * 0.4, bt.y + 0.005, bz - pz * 0.4); this.moor = t < 6; this.crewAct = t < 6 ? 'work' : null; }
+      if (this.depth(x, z) !== null) guard.position.set(x, bt.y + 0.005, z);
+      guard.rotation.y = r;
+      lamp.position.set(guard.position.x, bt.y + 0.18, guard.position.z);
+      return p < 0 || t < 7;
+    };
+  }
+
+  /**
+   * Le transfuge n'est pas seul : sa femme et son fils attendent un peu plus loin. Prendre toute la famille : ils rejoignent
+   * l'équipe, qui les accueille. Lui seul, et vite : ils lui font signe et repartent vers la ville
+   */
+  private stageFamily(s: Staging, a: ActiveExpedition) {
+    const o = this.isleSpot(), x0 = o.x + o.fx * 1.6, z0 = o.z + o.fz * 1.6;
+    const fam = [this.sNpc(s, 'villager', a.age, x0 + o.sx * 0.3, z0 + o.sz * 0.3, 0, 'idle'), this.sNpc(s, 'villager', a.age, x0 - o.sx * 0.3, z0 - o.sz * 0.3, 0, 'idle')];
+    fam[1].folk.root.scale.setScalar(0.75);
+    return () => {
+      const p = s.pick, t = s.after;
+      fam.forEach((n, i) => {
+        const k = i ? -0.3 : 0.3, hx = x0 + o.sx * k, hz = z0 + o.sz * k;
+        if (p < 0) { this.sPlace(n, hx, hz, Math.atan2(o.x - hx, o.z - hz), 'talk'); return; }
+        const u = Math.min(1, t / 3);
+        if (p === 0) { const tx = o.x + o.sx * k * 2, tz = o.z + o.sz * k * 2; this.sPlace(n, hx + (tx - hx) * u, hz + (tz - hz) * u, Math.atan2(tx - hx, tz - hz), u < 1 ? 'walk' : 'cheer'); }
+        else { const tx = hx + o.fx * 3, tz = hz + o.fz * 3; this.sPlace(n, hx + (tx - hx) * u, hz + (tz - hz) * u, Math.atan2(o.fx, o.fz), u < 1 ? 'walk' : 'idle'); n.folk.root.visible = u < 1; }
+      });
+      this.crewAct = p === 0 && t < 4 ? 'cheer' : null;
+      return p < 0 || t < 6;
+    };
+  }
+
+  /**
+   * Une sentinelle sur le quai rival, sa torche à la main, qui fait sa ronde vers nous. Attendre qu'elle passe : l'équipe
+   * tapie, la sentinelle passe son chemin. Une diversion : un caillou lancé dans l'eau plus loin, une gerbe, et la sentinelle
+   * part voir
+   */
+  private stageSentry(s: Staging, a: ActiveExpedition) {
+    const o = this.isleSpot(), x0 = o.x + o.fx * 1.8 + o.sx * 1, z0 = o.z + o.fz * 1.8 + o.sz * 1;
+    const man = this.sNpc(s, 'villager', a.age, x0, z0, 0, 'walk');
+    const torch = this.flameAt(0, 0, 0, 0.7);
+    s.objs.push(torch);
+    const stone = this.sAdd(s, new THREE.Mesh(pebbleGeo(), mats.body));
+    stone.visible = false;
+    const lx = o.x - o.sx * 2.5 + o.fx * 1.5, lz = o.z - o.sz * 2.5 + o.fz * 1.5;
+    let splashed = false;
+    return () => {
+      const p = s.pick, t = s.after;
+      let x = x0, z = z0, face = Math.atan2(-o.sx, -o.sz), pose: FolkPose = 'walk';
+      if (p < 0) { x = x0 - o.sx * Math.min(0.5, s.t * 0.1); z = z0 - o.sz * Math.min(0.5, s.t * 0.1); }
+      if (p === 0) { const u = Math.min(1, t / 6); x = x0 + o.sx * 2.5 * u; z = z0 + o.sz * 2.5 * u; face = Math.atan2(o.sx, o.sz); this.crewAct = t < 6 ? 'sit' : null; }
+      if (p === 1) {
+        const u = Math.min(1, t / 0.8);
+        stone.visible = t < 0.8;
+        stone.position.set(o.x + (lx - o.x) * u, this.world.surfaceAt(o.x, o.z) + 0.3 + Math.sin(u * Math.PI) * 0.5, o.z + (lz - o.z) * u);
+        if (u >= 1 && !splashed) { splashed = true; this.splash(lx, lz, this.world.surfaceAt(lx, lz)); }
+        const v = Math.min(1, Math.max(0, (t - 1) / 4));
+        x = x0 + (lx - x0) * v * 0.7; z = z0 + (lz - z0) * v * 0.7; face = Math.atan2(lx - x0, lz - z0); pose = v < 1 && t > 1 ? 'run' : 'idle';
+        this.crewAct = t < 1 ? 'work' : null;
+      }
+      this.sPlace(man, x, z, face, pose);
+      torch.position.set(x + Math.sin(face) * 0.12, man.folk.root.position.y + 0.3, z + Math.cos(face) * 0.12);
+      return p < 0 || t < 7;
+    };
+  }
+
+  /**
+   * Le jardinier du palais surprend l'équipe : il s'approche, sa bêche à l'épaule. Lui glisser une pièce : une petite bourse
+   * passe de main en main, il se détourne. Se cacher dans les massifs : des buissons autour de l'équipe tapie, il passe sans
+   * rien voir
+   */
+  private stageGardener(s: Staging, a: ActiveExpedition) {
+    const o = this.isleSpot(), x0 = o.x + o.fx * 1.4 - o.sx * 0.8, z0 = o.z + o.fz * 1.4 - o.sz * 0.8;
+    const man = this.sNpc(s, 'villager', a.age, x0, z0, Math.atan2(o.x - x0, o.z - z0), 'walk');
+    const purse = this.sPut(s, sacksGeo(), o.x, o.z, 0, 0.15);
+    purse.scale.setScalar(0.35); purse.visible = false;
+    const hide = [-0.5, 0, 0.5].map((k) => { const m = this.sPut(s, bushGeo(), o.x + o.sx * k - o.fx * 0.2, o.z + o.sz * k - o.fz * 0.2, k * 3); m.visible = false; return m; });
+    return () => {
+      const p = s.pick, t = s.after;
+      if (p === 0) {
+        const u = Math.min(1, t / 1.5);
+        purse.visible = t < 3;
+        purse.position.set(o.x + (x0 - o.x) * u, this.world.surfaceAt(o.x, o.z) + 0.15, o.z + (z0 - o.z) * u);
+        this.sPlace(man, x0, z0, t > 2 ? Math.atan2(x0 - o.x, z0 - o.z) : Math.atan2(o.x - x0, o.z - z0), t > 2 ? 'walk' : 'talk');
+        this.crewAct = t < 2 ? 'cheer' : null;
+      }
+      if (p === 1) {
+        hide.forEach((m) => (m.visible = t < 6));
+        const u = Math.min(1, t / 6), tx = x0 + o.sx * 3, tz = z0 + o.sz * 3;
+        this.sPlace(man, x0 + (tx - x0) * u, z0 + (tz - z0) * u, Math.atan2(o.sx, o.sz), u < 1 ? 'walk' : 'idle');
+        this.crewAct = t < 6 ? 'sit' : null;
+      }
+      return p < 0 || t < 7;
+    };
+  }
+
   /**
    * Le blocus : quatre navires rivaux bord contre bord devant le port allié. De front : notre bateau fonce sur la ligne, une
    * grande gerbe au choc, et les rivaux s'écartent. Attendre la flotte alliée : on reste à l'arrêt, et deux navires alliés
@@ -3799,7 +4060,7 @@ export class ExpeditionScene {
     // les éclaireurs : une route sur l'eau jusqu'à la plage de l'île rivale (voir `scoutTrip`)
     else if (this.story === 'scout' && this.scoutTrip(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
     // les pourparlers de la paix : une route sur l'eau jusqu'aux îles, et retour (voir `tripSetup`)
-    else if (PEACE_TRIPS.has(a.m.id) && this.tripSetup(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
+    else if ((PEACE_TRIPS.has(a.m.id) || a.c.visit) && this.tripSetup(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
     else if (this.offshore) {
       let best = 0;
@@ -4689,6 +4950,7 @@ export class ExpeditionScene {
    * Faux s'il n'y a pas de route (la scène reste alors un simple voyage)
    */
   private tripSetup(a: ActiveExpedition, wx: number, wz: number) {
+    if (a.c.visit) return this.visitSetup(a, wx, wz);
     const w = this.world, ally = w.diplo.ally;
     if (!ally || !w.isles) return false;
     const plans = townPlans(w), rival = plans.find((p) => p.people !== ally), friend = plans.find((p) => p.people === ally);
@@ -4781,6 +5043,201 @@ export class ExpeditionScene {
   }
 
   /**
+   * Une visite sur les îles de l'archipel (expéditions facultatives, `Choice.visit`, voir `isleMissions.ts`) : la route sur
+   * l'eau jusqu'à la ville visitée (au port chez l'allié ou pour le port, à la plage sinon), puis, à terre, la marche jusqu'au
+   * lieu (le quai, la plage, la porte ; la place du marché, le temple ou le palais, en passant la porte) où l'attend son décor
+   * (`look`) ; ou, sans débarquer, au large du port (`offport`), ou la régate autour d'une petite île (`islet` : le bateau en
+   * fait le tour avec ceux de nos alliés, `loop`). Faux s'il n'y a pas de route (la scène reste un simple voyage)
+   */
+  private visitSetup(a: ActiveExpedition, wx: number, wz: number) {
+    const w = this.world, v = a.c.visit!, ally = w.diplo.ally;
+    if (!ally || !w.isles) return false;
+    const town = townPlans(w).find((p) => (v.to === 'ally' ? p.people === ally : p.people !== ally));
+    if (!town) return false;
+    const P = town.points, gate: [number, number] = P.portes[0] ?? [town.x, town.z], level = this.water!.level;
+    let route: [number, number][] | null, kind: 'visit' | 'ship' = 'visit', meet: [number, number], face: [number, number], walk: [number, number][];
+    let loop: TripLoop | undefined;
+    if (v.at === 'islet') {
+      // la petite île la plus proche de la ville alliée : on y va, puis on en fait le tour
+      kind = 'ship';
+      const isle = [...w.isles.small].sort((p, q) => Math.hypot(p.x - town.x, p.z - town.z) - Math.hypot(q.x - town.x, q.z - town.z))[0];
+      if (!isle) return false;
+      route = this.waterRoute(wx, wz, isle.x, isle.z, Math.ceil(isle.r) + 8);
+      if (!route) return false;
+      const end = route[route.length - 1], a0 = Math.atan2(end[1] - isle.z, end[0] - isle.x);
+      for (let r = Math.max(isle.r + 1.5, Math.hypot(end[0] - isle.x, end[1] - isle.z)); r <= isle.r + 7 && !loop; r += 1) {
+        const pts: [number, number][] = [end];
+        for (let i = 1; i < 16; i++) pts.push([isle.x + Math.cos(a0 + (i * Math.PI) / 8) * r, isle.z + Math.sin(a0 + (i * Math.PI) / 8) * r]);
+        pts.push(end);
+        if (pts.slice(1, 16).every(([x, z]) => this.depth(x, z) !== null)) loop = { route: pts, len: lengthsOf(pts) };
+      }
+      meet = end; face = [isle.x, isle.z]; walk = [end, end];
+    } else if (v.at === 'offport') {
+      // au large du port : on s'arrête à quelques cases, sans accoster
+      kind = 'ship';
+      route = this.waterRoute(wx, wz, P.port[0], P.port[1], SCOUT_REACH);
+      if (!route) return false;
+      let i = route.length - 1;
+      while (i > 1 && Math.hypot(route[i][0] - P.port[0], route[i][1] - P.port[1]) < 4.5) i--;
+      route = route.slice(0, i + 1);
+      meet = route[route.length - 1]; face = P.port; walk = [meet, meet];
+    } else {
+      // on accoste au port (chez l'allié, ou pour le port lui-même), à la plage sinon (on ne se montre pas chez le rival)
+      const land = v.to === 'ally' || v.at === 'port' ? P.port : P.plage;
+      route = this.waterRoute(wx, wz, land[0], land[1], SCOUT_REACH);
+      if (!route) return false;
+      const end = route[route.length - 1], ashore = this.dockOf(end);
+      if (v.at === 'port') { meet = this.dryOn(P.port, [town.x, town.z], [0.08, 0.12, 0.05, 0.16, 0.2, 0.25]) ?? ashore; face = end; walk = [ashore, meet]; }
+      else if (v.at === 'plage') { meet = this.dryOn(P.plage, gate, [0.2, 0.15, 0.25, 0.1, 0.3]) ?? ashore; face = gate; walk = [ashore, meet]; }
+      else if (v.at === 'gate') { meet = this.dryOn(ashore, gate, [0.8, 0.75, 0.7, 0.85, 0.6]) ?? ashore; face = gate; walk = [ashore, meet]; }
+      else {
+        // en ville : on passe la porte, puis on va jusqu'au lieu (le marché, le temple, le palais)
+        // (à quelques cases du bâtiment, côté porte : plus près, le décor tombait sous les étals ou dans le temple)
+        const T = P[v.at], dT = Math.max(1, Math.hypot(gate[0] - T[0], gate[1] - T[1])), d0 = v.at === 'marche' ? 3.8 : 4.8;
+        meet = this.dryOn(T, gate, [d0, d0 + 0.6, d0 + 1.2, d0 - 0.5, d0 + 2].map((d) => Math.min(0.9, d / dT))) ?? T; face = T;
+        walk = [ashore, this.dryOn(gate, ashore, [0.12, 0.08, 0.18]) ?? gate, gate, meet];
+      }
+    }
+    const len = lengthsOf(route);
+    // le décor du lieu : ceux qui reçoivent l'équipe, ce qu'on y voit, ce qui s'y passe (`anim`)
+    const props: THREE.Object3D[] = [];
+    const ang = Math.atan2(face[0] - meet[0], face[1] - meet[1]), fx = Math.sin(ang), fz = Math.cos(ang), sx = Math.cos(ang), sz = -Math.sin(ang);
+    // (les villes des îles sont bâties grand : le décor de la visite est agrandi d'autant, `VISIT_K`, et ses places écartées)
+    const at = (f: number, s: number): [number, number] => [meet[0] + (fx * f + sx * s) * VISIT_GAP, meet[1] + (fz * f + sz * s) * VISIT_GAP];
+    const host = (role: FolkRole, f: number, s: number, look = ang + Math.PI, pose: FolkPose = 'idle') => {
+      const [x, z] = at(f, s), n = this.npc(role, a.age, x, z, look, pose);
+      props.push(n.folk.root);
+      return n;
+    };
+    const prop = (g: THREE.BufferGeometry, f: number, s: number, ry = ang, y: number | null = null, sc = 1, boat = false) => {
+      const [x, z] = at(f, s), m = this.put(g, x, z, ry);
+      if (y !== null) m.position.y = y;
+      m.scale.setScalar(sc * (boat ? 1 : VISIT_K));
+      props.push(m);
+      return m;
+    };
+    const flame = (f: number, s: number, lift: number, size: number) => { const [x, z] = at(f, s), o = this.flameAt(x, w.surfaceAt(x, z) + lift, z, size); props.push(o); return o; };
+    /** un bateau sur l'eau, à (f, s) du lieu (rien si c'est la terre) */
+    const ship = (k: BoatKind, f: number, s: number, ry = ang + Math.PI / 2) => { const [x, z] = at(f, s); return this.depth(x, z) === null ? null : prop(boatGeo(k), f, s, ry, level + 0.005, 1, true); };
+    const real = <T,>(xs: (T | null)[]) => xs.filter((m): m is T => !!m);
+    let anim: ((k: number, dt: number) => void) | undefined, act: Act | undefined;
+    const L = v.look;
+    if (L === 'fair' || L === 'dice') {
+      // la foire : deux étals garnis, un jongleur, des marchands ; ou la table des dés et ses parieurs
+      if (L === 'fair') {
+        for (const s of [-1, 1]) { prop(tableGeo(false), 0.9, s * 0.7, ang + Math.PI / 2); prop(s < 0 ? potsGeo() : foodGeo(), 0.9, s * 0.7, 0, null, 0.7); host('villager', 1.3, s * 0.7); }
+        const j = host('juggler', 1.2, 0, ang + Math.PI, 'juggle');
+        prop(flagGeo(), 1.6, -1.2, 0); prop(flagGeo(), 1.6, 1.2, 0);
+        anim = () => { j.pose = 'juggle'; };
+      } else {
+        prop(tableGeo(true), 0.6, 0, 0); prop(cupsGeo(), 0.6, 0, 0, null, 0.8);
+        const fans = [host('villager', 1.1, -0.45), host('villager', 1.1, 0.45), host('drummer', 1.4, 0)];
+        anim = (k) => fans.forEach((n, i) => (n.pose = k > TRIP_MEET && Math.sin(this.t * 2.2 + i) > 0.2 ? 'cheer' : 'talk'));
+      }
+    } else if (L === 'cargo' || L === 'carpentry') {
+      // le port brisé : une barque chavirée, des planches ; nos caisses déchargées, ou la jetée qu'on rebâtit
+      const wreck = ship('rowboat', -0.6, 1.4);
+      if (wreck) { wreck.rotation.z = 2.6; wreck.position.y = level - 0.02; }
+      host('fisher', 0.9, -0.8, ang + Math.PI, 'work'); host('villager', 1.2, 0.6, ang + Math.PI, 'talk');
+      if (L === 'cargo') {
+        const pile = [prop(sacksGeo(), 0.3, -0.5), prop(barrelsGeo(), 0.3, 0.5, ang, null, 0.8), prop(sacksGeo(), 0.5, 0)];
+        anim = (k) => pile.forEach((p, i) => (p.visible = k > TRIP_MEET + i * 0.08 && k < TRIP_BOARD + 0.06));
+        act = 'work';
+      } else {
+        const deck = prop(deckGeo(false), -0.3, 0, ang + Math.PI / 2, null, 1.2);
+        prop(laidGeo(), 0.5, 0.8, ang); prop(laidGeo(), 0.6, -0.9, ang + 0.3);
+        anim = (k) => { const u = Math.max(0, Math.min(1, (k - TRIP_MEET) / (TRIP_LEAVE - TRIP_MEET))); deck.scale.set(1.2, 1.2, 0.3 + 0.9 * u); };
+        act = 'work';
+      }
+    } else if (L === 'forge' || L === 'swap') {
+      // l'atelier des maîtres : le feu de forge et le chaudron, le maître ; ou la table des secrets, rouleaux déroulés
+      if (L === 'forge') {
+        prop(fireGeo(), 1, 0); flame(1, 0, 0.015, 0.9);
+        prop(cauldronGeo(), 1.1, 0.6, 0, null, 0.8); prop(stoneGeo(), 0.7, -0.5, 0);
+        const smith = host('villager', 1.4, -0.3, ang + Math.PI, 'work');
+        anim = () => { smith.pose = 'work'; };
+        act = 'work';
+      } else {
+        prop(tableGeo(false), 0.6, 0, ang + Math.PI / 2); prop(scrollGeo(), 0.6, -0.15, ang); prop(scrollGeo(), 0.6, 0.18, ang + 1);
+        host('sage', 1.1, 0, ang + Math.PI, 'talk'); host('scholar', 1.1, 0.5, ang + Math.PI);
+      }
+    } else if (L === 'race' || L === 'reef') {
+      // la régate : deux voiliers alliés courent le même tour que nous, une bouée à pavillon ; les récifs qui affleurent
+      const rivals = real([ship('sail', 0.8, 0.8), ship('sail', -0.8, 1.2)]);
+      if (loop) {
+        const lp = loop, tot = lp.len[lp.len.length - 1];
+        anim = (k) => {
+          const u = Math.max(0, Math.min(1, (k - TRIP_OUT) / (TRIP_BOARD - TRIP_OUT)));
+          rivals.forEach((m, i) => {
+            const d = Math.max(0, Math.min(tot, (smooth(u) + (i ? -0.04 : 0.03)) * tot)), [x, z, h] = alongLoop(lp, d);
+            const o = (i ? -1 : 1) * 0.45, px = x + Math.cos(h) * o, pz = z - Math.sin(h) * o;
+            if (this.depth(px, pz) !== null) m.position.set(px, level + 0.005 + Math.sin(this.t * 1.5 + i) * 0.006, pz);
+            m.rotation.y = h;
+          });
+        };
+        if (L === 'reef') for (let i = 2; i < 15; i += 3) { const [x, z] = lp.route[i]; const r = this.put(rocksGeo(), x + (face[0] - x) * 0.12, z + (face[1] - z) * 0.12, i); r.position.y = level - 0.03; r.scale.setScalar(0.5); props.push(r); }
+      }
+      const buoy = ship('rowboat', 0, 1.6, 0);
+      if (buoy) { buoy.scale.setScalar(0.5); prop(flagGeo(), 0, 1.6, 0, level + 0.02, 0.8); }
+      act = 'cheer';
+    } else if (L === 'spyglass' || L === 'fireship') {
+      // au large du port rival : ses navires au mouillage ; le brûlot qui file sur eux, puis le feu à bord
+      const fleet = real([-1.2, 0, 1.2].map((s) => ship('sail', 4.2, s, ang + Math.PI / 2)));
+      if (L === 'spyglass') { act = 'work'; anim = () => fleet.forEach((m, i) => (m.position.y = level + 0.005 + Math.sin(this.t * 1.1 + i) * 0.006)); }
+      else {
+        const boat = ship('rowboat', 0.6, 0.4, ang);
+        const fire = boat ? flame(0.6, 0.4, 0.06, 1.2) : null;
+        const burning = fleet.map((m) => { const f = this.flameAt(m.position.x, level + 0.12, m.position.z, 1.6); props.push(f); return f; });
+        let pt = 0;
+        anim = (k, dt) => {
+          const u = Math.max(0, Math.min(1, (k - TRIP_MEET) / (TRIP_LEAVE - TRIP_MEET - 0.06)));
+          if (boat && fire) { const [x, z] = at(0.6 + 3.4 * u, 0.4 * (1 - u)); if (this.depth(x, z) !== null) boat.position.set(x, level + 0.005, z); fire.position.set(boat.position.x, level + 0.06, boat.position.z); boat.visible = fire.visible = u < 1 && k >= TRIP_OUT * 0.5; }
+          burning.forEach((f) => (f.visible = u >= 1 && k < TRIP_BOARD + 0.05));
+          if (u >= 1 && k < TRIP_BOARD && (pt -= dt) <= 0) { pt = 0.2; const m = fleet[Math.floor(Math.random() * fleet.length)]; if (m) this.puffAt(m.position.x, level + 0.2, m.position.z, 'smoke', 0.05, 0.03); }
+        };
+        act = 'cheer';
+      }
+    } else if (L === 'eavesdrop' || L === 'ropes') {
+      // le quai rival : des marins qui parlent près des tonneaux ; ou les navires amarrés dont on coupe les cordes (ils dérivent)
+      if (L === 'eavesdrop') {
+        prop(barrelsGeo(), 1, 0.6, ang, null, 0.8);
+        const men = [host('fisher', 1.5, 0.2, ang + Math.PI, 'talk'), host('villager', 1.6, -0.3, ang, 'talk')];
+        anim = () => men.forEach((m) => (m.pose = 'talk'));
+        act = 'sit';
+      } else {
+        const moored = real([-0.7, 0.7].map((s) => ship('sail', -1.3, s, ang + Math.PI / 2)));
+        const home = moored.map((m) => m.position.clone());
+        anim = (k) => {
+          const u = Math.max(0, Math.min(1, (k - (TRIP_MEET + TRIP_LEAVE) / 2) / 0.25));
+          moored.forEach((m, i) => { const sd = i ? 0.6 : -0.6, x = home[i].x - fx * 2.5 * u + sx * sd * u, z = home[i].z - fz * 2.5 * u + sz * sd * u; if (this.depth(x, z) !== null) m.position.set(x, home[i].y, z); m.rotation.y = ang + Math.PI / 2 + u * (i ? 0.7 : -0.7); });
+        };
+        act = 'work';
+      }
+    } else if (L === 'beach' || L === 'escort') {
+      // le transfuge, son baluchon à ses pieds (il monte avec nous au départ) ; à la porte, deux gardes qui regardent ailleurs
+      const def = host('nomad', 0.9, 0.2, ang + Math.PI);
+      const bag = prop(sacksGeo(), 0.8, 0.5, ang, null, 0.6);
+      if (L === 'escort') { host('villager', 2.2, -0.6, ang + Math.PI / 2); host('villager', 2.2, 0.6, ang - Math.PI / 2); }
+      else flame(0.4, -0.5, 0.05, 0.6);
+      anim = (k) => { def.folk.root.visible = bag.visible = k < TRIP_LEAVE && k >= TRIP_OUT * 0.5; def.pose = k > TRIP_MEET ? 'talk' : 'idle'; };
+    } else {
+      // les jardins du palais : massifs et jeunes arbres ; le jardinier qui vend son sac, ou les plants qu'on arrache
+      for (const [f, s] of [[0.8, -0.8], [0.9, 0.7], [1.5, 0]] as const) prop(bushGeo(), f, s, f * 3, null, 0.9);
+      prop(sproutTreeGeo(), 1.6, -1.1, 0); prop(sproutTreeGeo(), 1.7, 1.1, 1);
+      if (L === 'buy') { host('villager', 0.8, 0, ang + Math.PI, 'talk'); prop(sacksGeo(), 0.5, 0.3, ang, null, 0.6); }
+      else {
+        const plants = [prop(hopGeo(), 0.6, -0.4, 0, null, 0.7), prop(hopGeo(), 0.6, 0.4, 1, null, 0.7)];
+        host('villager', 3, 1.5, ang + Math.PI, 'idle');
+        anim = (k) => plants.forEach((p, i) => (p.visible = k >= TRIP_OUT * 0.5 && k < TRIP_MEET + 0.1 + i * 0.08));
+        act = 'work';
+      }
+    }
+    for (const o of props) o.visible = false;
+    this.scout = { route, len, walk, post: meet, walls: face, trip: { kind, props, anim, loop, act } };
+    return true;
+  }
+
+  /**
    * Un pourparler de la paix : le bateau suit sa route jusqu'à l'île (la vue le suit), l'équipe débarque et marche jusqu'au lieu
    * de la rencontre, y reste face à ses hôtes, revient à bord ; le bateau refait la route en sens inverse et l'équipe redescend
    * au quai. À bord (`ship`), personne ne débarque : les hôtes viennent au bateau
@@ -4796,25 +5253,42 @@ export class ExpeditionScene {
     // les hôtes paraissent quand on approche, et s'en vont quand on repart
     const there = k >= TRIP_OUT * 0.8 && k < TRIP_BOARD + 0.06;
     for (const o of tr.props) o.visible = tr.kind === 'ship' ? there : k >= TRIP_OUT * 0.5;
+    tr.anim?.(k, dt);
     const ashore = tr.kind !== 'ship' && k >= TRIP_OUT && k < TRIP_BOARD;
     const docked = k >= TRIP_HOME || this.workK >= 0.985;
     const crew = ashore ? [] : this.embark(bt.riders, bt.home, docked);
-    const [px, pz] = this.sail(bt.obj, sc.route[i - 1], sc.route[i], bt.y, u, back, dt, crew, false, 0);
+    // la régate : entre l'arrivée et le départ, le bateau fait le tour de la petite île (`loop`)
+    const lp = tr.loop, racing = !!lp && k >= TRIP_OUT && k < TRIP_BOARD;
+    let px: number, pz: number;
+    if (lp && racing) {
+      const tot = lp.len[lp.len.length - 1], dl = smooth(Math.min(1, (k - TRIP_OUT) / (TRIP_BOARD - TRIP_OUT))) * tot;
+      let j = 1;
+      while (j < lp.len.length - 1 && lp.len[j] < dl) j++;
+      const sl = Math.max(0.001, lp.len[j] - lp.len[j - 1]);
+      [px, pz] = this.sail(bt.obj, lp.route[j - 1], lp.route[j], bt.y, Math.min(1, Math.max(0, (dl - lp.len[j - 1]) / sl)), false, dt, crew, false, 0);
+    } else [px, pz] = this.sail(bt.obj, sc.route[i - 1], sc.route[i], bt.y, u, back, dt, crew, false, 0);
     this.focus = [px, pz];
     if (!ashore) {
-      // à bord, au milieu du bras de mer : debout, tournés vers le radeau, le temps de la signature
-      if (tr.kind === 'ship' && k >= TRIP_OUT && k < TRIP_BOARD && !this.crewAct) { this.crewAct = 'cheer'; this.crewFace = Math.atan2(sc.walls[0] - px, sc.walls[1] - pz); }
+      // à bord, au milieu du bras de mer : debout, tournés vers le radeau, le temps de la signature (ou vers ce qu'on est venu voir)
+      if (tr.kind === 'ship' && k >= TRIP_OUT && k < TRIP_BOARD && !this.crewAct) { this.crewAct = tr.act ?? 'cheer'; this.crewFace = racing ? bt.obj.rotation.y : Math.atan2(sc.walls[0] - px, sc.walls[1] - pz); }
+      if (tr.kind === 'ship' && tr.act && there && !racing) this.focus = [(px * 2 + sc.walls[0]) / 3, (pz * 2 + sc.walls[1]) / 3];
       return;
     }
     const t = k < TRIP_MEET ? smooth((k - TRIP_OUT) / (TRIP_MEET - TRIP_OUT)) : k < TRIP_LEAVE ? 1 : 1 - smooth((k - TRIP_LEAVE) / (TRIP_BOARD - TRIP_LEAVE));
-    const [ax, az] = sc.walk[0], [mx, mz] = sc.walk[sc.walk.length - 1], n = bt.riders.length;
+    // (la marche suit une ligne brisée : la porte de la ville, puis le lieu, pour une visite en ville)
+    const [mx, mz] = sc.walk[sc.walk.length - 1], n = bt.riders.length;
+    const along = (q: number): [number, number] => {
+      const p = sc.walk, g = Math.max(0, Math.min(1, q)) * (p.length - 1), j = Math.min(p.length - 2, Math.floor(g)), r = g - j;
+      return [p[j][0] + (p[j + 1][0] - p[j][0]) * r, p[j][1] + (p[j + 1][1] - p[j][1]) * r];
+    };
     const hx = sc.walls[0] - mx, hz = sc.walls[1] - mz, hl = Math.max(0.01, Math.hypot(hx, hz));
     const going = k < TRIP_MEET, leaving = k >= TRIP_LEAVE;
     bt.riders.forEach((id, j) => {
       const off = (j - (n - 1) / 2) * 0.3, s = smooth(Math.max(0, Math.min(1, t * 1.15 - j * 0.05)));
-      const x = ax + (mx - ax) * s - (hz / hl) * off * s, z = az + (mz - az) * s + (hx / hl) * off * s;
-      const heading = going ? Math.atan2(mx - ax, mz - az) : leaving ? Math.atan2(ax - mx, az - mz) : Math.atan2(hx, hz);
-      this.agents.ride(id, { x, z, y: w.surfaceAt(x, z), heading, act: this.crewAct ?? (going || leaving ? 'stroll' : k > TRIP_LEAVE - 0.05 ? 'cheer' : null) });
+      const [cx, cz] = along(s), [nx, nz] = along(s + (leaving ? -0.04 : 0.04));
+      const x = cx - (hz / hl) * off * s, z = cz + (hx / hl) * off * s;
+      const heading = going || leaving ? Math.atan2(nx - cx, nz - cz) : Math.atan2(hx, hz);
+      this.agents.ride(id, { x, z, y: w.surfaceAt(x, z), heading, act: this.crewAct ?? (going || leaving ? 'stroll' : k > TRIP_LEAVE - 0.05 ? 'cheer' : tr.act ?? null) });
     });
     this.focus = [(mx * 2 + sc.walls[0]) / 3, (mz * 2 + sc.walls[1]) / 3];
   }

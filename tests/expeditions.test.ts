@@ -178,7 +178,7 @@ describe('comptes rendus des expéditions', () => {
     expect(MISSIONS.find((m) => m.id === 'scout' || m.id === 'deep')).toBeUndefined();
     expect('outpost' in KINDS).toBe(false);
     expect(MISSIONS.some((m) => m.requires?.kinds?.includes('outpost' as never))).toBe(false);
-    for (const m of MISSIONS) for (const c of m.choices) for (const e of [...c.win, ...c.lose]) expect(['herd', 'ore', 'need', 'perk', 'injured', 'unherd', 'diplo']).toContain(e.t);
+    for (const m of MISSIONS) for (const c of m.choices) for (const e of [...c.win, ...c.lose]) expect(['herd', 'ore', 'need', 'perk', 'injured', 'unherd', 'diplo', 'boon', 'gold']).toContain(e.t);
     // une ancienne partie : ses missions retirées et le plan des galeries s'oublient, le reste demeure
     const s = readExpState({ done: ['herd', 'scout', 'deep'], perks: ['map', 'seeds'], camp: 4, wins: 3 });
     expect(s.done).toEqual(['herd']);
