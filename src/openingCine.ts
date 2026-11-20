@@ -14,12 +14,12 @@
 
 /** Le film (s) : sa durée, ses fichiers, et ses bandeaux, au temps de la vidéo (deux plans de 8 s collés) */
 export const OPEN_FILM = {
-  dur: 16,
+  dur: 19.58,
   webm: './ouverture/ouverture.webm',
   mp4: './ouverture/ouverture.mp4',
   captions: [
     { at: 1, dur: 5.6, text: 'Il y a très longtemps…', sub: 'La terre était sauvage' },
-    { at: 8.6, dur: 5.4, text: 'Un peuple errait', sub: 'cherchant sa terre' },
+    { at: 10.2, dur: 6, text: 'Un peuple errait', sub: 'cherchant sa terre' },
   ] as { at: number; dur: number; text: string; sub?: string }[],
 };
 

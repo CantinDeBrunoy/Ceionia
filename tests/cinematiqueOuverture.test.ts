@@ -4,12 +4,12 @@ import { tr, setLang } from '../src/i18n';
 import '../src/i18n/en';
 
 describe('la cinématique d’ouverture : la partition', () => {
-  it('deux plans vidéo de 8 s, puis le direct : environ 22 s, en WebM puis MP4', () => {
-    expect(OPEN_FILM.dur).toBe(16);
+  it('deux plans vidéo d’environ 10 s collés, puis le direct : environ 26 s, en WebM puis MP4', () => {
+    expect(OPEN_FILM.dur).toBeCloseTo(19.58, 1);
     expect(OPEN_FILM.webm).toMatch(/^\.\/ouverture\/.*\.webm$/);
     expect(OPEN_FILM.mp4).toMatch(/^\.\/ouverture\/.*\.mp4$/);
     expect(OPEN_FILM.dur + OPEN_LIVE).toBeGreaterThanOrEqual(20);
-    expect(OPEN_FILM.dur + OPEN_LIVE).toBeLessThanOrEqual(24);
+    expect(OPEN_FILM.dur + OPEN_LIVE).toBeLessThanOrEqual(27);
     // (le fondu de remplacement est plus court que le film : sans vidéo, on attend moins)
     expect(OPEN_FALLBACK).toBeLessThan(OPEN_FILM.dur);
   });
