@@ -39,7 +39,7 @@ function stringers(p: Parts, n: number, r: number, y: number, h: number, color: 
 }
 
 /** Un cerclage fin (rayon r, à la hauteur y) */
-const hoop = (p: Parts, r: number, y: number, color = 0xc8ccd2) => p.add(new THREE.TorusGeometry(r, 0.003, 3, 16).rotateX(Math.PI / 2), 0, y, 0, color);
+const hoop = (p: Parts, r: number, y: number, color = 0xc8ccd2) => p.add(new THREE.CylinderGeometry(r + 0.002, r + 0.002, 0.006, 10, 1, true), 0, y, 0, color);
 
 export function drawRocket(p: Parts, kind: RocketKind, x = 0, y = 0, z = 0) {
   const q = new Parts();
@@ -57,11 +57,11 @@ export function drawRocket(p: Parts, kind: RocketKind, x = 0, y = 0, z = 0) {
     sweptFins(q, 4, r, 0.2, 0.07, RED, 0.02);
     // la goulotte des câbles le long du premier étage, les cerclages, les lisses de l'inter-étage, la plaque des ombilicaux
     q.box(0.014, 0.6, 0.012, 0, 0.12, -r - 0.004, 0xd8dce2);
-    for (const y of [0.3, 0.52, 0.9]) hoop(q, r + 0.001, y);
-    stringers(q, 16, r + 0.002, 0.76, 0.04, 0x3c3c40);
+    for (const y of [0.3, 0.9]) hoop(q, r + 0.001, y);
+    stringers(q, 8, r + 0.002, 0.76, 0.04, 0x3c3c40);
     q.box(0.03, 0.05, 0.008, r * 0.7, 0.68, r * 0.7, 0x5a6270, Math.PI / 4);
     // les tuyères de contrôle d'attitude sous la coiffe, l'antenne à la pointe, le bouclier thermique du culot
-    for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2; q.box(0.018, 0.022, 0.012, Math.sin(a) * 0.066, 1.02, Math.cos(a) * 0.066, 0x3c3c40, a); }
+    for (let k = 0; k < 2; k++) { const a = k * Math.PI + Math.PI / 2; q.box(0.018, 0.022, 0.012, Math.sin(a) * 0.066, 1.02, Math.cos(a) * 0.066, 0x3c3c40, a); }
     q.cyl(0.002, 0.002, 0.05, 3, 0, 1.29, 0, 0x3c3c40);
     q.cyl(r, r * 0.9, 0.012, 12, 0, 0.055, 0, 0x5a5e66);
     for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + (k * Math.PI) / 2; q.cyl(0.006, 0.012, 0.025, 6, Math.sin(a) * 0.05, 0.035, Math.cos(a) * 0.05, 0x3c3c40); }
@@ -77,10 +77,10 @@ export function drawRocket(p: Parts, kind: RocketKind, x = 0, y = 0, z = 0) {
     q.cyl(r + 0.003, r + 0.003, 0.05, 14, 0, 0.62, 0, BLACK);
     sweptFins(q, 4, r, 0.16, 0.06, BLACK, 0.03);
     q.box(0.014, 0.55, 0.012, 0, 0.08, -r - 0.004, 0xd8dce2);
-    stringers(q, 20, r + 0.003, 0.62, 0.05, 0x3c3c40);
-    for (const y of [0.3, 0.45, 0.8, 0.95]) hoop(q, r + 0.001, y);
+    stringers(q, 10, r + 0.003, 0.62, 0.05, 0x3c3c40);
+    for (const y of [0.4, 0.9]) hoop(q, r + 0.001, y);
     // les fusées d'allumage du deuxième étage, les quatre blocs de tuyères du module de service, les hublots de la cabine
-    for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + (k * Math.PI) / 2; q.cyl(0.01, 0.01, 0.06, 6, Math.sin(a) * (r + 0.008), 0.7, Math.cos(a) * (r + 0.008), 0x8a8f96); q.cone(0.01, 0.02, 6, Math.sin(a) * (r + 0.008), 0.76, Math.cos(a) * (r + 0.008), 0x8a8f96); }
+    for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + (k * Math.PI) / 2; q.cyl(0.01, 0.01, 0.06, 6, Math.sin(a) * (r + 0.008), 0.7, Math.cos(a) * (r + 0.008), 0x8a8f96); }
     for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2; q.box(0.02, 0.022, 0.014, Math.sin(a) * 0.075, 1.53, Math.cos(a) * 0.075, 0x5a5e66, a); }
     for (let k = 0; k < 3; k++) { const a = -0.6 + k * 0.6; q.add(new THREE.BoxGeometry(0.014, 0.014, 0.006).rotateX(-0.45), Math.sin(a) * 0.05, 1.65, Math.cos(a) * 0.05, 0x26364a, a); }
     q.cyl(r, r, 0.42, 14, 0, 0.69, 0, WHITE);
