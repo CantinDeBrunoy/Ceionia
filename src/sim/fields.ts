@@ -66,7 +66,7 @@ export type FieldTask = 'hoe' | 'sow' | 'reap' | 'gather' | 'dig' | 'drive';
 export function findPlots(w: World): Plot[] {
   const seen = new Uint8Array(N * N), out: Plot[] = [];
   for (let k0 = 0; k0 < N * N; k0++) {
-    if (seen[k0] || w.veg[k0] !== VEG_FIELD) continue;
+    if (seen[k0] || w.veg[k0] !== VEG_FIELD || w.occ[k0]) continue;
     // parcourue dans l'ordre des cases : la première trouvée est la plus petite de sa parcelle
     const cells = [k0];
     seen[k0] = 1;
@@ -76,7 +76,7 @@ export function findPlots(w: World): Plot[] {
       sx += x; sz += z;
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, nz = z + dz, k = nz * N + nx;
-        if (w.inCells(nx, nz) && !seen[k] && w.veg[k] === VEG_FIELD) { seen[k] = 1; cells.push(k); }
+        if (w.inCells(nx, nz) && !seen[k] && w.veg[k] === VEG_FIELD && !w.occ[k]) { seen[k] = 1; cells.push(k); }
       }
     }
     const angle = (hash2(k0 % N, Math.floor(k0 / N), 77) - 0.5) * Math.PI;

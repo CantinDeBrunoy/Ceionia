@@ -1,4 +1,4 @@
-import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize, isRampart } from '../build/catalog';
+import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize, isRampart, isDecor } from '../build/catalog';
 import { readPortal } from './portal';
 import { tr } from '../i18n';
 import { smoothstep } from '../core/rng';
@@ -1557,7 +1557,9 @@ export class World {
       for (let i = 0; i < s; i++) {
         const k = this.ci(x + i, z + j);
         this.occ[k] = b.id;
-        this.veg[k] = 0;
+        // une décoration posée dans un champ le laisse en place : le blé pousse autour d'elle (la vue de la végétation ne
+        // retire que la petite place qu'elle occupe), le champ garde sa récolte ; tout le reste vide la case
+        if (!(isDecor(kind) && this.veg[k] === VEG_FIELD)) this.veg[k] = 0;
       }
     this.buildings.set(b.id, b);
     this.vegDirty = true;
