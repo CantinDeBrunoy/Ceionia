@@ -1040,7 +1040,8 @@ export class UI {
   private bindTools(root: HTMLElement) {
     root.querySelectorAll<HTMLButtonElement>('button[data-tool]').forEach((b) => {
       const id = b.dataset.tool!;
-      b.onclick = () => { this.host.tools.setTool(id as ToolId); this.host.audio.sfxClick(); };
+      // (la flèche, l'outil Voir, vide aussi la sélection : la fiche du bâtiment choisi restait ouverte)
+      b.onclick = () => { this.host.tools.setTool(id as ToolId); if (id === 'none') this.host.tools.select(null); this.host.audio.sfxClick(); };
       b.onpointerenter = (e) => { if (e.pointerType === 'mouse') { this.hover = { tool: id }; this.renderInfo(); } };
       b.onpointerleave = () => { this.hover = null; this.renderInfo(); };
     });

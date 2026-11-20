@@ -656,6 +656,7 @@ class Game implements UIHost {
       defenseLock: (k) => this.ui.lockWhy(k as KindId),
       defenseCount: (k) => { const d = isleDefenses(this.world); return k === 'watchtower' ? d.towers : k === 'barracks' ? d.barracks : this.sim.counts[k as KindId] ?? 0; },
       buildDefense: (k) => this.buildDefense(k as KindId), isleHeld: () => this.islePlace,
+      dropHeld: () => { if (this.islePlace || this.tools.tool !== 'none') { this.tools.setTool('none'); this.endIslePlace(); } this.tools.select(null); },
       following: () => this.hellFollow, follow: (on) => { this.hellFollow = on; },
       craft: (id) => { const why = this.expeditions.whyCraft(GEAR_BY[id], this.sim.age); if (!why) this.expeditions.craft(id, this.sim.age); return why; },
       crafting: () => this.world.exp.craft, craftCheck: (ids) => this.expeditions.whyCraftAll(ids, this.sim.age),
