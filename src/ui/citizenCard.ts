@@ -109,7 +109,8 @@ export function citizenCard(h: UIHost, id: number): { key: string; html: string 
   const key = `cit|${c.id}|${age}|${name}|${homeName}|${job}|${now}|${wish.text}|${block}|${followed}`;
   const html = `<div class="ihead"><div class="xth">${portrait(c.id, age, c.child)}</div><div class="grow"><h4>${name}</h4><small class="xsub">${job}</small></div><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
     <blockquote class="cwish t-${wish.tone}">« ${wish.text} »</blockquote>${block}
-    <p class="stat">${ic('house', 14, 2)} ${home && home.kind !== 'gather' ? tr('{home}, famille {family}', { home: homeName, family: familyName(c.home, age) }) : homeName}</p>
+    <p class="stat">${ic('house', 14, 2)} ${home ? `<button class="golink" data-act="go:${home.id}" title="${tr('Aller voir sa maison')}">${home.kind !== 'gather' ? tr('{home}, famille {family}', { home: homeName, family: familyName(c.home, age) }) : homeName} ›</button>` : homeName}</p>
+    ${work && !c.child ? `<p class="stat">${ic('hammer', 14, 2)} <button class="golink" data-act="go:${work.id}" title="${tr('Aller voir son lieu de travail')}">${tr('Travaille à : {place}', { place: KINDS[work.kind].names[Math.max(work.age, KINDS[work.kind].minAge)] })} ›</button></p>` : ''}
     <p class="stat">${ic('eye', 14, 2)} ${now}</p>
     <div class="acts xacts">${c.wish?.type === 'expedition' && !c.thanks && wish.text === ctx.own ? `<button data-act="exp" data-m="${c.wish.mission}" class="primary">${ic('compass', 16, 2)} ${tr('Voir l’expédition')}</button>` : ''}<button data-act="follow" class="${followed ? '' : 'primary'}">${ic('eye', 16, 2)} ${tr(followed ? 'Ne plus suivre' : 'Suivre')}</button>${home ? `<button data-act="home">${ic('house', 16, 2)} ${tr('Sa maison')}</button>` : ''}</div>`;
   return { key, html };

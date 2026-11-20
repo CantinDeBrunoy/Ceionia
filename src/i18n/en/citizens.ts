@@ -76,4 +76,5 @@ registerDict('citizens', {
   'Le village a l’air en paix.': 'The village seems at peace.', 'Personne de malade aujourd’hui, tant mieux.': 'Nobody sick today, good.',
   'Mes élèves apprennent vite.': 'My pupils learn fast.', 'Tout est calme dans les rues.': 'All is quiet in the streets.',
   'Mes bêtes sont en bonne santé.': 'My animals are healthy.', 'Les abeilles ont bien travaillé.': 'The bees worked hard.',
+  'Aller voir sa maison': 'Go to their home', 'Aller voir son lieu de travail': 'Go to their workplace', 'Travaille à : {place}': 'Works at: {place}',
 });
