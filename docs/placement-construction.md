@@ -68,7 +68,7 @@ Le joueur prend un bâtiment dans le menu Bâtir (outil `build`) ; un fantôme s
 
 ## Pièges et invariants
 - L'instantané ne contient ni l'état des habitants ni les stocks qui varient avec le temps autres que bois, pierre et briques. Un tracé de ligne n'est pas un geste annulable à lui seul : Ctrl+Z annule le dernier geste de construction, et les lignes reviennent à leur état d'alors (`tests/bugsManuel.test.ts`).
-- « Occupé » juste après une pose : tant que le curseur reste sur la case du bâtiment qu'on vient de poser, le refus « Emplacement occupé » est masqué (`placedAt`).
+- Juste après une pose : tant que la souris reste sur la case où elle était à la pose (`placedAt`, relevée au premier survol qui suit : le second clic, celui de l'entrée, n'est pas sur l'endroit du bâtiment), aucun refus de place n'est écrit (« Emplacement occupé », « Une route est déjà ici » sur le chemin d'accès tout juste posé) ; le manque de ressources, si. Avant, la fiche gardait « ✗ Une route est déjà ici » après une pose réussie (Inès, v6).
 - Un geste ne doit pousser qu'un instantané : toujours `mark()` avant de modifier, jamais après (`upgradeSelected` remet `pre` à la main parce que `beginStroke` y est appelé avant la tentative).
 - Un déplacement retire le bâtiment du monde avant de le reposer : pendant ce temps, les besoins (logement, vivres…) sont recalculés sans lui.
 - `upgrade` libère temporairement l'ancienne emprise (`occ = 0`) pour tester `canPlace` ; ne pas y insérer d'`await` ni de rappel.

@@ -1003,7 +1003,8 @@ export class ToolController implements ToolInput {
     // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
     if (this.h.autoRoads) autoRoad(w, b);
     this.moveOrigin = null;
-    this.placedAt = `${o.x},${o.z}`;
+    // (la case sous la souris au prochain survol : le second clic, celui de l'entrée, n'est pas sur l'endroit du bâtiment)
+    this.placedAt = '?';
     // (la zone des emplacements reste affichée après la pose : on en pose souvent plusieurs, mines, ports…)
     if (this.tool === 'move') { this.tool = 'none'; this.h.changed(); }
     this.h.audio.sfxPlace();
@@ -1118,12 +1119,14 @@ export class ToolController implements ToolInput {
       }
       const cost = this.moveOrigin ? null : priceIn(w, kind, age);
       const why0 = reason ? tr(reason) : (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
-      // sous le curseur, le bâtiment qu'on vient de poser : « Emplacement occupé » n'a rien à dire tant que la souris n'a pas bougé de case
+      // juste après une pose, la case sous la souris (le bâtiment posé, son chemin d'accès) : un refus n'a rien à dire tant que
+      // la souris n'a pas changé de case. « Une route est déjà ici » restait sur la fiche après une pose réussie (testeuse v6)
       const cellKey = `${o.x},${o.z}`;
-      if (this.placedAt !== cellKey) this.placedAt = null;
+      if (this.placedAt === '?') this.placedAt = cellKey;
+      else if (this.placedAt !== cellKey) this.placedAt = null;
       // (un rempart en cours de tracé : l'aperçu du tracé a déjà dit ce qui manque ; une case occupée par un pan est son point de départ)
       const tracing = this.tracingWall && this.freeFrom;
-      if (!tracing) this.placeWhy = this.placedAt === cellKey && reason === tr('Emplacement occupé') ? null : this.tracingWall && this.hitBuilding && (this.hitBuilding.kind === 'wall' || this.hitBuilding.kind === 'gate') ? null : why0;
+      if (!tracing) this.placeWhy = this.placedAt === cellKey && reason ? null : this.tracingWall && this.hitBuilding && (this.hitBuilding.kind === 'wall' || this.hitBuilding.kind === 'gate') ? null : why0;
       setGhostValid(tracing ? !this.placeWhy : !why0);
       const rot = mask !== undefined ? 0 : an ? this.anchorRot() : this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
