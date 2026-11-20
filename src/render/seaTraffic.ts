@@ -314,6 +314,12 @@ interface Lane {
   vessels: Vessel[];
 }
 
+/**
+ * Échelle des navires (voir docs/trafic.md, « Échelle ») : un habitant fait 0,19 case ; la caravelle d'un chantier fait ainsi
+ * ~1,2 case de long, comme celle des expéditions, le galion ~1,8 ; les bateaux de pêche sont plus petits
+ */
+const YARD_SIZE = 1.6, FISH_SIZE = 0.9;
+
 /** Au départ et au bout de son chemin (huit points : quatre cases), le navire rapetisse : il se fond dans l'horizon ou la grève */
 const FADE = 8;
 /** Eau où l'on appareille : la moindre eau près du quai (comme `shipRoute`) */
@@ -391,7 +397,7 @@ export class SeaTraffic {
         if (path.length > 12) {
           lane.path = path;
           const kinds = yard ? [merchantKind(a, 0), merchantKind(a, 1)] : [fisherKind(a)];
-          kinds.forEach((k, i) => lane!.vessels.push(this.makeVessel(k, yard ? 1.25 : 0.7, 4 + i * 22 + (b.id % 5) * 3)));
+          kinds.forEach((k, i) => lane!.vessels.push(this.makeVessel(k, yard ? YARD_SIZE : FISH_SIZE, 4 + i * 22 + (b.id % 5) * 3)));
         }
       }
       for (const v of lane.vessels) this.step(v, lane.path, b.id, dt);

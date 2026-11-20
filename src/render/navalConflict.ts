@@ -28,6 +28,8 @@ const ease = (k: number) => k * k * (3 - 2 * k);
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 /** Taille d'un navire de guerre (le modèle fait environ une case de long) */
 const SIZE: Record<WarshipKind, number> = { galley: 1.9, dhow: 2, junk: 2, frigate: 2.2, ironclad: 2.1, launch: 1.9, hover: 1.8 };
+/** Les navires de commerce entre les îles (`vesselModel`), à la taille de ceux des chantiers (voir `YARD_SIZE`, `seaTraffic.ts`) */
+const MERCHANT_SIZE = 1.6;
 /** Points (un tous les demi-cases) pour sortir du port en grandissant, ou y rentrer en rapetissant */
 const FADE = 6;
 /** Distance (cases) de la caméra au-delà de laquelle une scène n'est ni dessinée ni animée */
@@ -246,7 +248,7 @@ export class NavalConflict {
     root.visible = false;
     root.scale.setScalar(0.001);
     this.group.add(root);
-    const size = kind ? SIZE[kind] : 1.3;
+    const size = kind ? SIZE[kind] : MERCHANT_SIZE;
     const [x, z] = path[0], [x2, z2] = path[Math.min(path.length - 1, 2)];
     return {
       root, model, kind, people, oars, drones, path, s: 0, dir: 1, speed: kind ? WAR_SPEED[kind] : 1.4, size, heading: Math.atan2(x2 - x, z2 - z),

@@ -202,11 +202,18 @@ const BOAT_MAKE: Record<BoatKind, (p: Parts) => void> = {
     for (let k = 0; k < 3; k++) p.box(0.21, 0.05, 0.006, 0, 0.18 + k * 0.05, 0.04, k % 2 ? 0xc8443a : 0xf4ecdc);
   },
 };
-const boatGeo = (kind: BoatKind = 'rowboat') => geo(`boat:${kind}`, BOAT_MAKE[kind]);
+export const boatGeo = (kind: BoatKind = 'rowboat') => geo(`boat:${kind}`, BOAT_MAKE[kind]);
 /** La galère de guerre (partagée avec la traversée vers l'île du portail, voir `isleFerry`) */
 export const galleyGeo = () => boatGeo('galley');
 /** Hauteur du siège des passagers au-dessus de l'eau selon l'embarcation, et haut de la cheminée du vapeur (pour sa fumée) */
 const BOAT_SEAT: Record<BoatKind, number> = { canoe: 0.0, rowboat: 0.03, sail: 0.05, steam: 0.06, launch: 0.06, hover: 0.07, galley: 0.05 };
+/**
+ * Taille du bateau de l'équipe (son `obj`), à l'échelle des habitants (0,19 case de haut) : pirogue ~0,43 case, barque ~0,55
+ * (trois ou quatre assis), caravelle latine ~1,2, vapeur à roues ~1, vedette ~1, hydroglisseur ~0,9, galère ~1,2. Les modèles
+ * de `BOAT_MAKE` sont dessinés plus petits ; places et hauteur des sièges suivent l'échelle (voir `sail`). Les bateaux de décor
+ * des imprévus (`boatGeo` posé tel quel) gardent leur taille de modèle
+ */
+export const BOAT_SCALE: Record<BoatKind, number> = { canoe: 1.25, rowboat: 1.4, sail: 1.8, steam: 2.2, launch: 1.8, hover: 2.2, galley: 1.6 };
 const STEAM_FUNNEL: [number, number, number] = [0, 0.26, -0.02];
 /** La faune marine : à défaut du modèle de Quaternius, un dauphin, une baleine, une raie dessinés (longueur 1, nez vers +z) */
 type SwimKind = 'dolphin' | 'whale' | 'manta' | 'school';
@@ -4373,6 +4380,12 @@ export class ExpeditionScene {
     return best;
   }
 
+  /**
+   * Taille du bateau de l'équipe (`BOAT_SCALE`) ; au galion englouti, la gabare de relevage (`Salvage`) s'accroche au bateau
+   * et y place l'équipe : il garde la taille de son modèle
+   */
+  private boatScale() { return this.story === 'wreck' && this.offshore ? 1 : BOAT_SCALE[this.boatKind]; }
+
   /** Niveau de l'eau en (x, z) s'il y a assez de fond pour une barque, sinon null */
   private depth(x: number, z: number) {
     const w = this.world, cx = Math.floor(x), cz = Math.floor(z);
@@ -4399,6 +4412,12 @@ export class ExpeditionScene {
     let [wx, wz] = wat.wet;
     const [bx, bz] = wat.bank;
     const dx = wx - bx, dz = wz - bz, d = Math.max(0.01, Math.hypot(dx, dz));
+    // le bateau, plus long que son modèle (`BOAT_SCALE`), mouille d'autant plus loin du bord, en eau assez profonde : sa poupe
+    // ne monte pas sur la grève
+    const g0 = boatGeo(this.boatKind);
+    if (!g0.boundingBox) g0.computeBoundingBox();
+    const extra = ((g0.boundingBox!.max.z - g0.boundingBox!.min.z) / 2) * (this.boatScale() - 1);
+    for (let k = 0.1; k <= extra + 0.01; k += 0.1) { const x = wx + (dx / d) * 0.1, z = wz + (dz / d) * 0.1; if (this.depth(x, z) === null) break; wx = x; wz = z; }
     let out: [number, number] = [wx, wz];
     for (let k = 0.4; k <= 2; k += 0.2) { const x = wx + (dx / d) * k, z = wz + (dz / d) * k; if (this.depth(x, z) === null) break; out = [x, z]; }
     // la chasse au monstre : en haute mer (reliée au large, pas un étang ni une mer intérieure), au plus proche point dégagé de
@@ -4449,7 +4468,7 @@ export class ExpeditionScene {
       hull.castShadow = true;
       obj.add(hull);
       // la chasse armée : des galères plus grandes
-      obj.scale.setScalar(war ? 1.1 : 1);
+      obj.scale.setScalar((war ? 1.1 : 1) * this.boatScale());
       this.group.add(obj);
       this.props.push(obj);
       return obj;
@@ -5849,6 +5868,20 @@ export class ExpeditionScene {
     const turn = Math.atan2(Math.sin(aim - was), Math.cos(aim - was)), yaw = was + Math.sign(turn) * Math.min(Math.abs(turn), dt * 2.4);
     this.yaws.set(obj, yaw);
     const rough = this.rough, heading = yaw + Math.sin(t * 0.4) * 0.15 * calm + Math.sin(t * 3.1) * 0.2 * rough + (main ? nd.yaw : 0);
+    // (plus long que son modèle, voir `BOAT_SCALE` : si sa proue ou sa poupe touche le fond, au quai surtout, il recule d'autant
+    // le long de son axe, d'une demi-longueur au plus)
+    const g0 = boatGeo(this.boatKind);
+    if (!g0.boundingBox) g0.computeBoundingBox();
+    const hl = Math.max(g0.boundingBox!.max.z, -g0.boundingBox!.min.z) * obj.scale.x * 0.9, hx = Math.sin(heading), hz = Math.cos(heading);
+    const ground = (x: number, z: number) => { const cx = Math.floor(x), cz = Math.floor(z); return !this.world.inCells(cx, cz) || this.world.hAt(x, z) > level - 0.02; };
+    // (au volcan, l'équipe saute sur la plage de l'île depuis le bateau : il y reste échoué)
+    for (let i = 0, moved = 0; i < (this.boatScale() > 1 && !VOLCANIC.has(this.story) ? 12 : 0) && moved < hl; i++) {
+      const bow = ground(px + hx * hl, pz + hz * hl), stern = ground(px - hx * hl, pz - hz * hl);
+      if (bow === stern) break;
+      const sg = bow ? -1 : 1, nx = px + hx * 0.05 * sg, nz = pz + hz * 0.05 * sg;
+      if (this.depth(nx, nz) === null) break;
+      px = nx; pz = nz; moved += 0.05;
+    }
     const y = level + 0.005 + Math.sin(t * 1.7) * 0.006 + Math.abs(Math.sin(t * 4.3)) * 0.02 * rough + (main ? nd.lift : 0);
     // (son déplacement depuis l'image d'avant : l'équipage le suit, voir `seat`)
     const prev = obj.position.x || obj.position.z ? [px - obj.position.x, pz - obj.position.z] as [number, number] : undefined;
@@ -5856,8 +5889,8 @@ export class ExpeditionScene {
     obj.position.set(px, y, pz);
     obj.rotation.set(Math.sin(t * 1.3) * (0.03 * calm + 0.12 * rough), heading, Math.sin(t * 1.1 + rough * 2) * (0.04 * calm + 0.18 * rough));
     // le bateau à vapeur fume par sa cheminée
-    if (this.boatKind === 'steam' && Math.random() < dt * 4) this.puffAt(px - Math.sin(heading) * 0.02, y + STEAM_FUNNEL[1] + 0.01, pz - Math.cos(heading) * 0.02, 'smoke', -Math.sin(heading) * 0.04, -Math.cos(heading) * 0.04);
-    const sc = obj.scale.x, seat = BOAT_SEAT[this.boatKind], m = this.monster, mon = m && m.obj.visible ? m.obj.position : null;
+    if (this.boatKind === 'steam' && Math.random() < dt * 4) this.puffAt(px - Math.sin(heading) * 0.02, y + STEAM_FUNNEL[1] * obj.scale.x + 0.01, pz - Math.cos(heading) * 0.02, 'smoke', -Math.sin(heading) * 0.04, -Math.cos(heading) * 0.04);
+    const sc = obj.scale.x, seat = BOAT_SEAT[this.boatKind] * sc, m = this.monster, mon = m && m.obj.visible ? m.obj.position : null;
     riders.forEach((id, i) => {
       // les hommes d'armes de la galère, répartis le long du bordage, face au monstre dès qu'il paraît ; sinon deux à bord :
       // le pêcheur à l'arrière
@@ -5866,7 +5899,7 @@ export class ExpeditionScene {
       const lz = (war ? ((rows - 1) / 2 - Math.floor(i / 2)) * gap : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading), side = war ? (i % 2 ? -0.04 : 0.04) * sc : 0;
       if (this.story === 'dive' && i === 1 && u > 0.97) {
         // le plongeur se met à l'eau, masque au ras de l'eau, à côté de la barque
-        this.seat(id, { x: px + cz * 0.2, z: pz - sx * 0.2, y: y - 0.13, heading: heading + Math.PI / 2 }, move);
+        this.seat(id, { x: px + cz * 0.2 * sc, z: pz - sx * 0.2 * sc, y: y - 0.13, heading: heading + Math.PI / 2 }, move);
         return;
       }
       const rx = px + sx * lz + cz * side, rz = pz + cz * lz - sx * side;

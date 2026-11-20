@@ -7,6 +7,20 @@
 ## En bref
 Ce sont des décors animés : ils ne produisent rien, ne coûtent rien et ne sont pas sauvegardés. Ils apparaissent selon l'âge, les bâtiments posés (écurie, usine automobile, port, chantier naval, aéroport…) et le carburant. Aucun n'a de collision ni de gameplay propre ; le jeu les lit seulement par `motor` et par les bâtiments qui les justifient.
 
+**Échelle** (règle du 20 nov. 2026, retour de l'auteur : les bateaux des expéditions étaient tout petits à côté des navires alliés). Un habitant fait 0,19 case de haut (environ 1,7 m : une case vaut une dizaine de mètres). Longueurs visées, en cases :
+
+| Embarcation | Longueur | Où |
+|---|---|---|
+| pirogue | ~0,43 (deux personnes) | expéditions |
+| barque | ~0,55 (trois ou quatre assis) | expéditions |
+| vedette, hydroglisseur, vapeur à roues | ~0,9 à 1 | expéditions |
+| caravelle | ~1,2 | expéditions, chantiers navals, commerce des îles |
+| galère de l'équipe | ~1,2 (1,3 à la chasse) | expéditions |
+| galion, vapeur, cargo, navire à foils | ~1,3 à 1,9 | chantiers navals, commerce des îles |
+| navires de guerre des peuples | ~2 à 2,6 | conflit entre les îles (`SIZE`) |
+
+Les navires de guerre restent les plus grands exprès : on les regarde de loin. Les bateaux de pêche des halles sont plus petits (`FISH_SIZE`). Les navires des ports (`Transports`, `freighter`) n'ont pas changé. Pour les expéditions, voir `BOAT_SCALE` dans [expeditions.md](expeditions.md).
+
 ## Règles du jeu
 **Charrettes et voitures** (`Traffic`) :
 - Nombre : `min(MAX_CARTS = 10, floor(nombre de cases de route / 18))`, seulement si l'âge ≥ 1, la population ≥ 8 et (une écurie `stable` existe **ou** `motor`). Sans écurie ni usine automobile, aucun véhicule sur les routes.
@@ -22,7 +36,7 @@ Ce sont des décors animés : ils ne produisent rien, ne coûtent rien et ne son
 
 **Navires des ports** (`Transports`) : un navire par `harbor` d'âge 1 au moins (le port s'ouvre à l'Antiquité depuis le 20 nov. 2026) : une birème à l'Antiquité, une cogue au Médiéval, puis le vapeur et le porte-conteneurs (`freighter`) ; il appareille, suit l'eau jusqu'au bord de la carte (`shipRoute`), rapetisse à l'horizon, revient s'amarrer. Grand port 3 × 3 : navire ×2. Le vapeur fume par sa cheminée (`funnel`).
 **Avions** : un par `airport` dès l'âge 4 (global) ; plan de vol fixe (`flightPlan`) : poste, roulage, décollage, tour du pays, atterrissage, retour. Ne dépend pas de `motor`.
-**Navires en mer** (`SeaTraffic`) dès l'âge 2 : chaque `shipyard` arme 2 navires (échelle 1,25), chaque `fishmarket` un bateau (0,7). Le type suit l'âge : caravelle (≤ 2), galion ou vapeur (3), cargo (4), navire à foils (5) pour les chantiers ; caravelle, galion, chalutier, hydroglisseur pour la pêche (`merchantKind`, `fisherKind`). Pas de navire si le chenal fait 12 points ou moins.
+**Navires en mer** (`SeaTraffic`) dès l'âge 2 : chaque `shipyard` arme 2 navires (échelle `YARD_SIZE` = 1,6), chaque `fishmarket` un bateau (`FISH_SIZE` = 0,9). Les navires de commerce entre les îles rivales sont à la même échelle (`MERCHANT_SIZE` = 1,6, `render/navalConflict.ts`). Le type suit l'âge : caravelle (≤ 2), galion ou vapeur (3), cargo (4), navire à foils (5) pour les chantiers ; caravelle, galion, chalutier, hydroglisseur pour la pêche (`merchantKind`, `fisherKind`). Pas de navire si le chenal fait 12 points ou moins.
 - Modèles (`vesselModel`, géométrie partagée, aussi pour le commerce entre les îles rivales et la caravelle du survol de la traversée, `voyageStage.ts`). La caravelle et le galion (refaits le 19 nov. 2026, retour de l'auteur : « moches », sans détails) reprennent les outils des navires orientaux (`shipHull`, `rod`, `sail3`, `sailor`, exportés par `models/orientShips.ts`) : coque galbée à facettes, liston et préceintes (`wales`), châteaux qui épousent la coque (`castle` : flancs, pont, cloison à porte, lisse), voiles carrées gonflées dont la croix rouge est faite de cases de la même grille (`course`, `canvas` ; une croix posée par-dessus s'enfonçait dans le ventre de la toile), artimon latin, haubans à enfléchures et porte-haubans (`shrouds`), beaupré, flammes, matelots. Caravelle : château arrière à fenêtres et fanal, gaillard d'avant, hune et hunier. Galion : sabords et canons, château arrière sur deux étages (galerie de poupe à deux rangs de fenêtres, trois fanaux, lisses d'or), éperon et civadière, trois hunes, perroquet. Le vapeur et le cargo viennent de `freighter` (`models.ts`), qui fait aussi les navires des ports (`Transports`). À l'âge 1, la birème : coque longue et basse à éperon de bronze, œil peint, deux rangs de rames, boucliers ronds au bordage, mât à voile carrée crème rayée d'ocre, poupe en volute (aphlaste), deux rames-gouvernails. Ensuite : coque galbée (`shipHull`) à carène rouge et liston blanc, hublots et bastingage qui suivent le flanc (`flank`, `rail`), cheminée inclinée à bague (`funnel`) ; le vapeur a son rouf, sa passerelle à ailerons, ses manches à air, ses canots sur bossoirs (`lifeboat`), deux mâts de charge et leurs bômes ; le porte-conteneurs son bulbe, son gaillard d'avant à brise-lames, huit rangées de conteneurs sur leurs panneaux, son château à rangs de vitres et mât de radar, son canot orange sur rampe. Le navire à foils (`hydrofoil`) : deux coques fines (`offsetX`) à liseré, pont en losange, cabine effilée (`frustum`) sous verrière, aire d'envol, radar, aileron, nacelles, foils en dièdre. Triangles (19 nov. 2026) : caravelle 336 → 1 288, galion 552 → 2 088, vapeur 844 → 1 708, cargo 2 812 → 1 732 (conteneurs sans nervures), navire à foils 216 → 1 006. Les fenêtres et liserés sont des couleurs du corps, pas des lumières : `vesselModel` et `Transports` ne gardent que le corps (`build().body`) ; une pièce `glow` y serait perdue.
 
 **Aéronefs** :
