@@ -6,6 +6,8 @@ import { mats } from './materials';
 import type { BuildingView } from './buildings';
 import { HELIPADS } from './models';
 
+const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
+
 /** Héliport sur le toit du centre hospitalier (repère du bâtiment : centre de l'emprise, façade vers +z) */
 const PAD = new THREE.Vector3(-0.45, 0.889, -0.5);
 /**
@@ -44,44 +46,123 @@ const LIVERIES: { body: number; band: number; cross: boolean }[] = [
   { body: 0xf4f2ee, band: 0xd84a3e, cross: true }, { body: 0xf2c23a, band: 0x22305a, cross: false }, { body: 0xd84a3e, band: 0xf4f2ee, cross: false },
 ];
 
-/** Hélicoptère, tourné vers +z : cabine à bandeau (et croix pour le sanitaire), verrière, poutre de queue, patins, feux de position */
+/**
+ * Une coque de révolution le long de z, tirée d'un profil (rayon, z) rangé de l'arrière vers l'avant : la tranche entre z0 et
+ * z1 (rayon × k), en `segs` fuseaux depuis l'angle `phi` sur `len` (0 : le ventre, π/2 : le flanc +x, π : le dos)
+ */
+export function loft(prof: [number, number][], z0: number, z1: number, k = 1, phi = 0, len = Math.PI * 2, segs = 12) {
+  const at = (z: number) => {
+    for (let i = 0; i + 1 < prof.length; i++) {
+      const [r0, a] = prof[i], [r1, b] = prof[i + 1];
+      if (z >= a && z <= b) return r0 + ((r1 - r0) * (z - a)) / (b - a);
+    }
+    return 0;
+  };
+  const pts = prof.filter(([, z]) => z > z0 + 1e-6 && z < z1 - 1e-6).map(([r, z]) => new THREE.Vector2(r * k, z));
+  pts.unshift(new THREE.Vector2(at(z0) * k, z0)); pts.push(new THREE.Vector2(at(z1) * k, z1));
+  return new THREE.LatheGeometry(pts, segs, phi, len).rotateX(Math.PI / 2);
+}
+
+/** Une pièce plate tirée d'un contour (z, y), épaisse de `t` le long de x */
+export function plate(pts: [number, number][], t: number) {
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y))), { depth: t, bevelEnabled: false });
+  return g.translate(0, 0, -t / 2).rotateY(-Math.PI / 2);
+}
+
+/** Profil de la cabine (rayon, z), de l'arrière au nez ; son axe à HY, aplatie en largeur (SX) et en hauteur (SY) */
+const CABIN: [number, number][] = [[0.03, -0.15], [0.048, -0.135], [0.066, -0.1], [0.078, -0.05], [0.082, 0.02], [0.08, 0.08], [0.072, 0.125], [0.055, 0.155], [0.03, 0.172], [0, 0.178]];
+const HY = 0.105, SX = 0.82, SY = 0.9;
+/** Où se posent les pales : le rotor principal sur son mât, le rotor de queue au flanc de la dérive */
+const ROTOR_AT: [number, number, number] = [0, 0.214, 0.01], TAIL_AT: [number, number, number] = [0.016, 0.155, -0.35];
+
+/**
+ * Hélicoptère, tourné vers +z : cabine profilée à deux tons (bandeau de la livrée sous la ceinture), verrière enveloppante et
+ * vitres latérales, porte coulissante, capot moteur à prises d'air et tuyères, mât et plateau cyclique, poutre de queue
+ * effilée, dérive et sa quille, plan fixe à dérives d'extrémité, patins relevés à l'avant ; projecteur sous le nez, feux de
+ * position et feu anticollision. Le sanitaire a ses croix rouges et son treuil de secours
+ */
 function heliGeo(livery = 0) {
   const p = new Parts(), { body, band, cross } = LIVERIES[livery];
-  p.add(new THREE.IcosahedronGeometry(0.07, 1).scale(1, 0.82, 1.5), 0, 0.078, 0.03, body);
-  p.add(new THREE.IcosahedronGeometry(0.052, 1).scale(1, 0.75, 1.1), 0, 0.09, 0.09, 0x86c4d8);
-  p.box(0.142, 0.022, 0.19, 0, 0.042, 0.02, band);
-  if (cross) for (const s of [-1, 1]) { p.box(0.004, 0.034, 0.012, s * 0.071, 0.065, -0.01, band); p.box(0.004, 0.012, 0.034, s * 0.071, 0.076, -0.01, band); }
-  else for (const s of [-1, 1]) for (let k = 0; k < 2; k++) p.box(0.004, 0.022, 0.03, s * 0.071, 0.07, -0.03 + k * 0.05, 0x86c4d8);
-  p.box(0.028, 0.03, 0.24, 0, 0.075, -0.18, body);
-  p.box(0.03, 0.01, 0.1, 0, 0.096, -0.2, band);
-  p.box(0.008, 0.07, 0.045, 0, 0.08, -0.29, band);
-  p.box(0.07, 0.006, 0.025, 0, 0.09, -0.27, body);
-  // patins et leurs jambes
+  const glass = 0x2e4a5e, steel = 0x5d6878, grey = 0x8a8f96, hull = (g: THREE.BufferGeometry) => g.scale(SX, SY, 1).translate(0, HY, 0);
+  // la cabine : le dessus à la couleur, le ventre au bandeau, la verrière qui enveloppe le nez, les vitres des flancs
+  p.add(hull(loft(CABIN, -0.15, 0.075, 1, Math.PI * 0.36, Math.PI * 1.28)), 0, 0, 0, body);
+  p.add(hull(loft(CABIN, 0.075, 0.178, 1, Math.PI * 0.36, Math.PI * 1.28)), 0, 0, 0, glass);
+  p.add(hull(loft(CABIN, -0.15, 0.178, 1, -Math.PI * 0.36, Math.PI * 0.72, 6)), 0, 0, 0, band);
+  for (const [a, b] of [[0.58, 0.8], [1.2, 1.42]]) p.add(hull(loft(CABIN, -0.02, 0.06, 1.03, Math.PI * a, Math.PI * (b - a), 2)), 0, 0, 0, glass);
+  p.add(hull(loft(CABIN, 0.07, 0.08, 1.035, Math.PI * 0.36, Math.PI * 1.28)), 0, 0, 0, dark(body, 0.8));
+  p.add(hull(loft(CABIN, 0.075, 0.178, 1.02, Math.PI - 0.03, 0.06, 1)), 0, 0, 0, dark(body, 0.8));
   for (const s of [-1, 1]) {
-    p.box(0.008, 0.008, 0.22, s * 0.055, 0, 0.02, 0x5d6878);
-    for (const z of [-0.04, 0.08]) p.add(new THREE.BoxGeometry(0.006, 0.04, 0.006), s * 0.048, 0.022, z, 0x5d6878, 0, false, s * 0.25);
+    // la porte coulissante : son contour, sa poignée, son rail ; le marchepied
+    const x = s * 0.082 * SX;
+    for (const z of [-0.07, 0.065]) p.box(0.003, 0.09, 0.004, x, HY - 0.05, z, dark(body, 0.65));
+    p.box(0.003, 0.004, 0.13, x, HY + 0.034, -0.003, dark(body, 0.65));
+    p.box(0.005, 0.006, 0.014, x + s * 0.002, HY, -0.055, grey);
+    p.box(0.012, 0.005, 0.07, s * 0.07, 0.03, 0.0, steel);
+    if (cross) { p.box(0.004, 0.04, 0.014, x + s * 0.001, HY - 0.016, -0.1, 0xd84a3e); p.box(0.004, 0.014, 0.04, x + s * 0.001, HY - 0.003, -0.1, 0xd84a3e); }
   }
-  p.cyl(0.012, 0.016, 0.04, 6, 0, 0.12, 0.03, 0x8a8f96);
-  p.box(0.06, 0.02, 0.09, 0, 0.118, -0.03, 0xe4e2dc);
-  // feux de position : rouge à bâbord, vert à tribord, blanc à la queue
-  p.box(0.012, 0.012, 0.012, 0.072, 0.06, 0.06, 0xff4a3a, 0, true);
-  p.box(0.012, 0.012, 0.012, -0.072, 0.06, 0.06, 0x3aff7a, 0, true);
-  p.box(0.01, 0.01, 0.01, 0, 0.12, -0.31, 0xfff4e0, 0, true);
+  // le capot moteur, ses prises d'air et ses deux tuyères, le mât et le plateau cyclique
+  p.add(hull(loft([[0.03, -0.13], [0.05, -0.1], [0.052, 0.02], [0.03, 0.06]], -0.13, 0.06, 1, Math.PI * 0.55, Math.PI * 0.9, 6)).translate(0, 0.045, 0), 0, 0, 0, body);
+  p.box(0.07, 0.03, 0.12, 0, 0.15, -0.04, body);
+  for (const s of [-1, 1]) {
+    p.box(0.004, 0.016, 0.03, s * 0.036, 0.162, 0.0, 0x26262a);
+    for (let k = 0; k < 3; k++) p.box(0.005, 0.002, 0.03, s * 0.0365, 0.157 + k * 0.005, 0.0, grey);
+    p.add(new THREE.CylinderGeometry(0.008, 0.011, 0.03, 6).rotateX(-Math.PI / 2 - 0.3), s * 0.024, 0.172, -0.105, 0x3c3c40);
+  }
+  p.cyl(0.013, 0.016, 0.03, 6, 0, 0.18, 0.01, grey);
+  p.cyl(0.02, 0.02, 0.006, 8, 0, 0.196, 0.01, 0x3c3c40);
+  // la poutre de queue effilée, la dérive et sa quille, le plan fixe et ses dérives d'extrémité
+  p.add(new THREE.CylinderGeometry(0.026, 0.012, 0.22, 8).rotateX(Math.PI / 2), 0, 0.122, -0.245, body);
+  p.add(new THREE.CylinderGeometry(0.0265, 0.02, 0.06, 8, 1, true).rotateX(Math.PI / 2), 0, 0.122, -0.17, band);
+  p.add(plate([[-0.31, 0.11], [-0.355, 0.11], [-0.375, 0.205], [-0.35, 0.205], [-0.322, 0.14]], 0.012), 0, 0, 0, band);
+  p.add(plate([[-0.32, 0.12], [-0.35, 0.12], [-0.36, 0.075], [-0.342, 0.075]], 0.01), 0, 0, 0, body);
+  p.box(0.13, 0.006, 0.034, 0, 0.12, -0.27, body);
+  for (const s of [-1, 1]) p.box(0.005, 0.03, 0.03, s * 0.066, 0.112, -0.272, band);
+  p.cyl(0.006, 0.006, 0.012, 6, 0.006, TAIL_AT[1] - 0.006, TAIL_AT[2], grey);
+  // les patins, relevés à l'avant, et leurs traverses cintrées jusqu'au ventre
+  for (const s of [-1, 1]) {
+    p.box(0.009, 0.008, 0.22, s * 0.06, 0, -0.01, steel);
+    p.add(new THREE.BoxGeometry(0.009, 0.008, 0.04), s * 0.06, 0.012, 0.11, steel, 0, false, 0, -0.6);
+    for (const z of [-0.07, 0.06]) {
+      p.add(new THREE.BoxGeometry(0.007, 0.05, 0.007), s * 0.053, 0.026, z, steel, 0, false, s * 0.3);
+      p.box(0.06, 0.007, 0.007, s * 0.022, 0.048, z, steel);
+    }
+  }
+  // le projecteur sous le nez, l'antenne, le treuil du sanitaire
+  p.box(0.022, 0.012, 0.016, 0, 0.034, 0.12, 0x3c3c40);
+  p.box(0.016, 0.008, 0.004, 0, 0.036, 0.129, 0xfff1c9, 0, true);
+  p.cyl(0.0015, 0.0015, 0.04, 3, -0.02, 0.17, -0.12, 0x26262a);
+  if (cross) {
+    p.box(0.05, 0.008, 0.008, 0.075, HY + 0.05, 0.04, grey);
+    p.cyl(0.01, 0.01, 0.016, 6, 0.098, HY + 0.04, 0.04, 0xd84a3e);
+    p.cyl(0.001, 0.001, 0.05, 3, 0.098, HY - 0.01, 0.04, 0x26262a);
+  }
+  // feux de position : rouge à bâbord, vert à tribord, blanc à la queue ; le feu anticollision rouge sur la dérive
+  p.box(0.01, 0.01, 0.012, 0.068, 0.12, 0.06, 0xff4a3a, 0, true);
+  p.box(0.01, 0.01, 0.012, -0.068, 0.12, 0.06, 0x3aff7a, 0, true);
+  p.box(0.008, 0.008, 0.008, 0, 0.13, -0.385, 0xfff4e0, 0, true);
+  p.box(0.01, 0.01, 0.014, 0, 0.205, -0.37, 0xff3a2a, 0, true);
   return p.build(false);
 }
 
-/** Pales du rotor principal (trois) et moyeu, centrées sur l'axe */
+/** Pales du rotor principal (quatre, extrémités peintes) et moyeu à bielles, centrées sur l'axe */
 function rotorGeo() {
   const p = new Parts();
-  for (let k = 0; k < 3; k++) p.add(new THREE.BoxGeometry(0.26, 0.004, 0.022).translate(0.13, 0, 0), 0, 0, 0, 0x3c3c40, (k * Math.PI * 2) / 3);
-  p.cyl(0.016, 0.016, 0.014, 6, 0, -0.007, 0, 0x5d6878);
+  for (let k = 0; k < 4; k++) {
+    const a = (k * Math.PI) / 2;
+    p.add(new THREE.BoxGeometry(0.24, 0.004, 0.02).translate(0.14, 0, 0), 0, 0, 0, 0x3c3c40, a, false, 0, 0.05);
+    p.add(new THREE.BoxGeometry(0.02, 0.0045, 0.0205).translate(0.25, 0, 0), 0, 0, 0, 0xf2c23a, a, false, 0, 0.05);
+    p.add(new THREE.BoxGeometry(0.03, 0.006, 0.01).translate(0.025, 0, 0), 0, 0, 0, 0x8a8f96, a);
+  }
+  p.cyl(0.016, 0.014, 0.014, 8, 0, -0.007, 0, 0x5d6878);
+  p.cone(0.01, 0.014, 6, 0, 0.007, 0, 0x8a8f96);
   return p.build(false).body;
 }
 
-/** Rotor de queue (deux pales), dans le plan vertical */
+/** Rotor de queue (deux pales), dans le plan vertical, et son moyeu */
 function tailGeo() {
   const p = new Parts();
-  for (let k = 0; k < 2; k++) p.add(new THREE.BoxGeometry(0.004, 0.08, 0.012), 0, 0, 0, 0x3c3c40, 0, false, 0, (k * Math.PI) / 2);
+  for (let k = 0; k < 2; k++) p.add(new THREE.BoxGeometry(0.004, 0.09, 0.012), 0, 0, 0, 0x3c3c40, 0, false, 0, (k * Math.PI) / 2);
+  p.add(new THREE.CylinderGeometry(0.007, 0.007, 0.008, 6).rotateZ(Math.PI / 2), 0, 0, 0, 0x8a8f96);
   return p.build(false).body;
 }
 
@@ -185,8 +266,8 @@ export class Helis {
     } else {
       const rotor = new THREE.Mesh(this.rotorG, mats.body);
       tail = new THREE.Mesh(this.tailG, mats.body);
-      rotor.position.set(0, 0.145, 0.03);
-      tail.position.set(0.012, 0.09, -0.29);
+      rotor.position.set(...ROTOR_AT);
+      tail.position.set(...TAIL_AT);
       rotor.castShadow = true;
       hull.add(rotor, tail);
       rotors = [rotor];

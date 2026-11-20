@@ -125,6 +125,12 @@ function lanterns(p: Parts, y: number, z: number, w: number) {
   }
 }
 
+/** Une caisse tirée d'un profil de côté (z, y), large de `w` le long de x */
+function sideBody(pts: [number, number][], w: number) {
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y))), { depth: w, bevelEnabled: false });
+  return g.translate(0, 0, -w / 2).rotateY(-Math.PI / 2);
+}
+
 /** Croix rouge (sur un flanc tourné vers x, ou une face tournée vers z) */
 function cross(p: Parts, x: number, y: number, z: number, onSide: boolean, s = 1) {
   if (onSide) { p.box(0.004, 0.06 * s, 0.018 * s, x, y, z, 0xd84a3e); p.box(0.004, 0.018 * s, 0.06 * s, x, y + 0.021 * s, z, 0xd84a3e); }
@@ -261,36 +267,76 @@ export function unitGeo(service: Service, age: number, motor: boolean): UnitGeo 
     out.ladder = lp.build(false).body;
     out.ladderAt = [...LADDER_AT];
   } else if (service === 'health') {
-    // ambulance : fourgon blanc, capot, pare-brise, damier jaune et vert, étoile de vie bleue, rampes avant et arrière
-    p.box(0.15, 0.16, 0.28, 0, 0.035, -0.06, WHITE);
-    p.box(0.146, 0.07, 0.1, 0, 0.035, 0.13, WHITE);
-    p.add(new THREE.BoxGeometry(0.14, 0.06, 0.004), 0, 0.14, 0.084, GLASS, 0, false, 0, -0.6);
+    // ambulance : fourgon blanc à capot plongeant, pare-brise et vitres de cabine, cellule haute à damier jaune et vert, étoile
+    // de vie bleue, porte latérale vitrée, portes arrière vitrées et marchepied, climatiseur sur le toit, rampes de feux à
+    // l'avant et à l'arrière, calandre, phares et feux, passages de roue, rétroviseurs
+    const W = 0.15;
+    p.add(sideBody([[-0.2, 0.03], [0.2, 0.03], [0.2, 0.08], [0.185, 0.1], [0.13, 0.112], [0.085, 0.17], [0.075, 0.2], [-0.2, 0.2]], W), 0, 0, 0, WHITE);
+    p.add(new THREE.BoxGeometry(0.13, 0.064, 0.004).rotateX(-0.85), 0, 0.142, 0.108, TINT);
     for (const s of [-1, 1]) {
-      p.box(0.004, 0.045, 0.05, s * 0.076, 0.13, 0.05, GLASS);
-      for (let k = 0; k < 9; k++) p.box(0.004, 0.026, 0.031, s * 0.0765, 0.075 + (k % 2) * 0.026, -0.18 + k * 0.031, k % 2 ? 0xd8e83a : 0x2a9a5a);
-      p.box(0.004, 0.03, 0.03, s * 0.077, 0.15, -0.08, 0x2c6ad8);
+      const x = s * (W / 2 + 0.002);
+      p.box(0.004, 0.045, 0.045, x, 0.12, 0.075, TINT);
+      p.box(0.004, 0.08, 0.004, x, 0.075, 0.05, 0xb8b4ac);
+      // le damier : deux rangs de cases sous la ceinture, la bande jaune au-dessus
+      for (let k = 0; k < 9; k++) for (let r = 0; r < 2; r++) p.box(0.004, 0.024, 0.031, x, 0.06 + r * 0.024, -0.185 + k * 0.031, (k + r) % 2 ? 0xd8e83a : 0x2a9a5a);
+      p.box(0.004, 0.014, 0.27, x, 0.11, -0.065, 0xd8e83a);
+      // l'étoile de vie, la porte latérale et sa vitre, une vitre dépolie
+      p.box(0.004, 0.034, 0.012, x, 0.14, -0.1, 0x2c6ad8); p.add(new THREE.BoxGeometry(0.004, 0.034, 0.012), x, 0.157, -0.1, 0x2c6ad8, 0, false, 0, Math.PI / 3); p.add(new THREE.BoxGeometry(0.004, 0.034, 0.012), x, 0.157, -0.1, 0x2c6ad8, 0, false, 0, -Math.PI / 3);
+      p.box(0.004, 0.13, 0.004, x, 0.035, 0.0, 0xb8b4ac); p.box(0.005, 0.035, 0.04, x, 0.14, 0.025, TINT);
+      p.box(0.005, 0.03, 0.05, x, 0.14, -0.17, 0xe8eef2);
+      // rétroviseur, passages de roue
+      p.box(0.012, 0.018, 0.006, s * 0.086, 0.13, 0.1, 0x2a2a2e);
+      for (const z of [-0.14, 0.11]) p.box(0.006, 0.026, 0.08, x, 0.034, z, 0x2a2a2e);
     }
-    p.box(0.15, 0.03, 0.004, 0, 0.08, -0.2, 0xd8e83a); p.box(0.004, 0.13, 0.004, 0, 0.05, -0.2015, 0xb8b4ac);
-    for (const s of [-1, 1]) p.box(0.05, 0.05, 0.004, s * 0.035, 0.13, -0.202, GLASS);
-    p.box(0.155, 0.02, 0.012, 0, 0.025, 0.18, 0x2a2a2e); for (const s of [-1, 1]) p.box(0.026, 0.014, 0.004, s * 0.055, 0.075, 0.181, 0xfff1c9, 0, true);
-    for (const z of [-0.14, 0.11]) for (const s of [-1, 1]) tyre(p, s * 0.075, z, 0.034);
-    lights.push([-0.04, 0.2, 0.06, 0], [0.04, 0.2, 0.06, 0], [-0.05, 0.2, -0.19, 0], [0.05, 0.2, -0.19, 0]);
+    // l'arrière : deux portes vitrées, marchepied, feux ; l'avant : calandre, phares, pare-chocs
+    p.box(0.004, 0.16, 0.004, 0, 0.035, -0.2015, 0xb8b4ac);
+    for (const s of [-1, 1]) { p.box(0.05, 0.045, 0.004, s * 0.035, 0.13, -0.202, GLASS); p.box(0.014, 0.04, 0.004, s * 0.067, 0.09, -0.202, 0xff3a2a, 0, true); }
+    p.box(0.15, 0.03, 0.004, 0, 0.075, -0.202, 0xd8e83a);
+    p.box(0.12, 0.008, 0.03, 0, 0.03, -0.21, 0x3c3c40);
+    p.box(0.155, 0.022, 0.012, 0, 0.022, 0.198, 0x2a2a2e);
+    p.box(0.08, 0.02, 0.004, 0, 0.055, 0.201, 0x3c3c40);
+    for (const s of [-1, 1]) p.box(0.026, 0.016, 0.004, s * 0.055, 0.06, 0.201, 0xfff1c9, 0, true);
+    // le toit : climatiseur, rampes de feux (leurs verres bleus) à l'avant et à l'arrière
+    p.box(0.07, 0.02, 0.08, 0, 0.2, -0.08, 0xd8d4cc);
+    for (const z of [0.06, -0.19]) { p.box(0.13, 0.012, 0.026, 0, 0.2, z, 0x2a2a2e); for (const s of [-1, 1]) p.box(0.04, 0.01, 0.02, s * 0.04, 0.208, z, 0x2c4ad8); }
+    for (const z of [-0.14, 0.11]) for (const s of [-1, 1]) tyre(p, s * 0.073, z, 0.034);
+    lights.push([-0.04, 0.218, 0.06, 0], [0.04, 0.218, 0.06, 0], [-0.04, 0.218, -0.19, 0], [0.04, 0.218, -0.19, 0]);
   } else {
-    // voiture de patrouille : caisse blanche, capot bleu, vitres teintées, bandes tricolores et « POLICE », rampe bleue et rouge
-    p.box(0.15, 0.055, 0.3, 0, 0.035, 0, WHITE);
-    p.box(0.15, 0.012, 0.09, 0, 0.09, 0.105, 0x2c4a9a);
-    p.box(0.13, 0.055, 0.15, 0, 0.09, -0.025, TINT); p.box(0.132, 0.008, 0.13, 0, 0.145, -0.03, WHITE);
+    // voiture de patrouille : berline blanche à capot et portières bleus, vitres teintées et montants, bandes tricolores et
+    // « POLICE », poignées et rétroviseurs, pare-buffle, calandre, phares et feux, plaques, passages de roue, rampe de feux sur
+    // le toit (verres bleu et rouge), antenne
+    const W = 0.15, blue = 0x2c4a9a;
+    p.add(sideBody([[-0.155, 0.028], [0.155, 0.028], [0.16, 0.058], [0.152, 0.085], [0.075, 0.095], [-0.115, 0.1], [-0.155, 0.09]], W), 0, 0, 0, WHITE);
+    p.add(sideBody([[0.07, 0.094], [0.02, 0.143], [-0.08, 0.146], [-0.12, 0.099]], W - 0.02), 0, 0, 0, TINT);
+    p.box(0.124, 0.006, 0.098, 0, 0.143, -0.03, WHITE);
+    p.add(new THREE.BoxGeometry(W - 0.004, 0.006, 0.085), 0, 0.09, 0.115, blue, 0, false, 0, 0.12);
     for (const s of [-1, 1]) {
-      p.box(0.004, 0.022, 0.3, s * 0.0755, 0.05, 0, 0x2c4a9a);
-      for (const [z, c] of [[0.02, 0x2c4a9a], [0.0, WHITE], [-0.02, 0xd84a3e]] as [number, number][]) p.box(0.005, 0.03, 0.02, s * 0.076, 0.05, z + 0.04, c);
-      for (let k = 0; k < 6; k++) p.box(0.005, 0.01, 0.008, s * 0.077, 0.056, -0.11 + k * 0.014, WHITE);
-      p.box(0.012, 0.01, 0.016, s * 0.082, 0.115, 0.05, 0x2a2a2e);
+      const x = s * (W / 2 + 0.002);
+      // les portières bleues, leurs fentes, poignées ; « POLICE » et les bandes tricolores
+      p.box(0.004, 0.05, 0.15, x, 0.035, -0.02, blue);
+      p.box(0.004, 0.05, 0.003, x, 0.04, -0.02, dark(blue, 0.7));
+      for (const z of [0.03, -0.065]) p.box(0.006, 0.005, 0.014, x, 0.075, z, 0xc4cad2);
+      for (let k = 0; k < 6; k++) p.box(0.005, 0.01, 0.008, x, 0.055, -0.07 + k * 0.016, WHITE);
+      for (const [z, c] of [[0.13, 0x2c4a9a], [0.112, WHITE], [0.094, 0xd84a3e]] as [number, number][]) p.box(0.005, 0.03, 0.018, x, 0.045, z, c);
+      // les montants blancs entre les vitres, le rétroviseur, les passages de roue
+      for (const z of [-0.02]) p.box(0.004, 0.045, 0.012, s * 0.066, 0.098, z, WHITE);
+      p.box(0.014, 0.012, 0.018, s * 0.083, 0.098, 0.06, 0x2a2a2e);
+      for (const z of [-0.09, 0.09]) p.box(0.006, 0.022, 0.08, x, 0.03, z, 0x2a2a2e);
     }
-    p.box(0.155, 0.02, 0.012, 0, 0.03, 0.152, 0x2a2a2e); p.box(0.155, 0.02, 0.012, 0, 0.03, -0.152, 0x2a2a2e);
-    for (const s of [-1, 1]) { p.box(0.03, 0.014, 0.004, s * 0.05, 0.065, 0.1505, 0xfff1c9, 0, true); p.box(0.026, 0.014, 0.004, s * 0.055, 0.065, -0.1505, 0xd84a3e, 0, true); }
-    for (const z of [-0.09, 0.09]) for (const s of [-1, 1]) tyre(p, s * 0.075, z, 0.035);
-    p.box(0.1, 0.012, 0.03, 0, 0.153, -0.02, 0x2a2a2e);
-    lights.push([0.03, 0.17, -0.02, 0], [-0.03, 0.17, -0.02, 1]);
+    // l'avant : pare-buffle, calandre, phares ; l'arrière : feux, plaque
+    p.box(0.155, 0.02, 0.012, 0, 0.025, 0.155, 0x2a2a2e);
+    p.box(0.1, 0.04, 0.008, 0, 0.03, 0.168, 0x1e1e22);
+    for (const s of [-1, 1]) p.box(0.008, 0.05, 0.008, s * 0.04, 0.02, 0.166, 0x1e1e22);
+    p.box(0.06, 0.016, 0.004, 0, 0.055, 0.157, 0x3c3c40);
+    for (const s of [-1, 1]) { p.box(0.03, 0.014, 0.004, s * 0.052, 0.068, 0.155, 0xfff1c9, 0, true); p.box(0.03, 0.014, 0.004, s * 0.052, 0.07, -0.157, 0xd84a3e, 0, true); }
+    p.box(0.155, 0.02, 0.012, 0, 0.025, -0.152, 0x2a2a2e);
+    p.box(0.04, 0.014, 0.004, 0, 0.05, -0.159, 0xf4f2ee);
+    // la rampe de feux et ses verres, l'antenne
+    p.box(0.11, 0.012, 0.028, 0, 0.149, -0.02, 0x2a2a2e);
+    p.box(0.04, 0.01, 0.024, 0.03, 0.155, -0.02, 0x2c4ad8); p.box(0.04, 0.01, 0.024, -0.03, 0.155, -0.02, 0xc83a2e);
+    p.cyl(0.0015, 0.0015, 0.08, 3, -0.04, 0.149, -0.1, 0x2a2a2e);
+    for (const z of [-0.09, 0.09]) for (const s of [-1, 1]) tyre(p, s * 0.073, z, 0.035);
+    lights.push([0.03, 0.165, -0.02, 0], [-0.03, 0.165, -0.02, 1]);
   }
   const g = p.build(false);
   out.body = g.body; out.glow = g.glow;
@@ -404,14 +450,41 @@ function futureUnit(p: Parts, service: Service, out: UnitGeo) {
     p.box(0.012, 0.004, 0.05, 0, 0.246, -0.1, 0x3aff9a, 0, 'neon'); p.box(0.05, 0.004, 0.012, 0, 0.246, -0.09, 0x3aff9a, 0, 'neon');
     p.cyl(0.002, 0.002, 0.08, 4, -0.06, 0.24, -0.18, 0x2a2a2e);
     p.box(0.1, 0.012, 0.024, 0, 0.214, 0.12, HULL);
+    for (const s of [-1, 1]) p.box(0.03, 0.008, 0.02, s * 0.03, 0.222, 0.12, 0x2c4ad8);
+    // la porte latérale coulissante et sa vitre, les caméras-rétroviseurs, les grilles des patins, le marchepied arrière, le
+    // dôme du capteur sur le toit
+    for (const s of [-1, 1]) {
+      const x = s * 0.0805;
+      for (const z of [0.0, 0.06]) p.box(0.004, 0.13, 0.003, x, 0.065, z, 0xb8bcc2);
+      p.box(0.005, 0.03, 0.03, x, 0.16, 0.03, TINT);
+      p.box(0.006, 0.006, 0.016, x + s * 0.001, 0.12, 0.012, CHROME);
+      p.box(0.014, 0.006, 0.006, s * 0.086, 0.16, 0.17, CHROME); p.box(0.008, 0.016, 0.012, s * 0.094, 0.152, 0.17, HULL);
+      for (let k = 0; k < 5; k++) p.box(0.005, 0.012, 0.004, s * 0.085, 0.036, -0.16 + k * 0.08, 0x1a1e26);
+    }
+    p.box(0.12, 0.008, 0.03, 0, 0.04, -0.225, CHROME);
+    p.add(new THREE.SphereGeometry(0.022, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), 0, 0.234, 0.02, 0xd8dce2);
     lights.push([-0.035, 0.228, 0.12, 0], [0.035, 0.228, 0.12, 0], [-0.05, 0.25, -0.19, 0], [0.05, 0.25, -0.19, 0]);
   } else {
     hoverPads(p, 0.062, 0.3);
     // coque en coin : dessous bleu nuit, dessus blanc, nez effilé
-    p.box(0.15, 0.04, 0.32, 0, 0.04, 0, 0x1c2a4a);
-    p.add(new THREE.BoxGeometry(0.148, 0.036, 0.12), 0, 0.095, 0.1, WHITE, 0, false, 0, -0.18);
-    p.box(0.148, 0.04, 0.16, 0, 0.08, -0.08, WHITE);
-    p.add(new THREE.ConeGeometry(0.075, 0.06, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4).scale(1, 0.4, 1), 0, 0.06, 0.185, 0x1c2a4a);
+    p.add(sideBody([[-0.165, 0.03], [0.17, 0.03], [0.215, 0.05], [0.18, 0.078], [-0.165, 0.082]], 0.15), 0, 0, 0, 0x1c2a4a);
+    p.add(sideBody([[-0.165, 0.08], [0.18, 0.076], [0.07, 0.112], [-0.02, 0.118], [-0.165, 0.12]], 0.148), 0, 0, 0, WHITE);
+    p.add(sideBody([[0.18, 0.076], [0.215, 0.05], [0.2, 0.08], [0.12, 0.096]], 0.1), 0, 0, 0, 0x1c2a4a);
+    // le liseré chromé du cockpit, les dossiers et leurs appuie-tête, les canards du nez, le capteur, les prises d'air
+    p.box(0.13, 0.006, 0.012, 0, 0.118, 0.045, CHROME);
+    for (const s of [-1, 1]) {
+      p.box(0.006, 0.006, 0.11, s * 0.064, 0.118, -0.01, CHROME);
+      p.add(new THREE.BoxGeometry(0.04, 0.045, 0.01), s * 0.03, 0.145, -0.04, 0x1e1e22, 0, false, 0, -0.2);
+      p.box(0.026, 0.016, 0.01, s * 0.03, 0.168, -0.045, 0x2a2a2e);
+      p.add(new THREE.BoxGeometry(0.05, 0.004, 0.03), s * 0.095, 0.055, 0.14, 0x1c2a4a, 0, false, s * -0.15);
+      p.box(0.004, 0.016, 0.04, s * 0.0755, 0.085, 0.06, 0x0e1424);
+      for (let k = 0; k < 3; k++) p.box(0.005, 0.002, 0.04, s * 0.076, 0.088 + k * 0.005, 0.06, CHROME);
+      p.box(0.004, 0.035, 0.003, s * 0.0755, 0.082, -0.06, 0x1c2a4a);
+    }
+    p.box(0.03, 0.01, 0.02, 0, 0.074, 0.19, 0x5a6270); p.box(0.018, 0.006, 0.004, 0, 0.076, 0.2, CYAN, 0, 'neon');
+    // l'aileron arrière entre les dérives, les verres de la rampe de feux
+    p.box(0.13, 0.006, 0.03, 0, 0.165, -0.155, WHITE);
+    p.box(0.04, 0.008, 0.012, 0.035, 0.192, -0.06, 0x2c4ad8); p.box(0.04, 0.008, 0.012, -0.035, 0.192, -0.06, 0xc83a2e);
     // cockpit ouvert : pare-brise fumé, deux agents casqués, arceau et sa rampe de feux
     p.add(new THREE.BoxGeometry(0.12, 0.04, 0.004), 0, 0.132, 0.06, TINT, 0, false, 0, -0.6);
     p.box(0.12, 0.01, 0.1, 0, 0.12, -0.01, 0x1e1e22);
