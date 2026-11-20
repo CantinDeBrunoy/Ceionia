@@ -29,6 +29,11 @@ export type Phase = 'gather' | 'out' | 'work' | 'back' | 'home';
 export interface ActiveExpedition {
   /** numéro de l'expédition (pour la suivre à la caméra) */
   id: number;
+  /**
+   * aucune route par la mer jusqu'à l'île visitée (posé par la scène, `ExpeditionScene.tripSetup`) : l'équipe rentre aussitôt,
+   * sans rien gagner ni perdre, et le joueur en est prévenu (avant, le bateau tournait en rond au large de la côte)
+   */
+  noRoute?: boolean;
   m: Mission;
   c: Choice;
   phase: Phase;
@@ -254,6 +259,8 @@ const OUT_MAX = 480;
  * 6 harpons et 2 barques). À 6, « Tout fabriquer » laissait les barques dehors (Karim, v6)
  */
 export const MAX_CRAFT = 10;
+/** Une côte ouverte : la mer commence à cette distance au plus (cases), tout droit depuis la case (voir `openSea`) */
+export const OPEN_SEA_SHORE = 2;
 
 /** Nombre d'expéditions que le village peut mener de front, selon sa population */
 export const partyLimit = (pop: number) => 1 + TEAM_AT.filter((n) => pop >= n).length;
@@ -579,6 +586,13 @@ export class Expeditions {
         a.ok = this.rnd() >= this.chance(a);
         a.phase = 'home'; a.t = 4;
         ag.partyHide(a.party, true);
+      } else if (a.phase === 'work' && a.noRoute) {
+        // pas de route vers l'île : on rentre tout de suite, et on le dit
+        a.ok = false;
+        a.phase = 'back'; a.t = 0;
+        ag.mountParty(a.party, true);
+        this.goHome(a);
+        this.onNews?.(tr('{icon} « {title} » : aucune route par la mer vers l’île, l’équipe rentre.', { icon: a.m.icon, title: a.m.title }));
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra) {
         a.ok = a.fate ?? this.rnd() >= this.chance(a);
         a.phase = 'back'; a.t = 0;
@@ -840,16 +854,17 @@ export class Expeditions {
   }
 
   private finish(a: ActiveExpedition) {
-    const eff = a.ok ? [...(a.redo ? redoEffects(a.c.win) : a.c.win), ...a.bonus] : a.c.lose;
+    // (sans route vers l'île : ni gain ni perte, un récit qui le dit)
+    const eff = a.noRoute ? [] : a.ok ? [...(a.redo ? redoEffects(a.c.win) : a.c.win), ...a.bonus] : a.c.lose;
     const res = applyEffects(this.world, eff, this.dayLen());
-    const text = a.ok ? a.c.winText : a.c.loseText;
+    const text = a.noRoute ? tr('Aucune route par la mer ne mène à l’île depuis la côte d’où l’équipe est partie : elle est rentrée sans rien tenter. Un port bâti sur une côte qui donne sur le large, ou une autre façon de partir, aidera peut-être.') : a.ok ? a.c.winText : a.c.loseText;
     this.world.exp.riding = Math.max(0, this.world.exp.riding - a.mounts);
     if (a.ok && !this.done(a.m)) this.world.exp.done.push(a.m.id);
     // l'équipement revient en réserve ; un échec en coûte parfois une pièce
     const gear = this.world.exp.gear, carried = (Object.keys(a.gear) as GearId[]).filter((g) => (a.gear[g] ?? 0) > 0);
     let lost = '';
     for (const g of carried) { gear[g] += a.gear[g]!; this.world.exp.away[g] = Math.max(0, this.world.exp.away[g] - a.gear[g]!); }
-    if (!a.ok && carried.length && this.rnd() < 0.5) {
+    if (!a.ok && !a.noRoute && carried.length && this.rnd() < 0.5) {
       const g = carried[Math.floor(this.rnd() * carried.length)];
       gear[g]--;
       lost = tr('{name} perdue en route', { name: GEAR_BY[g].name.toLowerCase() });
@@ -1090,7 +1105,7 @@ export class Expeditions {
         const sand = w.biome[k] === BIOME_DESERT && (kind === 'cave' || kind === 'mountain') ? 15 : 0;
         if (kind === 'forest') ok = w.veg[k] === VEG_FOREST && d > 8;
         else if (kind === 'plain') ok = w.veg[k] === 0 && !w.road[k] && slope < 0.5 && h < 3 && d > 10;
-        else if (kind === 'river') ok = sea ? w.nearWater(x, z, 2) && d > 7 && (!outer || nearMask(outer, x, z, 3)) && (high ? !!offing(w, x + 0.5, z + 0.5, OFFING_LEVELS[hunt][0], high, room!, OFFING_REACH, OFFING_LEVELS[hunt][1]) : this.openSea(x, z, seaLen)) : w.nearWater(x, z, 1) && d > 7;
+        else if (kind === 'river') ok = sea ? w.nearWater(x, z, 2) && d > 7 && (!outer || nearMask(outer, x, z, 3)) && (high ? !!offing(w, x + 0.5, z + 0.5, OFFING_LEVELS[hunt][0], high, room!, OFFING_REACH, OFFING_LEVELS[hunt][1]) : this.openSea(x, z, seaLen, !!outer)) : w.nearWater(x, z, 1) && d > 7;
         else if (kind === 'mountain') {
           // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif (au pied d'une simple butte, s'il le faut)
           const up = slope < 1.2 && (h > 1 || loose) && d > 9 ? rise(x, z) : 0;
@@ -1127,7 +1142,7 @@ export class Expeditions {
    * La côte s'ouvre-t-elle sur le large ? Tout droit depuis cette case, huit cases de mer au moins (pas un lac), dont de
    * l'eau profonde : de quoi aller bien plus loin que la rive
    */
-  private openSea(x: number, z: number, len = 8): boolean {
+  private openSea(x: number, z: number, len = 8, shore = false): boolean {
     const w = this.world;
     for (let d = 0; d < 8; d++) {
       const dx = Math.round(Math.cos((d * Math.PI) / 4)), dz = Math.round(Math.sin((d * Math.PI) / 4));
@@ -1137,6 +1152,10 @@ export class Expeditions {
         if (!w.inCells(cx, cz) || w.lake[w.ci(cx, cz)]) break;
         const h = w.cellAvg(cx, cz);
         if (h < -0.1) { wet++; if (h < -0.5) deep = true; } else if (wet) break;
+        // (la mer commence dans les deux cases : plus loin, derrière une bande de terre, on prenait pour une côte un point
+        // dans les terres, à côté d'une mare, et le bateau partait de la mare. Partie de l'auteur, 21 nov. 2026. Seulement pour
+        // les expéditions qui suivent une route jusqu'aux îles, `shore` : les autres gardent leur rivage)
+        else if (shore && s >= OPEN_SEA_SHORE) break;
       }
       if (wet >= len && deep) return true;
     }

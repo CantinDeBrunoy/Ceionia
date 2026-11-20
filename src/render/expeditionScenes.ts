@@ -25,6 +25,37 @@ import { townPlans } from '../world/rivalTown';
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
 export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34], wolf: ['wolf', 0.3] };
 
+/**
+ * Où mouiller « au large » d'un port (les visites sur les îles, `offport`) : une case de mer ouverte (`sea`, `openWater`), à
+ * `OFFING_NEAR` à `OFFING_FAR` cases du port, qui a le plus d'eau libre autour d'elle (`seaRoomMap`), au moins `OFFING_ROOM`
+ * cases ; à égalité, la plus proche de 6 cases. Null s'il n'y en a pas
+ */
+export const OFFING_NEAR = 4, OFFING_FAR = 11, OFFING_ROOM = 2.5;
+/** Une visite accoste à la mer ouverte la plus proche du port ou de la plage, à cette distance au plus (cases), puis finit par l'eau qui y mène */
+export const LAGOON_REACH = 30;
+export function offing(w: World, sea: Uint8Array, port: [number, number]): [number, number] | null {
+  const room = seaRoomMap(sea);
+  let best: [number, number] | null = null, score = -Infinity;
+  for (let dz = -OFFING_FAR; dz <= OFFING_FAR; dz++) for (let dx = -OFFING_FAR; dx <= OFFING_FAR; dx++) {
+    const x = Math.floor(port[0]) + dx, z = Math.floor(port[1]) + dz, d = Math.hypot(dx, dz);
+    if (d < OFFING_NEAR || d > OFFING_FAR || !w.inCells(x, z)) continue;
+    const r = room[z * N + x];
+    if (!sea[z * N + x] || r < OFFING_ROOM) continue;
+    const sc = Math.min(r, 6) - Math.abs(d - 6) * 0.3;
+    if (sc > score) { score = sc; best = [x + 0.5, z + 0.5]; }
+  }
+  if (best) return best;
+  // (un port au fond d'une lagune, comme celui des Jadéens chez Inès : pas de mer ouverte si près. La pleine mer la plus proche,
+  // jusqu'à `LAGOON_REACH` cases, avec un peu d'eau libre autour)
+  let bd = Infinity;
+  for (let dz = -LAGOON_REACH; dz <= LAGOON_REACH; dz++) for (let dx = -LAGOON_REACH; dx <= LAGOON_REACH; dx++) {
+    const x = Math.floor(port[0]) + dx, z = Math.floor(port[1]) + dz, d = Math.hypot(dx, dz);
+    if (d > LAGOON_REACH || d >= bd || !w.inCells(x, z) || !sea[z * N + x] || room[z * N + x] < 1.5) continue;
+    bd = d; best = [x + 0.5, z + 0.5];
+  }
+  return best;
+}
+
 /** Le décor d'une visite sur les îles : agrandi (les villes des îles sont bâties grand), et ses places écartées d'autant */
 const VISIT_K = 1.6, VISIT_GAP = 1.3;
 /** Un tour fermé sur l'eau (la régate autour d'une petite île) : ses points et leurs longueurs cumulées */
@@ -4453,6 +4484,9 @@ export class ExpeditionScene {
     else if (this.story === 'scout' && this.scoutTrip(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
     // les pourparlers de la paix : une route sur l'eau jusqu'aux îles, et retour (voir `tripSetup`)
     else if ((PEACE_TRIPS.has(a.m.id) || a.c.visit) && this.tripSetup(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
+    // (une visite sur les îles ou un pourparler sans route par la mer : l'expédition le sait, l'équipe rentre et le joueur est
+    // prévenu ; avant, le bateau faisait des allers-retours au large de la côte, sans jamais arriver)
+    else if ((PEACE_TRIPS.has(a.m.id) || a.c.visit) && this.world.diplo.ally && townPlans(this.world).length > 0) a.noRoute = true;
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
     else if (this.offshore) {
       let best = 0;
@@ -5296,12 +5330,16 @@ export class ExpeditionScene {
 
   /**
    * Une route sur l'eau du point (wx, wz) jusqu'à l'eau la plus proche de (tx, tz), à `reach` cases au plus : le plus court
-   * chemin sur les cases où un bateau flotte, allégé d'un point sur quatre ; null s'il n'y en a pas
+   * chemin sur les cases où un bateau flotte, allégé d'un point sur quatre ; null s'il n'y en a pas. `sea` : seulement les
+   * cases de ce masque (la mer ouverte des visites sur les îles : sans lui, la route passait par les rivières et finissait dans
+   * un marais ou une mare)
    */
-  private waterRoute(wx: number, wz: number, tx: number, tz: number, reach: number): [number, number][] | null {
-    const w = this.world, wet = (x: number, z: number) => w.inCells(x, z) && this.depth(x + 0.5, z + 0.5) !== null;
+  private waterRoute(wx: number, wz: number, tx: number, tz: number, reach: number, sea?: Uint8Array): [number, number][] | null {
+    const w = this.world, wet = (x: number, z: number) => w.inCells(x, z) && (!sea || sea[z * N + x] === 1) && this.depth(x + 0.5, z + 0.5) !== null;
     let start = -1, sd = Infinity;
-    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+    // (la mer ouverte peut commencer à trois cases du mouillage, en diagonale)
+    const r0 = sea ? 3 : 2;
+    for (let dz = -r0; dz <= r0; dz++) for (let dx = -r0; dx <= r0; dx++) {
       const x = Math.floor(wx) + dx, z = Math.floor(wz) + dz, d = Math.hypot(x + 0.5 - wx, z + 0.5 - wz);
       if (d < sd && wet(x, z)) { sd = d; start = z * N + x; }
     }
@@ -5456,6 +5494,9 @@ export class ExpeditionScene {
     const town = townPlans(w).find((p) => (v.to === 'ally' ? p.people === ally : p.people !== ally));
     if (!town) return false;
     const P = town.points, gate: [number, number] = P.portes[0] ?? [town.x, town.z], level = this.water!.level;
+    // (toute la visite se joue sur la mer ouverte, reliée au large : ni lac, ni rivière, ni marais, ni mare. Retour de l'auteur,
+    // 21 nov. 2026 : « Espionner leur port » mouillait dans une flaque au milieu des roseaux de la presqu'île rivale)
+    const sea = openWater(w), open = (x: number, z: number) => w.inCells(Math.floor(x), Math.floor(z)) && sea[Math.floor(z) * N + Math.floor(x)] === 1 && this.depth(x, z) !== null;
     let route: [number, number][] | null, kind: 'visit' | 'ship' = 'visit', meet: [number, number], face: [number, number], walk: [number, number][];
     let loop: TripLoop | undefined;
     if (v.at === 'islet') {
@@ -5463,29 +5504,32 @@ export class ExpeditionScene {
       kind = 'ship';
       const isle = [...w.isles.small].sort((p, q) => Math.hypot(p.x - town.x, p.z - town.z) - Math.hypot(q.x - town.x, q.z - town.z))[0];
       if (!isle) return false;
-      route = this.waterRoute(wx, wz, isle.x, isle.z, Math.ceil(isle.r) + 8);
+      route = this.waterRoute(wx, wz, isle.x, isle.z, Math.ceil(isle.r) + 8, sea);
       if (!route) return false;
       const end = route[route.length - 1], a0 = Math.atan2(end[1] - isle.z, end[0] - isle.x);
       for (let r = Math.max(isle.r + 1.5, Math.hypot(end[0] - isle.x, end[1] - isle.z)); r <= isle.r + 7 && !loop; r += 1) {
         const pts: [number, number][] = [end];
         for (let i = 1; i < 16; i++) pts.push([isle.x + Math.cos(a0 + (i * Math.PI) / 8) * r, isle.z + Math.sin(a0 + (i * Math.PI) / 8) * r]);
         pts.push(end);
-        if (pts.slice(1, 16).every(([x, z]) => this.depth(x, z) !== null)) loop = { route: pts, len: lengthsOf(pts) };
+        if (pts.slice(1, 16).every(([x, z]) => open(x, z))) loop = { route: pts, len: lengthsOf(pts) };
       }
       meet = end; face = [isle.x, isle.z]; walk = [end, end];
     } else if (v.at === 'offport') {
       // au large du port : on s'arrête à quelques cases, sans accoster
       kind = 'ship';
-      route = this.waterRoute(wx, wz, P.port[0], P.port[1], SCOUT_REACH);
+      const moor = offing(w, sea, P.port);
+      route = moor && this.waterRoute(wx, wz, moor[0], moor[1], 2, sea);
       if (!route) return false;
-      let i = route.length - 1;
-      while (i > 1 && Math.hypot(route[i][0] - P.port[0], route[i][1] - P.port[1]) < 4.5) i--;
-      route = route.slice(0, i + 1);
       meet = route[route.length - 1]; face = P.port; walk = [meet, meet];
     } else {
       // on accoste au port (chez l'allié, ou pour le port lui-même), à la plage sinon (on ne se montre pas chez le rival)
       const land = v.to === 'ally' || v.at === 'port' ? P.port : P.plage;
-      route = this.waterRoute(wx, wz, land[0], land[1], SCOUT_REACH);
+      // (la mer ouverte jusqu'au plus près, puis, si le port donne sur une lagune ou un bras d'eau peu profond, la fin du chemin
+      // par cette eau-là, `LAGOON_REACH` cases au plus : sans elle, un port en lagune, comme celui des Jadéens chez Bernard,
+      // n'avait plus de route et la visite retombait en simple voyage au large)
+      const far = this.waterRoute(wx, wz, land[0], land[1], LAGOON_REACH, sea), last = far?.[far.length - 1];
+      const near = last && Math.hypot(last[0] - land[0], last[1] - land[1]) > 2.5 ? this.waterRoute(last[0], last[1], land[0], land[1], SCOUT_REACH) : null;
+      route = far && near && near.length > 1 ? [...far, ...near.slice(1)] : far;
       if (!route) return false;
       const end = route[route.length - 1], ashore = this.dockOf(end);
       if (v.at === 'port') { meet = this.dryOn(P.port, [town.x, town.z], [0.08, 0.12, 0.05, 0.16, 0.2, 0.25]) ?? ashore; face = end; walk = [ashore, meet]; }
@@ -5519,7 +5563,7 @@ export class ExpeditionScene {
     };
     const flame = (f: number, s: number, lift: number, size: number) => { const [x, z] = at(f, s), o = this.flameAt(x, w.surfaceAt(x, z) + lift, z, size); props.push(o); return o; };
     /** un bateau sur l'eau, à (f, s) du lieu (rien si c'est la terre) */
-    const ship = (k: BoatKind, f: number, s: number, ry = ang + Math.PI / 2) => { const [x, z] = at(f, s); return this.depth(x, z) === null ? null : prop(boatGeo(k), f, s, ry, level + 0.005, 1, true); };
+    const ship = (k: BoatKind, f: number, s: number, ry = ang + Math.PI / 2) => { const [x, z] = at(f, s); return !open(x, z) ? null : prop(boatGeo(k), f, s, ry, level + 0.005, 1, true); };
     const real = <T,>(xs: (T | null)[]) => xs.filter((m): m is T => !!m);
     let anim: ((k: number, dt: number) => void) | undefined, act: Act | undefined;
     const L = v.look;
@@ -5583,7 +5627,9 @@ export class ExpeditionScene {
       act = 'cheer';
     } else if (L === 'spyglass' || L === 'fireship') {
       // au large du port rival : ses navires au mouillage ; le brûlot qui file sur eux, puis le feu à bord
-      const fleet = real([-1.2, 0, 1.2].map((s) => ship('sail', 4.2, s, ang + Math.PI / 2)));
+      // (la flotte au mouillage devant le port, un peu en deçà du quai, sur la mer ouverte seulement)
+      const fd = Math.max(1.5, Math.hypot(face[0] - meet[0], face[1] - meet[1]) / VISIT_GAP - 1.6);
+      const fleet = real([-1.2, 0, 1.2].map((s) => ship('sail', fd, s, ang + Math.PI / 2)));
       if (L === 'spyglass') { act = 'work'; anim = () => fleet.forEach((m, i) => (m.position.y = level + 0.005 + Math.sin(this.t * 1.1 + i) * 0.006)); }
       else {
         const boat = ship('rowboat', 0.6, 0.4, ang);
@@ -5592,7 +5638,7 @@ export class ExpeditionScene {
         let pt = 0;
         anim = (k, dt) => {
           const u = Math.max(0, Math.min(1, (k - TRIP_MEET) / (TRIP_LEAVE - TRIP_MEET - 0.06)));
-          if (boat && fire) { const [x, z] = at(0.6 + 3.4 * u, 0.4 * (1 - u)); if (this.depth(x, z) !== null) boat.position.set(x, level + 0.005, z); fire.position.set(boat.position.x, level + 0.06, boat.position.z); boat.visible = fire.visible = u < 1 && k >= TRIP_OUT * 0.5; }
+          if (boat && fire) { const [x, z] = at(0.6 + (fd - 0.8) * u, 0.4 * (1 - u)); if (this.depth(x, z) !== null) boat.position.set(x, level + 0.005, z); fire.position.set(boat.position.x, level + 0.06, boat.position.z); boat.visible = fire.visible = u < 1 && k >= TRIP_OUT * 0.5; }
           burning.forEach((f) => (f.visible = u >= 1 && k < TRIP_BOARD + 0.05));
           if (u >= 1 && k < TRIP_BOARD && (pt -= dt) <= 0) { pt = 0.2; const m = fleet[Math.floor(Math.random() * fleet.length)]; if (m) this.puffAt(m.position.x, level + 0.2, m.position.z, 'smoke', 0.05, 0.03); }
         };
