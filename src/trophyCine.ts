@@ -5,7 +5,7 @@
  */
 
 /** Les trophées qui ont leur cinématique : ceux qu'une expédition rapporte (la couronne du roi des Enfers a la sienne) */
-export const CINE_TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon'] as const;
+export const CINE_TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon', 'stag'] as const;
 const CINE = new Set<string>(CINE_TROPHIES);
 
 /**

@@ -14,7 +14,7 @@ Trois difficultés, choisies au début d'une partie et sauvegardées avec elle :
 |---|---|---|---|
 | `unlimited` (ressources illimitées) | `true` | `null` : suit le réglage « Ressources » du joueur | `false` : toujours comptées |
 | `price` (barème de tous les bâtiments) | `null` | `null` : seuls les grands se paient | barème : bois 5 + 3/âge, pierre 3 + 3/âge, enclos 1 + 1/âge |
-| `startWood` / `startStone` | 60 / 60 | 60 / 60 | 50 / 40 |
+| `startWood` / `startStone` | 60 / 60 | 60 / 60 | 60 / 40 (50 / 40 avant le 19 nov. 2026, voir [economie-ressources.md](economie-ressources.md)) |
 | `foodK` (nourriture par habitant) | 1 | 1 | 1,25 |
 | `famine` (part des habitants qui partent par seconde de jeu, à manque total) | 0 | 0 | 0,004 |
 | `growK` (vitesse de croissance) | 1 | 1 | 0,75 |

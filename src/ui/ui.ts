@@ -16,7 +16,7 @@ import { matches } from './search';
 import { readSlot, SaveData, savedAgo, Quality } from '../save/save';
 import { helpOn, setHelpOn } from './warTips';
 import { MAPS, newSeed } from '../world/mapgen';
-import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
+import { Expeditions, Report, ActiveExpedition, nextTeamAt } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
@@ -2167,7 +2167,8 @@ export class UI {
     const ways = h.ways?.() ?? { hell: 'none' as WayState, world: 'none' as WayState };
     const waysOn = waysTabShown(h.world, ways.hell, ways.world);
     if (tab === 'ways' && !waysOn) tab = 'missions';
-    const next = max < partyLimit(1e9) ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: max * 30, pop }) : tr('Équipes au maximum');
+    const at = nextTeamAt(max);
+    const next = at !== null ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: at, pop }) : tr('Équipes au maximum');
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${pic(a.m.icon, 18)} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
     const rank = (m: Mission) => (ex.done(m) ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);

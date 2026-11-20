@@ -215,10 +215,13 @@ registerDict('expeditions', {
   '🚂 Ce parcours existe déjà ({line}) : sur une voie unique, un seul train peut y rouler.': '🚂 This route already exists ({line}): on a single track, only one train can run.',
   // la cinématique d'un trophée qui rejoint la place (trophyStage.ts)
   'Le trophée du mammouth rejoint la place': 'The mammoth trophy joins the square',
+  'Les bois du cerf blanc rejoignent la place': 'The white stag’s antlers join the square',
   'Le tentacule du kraken rejoint la place': 'The kraken tentacle joins the square',
   'La dent du mégalodon rejoint la place': 'The megalodon tooth joins the square',
   'Le crâne du dragon rejoint la place': 'The dragon skull joins the square',
   // la recherche des expéditions
   'Rechercher une expédition': 'Search for an expedition',
   'Aucune expédition ne répond à « {q} ».': 'No expedition matches “{q}”.',
+  'Il n’y a pas de volcan sur cette carte.': 'There is no volcano on this map.',
+  'Aucun chemin vers le volcan : ni rive en face de son île, ni sentier jusqu’à lui.': 'No way to the volcano: no shore facing its island, no path to it.',
 });
