@@ -8,6 +8,8 @@
 Une bulle guide le joueur pas à pas. Elle se place à côté de l'élément dont elle parle, qu'entoure un anneau doré.
 Chaque étape a des tâches ; quand elles sont faites, la bulle dit « Bien joué ! » puis passe seule à la suivante.
 Rien n'est bloqué : « Suivant » passe toujours, « Passer le tutoriel » le met de côté.
+Un « Suivant » qui arrive moins de 0,9 s après un passage automatique (`LATE_MS`), ou enfoncé sur l'étape d'avant (`downOn`),
+est ignoré : il visait l'étape qui vient de se cocher et sautait la suivante (étapes 4 et 6 jamais vues, testeur v6).
 Plus tard dans la partie, des chapitres courts se lancent sur un événement : le choix d'affronter les démons, la première entrée
 dans les Enfers. Ils ne se montrent qu'une fois.
 
@@ -32,9 +34,14 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   9. `gear` « L'équipement » (à lire) : ouvrir l'onglet Équipement des expéditions et fabriquer la pièce de la mission
       que montre l'étape suivante (`tutoGear` : contre le premier danger de « La grande cueillette » en forêt, une lance à la
       Préhistoire) ; l'équipe emporte le meilleur de la réserve. Sans pièce possible, n'importe quelle pièce compte.
+      La tâche nomme la pièce (« Fabriquer : Lance », `craftTask`) et la bulle la montre même quand elle n'est pas encore
+      fabricable (la note dit pourquoi, le titre du bouton) : avant, elle montrait alors la première pièce venue, une torche
+      inutile (v6).
   10. `expeditions` : ouvrir les expéditions (la fenêtre restée sur l'onglet Équipement : l'onglet des missions) et lancer
       une mission ; pas de suivi à l'œil, l'étape passe dès le départ. Pièce encore en fabrication, fenêtre de départ
-      ouverte : une ligne invite à l'attendre.
+      ouverte : une ligne invite à l'attendre. Départ impossible (« Lancer l'expédition » grisé : habitants libres,
+      équipement), la ligne `blocked` le dit et propose de terminer ; la phrase nomme le vrai bouton, « Lancer l'expédition »
+      (elle disait « Partir »).
 - **Reprise** : une partie s'enregistre avec l'identifiant de l'étape (`id`). Arrêtée sur une étape retirée le 17 nov. 2026 (`MERGED` de `stepIndex`) : `wood` et `stone` reprennent à `food`, `resources` à `road`, `needs` à `time`. Arrêtée sur `gear`, elle reprend sur `gear`
   puis `expeditions` ; arrêtée sur `expeditions` (avant que l'équipement passe devant), elle reprend sur `expeditions`.
   Arrêtée sur `incidents`, l'ancienne 15e étape (retirée), le tutoriel compte pour fini (`retired`).

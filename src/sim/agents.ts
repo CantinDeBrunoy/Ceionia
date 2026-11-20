@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, VEG_FIELD } from '../world/world';
-import { Building, KINDS, KindId, hasDoor, sizeOf } from '../build/catalog';
+import { Building, KINDS, KindId, hasDoor, sizeOf, walkableDecor } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
 import { makeFolk, folkStep, holdFolk, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
@@ -354,6 +354,17 @@ interface Agent {
   rig?: number | null;
 }
 
+/**
+ * Ce qu'on peut lire d'un habitant de l'extérieur (sa fiche) : où il est, chez qui il vit, son métier, ce qu'il fait
+ */
+export interface Citizen {
+  id: number; home: number; x: number; z: number; hidden: boolean; child: boolean;
+  /** son lieu de travail (null : sans métier) ; bras des champs ; en expédition ; blessé au repos */
+  job: number | null; jobKind: string | null; hand: boolean; mission: boolean; resting: boolean;
+  /** en chemin, sur place, chez lui ; il rentre ; il court au feu ; ce qu'il fait sur place */
+  state: 'inside' | 'walking' | 'doing'; goingHome: boolean; urgent: boolean; act: Act | null; field: boolean;
+}
+
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
 /** une place où l'on est porté (barque, nacelle, voiture) ; `act` : ce qu'on y fait (assis par défaut, null : debout) */
 /** Une place à bord (voir `Agents.ride`) ; `fixed` : sur une embarcation rapide, elle emporte son passager sans qu'il glisse */
@@ -446,13 +457,56 @@ export class Agents {
    */
   camera: THREE.Camera | null = null;
   detail = 1;
+  /** l'habitant choisi d'un clic (sa fiche est ouverte) : un anneau doré sous ses pieds */
+  selected: number | null = null;
+  private ring: THREE.Mesh;
 
   constructor(private world: World) {
     this.body = new THREE.InstancedMesh(new THREE.ConeGeometry(0.075, 0.2, 6).translate(0, 0.1, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
     this.head = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.052, 0).translate(0, 0.25, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
     this.tool = new THREE.InstancedMesh(new THREE.BoxGeometry(0.014, 0.26, 0.014).translate(0, 0.13, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0x8a6a4e, flatShading: true }), MAX_AGENTS);
     for (const m of [this.body, this.head, this.tool]) { m.frustumCulled = false; m.castShadow = true; m.count = 0; this.group.add(m); }
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.11, 0.15, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd25a, transparent: true, opacity: 0.9, depthWrite: false }));
+    this.ring.visible = false; this.ring.renderOrder = 2;
+    this.group.add(this.ring);
   }
+
+  // ---------- Fiche d'un habitant ----------
+
+  /**
+   * L'habitant visible le plus proche du point d'écran (x, y en pixels du canevas de `width` × `height`), à moins de `radius`
+   * pixels de son buste ; null sinon. Une simple projection de chaque passant (90 au plus) : aucun coût hors du clic
+   */
+  pickAt(x: number, y: number, camera: THREE.Camera, width: number, height: number, radius = 18): number | null {
+    const v = new THREE.Vector3();
+    let best: number | null = null, bd = radius * radius;
+    for (const a of this.agents) {
+      if (a.hidden) continue;
+      v.set(a.x, this.groundY(a) + HUMAN * (a.child ? 0.4 : 0.6), a.z).project(camera);
+      if (v.z > 1) continue;
+      const dx = (v.x + 1) / 2 * width - x, dy = (1 - v.y) / 2 * height - y, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = a.id; }
+    }
+    return best;
+  }
+
+  /** Ce que la fiche montre d'un habitant (undefined : il n'est plus montré) */
+  citizen(id: number): Citizen | undefined {
+    const a = this.byId(id);
+    if (!a) return undefined;
+    return {
+      id: a.id, home: a.home, x: a.x, z: a.z, hidden: a.hidden, child: a.child, job: a.job?.b ?? null, jobKind: a.job?.kind ?? null, hand: !!a.hand,
+      mission: a.mission, resting: a.rest > 0, state: a.state, goingHome: a.goingHome, urgent: !!a.urgent, act: a.act, field: !!a.task,
+    };
+  }
+
+  /** Où regarder pour le suivre : lui, sinon (chez lui, au travail) le bâtiment où il est entré */
+  posOf(id: number): [number, number] | null {
+    const a = this.byId(id);
+    if (!a) return null;
+    return [a.x, a.z];
+  }
+
 
   reset() {
     for (const a of this.agents) this.dropActor(a);
@@ -763,7 +817,7 @@ export class Agents {
     const o = w.occ[c];
     if (o && c !== start && c !== goal) {
       const b = w.buildings.get(o);
-      if (!b || b.kind !== 'lamp') return false;
+      if (!b || !walkableDecor(b.kind)) return false;
     }
     return true;
   }
@@ -1425,7 +1479,7 @@ export class Agents {
         if (last && a.targetHidden && dist < 0.35) a.hidden = true;
         // un obstacle posé sur le chemin : on recalcule
         const nc = a.path[a.pi];
-        if (nc !== undefined && w.occ[nc] && nc !== a.path[a.path.length - 1] && w.buildings.get(w.occ[nc])?.kind !== 'lamp') { this.reroute(a); continue; }
+        if (nc !== undefined && w.occ[nc] && nc !== a.path[a.path.length - 1] && !walkableDecor(w.buildings.get(w.occ[nc])?.kind ?? 'house')) { this.reroute(a); continue; }
         // la nuit, on rentre, sauf pour éteindre un feu
         if (night && !a.goingHome && !a.mission && !this.fighting(a) && this.pathBudget > 0) this.sendHome(a);
       } else if (a.state === 'doing') {
@@ -1654,6 +1708,13 @@ export class Agents {
       m.count = n;
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+    // l'anneau sous l'habitant choisi, qui bat doucement
+    const sel = this.selected === null ? undefined : this.byId(this.selected);
+    this.ring.visible = !!sel && !sel.hidden;
+    if (sel && !sel.hidden) {
+      this.ring.position.set(sel.x, this.groundY(sel) + 0.015, sel.z);
+      this.ring.scale.setScalar((sel.child ? 0.75 : 1) * (1 + Math.sin(performance.now() / 260) * 0.08));
     }
   }
 }

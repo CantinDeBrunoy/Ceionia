@@ -76,6 +76,23 @@ function dotTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+/**
+ * Un pétale (un ovale plus large en haut) pour les pétales et les confettis qui tombent sur la place : sans
+ * texture, ces points étaient des carrés blancs au-dessus de l'agora (testeurs v6)
+ */
+function petalTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d')!;
+  // un ovale plus large en haut, tracé ligne à ligne (rien que des rectangles)
+  g.fillStyle = 'rgba(240,240,240,1)';
+  for (let y = 3; y < 29; y++) {
+    const t = (y - 16) / 13, hw = 8 * Math.sqrt(Math.max(0, 1 - t * t)) * (1 - 0.3 * t);
+    if (hw > 0.5) g.fillRect(16 - hw, y, hw * 2, 1);
+  }
+  return new THREE.CanvasTexture(c);
+}
+
 /** Un tronçon de cylindre de a à b, du rayon r0 au rayon r1 (petit bois, cordes des guirlandes) */
 export function tube(p: Parts, a: number[], b: number[], r0: number, r1: number, c: number, seg = 5, glow: Glow = false) {
   const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
@@ -102,6 +119,7 @@ export class Festivities {
   private flashPts: THREE.Points;
   private flashes: { x: number; y: number; z: number; t: number; c: THREE.Color }[] = [];
   private tex: THREE.Texture;
+  private petalTex!: THREE.Texture;
   /** la langue de flamme (une goutte effilée, de hauteur et de rayon 1), partagée par toutes les fêtes */
   private tongueGeo: THREE.BufferGeometry;
   private flameMat = new THREE.MeshBasicMaterial({ color: 0xff7426, fog: false });
@@ -126,7 +144,7 @@ export class Festivities {
     this.flashPts = new THREE.Points(mk(64), new THREE.PointsMaterial({ size: 4, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     this.flashPts.frustumCulled = false;
     this.group.add(this.flashPts);
-    this.flakePts = new THREE.Points(mk(CAP / 2), new THREE.PointsMaterial({ size: 0.09, vertexColors: true, transparent: true, depthWrite: false }));
+    this.flakePts = new THREE.Points(mk(CAP / 2), new THREE.PointsMaterial({ size: 0.13, map: (this.petalTex = petalTexture()), alphaTest: 0.35, vertexColors: true, transparent: true, depthWrite: false }));
     this.emberPts = new THREE.Points(mk(EMBERS), new THREE.PointsMaterial({ size: 0.06, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     for (const p of [this.glowPts, this.flakePts, this.emberPts]) { p.frustumCulled = false; this.group.add(p); }
     // la langue de flamme : renflée au pied, effilée en haut

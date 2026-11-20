@@ -105,6 +105,19 @@ export class NotifQueue {
     return it;
   }
 
+  /**
+   * Un message devenu faux (une décision prise) : il quitte l'écran, la file et la cloche. Sinon « une décision vous attend
+   * (cliquez ici) » restait dans la cloche, et son clic ouvrait l'imprévu suivant de l'équipe (testeurs v6)
+   */
+  retire(id: number) {
+    this.visible = this.visible.filter((v) => v.id !== id);
+    this.waiting = this.waiting.filter((v) => v.id !== id);
+    this.held = this.held.filter((v) => v.id !== id);
+    const h = this.history.find((x) => x.id === id);
+    if (h) { this.history.splice(this.history.indexOf(h), 1); if (h.unread) this.unread--; }
+    this.dirty = true;
+  }
+
   /** Le joueur a lu / fermé un message (clic) */
   dismiss(id: number) {
     this.visible = this.visible.filter((v) => v.id !== id);

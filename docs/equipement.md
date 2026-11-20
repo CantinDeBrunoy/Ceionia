@@ -15,7 +15,7 @@ La garnison de l'île (caserne) puise dans la même réserve : voir « Liens ».
 
 | Pièce (id) | Âge | Dernier âge | Prix | Atelier | Pare | `cut` | Pièces par équipe |
 |---|---|---|---|---|---|---|---|
-| Lance (`spear`) | 0 | 1 | 2 bois, 1 pierre* | non | bêtes, créatures | 0,25 | n |
+| Lance (`spear`) | 0 | 1 | 1 bois, 1 pierre* (2 bois avant le 19 nov. 2026) | non | bêtes, créatures | 0,25 | n |
 | Arc (`bow`) | 1 | 1 | 4 bois* | non | bêtes, créatures | 0,38 | n |
 | Épée (`sword`) | 2 | 2 | 1 minerai | oui | bêtes, créatures | 0,50 | n |
 | Arbalète (`crossbow`) | 2 | 2 | 1 minerai, 3 bois* | oui | bêtes, créatures | 0,56 | n |
@@ -63,7 +63,7 @@ Dangers (`Danger`) : `beast`, `fall`, `water`, `dark`, `weather`, `monster`. Un 
 
   Avec un atelier, un tiers de moins. Le pire cas (une pièce par membre contre deux dangers) tient en une demi-minute ; le prix (minerai, bois, pierre) reste le vrai frein.
 - `whyCraftAll(ids, age)` : pour la commande d'un lot (bouton « Tout fabriquer », garnison) : tout ou rien, total du prix et place dans la file.
-- L'onglet Équipement (`renderArsenal`) : une carte par pièce **de l'âge** (`gearCurrent` : ni à venir, ni dépassée) avec son illustration en fond (le bas de la carte, en verre clair, la laisse voir), réserve, en route, prix, raison du refus ; puis la file avec annulation.
+- L'onglet Équipement (`renderArsenal`) : une carte par pièce **de l'âge** (`gearCurrent` : ni à venir, ni dépassée) avec son illustration en fond (le bas de la carte, en verre clair, la laisse voir), réserve, en route, prix, raison du refus ; puis la file avec annulation. La grille se refait à chaque fabrication : ses images ne sont pas paresseuses (`loading="lazy"` les laissait vides un moment, la torche disparaissait après « Fabriquer », v6).
 
 ### Ce qu'une équipe emporte (`loadout`)
 Pour chaque danger du choix, dans l'ordre : la pièce en stock la plus protectrice (`cut` le plus haut parmi celles qui parent ce danger, même dépassée) qui n'est pas déjà prise ; autant de pièces que `per(party)` si possible, sinon ce qui reste. Le risque est multiplié par `k = 1 − (somme des cut × part fournie) / max(1, nombre de dangers)`, puis par `1 − 0,1` si une trousse est en stock (une seule part). Une pièce qui pare deux dangers (une arme : bêtes et créatures) n'est comptée que pour le premier danger traité. `Expeditions.preview(c)` donne le résultat avant départ (équipement, chevaux, carburant, risque).

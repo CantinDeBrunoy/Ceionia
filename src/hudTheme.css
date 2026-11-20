@@ -590,6 +590,15 @@ body.hell #resPanel { display: none !important; }
 #selCard .xacts button .pic { width: 18px; height: 18px; }
 #selCard .xacts .xdel { flex: 0 0 44px; color: #C8352A; border-color: #E9A08E; background: linear-gradient(180deg, #FFF3EE, #FBDCD2); }
 #selCard .xacts .xdel:hover { background: linear-gradient(180deg, #FFE9E1, #F8C9BB); }
+/* fiche d'un habitant : son visage, ce qu'il dit (un manque en rouge, un souhait en ambre, content en vert), une note */
+#selCard.citizen .xth { width: 64px; height: 64px; }
+#selCard.citizen .xth .face { width: 64px; height: 64px; border-radius: 50%; box-shadow: 0 2px 4px rgba(80, 50, 15, 0.22); }
+#selCard .cwish { margin: 9px 0 6px; padding: 8px 11px; border-radius: 12px; font-family: var(--hSerif); font-style: italic; font-weight: 600; font-size: 13.5px; line-height: 1.35; border-left: 4px solid; }
+#selCard .cwish.t-need { background: #FCE6DE; border-color: #D8553E; color: #7A2A1C; }
+#selCard .cwish.t-wish { background: #FBF0D6; border-color: #D9A23A; color: #6A4A12; }
+#selCard .cwish.t-happy { background: #E6F2DC; border-color: #6FA65A; color: #2E5A22; }
+#selCard .stat .who { min-height: 0; padding: 1px 8px; margin: 1px 0; border-radius: 999px; font-size: 12px; font-weight: 700; }
+#selCard .cnote { margin: 0 0 6px; font-size: 11.5px; font-weight: 700; color: #A8442E; }
 /* au téléphone : sur toute la largeur, au-dessus de la barre du bas ; la fiche choisie se replie sur son en-tête et ses actions */
 @media (max-width: 600px) {
   #info, #info.held, #selCard, #tinfo { padding: 9px 11px 10px; }
@@ -1422,3 +1431,121 @@ body.dockMin #dock > #homeBack { margin-bottom: 26px; }
 .expFind input::-webkit-search-cancel-button { display: none; }
 .expFind:focus-within { border-color: var(--hGold); box-shadow: 0 0 0 2px rgba(224, 173, 69, 0.35); }
 @media (max-width: 600px) { .expFind input { width: 90px; } }
+
+/* ---------- Écran de portable (820 px de haut ou moins : 1366 × 768, 1280 × 720, 1024 × 768) : les grandes fenêtres
+   resserrent leur en-tête pour laisser la place au contenu (testeurs v6, 19 nov. 2026) ---------- */
+@media (max-height: 820px) and (min-width: 861px) {
+  /* liste des expéditions : en-tête, filtres et équipes plus bas ; la liste voit deux rangées de cartes au lieu d'une et demie */
+  .overlay > .modal.expModal { height: calc(100dvh - 24px); }
+  .expModal .mtitle { padding-top: 12px; padding-bottom: 6px; margin-bottom: 4px; }
+  .expModal .exEmblem { width: 46px; height: 46px; }
+  .expModal .exTitle > span { font-size: 25px; }
+  .expModal .exTitle small { font-size: 13px; line-height: 1.3; }
+  .expModal .mtitle .x { min-height: 40px; min-width: 40px; }
+  .expNav { gap: 6px; margin-bottom: 8px; padding: 4px; }
+  .expNav button { min-height: 38px; padding: 0 14px; font-size: 14px; }
+  .expModal .teams { margin-bottom: 6px; padding: 5px 14px; }
+  .expModal .missions { padding-top: 18px; }
+  /* « Lancer une expédition » : îlot, titre, cartes et équipement tiennent sans faire défiler le milieu */
+  .overlay > .modal.sendModal { max-height: calc(100dvh - 40px); }
+  .sendModal .sScroll { gap: 6px; }
+  .sendModal .sTop, .sendModal .sTop.mart, .sendModal .sTop.mart.dio { height: clamp(64px, 11vh, 120px); }
+  .sendModal .sCap { gap: 2px; }
+  .sendModal .sCap h3 { font-size: 26px; }
+  .sendModal .sCap p { margin-top: 0; font-size: 14px; }
+  .sendModal .sEraRow .sLaur { width: 24px; height: 24px; }
+  .sendModal .sCards { margin-top: 2px; gap: 12px; }
+  .sendModal .sCard { gap: 5px; padding: 7px 10px 9px; }
+  .sendModal .scEmb { width: 52px; height: 42px; }
+  .sendModal .scName b { font-size: 18px; }
+  .sendModal .scBox { padding: 4px 8px; }
+  .sendModal .sSlim.sGear, .sendModal .gearNeed.sGear.sSlim { padding: 6px 14px; }
+  .sendModal .sSlim .gslot { width: 48px; height: 48px; }
+  .sendModal .sFoot { margin-top: 8px; }
+  /* Paramètres : moins de marge en haut, un paysage plus bas ; le panneau de droite gagne ce qu'ils rendent */
+  #ui > .overlay > .cePop.settings { margin-top: 44px; padding-bottom: 62px; }
+  #ui > .overlay > .cePop.settings .setPane { max-height: calc(100dvh - 250px); min-height: 300px; }
+}
+/* la bulle du tutoriel ouverte (étapes « L'équipement » et « Les expéditions », chapitres) : les fenêtres des expéditions se
+   rangent à gauche et lui laissent la colonne de droite, au lieu qu'elle couvre une carte de mission ou une approche */
+@media (min-width: 1200px) {
+  body:has(#tuto:not([hidden])) .overlay > .modal.expModal { max-width: min(1100px, calc(100vw - 470px)); margin-left: 36px; margin-right: auto; }
+  body:has(#tuto:not([hidden])) .overlay > .modal.sendModal { max-width: min(1040px, calc(100vw - 470px)); margin-left: 36px; margin-right: auto; }
+}
+/* (plus étroite, la liste des missions passe sur une colonne, comme sous 1 180 px) */
+@media (min-width: 1200px) and (max-width: 1640px) {
+  body:has(#tuto:not([hidden])) .expModal .missions { grid-template-columns: minmax(0, 1fr); }
+}
+/* ---------- Six rayons de construction (le rayon Décorations s'est ajouté) : sur un écran d'ordinateur moyen, les onglets se
+   serrent pour tenir sur la rangée, loupe comprise ; plus étroit encore, seul l'onglet ouvert garde son nom (les autres, leur
+   image et leur info-bulle) ---------- */
+@media (min-width: 861px) and (max-width: 1399px) {
+  #dock #subcats button { padding: 0 8px 2px 7px; gap: 4px; font-size: 12.5px; }
+}
+@media (min-width: 861px) and (max-width: 1180px) {
+  #dock #subcats button:not(.on) .cl { display: none; }
+}
+/* ---------- le panneau « Peuples » (`UI.openPeoples`, `ui/peoples.ts`) : une fiche par peuple, côte à côte ----------
+   Tient en 1 280 × 720 ; empilé au téléphone. Les gestes possibles en or, les autres grisés avec leur raison et un cadenas */
+button.round.off { opacity: 0.62; filter: grayscale(0.5); }
+button.round.off:hover { opacity: 0.85; }
+#ui .overlay > .modal.peoplesModal { max-width: 900px; padding-bottom: 18px; }
+.peoplesModal .mtitle { margin-bottom: 4px; }
+.peoplesModal .mtitle h3 svg { color: #B07A22; }
+.peoplesModal .ppLead { margin: 6px 2px 12px; font-size: 14.5px; font-weight: 600; color: var(--hInk2); }
+.peoplesModal .ppCards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.peoplesModal .ppCard { display: flex; flex-direction: column; gap: 9px; min-width: 0; padding: 14px 14px 12px; border-radius: 18px; border: 2px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4 0%, #FBF0DA 100%); box-shadow: var(--hTile); }
+.peoplesModal .ppCard.ally { border-color: #C99A3A; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 0 0 3px rgba(240, 205, 120, 0.4), 0 4px 12px rgba(120, 80, 25, 0.16); }
+.peoplesModal .ppCard header { display: flex; align-items: center; gap: 12px; }
+.peoplesModal .ppCard header > div { flex: 1; min-width: 0; }
+.peoplesModal .ppCrest { position: relative; flex: none; display: grid; place-items: center; }
+.peoplesModal .ppCrest svg { display: block; filter: drop-shadow(0 2px 3px rgba(90, 55, 20, 0.3)); }
+.peoplesModal .ppCard h4 { margin: 0; font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 48; font-size: 23px; font-weight: 800; letter-spacing: 0; text-transform: none; color: #3A2213; }
+.peoplesModal .ppCard header small { display: block; margin-top: 2px; font-size: 12.5px; font-style: italic; color: var(--hInk2); }
+.peoplesModal .ppRole { flex: none; align-self: flex-start; padding: 3px 10px; border-radius: 999px; border: 1.5px solid var(--hEdge); background: #FFF8E9; font-size: 11.5px; font-weight: 800; color: var(--hInk2); white-space: nowrap; }
+.peoplesModal .ppCard.ally .ppRole { border-color: var(--hGold); background: var(--hGoldFill); color: #4A2E10; }
+.peoplesModal .ppCard.rival .ppRole { border-color: #D9A08A; background: #FBE9E2; color: #8A3A22; }
+.peoplesModal .ppMood { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.55); box-shadow: inset 0 0 0 1px rgba(225, 195, 140, 0.55); }
+.peoplesModal .ppMood > div { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; }
+.peoplesModal .ppMood b { font-family: var(--hSerif); font-size: 16px; font-weight: 800; color: #3A2213; }
+.peoplesModal .ppMood small { grid-column: 1 / -1; font-size: 12.5px; color: var(--hInk2); }
+.peoplesModal .ppGauge { display: inline-flex; gap: 3px; }
+.peoplesModal .ppGauge i { width: 13px; height: 7px; border-radius: 4px; background: #E9DCC2; box-shadow: inset 0 1px 1px rgba(120, 80, 25, 0.2); }
+.peoplesModal .m0 .ppGauge i.on { background: #C8463A; }
+.peoplesModal .m1 .ppGauge i.on { background: #D98A3A; }
+.peoplesModal .m2 .ppGauge i.on { background: #C9A548; }
+.peoplesModal .m3 .ppGauge i.on, .peoplesModal .m4 .ppGauge i.on { background: #4F9E48; }
+.peoplesModal .ppStatus { align-self: flex-start; padding: 3px 11px 3px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+.peoplesModal .ppStatus::before { margin-right: 6px; }
+.peoplesModal .ppStatus.war { background: #FBE4DE; color: #8A3A22; }
+/* ce que les visites sur leur île ont gagné pour le dénouement (troupes, bonne volonté) */
+.peoplesModal .ppBoons { margin: 0; padding: 6px 10px 6px 24px; border-radius: 10px; background: rgba(90, 150, 110, 0.12); border: 1px solid rgba(90, 150, 110, 0.4); font-size: 12.5px; line-height: 1.45; color: #2f5a3c; }
+.peoplesModal .ppStatus.war::before { content: '⚔'; }
+.peoplesModal .ppStatus.peace { background: #E4F2DC; color: #2F6A2A; }
+.peoplesModal .ppStatus.peace::before { content: '🕊'; }
+.peoplesModal .ppStatus.ally { background: #FCEFC8; color: #6A4710; }
+.peoplesModal .ppStatus.ally::before { content: '🤝'; }
+.peoplesModal .ppStatus.calm { background: #EFE7D8; color: #5A4330; }
+.peoplesModal .ppStatus.calm::before { content: '⚖'; }
+.peoplesModal .ppActs { display: flex; flex-direction: column; gap: 6px; }
+#ui .overlay > .modal.peoplesModal button.ppAct { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 6px 12px 6px 8px; border-radius: 12px; text-align: left; font: inherit; color: var(--hInk); }
+#ui .overlay > .modal.peoplesModal button.ppAct.on { border: 1.5px solid var(--hGold); background: var(--hGoldFill); box-shadow: var(--hGoldShadow); cursor: pointer; }
+#ui .overlay > .modal.peoplesModal button.ppAct.on:hover { background: linear-gradient(180deg, #FFF3CC, #F9D886); }
+#ui .overlay > .modal.peoplesModal button.ppAct.off, #ui .overlay > .modal.peoplesModal button.ppAct.done { border: 1.5px dashed #DCC9A2; background: rgba(255, 252, 244, 0.6); box-shadow: none; cursor: default; opacity: 1; }
+#ui .overlay > .modal.peoplesModal button.ppAct.done { border-style: solid; border-color: #B9D6A8; background: #F1F8EA; }
+.peoplesModal .ppAct.off > img { filter: grayscale(1); opacity: 0.5; }
+.peoplesModal .ppAct > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.peoplesModal .ppAct b { font-size: 14.5px; font-weight: 800; }
+.peoplesModal .ppAct small { font-size: 12px; font-weight: 600; color: var(--hInk2); }
+.peoplesModal .ppAct.off b { color: #8C7A66; }
+.peoplesModal .ppAct.off small { color: #9A6A3A; }
+.peoplesModal .ppAct .ppLock { flex: none; opacity: 0.7; }
+.peoplesModal .ppAct .ppTick { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #4F9E48; color: #fff; font-size: 13px; font-weight: 900; }
+/* sans archipel : deux blasons voilés, un point d'interrogation dessus */
+.peoplesModal .ppCard.veil { align-items: center; padding: 22px 14px; border-style: dashed; background: rgba(255, 252, 244, 0.5); box-shadow: none; }
+.peoplesModal .ppCard.veil svg { filter: grayscale(1) brightness(1.25) opacity(0.45); }
+.peoplesModal .ppCard.veil .ppCrest i { position: absolute; font-family: var(--hSerif); font-style: normal; font-size: 30px; font-weight: 800; color: #6E5843; }
+.peoplesModal .ppCard.veil h4 { color: #8C7A66; }
+@media (max-width: 700px) {
+  .peoplesModal .ppCards { grid-template-columns: 1fr; }
+}

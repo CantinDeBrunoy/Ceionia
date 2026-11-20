@@ -379,6 +379,60 @@ export const EVENTS: ExpEvent[] = [
       { label: 'Finir au plus vite', risk: 1.25, work: -4, text: 'On a fini en hâte, les étincelles plein les cheveux.' },
     ],
   },
+  // ---------------- La chasse au cerf blanc ----------------
+  {
+    id: 'gaze', where: ['forest'], scenes: ['stag'], from: 0.3, title: 'Le regard du cerf blanc',
+    text: 'Le cerf blanc s’arrête au bord de la clairière et fixe les chasseurs. Une lumière pâle l’entoure. Personne n’ose bouger.',
+    options: [
+      { label: 'Bander l’arc sans bruit', risk: 0.85, work: 4, text: 'On a bandé l’arc sans un bruit, accroupis dans les fougères.' },
+      { label: 'Baisser les armes et le saluer', risk: 1.15, bonus: [joy(2, 6)], text: 'On a baissé les armes et salué le cerf blanc. Le village ne parle que de ce moment.' },
+    ],
+  },
+  // ---------------- En partant pour le volcan : sur la rive d'en face (ou à son pied) ----------------
+  {
+    id: 'ash', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent', 'eruption'], arrive: true, title: 'Une pluie de cendres',
+    text: 'Le vent rabat la fumée du volcan : une cendre grise tombe sur l’équipe et lui pique les yeux.',
+    options: [
+      { wait: true, label: 'Attendre sous une bâche', risk: 0.85, work: 6, text: 'On a tendu une bâche et attendu que la cendre cesse de tomber.' },
+      { label: 'Partir le visage couvert', risk: 1.15, work: -2, text: 'Un foulard sur le visage, on est parti sous la cendre.' },
+    ],
+  },
+  {
+    id: 'islander', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent', 'eruption'], arrive: true, title: 'Un vieux pêcheur de l’île',
+    text: 'Sur la rive, un vieux pêcheur de l’île raccommode ses filets. Il connaît tous les sentiers du volcan.',
+    options: [
+      { label: 'Le prendre pour guide', risk: 0.8, work: 4, text: 'Le vieux pêcheur nous a montré le bon sentier, celui que la lave n’a jamais pris.' },
+      { label: 'Lui acheter du poisson séché', risk: 1, bonus: [food(1, 4)], text: 'On a acheté au vieux pêcheur un panier de poisson séché.' },
+      { label: 'Le saluer et partir', risk: 1.05, work: -2, text: 'On a salué le vieux pêcheur, et l’on est parti sans attendre.' },
+    ],
+  },
+  // ---------------- Sur le volcan (sur ses flancs : jamais à l'arrivée) ----------------
+  {
+    id: 'tremor', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent', 'eruption'], from: 0.3, title: 'Le volcan gronde',
+    text: 'Le sol tremble sous les pieds. Au-dessus de l’équipe, des pierres se détachent et roulent sur la pente.',
+    options: [
+      { wait: true, label: 'S’abriter derrière un gros rocher', risk: 0.85, work: 8, text: 'On s’est serré derrière un gros rocher jusqu’à ce que la pente se calme.' },
+      { label: 'Continuer en courant', risk: 1.25, work: -4, text: 'On a continué en courant, entre les pierres qui roulaient.' },
+    ],
+  },
+  {
+    id: 'fumes', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent'], from: 0.3, title: 'Des fumées jaunes',
+    text: 'Une fissure s’ouvre près du sentier et crache une fumée jaune qui pique les yeux et la gorge.',
+    options: [
+      { label: 'Se couvrir le nez d’un linge mouillé', risk: 0.9, work: 6, text: 'Un linge mouillé sur le nez, l’équipe a traversé la fumée sans tousser.' },
+      { wait: true, label: 'Attendre que le vent tourne', risk: 0.85, work: 10, text: 'On a attendu que le vent emporte la fumée de l’autre côté.' },
+      { label: 'Passer vite, en retenant son souffle', risk: 1.3, work: -4, text: 'On a passé la fumée d’une traite, en retenant son souffle.' },
+    ],
+  },
+  {
+    id: 'lavaflow', where: ['river', 'mountain'], scenes: ['eruption', 'ascent'], from: 0.3, title: 'La lave coupe le sentier',
+    text: 'Une langue de lave descend la pente et coupe le sentier qui mène à la plage.',
+    options: [
+      { label: 'Poser des pierres pour passer', risk: 0.95, work: 6, text: 'On a posé de grosses pierres sur la lave qui se figeait, et l’on est passé dessus.' },
+      { wait: true, label: 'Attendre qu’elle se fige', risk: 0.85, work: 10, text: 'On a attendu que la coulée noircisse et se fige avant de passer.' },
+      { label: 'Sauter par-dessus', risk: 1.35, work: -3, text: 'On a sauté par-dessus la lave, d’un seul élan. Les semelles fumaient.' },
+    ],
+  },
   // ---------------- Les grands Jeux du village ----------------
   {
     id: 'flame', where: ['plain'], scenes: ['games'], arrive: true, title: 'La flamme vacille',

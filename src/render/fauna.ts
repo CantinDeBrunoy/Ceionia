@@ -10,7 +10,7 @@ import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { CH, NC } from './vegetation';
 import { makeBeast, BEAST_KINDS, GESTURES, beastYaw, BeastKind, FOWL_FLOAT } from './beasts';
 import { Impostors } from './impostors';
-import { songbirdGeo, starlingGeo, gooseGeo, gullGeo, eagleGeo, wingMaterial, WingRig, BIRD_COATS, SONG_RIG, STARLING_RIG, GOOSE_RIG, GULL_RIG, EAGLE_RIG } from './birds';
+import { Plumage, songbirdGeo, starlingGeo, gooseGeo, gullGeo, eagleGeo, wingMaterial, WingRig, BIRD_COATS, SONG_RIG, STARLING_RIG, GOOSE_RIG, GULL_RIG, EAGLE_RIG } from './birds';
 
 type Kind = 'sheep' | 'cow' | 'pig' | 'hen' | 'rabbit' | 'deer' | 'horse' | 'llama' | 'fox' | 'wolf' | 'frog'
   | 'duck' | 'duckling' | 'bird' | 'songbird' | 'bee' | 'butterfly' | 'bat' | 'fish' | 'dolphin' | 'whale' | 'manta' | 'shark'
@@ -353,26 +353,128 @@ function duckGeo() {
   return p.build(false).body;
 }
 
-/** Abeille : corps rayé et deux ailes translucides */
+type P3 = [number, number, number];
+/** Triangle et son reflet (x → −x, sommets dans l'autre sens pour garder la face dehors) */
+const pair = (p: Plumage, a: P3, b: P3, c: P3, color: number, shade = 1) => {
+  p.tri(a, b, c, color, 0, 0, shade);
+  p.tri([-a[0], a[1], a[2]], [-c[0], c[1], c[2]], [-b[0], b[1], b[2]], color, 0, 0, shade);
+};
+/** Trait fin (patte, nervure, antenne) de `a` à `b`, large de `w` (sur le côté, ou en hauteur avec `up`), et son reflet */
+const stroke = (p: Plumage, a: P3, b: P3, w: number, color: number, up = 0) => {
+  const dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1;
+  const ox = up ? 0 : (-dz / l) * w, oz = up ? 0 : (dx / l) * w, oy = up ? w : 0;
+  pair(p, [a[0] + ox, a[1] + oy, a[2] + oz], [a[0] - ox, a[1] - oy, a[2] - oz], b, color);
+};
+/** Géométrie des formes instanciées à ailes battantes (`flapMaterial` ne lit que la position et la couleur) */
+const flat = (p: Plumage) => { const g = p.build(); g.deleteAttribute('aWing'); g.deleteAttribute('aPaint'); return g; };
+
+/**
+ * Abeille : thorax roux et velu, abdomen à bandes jaunes et noires, tête sombre aux gros yeux, antennes coudées,
+ * six pattes repliées sous le corps (corbeilles de pollen aux pattes arrière), dard, deux paires d'ailes nervurées.
+ * Le corps tient dans |x| < 0,0055 (`flap` de `SPECS`) : seules les ailes battent
+ */
 function beeGeo() {
-  const p = new Parts();
-  p.add(ico(0.009, 0.9, 0.85, 1.35, 0), 0, 0, 0, 0xf2c230);
-  p.add(box(0.017, 0.016, 0.004), 0, 0, -0.002, 0x2a2420);
-  p.add(box(0.016, 0.015, 0.004), 0, 0, -0.008, 0x2a2420);
-  for (const s of [-1, 1]) p.add(tri([s * 0.003, 0.007, 0.002, s * 0.022, 0.009, 0.004, s * 0.018, 0.008, -0.01]), 0, 0, 0, 0xeef6ff);
-  return p.build(false).body;
+  const p = new Plumage(23, 0.08);
+  const GOLD = 0xd09a34, GOLD2 = 0xa8782a, YEL = 0xf2c230, YEL2 = 0xd8a428, BLK = 0x2a2420, BLK2 = 0x1e1a18;
+  // abdomen, de la pointe au pédoncule : bandes alternées
+  p.loft([
+    { z: -0.026, y: -0.0015, rx: 0.0012, ry: 0.0012, top: BLK, belly: BLK2 },
+    { z: -0.023, y: -0.001, rx: 0.0032, ry: 0.003, top: BLK, belly: BLK2 },
+    { z: -0.0195, y: -0.0005, rx: 0.0048, ry: 0.0046, top: YEL, belly: YEL2 },
+    { z: -0.016, y: 0, rx: 0.0055, ry: 0.0052, top: BLK, belly: BLK2 },
+    { z: -0.0125, y: 0.0003, rx: 0.0055, ry: 0.0054, top: YEL, belly: YEL2 },
+    { z: -0.009, y: 0.0004, rx: 0.0052, ry: 0.005, top: BLK, belly: BLK2 },
+    { z: -0.0055, y: 0.0005, rx: 0.0043, ry: 0.0042, top: YEL, belly: YEL2 },
+    { z: -0.003, y: 0.0008, rx: 0.002, ry: 0.002, top: BLK, belly: BLK2 },
+    { z: -0.002, y: 0.001, rx: 0, ry: 0 },
+  ], 6, YEL, YEL2);
+  // thorax velu
+  p.loft([
+    { z: -0.0035, y: 0.001, rx: 0.002, ry: 0.002 },
+    { z: -0.002, y: 0.0012, rx: 0.0045, ry: 0.0048 },
+    { z: 0.003, y: 0.0016, rx: 0.0053, ry: 0.0055 },
+    { z: 0.0075, y: 0.0014, rx: 0.0042, ry: 0.0045 },
+    { z: 0.009, y: 0.001, rx: 0, ry: 0 },
+  ], 6, GOLD, GOLD2);
+  // tête et gros yeux
+  p.loft([
+    { z: 0.0085, y: 0.0008, rx: 0.003, ry: 0.0032 },
+    { z: 0.011, y: 0.0005, rx: 0.0042, ry: 0.004 },
+    { z: 0.0135, y: -0.0002, rx: 0.0034, ry: 0.0036 },
+    { z: 0.0155, y: -0.0012, rx: 0, ry: 0 },
+  ], 5, BLK, BLK2);
+  pair(p, [0.0038, 0.0032, 0.0115], [0.0042, -0.0025, 0.0118], [0.0034, 0.0005, 0.0145], 0x3a2a1c);
+  pair(p, [0.0038, 0.0032, 0.0115], [0.0044, 0.0003, 0.0095], [0.0042, -0.0025, 0.0118], 0x46321e);
+  // antennes coudées
+  const A0: P3 = [0.0012, 0.003, 0.0135], A1: P3 = [0.0022, 0.0075, 0.0155], A2: P3 = [0.0036, 0.0085, 0.021];
+  stroke(p, A0, A1, 0.0005, BLK, 1); stroke(p, A1, A2, 0.0005, BLK, 1);
+  // pattes : avant, milieu, arrière (corbeille de pollen)
+  for (const [z0, z1, z2] of [[0.006, 0.009, 0.011], [0.002, 0.001, -0.002], [-0.001, -0.007, -0.012]]) {
+    const hip: P3 = [0.002, -0.003, z0], knee: P3 = [0.0048, -0.0065, z1], foot: P3 = [0.0042, -0.0105, z2];
+    stroke(p, hip, knee, 0.0006, BLK2, 1); stroke(p, knee, foot, 0.0005, BLK2, 1);
+  }
+  pair(p, [0.0046, -0.0062, -0.0055], [0.0048, -0.0092, -0.0085], [0.0046, -0.0058, -0.0095], 0xf0a020);
+  pair(p, [0.0046, -0.0062, -0.0055], [0.0042, -0.0085, -0.0082], [0.0048, -0.0092, -0.0085], 0xd88a18);
+  // dard
+  p.loft([{ z: -0.0255, y: -0.0015, rx: 0.0006, ry: 0.0006 }, { z: -0.029, y: -0.0018, rx: 0, ry: 0 }], 3, BLK2, BLK2);
+  // ailes : avant, puis arrière plus petite ; nervures plus sombres
+  const WING = 0xe8f2fb, VEIN = 0xa8b8c8;
+  const fore: P3[] = [[0.003, 0.0055, 0.0055], [0.012, 0.007, 0.004], [0.022, 0.0085, -0.002], [0.0245, 0.0088, -0.0075], [0.019, 0.008, -0.0105], [0.009, 0.0068, -0.006], [0.004, 0.0058, 0.001]];
+  for (let i = 1; i < fore.length - 1; i++) pair(p, fore[0], fore[i], fore[i + 1], WING, i % 2 ? 1 : 0.94);
+  const hind: P3[] = [[0.003, 0.0052, 0.0005], [0.011, 0.0062, -0.006], [0.016, 0.0068, -0.0105], [0.012, 0.0064, -0.0135], [0.005, 0.0056, -0.006]];
+  for (let i = 1; i < hind.length - 1; i++) pair(p, hind[0], hind[i], hind[i + 1], 0xdde8f2, i % 2 ? 0.96 : 0.9);
+  stroke(p, [0.003, 0.0059, 0.0055], [0.0225, 0.009, -0.002], 0.0005, VEIN);
+  stroke(p, [0.006, 0.0063, 0.002], [0.019, 0.0084, -0.0085], 0.0004, VEIN);
+  return flat(p);
 }
 
+/**
+ * Chauve-souris : corps velu (dos de la couleur de la bête, poitrail plus clair), museau nu, grandes oreilles pointues,
+ * yeux ; ailes en membrane tendue entre quatre doigts (os sombres, panneaux nuancés, bord de fuite festonné), pouce
+ * griffu, membrane de la queue entre les pattes. Le corps tient dans |x| < 0,008 (`flap`) ; sert aussi au sous-sol (`mobs.ts`)
+ */
 export function batGeo() {
-  const p = new Parts();
-  p.add(ico(0.016, 0.9, 0.8, 1.3, 0), 0, 0, 0, 0xffffff);
-  for (const s of [-1, 1]) {
-    p.add(new THREE.ConeGeometry(0.005, 0.014, 3), s * 0.007, 0.014, 0.012, 0xffffff);
-    // aile en membrane festonnée
-    p.add(tri([s * 0.008, 0, 0.012, s * 0.09, 0, 0.004, s * 0.055, 0, -0.016, s * 0.008, 0, 0.012, s * 0.055, 0, -0.016, s * 0.008, 0, -0.012,
-      s * 0.055, 0, -0.016, s * 0.09, 0, 0.004, s * 0.08, 0, -0.022]), 0, 0, 0, 0xd8d0d8);
-  }
-  return p.build(false).body;
+  const p = new Plumage(31, 0.07);
+  const FUR = 0xffffff, BELLY = 0xe0d0c4, SKIN = 0xb89a98, MEM = 0xeccac2, BONE = 0x584850, CLAW = 0x2a2224;
+  p.loft([
+    { z: -0.021, y: 0.0005, rx: 0.0025, ry: 0.0025 },
+    { z: -0.015, y: 0.0008, rx: 0.0062, ry: 0.0062 },
+    { z: -0.005, y: 0.001, rx: 0.0078, ry: 0.0078 },
+    { z: 0.006, y: 0.0015, rx: 0.0078, ry: 0.0074 },
+    { z: 0.013, y: 0.0025, rx: 0.0058, ry: 0.006 },
+    { z: 0.018, y: 0.0035, rx: 0.0068, ry: 0.0066 },
+    { z: 0.0245, y: 0.0035, rx: 0.0062, ry: 0.0058 },
+    { z: 0.029, y: 0.0018, rx: 0.0034, ry: 0.0034, top: SKIN, belly: SKIN },
+    { z: 0.0325, y: 0.001, rx: 0, ry: 0, top: SKIN, belly: SKIN },
+  ], 6, FUR, BELLY);
+  // oreilles : dos velu, creux rosé
+  pair(p, [0.0018, 0.0085, 0.021], [0.0066, 0.0065, 0.0175], [0.0062, 0.0215, 0.0145], FUR, 0.9);
+  pair(p, [0.0026, 0.0088, 0.0216], [0.006, 0.0072, 0.0186], [0.0058, 0.0185, 0.0158], 0xe0b4b0);
+  p.eyes(0.0052, 0.0052, 0.0255, 0.0011);
+  // aile droite (et son reflet) : épaule, coude, poignet, bouts des doigts, cheville
+  const S: P3 = [0.0065, 0.003, 0.008], E: P3 = [0.026, 0.0055, 0.0035], Wr: P3 = [0.046, 0.0065, 0.0125];
+  const d2: P3 = [0.08, 0.0055, 0.011], d3: P3 = [0.097, 0.003, -0.004], d4: P3 = [0.083, 0.0015, -0.025], d5: P3 = [0.056, 0.001, -0.031];
+  const A: P3 = [0.0065, 0, -0.019];
+  // creux du bord de fuite entre deux doigts, tiré vers `c`
+  const notch = (a: P3, b: P3, c: P3, k: number): P3 => {
+    const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+    return [m[0] + (c[0] - m[0]) * k, m[1] + (c[1] - m[1]) * k + 0.002, m[2] + (c[2] - m[2]) * k];
+  };
+  const fan: P3[] = [d2, d3, notch(d3, d4, Wr, 0.22), d4, notch(d4, d5, Wr, 0.24), d5, notch(d5, A, E, 0.3), A];
+  for (let i = 0; i < fan.length - 1; i++) pair(p, Wr, fan[i], fan[i + 1], MEM, [1, 0.9, 0.95, 0.86, 0.93, 0.84, 0.9][i]);
+  pair(p, Wr, A, E, MEM, 0.88);
+  pair(p, E, A, S, MEM, 0.8);
+  pair(p, S, E, Wr, MEM, 0.97);
+  // os : bras velu, doigts sombres, pouce griffu
+  const up = (q: P3, h: number): P3 => [q[0], q[1] + h, q[2]];
+  stroke(p, up(S, 0.0008), up(E, 0.0008), 0.0016, FUR);
+  stroke(p, up(E, 0.0008), up(Wr, 0.0008), 0.0012, BONE);
+  for (const d of [d2, d3, d4, d5]) stroke(p, up(Wr, 0.0006), up(d, 0.0006), 0.0008, BONE);
+  pair(p, [Wr[0] - 0.001, Wr[1] + 0.0008, Wr[2]], [Wr[0] + 0.001, Wr[1] + 0.0008, Wr[2] - 0.001], [Wr[0] + 0.002, Wr[1] + 0.001, Wr[2] + 0.006], CLAW);
+  // membrane de la queue et pieds griffus
+  pair(p, A, [0, 0.0005, -0.033], [0, 0.0008, -0.02], MEM, 0.86);
+  pair(p, [0.004, 0, -0.016], [0.0072, -0.001, -0.022], [0.0048, -0.0005, -0.023], CLAW);
+  return flat(p);
 }
 
 function fishGeo() {
@@ -492,14 +594,57 @@ export function swayMaterial(uTime: { value: number }, [freq, amp]: [number, num
   return m;
 }
 
+/**
+ * Papillon : thorax velu et abdomen fin, antennes à massue ; ailes antérieures et postérieures à motif : base plus sombre,
+ * plage de la couleur de l'insecte (couleur par instance), bordure noire semée de points clairs, ocelle sur l'aile arrière,
+ * queue effilée. Ailes à plat, au-delà de |x| = 0,003 (`flap`)
+ */
 function butterflyGeo() {
-  const p = new Parts();
-  p.add(box(0.006, 0.006, 0.03), 0, 0, 0, DARK);
-  for (const s of [-1, 1]) {
-    p.add(tri([s * 0.003, 0, 0.004, s * 0.036, 0, 0.024, s * 0.03, 0, -0.003]), 0, 0, 0, 0xffffff);
-    p.add(tri([s * 0.003, 0, -0.002, s * 0.027, 0, -0.012, s * 0.012, 0, -0.024]), 0, 0, 0, 0xf2f2f2);
-  }
-  return p.build(false).body;
+  const p = new Plumage(41, 0.05);
+  p.loft([
+    { z: -0.019, y: 0, rx: 0.0007, ry: 0.0007 },
+    { z: -0.012, y: 0, rx: 0.0017, ry: 0.0019 },
+    { z: -0.002, y: 0.0003, rx: 0.0022, ry: 0.0024 },
+    { z: 0.005, y: 0.0006, rx: 0.0026, ry: 0.0028 },
+    { z: 0.009, y: 0.0006, rx: 0.0022, ry: 0.0022 },
+    { z: 0.0115, y: 0.0005, rx: 0.0014, ry: 0.0014 },
+    { z: 0.0125, y: 0.0004, rx: 0, ry: 0 },
+  ], 5, DARK, 0x4a4446);
+  stroke(p, [0.0007, 0.0012, 0.011], [0.0065, 0.0045, 0.027], 0.00045, DARK, 1);
+  pair(p, [0.0058, 0.0042, 0.0255], [0.0075, 0.0052, 0.0275], [0.0062, 0.0036, 0.0285], DARK);
+  // une aile : éventail depuis la base, trois plages du centre au bord, points dans la bordure, ocelle
+  const wing = (root: P3, rim: P3[], spots: number[], eye = -1) => {
+    const at = (q: P3, k: number): P3 => [root[0] + (q[0] - root[0]) * k, root[1] + (q[1] - root[1]) * k, root[2] + (q[2] - root[2]) * k];
+    const mid = (a: P3, b: P3, k: number, lift: number): P3 => {
+      const c = at(a, k), d = at(b, k);
+      return [(c[0] + d[0]) / 2, (c[1] + d[1]) / 2 + lift, (c[2] + d[2]) / 2];
+    };
+    for (let i = 0; i < rim.length - 1; i++) {
+      const a = rim[i], b = rim[i + 1], sh = i % 2 ? 1 : 0.94;
+      pair(p, root, at(a, 0.38), at(b, 0.38), 0xc8c0b8, sh);
+      pair(p, at(a, 0.38), at(a, 0.74), at(b, 0.74), 0xffffff, sh);
+      pair(p, at(a, 0.38), at(b, 0.74), at(b, 0.38), 0xffffff, sh * 0.97);
+      pair(p, at(a, 0.74), a, b, 0x262224);
+      pair(p, at(a, 0.74), b, at(b, 0.74), 0x262224, 0.9);
+      if (spots.includes(i)) {
+        const m = mid(a, b, 0.87, 0.0003), r = Math.hypot(b[0] - a[0], b[2] - a[2]) * 0.2;
+        pair(p, [m[0] - r, m[1], m[2]], [m[0] + r, m[1], m[2] - r * 0.4], [m[0] + r * 0.2, m[1], m[2] + r], 0xf4f0e8);
+      }
+      if (i === eye) {
+        // ocelle : rond sombre cerclé de clair
+        const m = mid(a, b, 0.56, 0.0003), r = 0.0032;
+        for (let k = 0; k < 5; k++) {
+          const u = (k / 5) * Math.PI * 2, v = ((k + 1) / 5) * Math.PI * 2;
+          const ring = (q: number, rr: number, h: number): P3 => [m[0] + Math.cos(q) * rr, m[1] + h, m[2] + Math.sin(q) * rr];
+          pair(p, m, ring(u, r, 0), ring(v, r, 0), 0xf8f2e0);
+          pair(p, [m[0], m[1] + 0.0002, m[2]], ring(u, r * 0.55, 0.0002), ring(v, r * 0.55, 0.0002), 0x1e2a48);
+        }
+      }
+    }
+  };
+  wing([0.002, 0.0004, 0.004], [[0.004, 0.0008, 0.009], [0.018, 0.0012, 0.019], [0.031, 0.0014, 0.026], [0.037, 0.0012, 0.022], [0.035, 0.001, 0.011], [0.029, 0.0008, 0.001], [0.016, 0.0006, -0.004], [0.004, 0.0004, -0.001]], [2, 3, 4, 5]);
+  wing([0.002, 0.0002, -0.002], [[0.004, 0.0004, -0.001], [0.019, 0.0005, -0.004], [0.028, 0.0004, -0.011], [0.025, 0.0003, -0.021], [0.015, 0.0002, -0.026], [0.009, 0.0001, -0.036], [0.006, 0.0001, -0.024], [0.0025, 0.0002, -0.009]], [1, 2, 3], 2);
+  return flat(p);
 }
 
 const SPECS: Record<Kind, Spec> = {
@@ -519,7 +664,7 @@ const SPECS: Record<Kind, Spec> = {
   bird: { geo: gooseGeo, max: 70, colors: BIRD_COATS.bird.map((c) => c[0]), speed: 0, idle: [1, 1], ok: any, wings: GOOSE_RIG },
   starling: { geo: starlingGeo, max: 60, colors: BIRD_COATS.starling.map((c) => c[0]), speed: 0, idle: [1, 1], ok: any, wings: STARLING_RIG },
   songbird: { geo: songbirdGeo, max: 90, colors: BIRD_COATS.songbird.map((c) => c[0]), speed: 0, idle: [4, 14], ok: any, wings: SONG_RIG },
-  bee: { geo: beeGeo, max: 48, colors: [0xffffff], speed: 0, idle: [1, 3], ok: any, flap: [40, 1.5, 0.003], scale: 2.2 },
+  bee: { geo: beeGeo, max: 48, colors: [0xffffff], speed: 0, idle: [1, 3], ok: any, flap: [40, 1.5, 0.0055], scale: 2.2 },
   bat: { geo: batGeo, max: 24, colors: [0x3a3238, 0x2e282e, 0x4a3e3e], speed: 0, idle: [1, 1], ok: any, flap: [17, 1.4, 0.008], scale: 1.7 },
   fish: { geo: fishGeo, max: 170, colors: [0xf28c38, 0xc8d4dc, 0x5fa8d8, 0xf2d04a], speed: 0, idle: [1, 1], ok: water },
   whale: { geo: dolphinGeo, max: 4, colors: [0x55607a], speed: 0, idle: [1, 1], ok: water, scale: 4 },

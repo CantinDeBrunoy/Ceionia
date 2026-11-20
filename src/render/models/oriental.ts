@@ -213,6 +213,21 @@ export function mashrabiya(f: Face, u: number, y: number, w: number, h: number, 
   f.box(w + 0.03, 0.03, d + 0.03, u, y + h, d / 2, wood);
 }
 
+/** Frise peinte de triangles le long d'une face (décor des maisons de terre), centrée, base en y : un triangle par motif */
+export function frieze(f: Face, len: number, y: number, col: number, step = 0.07, n = 0.004) {
+  const k = Math.max(2, Math.floor(len / step)), V = (x: number, yy: number) => new THREE.Vector2(x, yy);
+  for (let i = 0; i < k; i++) f.shape([V(-step * 0.32, 0), V(step * 0.32, 0), V(0, step * 0.5)], -len / 2 + (len / k) * (i + 0.5), y, n, col);
+}
+/** Pinacles de terre aux quatre coins d'une terrasse w × d posée en y (architecture de terre crue) */
+function pinnacles(p: Parts, w: number, d: number, y: number, col: number, r = 0.04, h = 0.12, x = 0, z = 0) {
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.cone(r, h, 4, x + sx * (w / 2 - r * 0.7), y, z + sz * (d / 2 - r * 0.7), col, false, Math.PI / 4);
+}
+/** Torche murale sur une face : hampe de bois, flamme qui vacille la nuit */
+function wallTorch(f: Face, u: number, y: number) {
+  f.add(new THREE.BoxGeometry(0.014, 0.1, 0.014).rotateX(0.5), u, y, 0.02, O.darkwood);
+  f.box(0.03, 0.045, 0.03, u, y + 0.045, 0.045, 0xffa040, true);
+}
+
 /** Assombrit une couleur */
 export function dark(c: number, k: number) {
   const col = new THREE.Color(c).multiplyScalar(k);
@@ -944,7 +959,7 @@ function courtyard(p: Parts, s: Style, v: number, cw: number, cd: number, h: num
 /** Maison de brique crue (Antiquité) : cube à rondins, porte à linteau de bois, toit en terrasse, coupoles en ruche ou chambre haute */
 function mudHouse(p: Parts, s: Style, r: () => number, v: number, W: number, D: number, wall: number) {
   const h = 0.3 + r() * 0.1, kind = v % 4, sd = v % 2 ? 1 : -1;
-  const fs = faces(p, W, D), f = fs[0][0];
+  const fs = faces(p, W, D), f = fs[0][0], paint = pick([O.white, 0xe8d8b0, O.ochre, O.red, O.turqD], v >> 2);
   if (kind === 2) {
     // maison à coupoles en ruche : deux pièces carrées sous des cônes de terre
     for (const sx of [-1, 1]) {
@@ -953,23 +968,29 @@ function mudHouse(p: Parts, s: Style, r: () => number, v: number, W: number, D: 
       p.add(new THREE.LatheGeometry([[0.5, 0], [0.46, 0.3], [0.32, 0.65], [0.12, 0.92], [0, 1]].map(([u, y]) => new THREE.Vector2(u * Math.min(ww, D) * 0.98, y * 0.42)), 7), x, h * 0.8, 0, wall);
       p.cyl(0.025, 0.025, 0.03, 5, x, h * 0.8 + 0.42, 0, s.trim);
     }
-    door(f, -W * 0.24, 0.12, 0.18, 'round', s.trim, O.wood);
-    f.shape(archPts(0.06, 0.08, 'round', 3), W * 0.24, 0.12, 0.004, O.hole);
+    door(f, -W * 0.24, 0.12, 0.18, 'round', paint, O.wood, { step: s.trim });
+    mashrabiya(f, W * 0.24, 0.1, 0.13, 0.11, O.wood);
+    frieze(f, W * 0.9, h * 0.8 - 0.06, paint, 0.08);
   } else {
     p.box(W, h, D, 0, 0, 0, wall);
     vigas(f, W, h - 0.06, O.beam, 0.17, 0.05);
     vigas(fs[1][0], D, h - 0.06, O.beam, 0.2, 0.05);
     parapet(p, W, D, h, wall, 0.05, 0.04);
-    // porte de planches sous un linteau de bois, petite fenêtre carrée, banquette de terre
+    // le pied enduit d'une boue plus sombre, les pinacles de terre aux coins de la terrasse
+    for (const [ff, len] of fs) ff.plane(len, 0.05, 0, 0.025, 0.002, O.mudD);
+    pinnacles(p, W, D, h + 0.05, wall);
+    // la porte en plein cintre : encadrement peint, vantail de planches clouté, marche ; la frise peinte au-dessus
     const du = sd * W * 0.2;
-    bay(f, du, 0, 0.13, 0.2, 'flat', O.wood, { frame: s.trim });
-    f.box(0.2, 0.025, 0.035, du, 0.2, 0.017, O.beam);
-    f.box(0.18, 0.02, 0.06, du, 0, 0.03, s.trim);
-    f.plane(0.06, 0.06, -du, 0.19, 0.004, O.hole);
-    f.box(0.09, 0.012, 0.03, -du, 0.155, 0.015, O.beam);
+    door(f, du, 0.14, 0.22, 'round', paint, O.wood, { step: s.trim });
+    for (let k = 0; k < 3; k++) for (const s2 of [-1, 1]) f.box(0.012, 0.012, 0.008, du + s2 * 0.035, 0.05 + k * 0.06, 0.012, 0x3a3a3e);
+    frieze(f, W * 0.86, h - 0.14, paint, 0.075);
+    // la fenêtre sur la rue : un claustra de bois en saillie (le moucharabieh de l'Antiquité), la banquette de terre dessous
+    mashrabiya(f, -du, 0.14, 0.15, 0.12, O.wood);
     f.box(W * 0.35, 0.045, 0.07, -du, 0, 0.035, s.trim);
     fs[1][0].plane(0.05, 0.05, 0, h * 0.6, 0.004, O.hole);
     fs[3][0].plane(0.05, 0.05, 0, h * 0.6, 0.004, O.hole);
+    // les gargouilles de bois qui rejettent l'eau des pluies loin des murs
+    for (const ff of [fs[1][0], fs[3][0]]) ff.add(new THREE.BoxGeometry(0.03, 0.025, 0.11).rotateX(-0.15), D * 0.2, h - 0.02, 0.05, O.beam);
     if (kind === 0) {
       // chambre haute et son échelle
       const ux = -sd * W * 0.2, uw = W * 0.45, ud = D * 0.5;
@@ -986,14 +1007,18 @@ function mudHouse(p: Parts, s: Style, r: () => number, v: number, W: number, D: 
       frustum(p, W * 0.66, D * 0.54, W * 0.6, D * 0.48, 0.03, 0, h + 0.17, 0, O.straw);
       p.box(W * 0.4, 0.008, D * 0.3, 0, h, 0, pick(AWNING, v));
     } else {
-      // jarres, sacs de grain et dattes au soleil sur le toit
-      for (let i = 0; i < 3; i++) jar(p, -W * 0.25 + i * 0.09, -D * 0.25, 1, O.terra, h);
-      p.box(W * 0.35, 0.012, D * 0.3, W * 0.12, h, D * 0.1, 0xa0502a);
-      p.add(new THREE.IcosahedronGeometry(0.05, 0).scale(1, 0.8, 1), -W * 0.2, h + 0.04, D * 0.15, O.straw);
+      // une petite coupole de terre sur la pièce du fond ; jarres, sacs de grain et dattes au soleil sur le toit
+      p.cyl(0.15, 0.16, 0.05, 8, -sd * W * 0.22, h, -D * 0.2, wall);
+      dome(p, 0.15, 0.13, -sd * W * 0.22, h + 0.05, -D * 0.2, O.mudL, 'saucer', 8);
+      p.cyl(0.02, 0.025, 0.04, 4, -sd * W * 0.22, h + 0.18, -D * 0.2, O.mudD);
+      for (let i = 0; i < 3; i++) jar(p, sd * W * 0.12 + i * 0.09 * sd, -D * 0.25, 1, O.terra, h);
+      p.box(W * 0.35, 0.012, D * 0.3, sd * W * 0.14, h, D * 0.12, 0xa0502a);
+      p.add(new THREE.IcosahedronGeometry(0.05, 0).scale(1, 0.8, 1), -sd * W * 0.22, h + 0.04, D * 0.22, O.straw);
     }
   }
-  // jarre d'eau près de la porte
+  // jarre d'eau près de la porte, et un palmier-dattier à l'angle de derrière (trois maisons sur quatre)
   jar(p, -sd * W * 0.42, D / 2 + 0.05, 1.2);
+  if (v % 4 !== 1) palm(p, sd * (W / 2 + 0.05), -D / 2 + 0.06, 0.56 + (v % 3) * 0.05, v);
 }
 
 /** Immeuble blanc (Moderne) : boutique ou arcades au rez-de-chaussée, balcons, claustra, citernes, climatiseurs, paraboles */
@@ -1435,8 +1460,19 @@ function oWorkshop(p: Parts, age: number, v: number, w: number, d: number) {
   p.box(W, h, D * 0.45, 0, 0, -D * 0.27, wall);
   const fb = new Face(p, 0, 0, -D * 0.045);
   if (s.mud) vigas(fb, W, h - 0.06, O.beam, 0.17, 0.05); else { cornice(fb, W, h - 0.03, s.trim); merlons(fb, W, h, wall, 'step', 0.28, 0.08, 0.04); }
-  door(fb, W * 0.32, 0.11, 0.19, s.mud ? 'flat' : s.arch, s.trim, s.mud ? O.wood : pick(DOORS, v));
+  door(fb, W * 0.32, 0.11, 0.19, s.mud ? 'round' : s.arch, s.trim, s.mud ? O.wood : pick(DOORS, v));
   parapet(p, W, D * 0.45, h, wall, 0.04, 0.03, 0, -D * 0.27);
+  if (s.mud) {
+    // la maison de terre de l'artisan : pinacles, frise peinte sous les rondins, fenêtre à claustra sur le côté, palmier derrière
+    pinnacles(p, W, D * 0.45, h + 0.04, wall, 0.035, 0.1, 0, -D * 0.27);
+    frieze(fb, W * 0.9, h - 0.13, pick([O.white, O.ochre, O.red], v), 0.07);
+    mashrabiya(new Face(p, Math.PI / 2, W / 2, -D * 0.27), 0, 0.12, 0.13, 0.1, O.wood);
+    palm(p, -W * 0.44, -D * 0.47, 0.66, v + 3);
+    // les paniers de marchandises et une natte devant l'appentis, une enseigne de toile au poteau
+    for (let i = 0; i < 2; i++) p.cyl(0.05, 0.04, 0.06, 6, W * 0.42 - i * 0.1, 0, D * 0.42, i ? 0xb08a50 : 0x9a7040);
+    p.box(W * 0.3, 0.006, 0.16, -W * 0.05, 0, D * 0.38, pick(AWNING, v + 1));
+    new Face(p, 0, W * 0.42 + 0.03, D * 0.12 + 0.02, 0.12).plane(0.07, 0.1, 0.035, 0.05, 0, pick(AWNING, v + 2));
+  }
   for (const sx of [-1, 1]) p.cyl(0.018, 0.018, 0.27, 4, sx * W * 0.42, 0, D * 0.12, O.wood);
   p.add(new THREE.BoxGeometry(W * 0.96, 0.015, D * 0.42).rotateX(0.12), 0, 0.28, D * 0.0, kind === 1 ? pick(AWNING, v) : O.straw);
   p.box(W * 0.96, 0.02, 0.02, 0, 0.25, D * 0.2, O.wood);
@@ -1612,7 +1648,16 @@ export function orientWall(p: Parts, age: number, len: number, sink: number) {
   for (const ry of [0, Math.PI]) {
     const f = new Face(p, ry, 0, ry ? -t / 2 - 0.03 : t / 2 + 0.03);
     merlons(f, len, h + 0.04, wall, s.mud ? 'tooth' : age >= 4 ? 'round' : 'step', 0.3, 0.1, 0.05);
-    if (s.mud) { vigas(f, len, h * 0.55, O.beam, 0.32, 0.05); vigas(f, len, h * 0.85, O.beam, 0.32, 0.05); }
+    if (s.mud) {
+      vigas(f, len, h * 0.55, O.beam, 0.32, 0.05); vigas(f, len, h * 0.85, O.beam, 0.32, 0.05);
+      f.plane(len, 0.06, 0, 0.03, 0.03, O.mudD);
+      if (!ry) {
+        // dehors : des contreforts de terre, et la frise peinte sous le chemin de ronde
+        const k = Math.max(1, Math.round(len / 0.55));
+        for (let i = 0; i < k; i++) frustum(p, 0.12, 0.12, 0.08, 0.03, h * 0.7, -len / 2 + (len / k) * (i + 0.5), 0, t / 2 + 0.06, O.mudD);
+        frieze(f, len, h - 0.1, O.white, 0.1, 0.03);
+      }
+    }
     else {
       // assises de pierre marquées, meurtrières, bandeau sous le parapet
       for (let k = 0; k < 2; k++) f.plane(len, 0.012, 0, h * (0.3 + k * 0.3), 0.002, dark(wall, 0.9));
@@ -1632,6 +1677,26 @@ function oTower(p: Parts, age: number, v: number) {
     for (const [f, len] of faces(p, 0.72, 0.72, 0, 0, h)) merlons(f, len, 0, wall, 'tooth', 0.18, 0.1, 0.06);
     for (const [f] of faces(p, 0.8, 0.8)) { vigas(f, 0.6, h * 0.55, O.beam, 0.14, 0.06); vigas(f, 0.6, h * 0.85, O.beam, 0.14, 0.05); f.plane(0.03, 0.1, 0, h * 0.7, 0.03, O.hole); }
     p.box(0.74, 0.03, 0.74, 0, h, 0, top);
+    // les pinacles aux coins, la frise peinte sous les merlons, le pied enduit de boue plus sombre
+    pinnacles(p, 0.74, 0.74, h + 0.03, wall, 0.06, 0.2);
+    for (const [f, len] of faces(p, 0.726, 0.726, 0, 0, 0)) frieze(f, len * 0.9, h - 0.09, O.white, 0.08, 0.004);
+    for (const [f, len] of faces(p, 0.776, 0.776)) f.plane(len, 0.08, 0, 0.04, 0.002, O.mudD);
+    // la porte en plein cintre au pied, son vantail clouté, sa marche
+    const fd = new Face(p, 0, 0, 0.39);
+    door(fd, 0, 0.16, 0.26, 'round', O.mudD, O.wood, { step: O.mudD });
+    for (let k = 0; k < 4; k++) for (const s2 of [-1, 1]) fd.box(0.012, 0.012, 0.008, s2 * 0.04, 0.05 + k * 0.05, 0.012, 0x3a3a3e);
+    // le balcon de guet ajouré en encorbellement sur la face, et deux torches
+    mashrabiya(new Face(p, 0, 0, 0.372), 0, h * 0.42, 0.26, 0.17, O.wood);
+    for (const s2 of [-1, 1]) wallTorch(fd, s2 * 0.15, 0.2);
+    // le kiosque du guetteur sur la terrasse : quatre poteaux, une coupole de terre, une hampe à fanion
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.cyl(0.016, 0.016, 0.22, 4, sx * 0.15, h + 0.03, sz * 0.15, O.wood);
+    p.box(0.38, 0.03, 0.38, 0, h + 0.25, 0, O.beam);
+    dome(p, 0.2, 0.14, 0, h + 0.28, 0, O.mudL, 'saucer', 8);
+    p.cyl(0.008, 0.01, 0.34, 3, 0, h + 0.38, 0, O.darkwood);
+    new Face(p, Math.PI / 2, 0, 0, h + 0.62).plane(0.18, 0.1, 0.09, 0.05, 0, O.red);
+    new Face(p, -Math.PI / 2, 0, 0, h + 0.62).plane(0.18, 0.1, -0.09, 0.05, 0, O.red);
+    // un palmier au pied
+    palm(p, 0.52, -0.08, 0.72, v + 5);
     return;
   }
   const h = 1.25, R = 0.5;
@@ -1663,7 +1728,19 @@ function oGate(p: Parts, age: number, v: number) {
     if (s.mud) {
       frustum(p, 0.78, 0.98, 0.64, 0.84, h + 0.2 + sink, sx * 0.85, -sink, 0, wall);
       for (const [f, len] of faces(p, 0.64, 0.84, sx * 0.85, 0, h + 0.2)) merlons(f, len, 0, wall, 'tooth', 0.18, 0.1, 0.06);
-      for (const sz of [-1, 1]) { const f = new Face(p, sz > 0 ? 0 : Math.PI, sx * 0.85, sz * 0.47); vigas(f, 0.6, h * 0.6, O.beam, 0.14, 0.06); vigas(f, 0.6, h * 0.9, O.beam, 0.14, 0.05); }
+      pinnacles(p, 0.64, 0.84, h + 0.2, wall, 0.05, 0.18, sx * 0.85);
+      for (const sz of [-1, 1]) {
+        const f = new Face(p, sz > 0 ? 0 : Math.PI, sx * 0.85, sz * 0.47);
+        vigas(f, 0.6, h * 0.6, O.beam, 0.14, 0.06); vigas(f, 0.6, h * 0.9, O.beam, 0.14, 0.05);
+        new Face(p, f.ry, sx * 0.85, sz * 0.44).plane(0.6, 0.08, 0, 0.04, 0.002, O.mudD);
+        frieze(new Face(p, f.ry, sx * 0.85, sz * 0.43), 0.56, h + 0.08, O.white, 0.08);
+        // dehors, sur chaque tour, un balcon de guet ajouré
+        if (sz > 0) mashrabiya(new Face(p, 0, sx * 0.85, 0.455), 0, h * 0.5, 0.24, 0.16, O.wood);
+      }
+      // la hampe et son fanion sur chaque tour
+      p.cyl(0.008, 0.01, 0.4, 3, sx * 0.85, h + 0.2, 0, O.darkwood);
+      new Face(p, Math.PI / 2, sx * 0.85, 0, h + 0.5).plane(0.2, 0.11, 0.1, 0.055, 0, O.red);
+      new Face(p, -Math.PI / 2, sx * 0.85, 0, h + 0.5).plane(0.2, 0.11, -0.1, 0.055, 0, O.red);
       continue;
     }
     column(p, 0.5, 0.45, h + 0.25 + sink, 12, sx * 0.85, -sink, 0, wall);
@@ -1684,12 +1761,23 @@ function oGate(p: Parts, age: number, v: number) {
     f.shape(archPts(0.56, h * 0.74, s.arch, 7), 0, 0, 0.014, O.hole);
     if (sz > 0) { f.shape(archPts(0.24, h * 0.62, s.arch, 5), -0.13, 0, 0.018, O.darkwood); f.shape(archPts(0.24, h * 0.62, s.arch, 5), 0.13, 0, 0.018, O.darkwood); for (let k = 0; k < 4; k++) for (const u of [-0.18, -0.08, 0.08, 0.18]) f.plane(0.015, 0.015, u, 0.1 + k * 0.12, 0.022, 0x3a3a3e); }
     merlons(f, 1.1, h + 0.04, wall, s.mud ? 'tooth' : age >= 4 ? 'round' : 'step', 0.24, 0.1, 0.05);
-    if (s.mud) vigas(f, 1.0, h * 0.85, O.beam, 0.14, 0.05);
+    if (s.mud) {
+      vigas(f, 1.0, h * 0.85, O.beam, 0.14, 0.05);
+      // l'arc souligné d'un bandeau peint, la frise au-dessus, deux torches qui gardent l'entrée
+      f.shape(archPts(0.76, h * 0.86, s.arch, 7), 0, 0, 0.006, sz > 0 ? O.white : O.mudL);
+      frieze(f, 1.0, h * 0.74, sz > 0 ? O.red : O.white, 0.08, 0.008);
+      for (const sx of [-1, 1]) wallTorch(f, sx * 0.44, h * 0.45);
+    }
     // gardes : deux lanternes (Médiéval à Moderne), une arche lumineuse au Futuriste
     if (!s.mud && age <= 4) for (const sx of [-1, 1]) wallLamp(f, sx * 0.38, h * 0.62);
     if (age === 5) f.shape(archPts(0.6, h * 0.78, s.arch, 7), 0, 0, 0.012, O.turqL, 'neon');
   }
   if (age === 5) { p.box(1.1, 0.02, 0.02, 0, h + 0.05, 0.44, O.turqL, 0, 'neon'); p.box(1.1, 0.02, 0.02, 0, h + 0.05, -0.44, O.turqL, 0, 'neon'); }
+  // à l'Antiquité, deux palmiers devant la porte, et l'abreuvoir de pierre des caravanes
+  if (s.mud) {
+    for (const sx of [-1, 1]) palm(p, sx * 0.52, 0.64, 0.8 + (v + sx) % 2 * 0.1, v * 3 + sx);
+    p.box(0.3, 0.07, 0.1, 0.78, 0, 0.62, O.mudD); p.box(0.26, 0.072, 0.06, 0.78, 0, 0.62, O.water);
+  }
   if (age >= 2 && age <= 4) { p.cyl(0.012, 0.012, 0.6, 3, 0, h + 0.04, 0, O.darkwood); new Face(p, Math.PI / 2, 0, 0, h + 0.44).plane(0.3, 0.18, 0.15, 0.09, 0, O.turq); new Face(p, -Math.PI / 2, 0, 0, h + 0.44).plane(0.3, 0.18, -0.15, 0.09, 0, O.turq); }
 }
 

@@ -1,8 +1,9 @@
 import { Underground, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from '../world/world';
 import { Agents, Kit } from './agents';
-import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, RECENT_EVENTS } from './missions';
-import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
+import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, RECENT_EVENTS, VOLCANIC } from './missions';
+import { nearestVolcano, volcanoIsle, volcanoGate, crossTo, landCell } from './volcano';
+import { AGES, KINDS, KindId, isDecor, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { missionOffered, missionWhy, tributePerDay, isleOf, rivalOf, talkRisk, isleOffered, isleWhy } from './diplomacy';
@@ -78,7 +79,7 @@ export interface ActiveExpedition {
 }
 
 /** Les chasses où le monstre meurt sur place : l'issue s'y tire avant la fin du travail */
-export const FATED = new Set<string>(['megalodon', 'kraken', 'dragon']);
+export const FATED = new Set<string>(['megalodon', 'kraken', 'dragon', 'stag']);
 /** Part du travail où se joue l'issue d'une chasse au monstre (après le dernier imprévu, qui survient aux trois quarts au plus) */
 export const FATE_AT = 0.8;
 /** Phare et chantier naval veillent sur les expéditions en mer : risque en moins (les deux se cumulent) */
@@ -230,8 +231,11 @@ const destName = (c: Choice) => tr(c.sea ? 'la mer' : DEST_NAME[c.dest]);
  */
 export const PORTAL_SAIL = 2.2, PORTAL_RETURN = 0.17;
 const FALLBACK: Record<DestKind, DestKind | null> = { cave: 'mountain', mountain: 'far', river: 'plain', forest: 'plain', far: 'plain', plain: null, spaceport: null };
-/** Une équipe de plus tous les 30 habitants, quatre au plus */
-const PER_TEAM = 30, MAX_TEAMS = 4;
+/**
+ * Une équipe de plus à 20, 50 et 80 habitants, quatre au plus. La deuxième venait à 30 : les testeurs l'attendaient
+ * trop longtemps (v6, 19 nov. 2026) ; les suivantes gardent leur écart de 30
+ */
+const TEAM_AT = [20, 50, 80], MAX_TEAMS = TEAM_AT.length + 1;
 /** Sans réponse du joueur, l'équipe tranche d'elle-même au bout de ce temps (secondes de jeu) */
 const AUTO_DECIDE = 90;
 /** Une équipe encore en chemin au bout de ce temps (secondes de jeu) se met au travail là où elle est : elle est bloquée */
@@ -250,7 +254,9 @@ const OUT_MAX = 480;
 export const MAX_CRAFT = 10;
 
 /** Nombre d'expéditions que le village peut mener de front, selon sa population */
-export const partyLimit = (pop: number) => Math.min(MAX_TEAMS, 1 + Math.floor(pop / PER_TEAM));
+export const partyLimit = (pop: number) => 1 + TEAM_AT.filter((n) => pop >= n).length;
+/** Population où vient l'équipe suivante quand le village en a `max` (null : au maximum) */
+export const nextTeamAt = (max: number): number | null => TEAM_AT[max - 1] ?? null;
 
 /**
  * Expéditions : chaque équipe enrôlée part aussitôt en file vers sa destination, y travaille, revient au cœur du village ;
@@ -282,6 +288,8 @@ export class Expeditions {
   onNews: ((msg: string) => void) | null = null;
   /** une équipe attend une décision */
   onEvent: ((a: ActiveExpedition) => void) | null = null;
+  /** l'équipe a tranché seule un imprévu resté sans réponse (`AUTO_DECIDE`) : `i`, l'option prise */
+  onAuto: ((a: ActiveExpedition, ev: ExpEvent, i: number) => void) | null = null;
   /** population du village, donnée par le jeu */
   pop: () => number = () => 0;
   private nextId = 1;
@@ -386,6 +394,7 @@ export class Expeditions {
     if (this.running(m)) return tr('Cette expédition est déjà en route.');
     // une partie commencée avant l'île du portail n'en a pas
     if (c.scene === 'portal' && !this.world.portal) return tr('Cette carte n’a pas d’île du portail : la partie a commencé avant elle. Une nouvelle partie en aura une.');
+    if (VOLCANIC.has(c.scene) && !this.volcanoNear()) return tr('Il n’y a pas de volcan sur cette carte.');
     // la diplomatie de l'archipel : une étape à son heure, et une seule fois
     const diplo = missionWhy(this.world, m.id) ?? (m.isle ? isleWhy(this.world, m.id, m.isle.when) : null);
     if (diplo) return diplo;
@@ -394,7 +403,7 @@ export class Expeditions {
     const max = this.slots();
     if (this.active.length >= max) {
       return max < MAX_TEAMS
-        ? tr('Toutes les équipes sont en route ({n}/{max}) : à {pop} habitants, le village pourra en envoyer une de plus.', { n: this.active.length, max, pop: max * PER_TEAM })
+        ? tr('Toutes les équipes sont en route ({n}/{max}) : à {pop} habitants, le village pourra en envoyer une de plus.', { n: this.active.length, max, pop: nextTeamAt(max) ?? 0 })
         : tr('Toutes les équipes sont en route ({n}/{max}).', { n: max, max });
     }
     if (!this.base()) return tr('Il faut d’abord un village : une maison au moins.');
@@ -425,6 +434,13 @@ export class Expeditions {
       if (!dest) dest = this.portalShore(base, true) ?? base;
     }
     this.lastFail = null;
+    // le volcan : la rive d'en face de son île (on y traverse en barque), ou son pied s'il se gagne à pied
+    let volc = 0;
+    if (VOLCANIC.has(c.scene)) {
+      const t = this.volcanoTrip(base, c);
+      if (!t) { this.lastFail = tr('Aucun chemin vers le volcan : ni rive en face de son île, ni sentier jusqu’à lui.'); return null; }
+      dest = t.dest; sea = t.sea; kind = t.sea ? 'river' : 'mountain'; volc = t.cross;
+    }
     // un aller simple vers l'île rivale (les éclaireurs) : une côte sur la mer reliée au large, pas une lagune fermée d'où la
     // barque ne sortirait pas
     // (les pourparlers de la paix aussi : ils traversent jusqu'aux îles)
@@ -474,6 +490,8 @@ export class Expeditions {
     // la galère du portail traverse à l'allure d'une galère : loin de l'île, le travail s'allonge d'autant (sinon elle
     // filait d'une rive à l'autre en quelques secondes, et l'on croyait l'équipe téléportée)
     if (c.scene === 'portal') a.extra = Math.max(a.extra, this.portalCrossing(dest) / (PORTAL_SAIL * PORTAL_RETURN) - c.work);
+    // (la barque du volcan de même : sa traversée tient dans le début du travail, voir `ISLE_LAND`)
+    if (volc > 0) a.extra = Math.max(a.extra, volc / (PORTAL_SAIL * PORTAL_RETURN) - c.work);
     // les pourparlers de la paix traversent jusqu'aux îles (voir `TRIP_OUT`) : le travail s'allonge avec la traversée
     if (PEACE_TRIPS.has(m.id) || c.visit) a.extra = Math.max(a.extra, this.peaceCrossing(dest, c) / (TRIP_SAIL * TRIP_OUT) - c.work);
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval (tous en selle, ou tous à pied) ; on part en selle
@@ -482,6 +500,8 @@ export class Expeditions {
     kits.forEach((kt, i) => {
       // les chasseurs du mammouth ont toujours leurs lances de chasse au poing (les armes du village, emportées en plus, rendent la chasse plus sûre)
       if (c.scene === 'mammoth' || c.scene === 'megalodon' || c.scene === 'kraken' || c.scene === 'dragon') kt.weapon ??= huntWeapon(age);
+      // (le cerf blanc se chasse à l'arc, jusqu'à ce que les armes à feu le remplacent)
+      if (c.scene === 'stag') kt.weapon ??= age <= 2 ? 'bow' : huntWeapon(age);
       if (i < (take.armor ?? 0) + (take.energyArmor ?? 0)) kt.armor = true;
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       else if (kits.length - 1 - i < (take.lamp ?? 0)) kt.lamp = true;
@@ -514,7 +534,7 @@ export class Expeditions {
       // une décision attendue : l'équipe patiente, puis tranche d'elle-même
       if (a.wait) {
         a.waitT += dt / Math.max(1, this.speed);
-        if (a.waitT >= AUTO_DECIDE) this.decide(a, this.safest(a));
+        if (a.waitT >= AUTO_DECIDE) { const ev = a.wait, i = this.safest(a); if (this.decide(a, i)) this.onAuto?.(a, ev, i); }
         continue;
       }
       // une attente choisie : le travail est suspendu, l'équipe reste là à attendre (elle ne fait pas l'action d'une autre option)
@@ -637,6 +657,55 @@ export class Expeditions {
       if (w.inCells(cx, cz) && w.onPortalIsland(cx, cz) && !w.isWet(cx, cz)) return k;
     }
     return L;
+  }
+
+  /** Le volcan le plus proche du village (ou du milieu de la carte), null s'il n'y en a pas */
+  volcanoNear() { const b = this.base() ?? [N / 2, N / 2]; return nearestVolcano(this.world, b[0], b[1]); }
+
+  /**
+   * Comment gagner le volcan : à pied jusqu'à son pied s'il est sur la terre du village (`sea` faux), sinon la rive d'en face
+   * de son île, atteignable à pied, d'où la barque file tout droit vers le volcan sans toucher d'autre terre (`cross` : la
+   * longueur de la traversée). La rive la plus proche du volcan d'abord ; null si rien ne va
+   */
+  volcanoTrip(base: [number, number], c: Choice): { dest: [number, number]; sea: boolean; cross: number } | null {
+    const w = this.world, v = nearestVolcano(w, base[0], base[1]);
+    if (!v) return null;
+    const isle = volcanoIsle(w, v.f), from = w.ci(Math.floor(base[0]), Math.floor(base[1]));
+    // sur la même terre : à pied, au pied du cône (puis l'équipe monte au lieu du travail, sur la scène)
+    if (isle[from]) {
+      const [gx, gz] = volcanoGate(w, v.f, c, base), a = Math.atan2(base[1] - v.f.z, base[0] - v.f.x);
+      for (const k of [1.1, 1.25, 1, 1.4]) for (const da of [0, 0.3, -0.3, 0.6, -0.6]) {
+        const x = Math.floor(v.f.x + Math.cos(a + da) * v.f.r * k), z = Math.floor(v.f.z + Math.sin(a + da) * v.f.r * k);
+        if (landCell(w, x, z) && !w.occ[w.ci(x, z)] && this.agents.findPath(from, w.ci(x, z))) return { dest: [x + 0.5, z + 0.5], sea: false, cross: 0 };
+      }
+      void gx; void gz;
+      return null;
+    }
+    const cand: [number, number, number, number, number][] = [];
+    for (let z = 1; z < N - 1; z++)
+      for (let x = 1; x < N - 1; x++) {
+        const k = w.ci(x, z);
+        if (isle[k] || w.occ[k] || w.lake[k] || w.decor[k] || w.cellAvg(x, z) < 0.12) continue;
+        const sea = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dz]) => w.cellAvg(x + dx, z + dz) < -0.3 && !w.lake[w.ci(x + dx, z + dz)]);
+        if (!sea) continue;
+        // l'équipe se retrouve une case en retrait de la berge : sur une rive à pic, la moitié de la case de berge est déjà
+        // sous l'eau, et l'équipe y pataugeait en arrivant (la barque s'amarre tout près, voir `findWater`)
+        const ix = x - sea[0], iz = z - sea[1];
+        if (!landCell(w, ix, iz) || w.cellAvg(ix, iz) < 0.25 || w.occ[w.ci(ix, iz)] || isle[w.ci(ix, iz)]) continue;
+        cand.push([ix + 0.5, iz + 0.5, Math.hypot(x + 0.5 - v.f.x, z + 0.5 - v.f.z), x + 0.5, z + 0.5]);
+      }
+    cand.sort((p, q) => p[2] - q[2]);
+    // (une rive injoignable est souvent celle d'un îlot : on n'essaie plus ses voisines)
+    const failed: [number, number][] = [];
+    for (const [x, z, , sx, sz] of cand) {
+      if (failed.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 8)) continue;
+      const cross = crossTo(w, v.f, isle, sx, sz);
+      if (cross < 0) continue;
+      if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return { dest: [x, z], sea: true, cross };
+      failed.push([x, z]);
+      if (failed.length >= 40) break;
+    }
+    return null;
   }
 
   /** L'appareil qui emmènerait l'équipe : l'hélicoptère de l'héliport (âge moderne) ou la montgolfière de l'aérodrome, avec ses deux aires ; null si le village n'en a pas */
@@ -981,7 +1050,7 @@ export class Expeditions {
     const w = this.world, [bx, bz] = base, cand: [number, number, number][] = [];
     const town = new Uint8Array(N * N), ds: number[] = [];
     for (const b of w.buildings.values()) {
-      if (b.kind === 'lamp') continue;
+      if (isDecor(b.kind)) continue;
       const s = sizeOf(b);
       ds.push(Math.hypot(b.x + s / 2 - bx, b.z + s / 2 - bz));
       for (let dz = -4; dz < s + 4; dz++) for (let dx = -4; dx < s + 4; dx++) if (w.inCells(b.x + dx, b.z + dz)) town[w.ci(b.x + dx, b.z + dz)] = 1;

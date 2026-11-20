@@ -253,6 +253,18 @@ function lion(p: Parts, x: number, z: number, s = 1, col = A.stone, ry = 0) {
     q.sphere(0.03, 0.04, 0.12, 0.09, col);
   }, s);
 }
+/**
+ * Faîtage archaïque d'un toit de chaume ou de bardeaux (Antiquité) : le rondin du faîte, des rondins posés en travers et les
+ * planches croisées qui dépassent aux deux bouts ; `len` le long de x, au sommet (x, y, z), tourné de `ry`
+ */
+function oldRidge(p: Parts, len: number, x: number, y: number, z: number, ry = 0, col = A.darkwood) {
+  inFrame(p, x, y, z, ry, (q) => {
+    q.add(new THREE.CylinderGeometry(0.03, 0.03, len + 0.08, 5).rotateZ(Math.PI / 2), 0, 0.01, 0, dark(A.thatch, 0.62));
+    const n = Math.max(2, Math.round(len / 0.12));
+    for (let i = 0; i < n; i++) q.add(new THREE.CylinderGeometry(0.018, 0.018, 0.1, 5).rotateX(Math.PI / 2), -len / 2 + (len * (i + 0.5)) / n, 0.04, 0, col);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) q.add(new THREE.BoxGeometry(0.014, 0.17, 0.028).translate(0, 0.085, 0).rotateX(sz * 0.5), sx * (len / 2 + 0.03), -0.04, 0, col);
+  });
+}
 /** Mât à oriflamme rouge */
 function banner(p: Parts, x: number, z: number, h: number, col = A.red, y = 0) {
   p.cyl(0.012, 0.016, h, 4, x, y, z, A.darkwood);
@@ -632,12 +644,31 @@ function parapet(p: Parts, w: number, d: number, y: number, col: number, h = 0.0
 
 /** Maison de l'Antiquité : charpente, torchis, toit de chaume ; grenier sur pilotis, claie de séchage ou auvent selon la variante */
 function hutHouse(p: Parts, v: number, w: number, d: number) {
-  const W = w * 0.72, D = d * 0.62, H = 0.26, kind = v % 3, z = -d * 0.06;
-  body(p, W, D, H, A.wattle, A.timber, 0, z);
-  door(p, -W * 0.18, z + D / 2 + 0.006, 0.12, 0.19, A.timber, A.darkwood);
-  p.box(0.1, 0.08, 0.014, W * 0.22, 0.16, z + D / 2 + 0.006, 0x3a2a22);
-  p.box(0.014, 0.08, D * 0.3, W / 2 + 0.006, 0.16, z, 0x3a2a22);
+  const W = w * 0.72, D = d * 0.62, H = 0.26, kind = v % 3, z = -d * 0.06, lac = A.redDark, fz = z + D / 2;
+  body(p, W, D, H, A.wattle, lac, 0, z);
+  // la charpente apparente sur le torchis : la traverse à mi-hauteur, les poteaux de l'arrière
+  p.box(W + 0.012, 0.024, 0.012, 0, 0.05 + H * 0.55, fz + 0.002, A.timber);
+  for (const sx of [-1, 1]) p.box(0.012, 0.024, D + 0.012, sx * (W / 2 + 0.002), 0.05 + H * 0.55, z, A.timber);
+  for (const sx of [-1, 1]) p.box(0.03, H, 0.03, sx * (W / 2 - 0.01), 0.05, z - D / 2 + 0.01, A.timber);
+  // la véranda de planches sur la façade, l'avant-toit porté par deux poteaux laqués
+  p.box(W + 0.06, 0.035, 0.13, 0, 0.04, fz + 0.065, A.wood);
+  for (const sx of [-1, 1]) p.box(0.026, H + 0.02, 0.026, sx * (W / 2 - 0.02), 0.075, fz + 0.1, lac);
+  p.box(0.12, 0.03, 0.06, -W * 0.18, 0, fz + 0.15, A.stone);
+  door(p, -W * 0.18, fz + 0.006, 0.12, 0.19, A.timber, A.darkwood);
+  // fenêtres de papier à croisillons, allumées la nuit ; la lanterne pendue sous l'avant-toit
+  win(p, W * 0.22, 0.13, fz + 0.008, 0.12, 0.09);
+  win(p, W / 2 + 0.008, 0.13, z, 0.1, 0.08, Math.PI / 2);
+  lantern(p, -W * 0.18 + 0.13, 0.25, fz + 0.09, 0.026);
+  p.box(0.004, 0.03, 0.004, -W * 0.18 + 0.13, 0.28, fz + 0.09, A.darkwood);
   hipRoof(p, W + 0.2, D + 0.22, 0.3, 0, 0.05 + H, z, A.thatch);
+  oldRidge(p, Math.max(0.12, W - D), 0, 0.05 + H + 0.3, z);
+  // les pierres de gué jusqu'à la porte ; derrière, la clôture de bambou du potager et ses rangs de légumes
+  for (let i = 0; i < 3; i++) p.cyl(0.045, 0.05, 0.015, 6, -W * 0.18 + (i % 2 ? 0.03 : -0.02), 0, fz + 0.26 + i * 0.1, A.stone);
+  const gx = (v % 2 ? 1 : -1) * (w / 2 - 0.1), gz = -d / 2 + 0.06;
+  for (let i = 0; i < 4; i++) p.box(0.016, 0.14, 0.016, gx, 0, gz + i * 0.12, A.bamboo);
+  for (const y of [0.05, 0.11]) p.box(0.012, 0.012, 0.38, gx, y, gz + 0.18, dark(A.bamboo, 0.85));
+  p.box(0.16, 0.025, 0.3, gx - Math.sign(gx) * 0.1, 0, gz + 0.17, 0x7a5a3a);
+  for (let i = 0; i < 3; i++) p.box(0.04, 0.05, 0.26, gx - Math.sign(gx) * (0.04 + i * 0.05), 0.02, gz + 0.17, i % 2 ? A.leaf : dark(A.leaf, 1.15));
   if (kind === 0) {
     // grenier sur pilotis
     const gx = -w * 0.32, gz = d * 0.32;
@@ -872,14 +903,31 @@ export function aTeahouse(p: Parts, age: number, v: number, w: number, d: number
     if (para) { p.cyl(0.006, 0.006, 0.34, 4, x, 0.1, tz, A.darkwood); p.cone(0.16, 0.06, 8, x, 0.42, tz, pick([A.red, 0xe8c070, 0x3f7262], v + Math.round(x * 10))); }
   };
   if (age <= 1) {
-    // pavillon ouvert : poteaux, plancher, bancs, foyer et bouilloire, toit de chaume
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.04, 0.32, 0.04, sx * W / 2, 0.04, z + sz * D / 2, A.timber);
-    p.box(W, 0.05, D, 0, 0.04, z, A.wood);
-    for (const sz of [-1, 1]) p.box(W * 0.8, 0.06, 0.1, 0, 0.09, z + sz * D * 0.3, A.timber);
+    // pavillon ouvert : poteaux laqués, plancher, balustrade sur trois côtés, bancs à coussins, foyer et bouilloire
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.045, 0.32, 0.045, sx * W / 2, 0.04, z + sz * D / 2, A.redDark);
+    p.box(W + 0.06, 0.05, D + 0.06, 0, 0.04, z, A.wood);
+    p.box(W + 0.1, 0.02, D + 0.1, 0, 0.02, z, A.stone);
+    rail(p, W, 0, 0.09, z - D / 2, 0, A.redDark, 0.08, 0.2);
+    for (const sx of [-1, 1]) rail(p, D, sx * W / 2, 0.09, z, Math.PI / 2, A.redDark, 0.08, 0.2);
+    for (const sz of [-1, 1]) { p.box(W * 0.8, 0.06, 0.1, 0, 0.09, z + sz * D * 0.3, A.timber); for (let i = 0; i < 3; i++) p.box(0.08, 0.016, 0.07, -W * 0.27 + i * W * 0.27, 0.15, z + sz * D * 0.3, pick([0x2f4a6a, A.ochre, 0x6a3a3a], i + v)); }
     p.cyl(0.06, 0.07, 0.06, 6, 0, 0.09, z, A.darkstone);
+    p.box(0.05, 0.02, 0.05, 0, 0.12, z, 0xff8a3a, 0, true);
     p.cyl(0.035, 0.04, 0.05, 6, 0, 0.15, z, A.bronze);
+    p.add(new THREE.BoxGeometry(0.03, 0.008, 0.008).rotateZ(0.5), 0.045, 0.19, z, A.bronze);
+    // l'étagère des jarres à thé, contre la balustrade du fond
+    p.box(W * 0.5, 0.012, 0.06, 0, 0.2, z - D / 2 + 0.05, A.timber);
+    for (let i = 0; i < 4; i++) p.cyl(0.022, 0.026, 0.05, 6, -W * 0.18 + i * W * 0.12, 0.212, z - D / 2 + 0.05, pick([0x5a6a4a, 0x8a5a3a, 0x3a4a5a], i + v));
     hipRoof(p, W + 0.3, D + 0.3, 0.32, 0, 0.36, z, A.thatch);
-    table(-w * 0.28, d * 0.32, false); table(w * 0.22, d * 0.34, false);
+    oldRidge(p, Math.max(0.12, W - D), 0, 0.68, z);
+    // les lanternes de papier aux quatre coins, sous l'avant-toit, et la bannière du thé à son mât
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { lantern(p, sx * (W / 2 + 0.06), 0.27, z + sz * (D / 2 + 0.06), 0.03); p.box(0.004, 0.05, 0.004, sx * (W / 2 + 0.06), 0.31, z + sz * (D / 2 + 0.06), A.darkwood); }
+    p.cyl(0.012, 0.016, 0.62, 4, w * 0.4, 0, d * 0.12, A.darkwood);
+    p.box(0.012, 0.26, 0.11, w * 0.4, 0.3, d * 0.12 + 0.06, A.paper); p.box(0.014, 0.12, 0.05, w * 0.4, 0.38, d * 0.12 + 0.06, A.red);
+    // les tables de la terrasse, les pierres de gué, le bambou et la lanterne de pierre
+    table(-w * 0.28, d * 0.32, false); table(w * 0.18, d * 0.36, false);
+    for (let i = 0; i < 3; i++) p.cyl(0.05, 0.055, 0.015, 6, -0.04 + (i % 2) * 0.06, 0.04, z + D / 2 + 0.12 + i * 0.12, A.stone);
+    bamboo(p, -w * 0.42, -d * 0.36, 0.45, v);
+    stoneLantern(p, w * 0.4, -d * 0.36, 0.8);
     return;
   }
   const glass = age >= 5, wall = glass ? A.glass : A.plaster, col = glass ? 0xf2f0ea : A.red, neon = age >= 5 ? A.cyan : undefined;
@@ -1011,6 +1059,14 @@ export function aWorkshop(p: Parts, age: number, v: number, w: number, d: number
       p.box(0.18, 0.1, 0.12, -W * 0.15, 0, D * 0.09, A.timber);
       p.cyl(0.05, 0.05, 0.02, 8, -W * 0.15, 0.1, D * 0.09, 0x9a7a5a);
       for (let i = 0; i < 6; i++) p.cyl(0.03, 0.04, 0.07, 6, W * 0.05 + (i % 3) * 0.08, 0, D * 0.36 + ((i >> 1) & 1) * 0.08, pick([0x6a8aa0, 0xb88a5a, 0x5a7a6a], i + v));
+      // le feu qui luit dans la gueule du four, le bois empilé, le rideau d'enseigne et la lanterne sous l'abri, le bambou
+      p.box(0.06, 0.05, 0.012, -W * 0.4, 0.04, -D * 0.28 + 0.1, 0xff8a3a, 0, true);
+      for (let i = 0; i < 4; i++) p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.2, 5).rotateX(Math.PI / 2), -W * 0.44 + (i % 2) * 0.04, 0.02 + Math.floor(i / 2) * 0.034, D * 0.12 + (i % 2) * 0.02 - 0.01, 0x8a6a48);
+      for (let i = 0; i < 3; i++) p.box(0.07, 0.11, 0.006, -W * 0.08 + i * 0.075, 0.12, D * 0.3 + 0.01, 0x2f4a6a);
+      p.box(0.006, 0.03, 0.006, 0, 0.115, D * 0.3 + 0.01, 0xf2ead8);
+      lantern(p, W * 0.3, 0.17, D * 0.3, 0.026);
+      p.cyl(0.035, 0.035, 0.012, 6, -W * 0.15, 0.115, D * 0.09, 0xb88a5a);
+      bamboo(p, W * 0.44, -D * 0.46, 0.5, v);
     } else {
       // le teinturier : petite maison, perches où sèchent les soies de couleur, cuves
       p.box(W * 0.5, 0.24, D * 0.4, -W * 0.22, 0, -D * 0.25, age <= 1 ? A.wattle : A.plaster);
@@ -1019,6 +1075,16 @@ export function aWorkshop(p: Parts, age: number, v: number, w: number, d: number
       for (const k of [0, 1]) p.box(W * 0.86, 0.015, 0.015, 0, 0.34, D * 0.12 + (k - 0.5) * 0.12, A.timber);
       for (let i = 0; i < 5; i++) for (const k of [0, 1]) p.box(0.1, 0.22, 0.006, -W * 0.34 + i * W * 0.17, 0.12, D * 0.12 + (k - 0.5) * 0.12, pick([0x2f5fa0, 0xc0442a, 0xd9a43c, 0x3f8a6a, 0x8a4f7a], i + k * 2 + v));
       for (let i = 0; i < 3; i++) { p.cyl(0.07, 0.07, 0.08, 7, W * 0.2, 0, -D * 0.3 + i * 0.14, A.timber); p.cyl(0.06, 0.06, 0.082, 7, W * 0.2, 0, -D * 0.3 + i * 0.14, [0x2f5fa0, 0xc0442a, 0xd9a43c][(i + v) % 3]); }
+      // la petite maison : porte, fenêtre de papier, poteaux laqués, lanterne ; le faîtage à planches croisées au chaume
+      const hz = -D * 0.25 + D * 0.2;
+      for (const sx of [-1, 1]) p.box(0.026, 0.24, 0.026, -W * 0.22 + sx * (W * 0.25 - 0.01), 0, hz, A.redDark);
+      p.box(0.1, 0.17, 0.012, -W * 0.3, 0, hz + 0.004, A.timber); p.box(0.004, 0.17, 0.016, -W * 0.3, 0, hz + 0.006, A.darkwood);
+      win(p, -W * 0.12, 0.1, hz + 0.008, 0.09, 0.08);
+      lantern(p, -W * 0.22, 0.2, hz + 0.08, 0.024);
+      if (age <= 1) oldRidge(p, 0.14, -W * 0.22, 0.42, -D * 0.25);
+      // le baquet à rincer, les écheveaux de soie
+      p.cyl(0.08, 0.07, 0.05, 8, -W * 0.2, 0, D * 0.38, A.timber); p.cyl(0.07, 0.07, 0.052, 8, -W * 0.2, 0, D * 0.38, 0x6a8ab0);
+      for (let i = 0; i < 3; i++) p.box(0.03, 0.08, 0.03, W * 0.42, 0.02, -D * 0.38 + i * 0.07, pick([0xc0442a, 0xd9a43c, 0x2f5fa0], i + v));
     }
     return;
   }
@@ -1268,6 +1334,11 @@ export function aWallPiece(p: Parts, age: number, len: number, sink: number) {
     const h = 0.5;
     p.box(len, h + sink, t, 0, -sink, 0, wall);
     for (let i = 1; i < 4; i++) p.box(len, 0.01, t + 0.006, 0, (h * i) / 4, 0, dark(wall, 0.88));
+    // le pied de pierres sèches, les poteaux du coffrage restés dans la terre, le chaperon de chaume côté ville
+    p.box(len, 0.08, t + 0.05, 0, 0, 0, A.darkstone);
+    const k = Math.max(1, Math.round(len / 0.5));
+    for (let i = 0; i < k; i++) p.box(0.035, h - 0.08, 0.02, -len / 2 + (len * (i + 0.5)) / k, 0.08, t / 2 + 0.008, A.timber);
+    frustum(p, len, 0.18, len, 0.03, 0.06, 0, h, -t / 4, A.thatch);
     const n = Math.max(2, Math.floor(len / 0.16));
     for (let i = 0; i < n; i++) p.box(0.05, 0.14 + (i % 2) * 0.03, 0.05, -len / 2 + 0.08 + (i * (len - 0.16)) / (n - 1), h, t / 2 - 0.05, A.timber);
     p.box(len, 0.025, 0.025, 0, h + 0.09, t / 2 - 0.05, A.darkwood);
@@ -1296,10 +1367,24 @@ export function aTower(p: Parts, age: number, v: number) {
   if (age <= 1) {
     p.box(0.9, 0.7 + sink, 0.9, 0, -sink, 0, wall);
     for (let i = 1; i < 4; i++) p.box(0.906, 0.01, 0.906, 0, (0.7 * i) / 4, 0, dark(wall, 0.88));
-    // plate-forme de bois sur poteaux, toit de chaume
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.04, 0.34, 0.04, sx * 0.34, 0.7, sz * 0.34, A.timber);
-    for (const r of [0, Math.PI / 2]) for (const sg of [-1, 1]) p.box(0.72, 0.1, 0.02, Math.sin(r) * sg * 0.35, 0.72, Math.cos(r) * sg * 0.35, A.timber, r);
-    hipRoof(p, 0.95, 0.95, 0.3, 0, 1.04, 0, A.thatch);
+    // le pied de pierres sèches, les meurtrières dans la terre damée
+    p.box(0.96, 0.1, 0.96, 0, 0, 0, A.darkstone);
+    for (const r of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) p.box(0.03, 0.1, 0.012, Math.sin(r) * 0.452, 0.42, Math.cos(r) * 0.452, 0x2a2420, r);
+    // le pavillon de guet : plancher en débord, poteaux laqués, balustrade, toit de bardeaux aux coins relevés
+    p.box(0.86, 0.04, 0.86, 0, 0.7, 0, A.wood);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.04, 0.34, 0.04, sx * 0.34, 0.74, sz * 0.34, A.redDark);
+    for (const r of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) rail(p, 0.68, Math.sin(r) * 0.36, 0.74, Math.cos(r) * 0.36, r, A.redDark, 0.09, 0.17);
+    p.box(0.76, 0.03, 0.76, 0, 1.04, 0, A.beam);
+    hipRoof(p, 1.02, 1.02, 0.3, 0, 1.07, 0, A.shingle, 0, { lod: true, rows: 1, step: 0.12, lift: 0.11 });
+    // le tambour d'alarme sur son chevalet, les lanternes aux coins de la façade, l'oriflamme
+    p.add(new THREE.CylinderGeometry(0.09, 0.09, 0.1, 8).rotateX(Math.PI / 2), -0.12, 0.88, -0.1, A.lacquer);
+    for (const sz of [-1, 1]) p.add(new THREE.CylinderGeometry(0.092, 0.092, 0.006, 8).rotateX(Math.PI / 2), -0.12, 0.88, -0.1 + sz * 0.05, A.paper);
+    for (const sx of [-1, 1]) p.box(0.02, 0.15, 0.02, -0.12 + sx * 0.08, 0.74, -0.1, A.darkwood);
+    for (const sx of [-1, 1]) lantern(p, sx * 0.4, 0.98, 0.4, 0.03);
+    banner(p, 0.38, -0.38, 0.6, A.red, 1.07);
+    // l'échelle de bois appuyée sur le flanc
+    for (const sz of [-1, 1]) p.add(new THREE.BoxGeometry(0.02, 0.78, 0.02).translate(0, 0.39, 0), 0.52, 0, sz * 0.07, A.timber, 0, false, 0.18);
+    for (let i = 0; i < 5; i++) p.box(0.016, 0.014, 0.15, 0.52 - (0.06 + i * 0.14) * Math.tan(0.18), 0.06 + i * 0.14, 0, A.timber);
     return;
   }
   const h = 1.0;
@@ -1325,13 +1410,29 @@ export function aGate(p: Parts, age: number, v: number) {
       p.box(0.8, h + sink, 1.0, sx * 0.7, -sink, 0, wall);
       for (let i = 1; i < 4; i++) p.box(0.806, 0.01, 1.006, sx * 0.7, (h * i) / 4, 0, dark(wall, 0.88));
     }
+    for (const sx of [-1, 1]) p.box(0.82, 0.1, 1.02, sx * 0.7, 0, 0, A.darkstone);
     p.box(0.6, 0.06, 1.0, 0, h - 0.06, 0, A.timber);
     for (const sz of [-1, 1]) p.box(0.6, 0.06, 0.04, 0, h - 0.12, sz * 0.48, A.darkwood);
-    for (const sx of [-1, 1]) p.box(0.04, h, 0.04, sx * 0.28, 0, 0.5, A.darkwood);
+    // le passage : poteaux laqués, vantaux rouges ouverts cloutés d'or, la plaque du nom
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.045, h, 0.045, sx * 0.28, 0, sz * 0.48, A.redDark);
+    for (const sx of [-1, 1]) {
+      p.box(0.22, h - 0.14, 0.022, sx * 0.17, 0, 0.42, A.lacquer, -sx * 0.9);
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) p.box(0.018, 0.018, 0.026, sx * (0.22 - j * 0.06), 0.1 + i * 0.13, 0.34 + j * 0.065, A.gold);
+    }
+    p.box(0.3, 0.1, 0.02, 0, h - 0.24, 0.51, A.darkwood); p.box(0.22, 0.06, 0.022, 0, h - 0.22, 0.512, A.gold);
+    // dehors, deux mâts à oriflamme et deux lanternes de papier au linteau
+    for (const sx of [-1, 1]) { banner(p, sx * 0.4, 0.58, 0.9, sx > 0 ? A.red : A.gold); lantern(p, sx * 0.2, h - 0.2, 0.56, 0.035); p.box(0.004, 0.06, 0.004, sx * 0.2, h - 0.15, 0.56, A.darkwood); }
+    // le pavillon : plancher, poteaux laqués, balustrade, toit de bardeaux aux coins relevés, faîtage à planches croisées
     inFrame(p, 0, h, 0, 0, (q) => {
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) q.box(0.04, 0.32, 0.04, sx * 0.7, 0, sz * 0.38, A.timber);
-      q.box(1.5, 0.08, 0.8, 0, 0, 0, A.wood);
-      hipRoof(q, 1.8, 1.0, 0.36, 0, 0.32, 0, A.thatch);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) q.box(0.045, 0.32, 0.045, sx * 0.7, 0, sz * 0.38, A.redDark);
+      for (const sx of [-0.35, 0.35]) for (const sz of [-1, 1]) q.box(0.035, 0.32, 0.035, sx, 0, sz * 0.38, A.redDark);
+      q.box(1.6, 0.08, 0.9, 0, 0, 0, A.wood);
+      for (const sz of [-1, 1]) rail(q, 1.5, 0, 0.08, sz * 0.42, 0, A.redDark, 0.08, 0.19);
+      for (const sx of [-1, 1]) rail(q, 0.8, sx * 0.76, 0.08, 0, Math.PI / 2, A.redDark, 0.08, 0.2);
+      q.box(1.5, 0.04, 0.82, 0, 0.32, 0, A.beam);
+      hipRoof(q, 1.86, 1.08, 0.36, 0, 0.35, 0, A.shingle, 0, { lod: true, rows: 1, step: 0.12, lift: 0.13 });
+      oldRidge(q, 0.78, 0, 0.71, 0);
+      for (const sx of [-1, 1]) lantern(q, sx * 0.72, 0.24, 0.46, 0.032);
     });
     return;
   }

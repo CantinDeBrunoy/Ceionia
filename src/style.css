@@ -244,6 +244,14 @@ button.pop:hover { background: rgba(255, 255, 255, 0.7); }
 .crow.note b, .crow.note em { color: #b06d0e; }
 #census .hint { margin: 8px 0 0; font-size: 12px; }
 #census .hint.ok { color: var(--good); font-weight: 700; }
+/* ce qui retient les nouveaux venus, et l'avancée vers le prochain habitant */
+#census .cgrow { display: flex; gap: 6px; align-items: flex-start; margin: 0 0 8px; font-size: 12.5px; font-weight: 700; line-height: 1.35; }
+#census .cgrow .ic { flex: none; margin-top: 1px; }
+#census .cgrow.warn { color: var(--bad); }
+#census .cgrow.full { color: #b06d0e; }
+#census .cgrow.ok { color: var(--good); margin-bottom: 4px; }
+#census .gbar { height: 5px; margin: 0 0 10px; border-radius: 3px; background: var(--line); overflow: hidden; }
+#census .gbar i { display: block; height: 100%; background: var(--good); border-radius: 3px; transition: width 0.4s; }
 
 /* à droite : l'horloge (picto de la saison, heure, saison et jour), pause et vitesse, puis expéditions, cloche et réglages */
 #hudR { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
@@ -721,7 +729,10 @@ body.under #selCard, body.photo #selCard { display: none; }
 .cePop .credits li::marker { color: #d39a45; }
 .cePop .credits a, .cePop.credits .hint a { color: #a8620e; font-weight: 700; text-decoration-color: rgba(168, 98, 14, 0.4); text-underline-offset: 2px; }
 #ui > .overlay > .cePop.credits .hint { margin: 0; font-size: 13px; font-weight: 500; line-height: 1.45; }
-@media (max-height: 760px) and (min-width: 721px) {
+/* écran de portable (820 px de haut ou moins) : titre plus petit, marge du bas réduite ; l'accueil tient sans ascenseur (il
+   défilait de 22 px en 1280 × 720 et de 19 px en 1366 × 768) */
+@media (max-height: 820px) and (min-width: 721px) {
+  .mInner { padding-bottom: 24px; }
   .mPeaks { width: 140px; }
   #menu h1 { font-size: 78px; }
   .mMode { flex-basis: 240px; }
@@ -1328,8 +1339,9 @@ button.bgo:hover { background: #0f9270; }
 .report .sum { font-weight: 800; font-size: 14px; }
 
 /* Âge futuriste : la retransmission en direct de la Lune, l'écran de fin de partie */
-.spacecast { position: absolute; right: 14px; top: calc(var(--hudB, 82px) + 14px); width: 380px; padding: 10px; opacity: 0; transform: translateY(12px) scale(0.96); transition: opacity 0.4s ease, transform 0.4s ease; pointer-events: none !important; z-index: 6; }
-.spacecast.show { opacity: 1; transform: none; }
+/* (cachée, elle n'est plus dans le texte de la page : les lecteurs d'écran lisaient « En direct de la Lune » dès la Préhistoire) */
+.spacecast { position: absolute; right: 14px; top: calc(var(--hudB, 82px) + 14px); width: 380px; padding: 10px; opacity: 0; visibility: hidden; transform: translateY(12px) scale(0.96); transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s linear 0.4s; pointer-events: none !important; z-index: 6; }
+.spacecast.show { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .spacecast canvas { display: block; width: 360px; height: 216px; border-radius: 10px; background: #05070d; }
 .sc-head { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
 .sc-head .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); animation: rec 1s steps(2) infinite; }
@@ -2183,7 +2195,7 @@ img.pic { display: inline-block; flex: none; vertical-align: -0.22em; object-fit
 
 /* Enfers, écran allégé : le haut du village caché (carte, besoins, horloge, expéditions, nouvelles, habitants : on les retrouve
    en rentrant) ; en bas, les troupes au milieu, et à droite l'aide, « Ma base » (un tiroir fermé à l'arrivée) et « Village » */
-body.hell #hudL, body.hell #needsBox, body.hell #clock, body.hell #bExp, body.hell #bBell, body.hell #resPanel .hsep, body.hell #resPanel .pop { display: none !important; }
+body.hell #hudL, body.hell #needsBox, body.hell #clock, body.hell #bExp, body.hell #bPeoples, body.hell #bBell, body.hell #resPanel .hsep, body.hell #resPanel .pop { display: none !important; }
 #troopBar .tfg { display: inline-flex; align-items: center; gap: 7px; margin-left: 2px; padding: 4px 12px 4px 6px; border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 999px; background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font: inherit; font-size: 12.5px; font-weight: 800; white-space: nowrap; }
 #troopBar button.tfg { cursor: pointer; }
 #troopBar button.tfg:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }

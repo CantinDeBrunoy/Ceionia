@@ -41,6 +41,20 @@ function turban(p: Parts, c: number, y = 0.246) {
   p.box(0.014, 0.04, 0.006, 0, y - 0.04, -0.03, c);
 }
 
+/** Bandes molletières enroulées jusqu'au genou */
+function wraps(p: Parts, c: number) {
+  for (const y of [-0.066, -0.052, -0.038]) p.box(0.032, 0.006, 0.036, 0, y, 0, c);
+}
+/** Bracelet de poignet */
+function bracelet(p: Parts, c: number) {
+  p.box(0.027, 0.01, 0.031, 0, -0.058, 0, c);
+}
+/** Jambières de lamelles laquées */
+function greaves(p: Parts, c: number) {
+  p.box(0.033, 0.03, 0.012, 0, -0.072, 0.014, c);
+  p.box(0.034, 0.004, 0.013, 0, -0.06, 0.014, GOLD);
+}
+
 // ---------- Peuple oriental ----------
 
 const sandGuard: Kit = {
@@ -52,8 +66,14 @@ const sandGuard: Kit = {
     p.box(0.03, 0.07, 0.061, 0, 0.13, 0, WHITE);
     p.box(0.088, 0.016, 0.062, 0, 0.12, 0, TURQ);
     p.box(0.012, 0.03, 0.006, 0.03, 0.09, 0.03, TURQ);
+    // galons du gilet, poignard courbe à la ceinture, gourde de cuir
+    for (const s of [-1, 1]) p.box(0.004, 0.07, 0.061, s * 0.016, 0.13, 0, BRASS);
+    p.add(new THREE.BoxGeometry(0.01, 0.03, 0.008), -0.016, 0.115, 0.032, BRASS, 0, false, 0.5);
+    p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 6).rotateZ(Math.PI / 2).scale(1, 1, 0.6), 0.046, 0.1, -0.008, LEATHER);
   },
-  head(p) { turban(p, WHITE); p.add(new THREE.ConeGeometry(0.008, 0.026, 5), 0, 0.285, 0, BRASS); },
+  shin: (p) => wraps(p, WHITE),
+  sleeve: (p) => bracelet(p, BRASS),
+  head(p) { turban(p, WHITE); p.add(new THREE.ConeGeometry(0.008, 0.026, 5), 0, 0.285, 0, BRASS); p.box(0.016, 0.016, 0.005, 0, 0.246, 0.033, TURQ); },
   right: (p) => scimitar(p),
   left: (p) => roundShield(p, TURQ, BRASS),
 };
@@ -66,7 +86,17 @@ const mailRider: Kit = {
     for (const s of [-1, 1]) p.box(0.03, 0.14, 0.06, s * 0.028, 0.06, 0, TURQ);
     p.box(0.088, 0.012, 0.062, 0, 0.13, 0, BRASS);
     for (const s of [-1, 1]) p.box(0.03, 0.02, 0.05, s * 0.05, 0.19, 0, dark(TURQ, 0.8));
+    // bordure brodée du manteau, plaque ronde de poitrine, fourreau du cimeterre
+    for (const s of [-1, 1]) p.box(0.004, 0.14, 0.061, s * 0.014, 0.06, 0, BRASS);
+    p.add(new THREE.CylinderGeometry(0.016, 0.016, 0.005, 10).rotateX(Math.PI / 2), 0, 0.165, 0.03, STEEL);
+    p.add(new THREE.BoxGeometry(0.012, 0.09, 0.016), 0.047, 0.09, -0.008, LEATHER, 0, false, 0, -0.35);
   },
+  shin(p) {
+    // bottes de cuir rouge à revers, genouillère de mailles
+    p.box(0.032, 0.036, 0.036, 0, -0.08, 0, 0x8a2e26);
+    p.box(0.032, 0.014, 0.01, 0, -0.045, 0.016, 0x9aa0a8);
+  },
+  sleeve: (p) => { p.box(0.027, 0.026, 0.031, 0, -0.064, 0, STEEL); p.box(0.028, 0.004, 0.032, 0, -0.04, 0, BRASS); },
   head(p) {
     // casque à pointe sur un turban, camail de mailles sur la nuque
     turban(p, WHITE, 0.24);
@@ -86,8 +116,14 @@ const jezailMan: Kit = {
     for (const y of [0.13, 0.16, 0.19]) p.box(0.008, 0.008, 0.004, 0, y, 0.029, BRASS);
     p.box(0.086, 0.03, 0.06, 0, 0.1, 0, 0xb83a32);
     p.add(new THREE.BoxGeometry(0.012, 0.11, 0.004), 0, 0.15, 0.03, LEATHER, 0, false, 0.62);
+    // cartouches sur la cartouchière, poire à poudre, sacoche de laine dans le dos
+    for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.005, 0.01, 0.005), -0.026 + k * 0.016, 0.115 + k * 0.022, 0.033, BRASS, 0, false, 0.62);
+    p.add(new THREE.ConeGeometry(0.009, 0.036, 5).rotateZ(1.1), 0.036, 0.1, 0.03, 0xe8dcc0);
+    p.box(0.05, 0.05, 0.022, 0, 0.13, -0.04, 0x8a3a30); for (const y of [0.14, 0.16]) p.box(0.052, 0.004, 0.024, 0, y, -0.04, SAND);
   },
-  head(p) { turban(p, WHITE); p.box(0.01, 0.014, 0.004, 0, 0.25, 0.033, BRASS); },
+  shin: (p) => wraps(p, SAND),
+  sleeve: (p) => bracelet(p, 0xb83a32),
+  head(p) { turban(p, WHITE); p.box(0.01, 0.014, 0.004, 0, 0.25, 0.033, BRASS); p.box(0.07, 0.012, 0.004, 0, 0.212, -0.03, WHITE); },
   right: (p) => { longRifle(p, { wood: 0x8a5a32, metal: 0x6a6a6e, len: 0.18 }); for (const y of [0.04, 0.09]) p.box(0.012, 0.006, 0.012, 0, y, 0.008, BRASS); },
   left() {},
 };
@@ -102,11 +138,20 @@ const desertNow: Kit = {
     for (const x of [-0.022, 0.022]) p.box(0.018, 0.022, 0.008, x, 0.15, 0.034, 0x8a7450);
     p.box(0.06, 0.016, 0.06, 0, 0.198, 0, TURQ);
     p.box(0.088, 0.012, 0.064, 0, 0.118, 0, 0x6a5238);
+    // sac à dos et radio, bidon, étui, lunettes de sable
+    p.box(0.056, 0.064, 0.026, 0, 0.13, -0.045, 0x9a7e56);
+    p.box(0.003, 0.07, 0.003, 0.02, 0.18, -0.06, 0x2a2a2e);
+    p.add(new THREE.CylinderGeometry(0.011, 0.011, 0.024, 6), 0.046, 0.1, -0.012, 0x6a5238);
+    p.box(0.014, 0.024, 0.018, -0.046, 0.098, 0.004, 0x5a4630);
   },
+  shin(p) { p.box(0.032, 0.014, 0.01, 0, -0.06, 0.018, 0x6a5238); p.box(0.033, 0.01, 0.037, 0, -0.078, 0.002, 0x6a5238); },
+  sleeve(p) { for (const x of [-0.0125, 0.0125]) p.box(0.002, 0.014, 0.016, x, -0.012, 0, TURQ); p.box(0.026, 0.008, 0.03, 0, -0.056, 0, 0xd8bc88); },
   head(p) {
     p.sphere(0.032, 0, 0.252, 0, 0xb09468, 1, 0.75);
     p.box(0.07, 0.006, 0.07, 0, 0.247, 0, 0xb09468);
     p.box(0.068, 0.008, 0.068, 0, 0.255, 0, TURQ);
+    p.box(0.042, 0.01, 0.006, 0, 0.262, 0.03, 0x2e3c48);
+    p.box(0.06, 0.03, 0.004, 0, 0.214, -0.03, 0xb09468);
   },
   right: (p) => carbine(p, 0x3a3630),
   left() {},
@@ -122,6 +167,17 @@ const sunExo: Kit = {
     p.box(0.006, 0.05, 0.004, 0, 0.15, 0.033, 0x4af0d8, 0, 'neon');
     p.box(0.09, 0.012, 0.066, 0, 0.118, 0, 0x5a4a38);
     p.box(0.056, 0.08, 0.03, 0, 0.13, -0.046, 0xd8c8a0);
+    // soleil d'or sur le plastron, tuyères dorsales, cellules aux hanches
+    p.add(new THREE.CylinderGeometry(0.013, 0.013, 0.004, 8).rotateX(Math.PI / 2), 0, 0.172, 0.033, GOLD);
+    for (const s of [-1, 1]) { p.cyl(0.011, 0.013, 0.02, 6, s * 0.016, 0.11, -0.058, 0x5a4a38); p.box(0.014, 0.024, 0.02, s * 0.047, 0.098, 0, 0x5a4a38); }
+  },
+  shin(p) {
+    p.box(0.034, 0.018, 0.01, 0, -0.054, 0.016, GOLD);
+    p.box(0.004, 0.026, 0.004, 0, -0.076, 0.019, 0x4af0d8, 0, 'neon');
+  },
+  sleeve(p) {
+    p.box(0.028, 0.028, 0.032, 0, -0.062, 0, 0xd8c8a0);
+    p.box(0.029, 0.004, 0.033, 0, -0.044, 0, 0x4af0d8, 0, 'neon');
   },
   head(p) {
     // casque à cimier pointu et visière dorée
@@ -175,7 +231,13 @@ const lacquerGuard: Kit = {
     lamellar(p, LACQ, INK);
     for (const s of [-1, 1]) p.box(0.03, 0.03, 0.05, s * 0.05, 0.18, 0, INK);
     p.box(0.088, 0.01, 0.062, 0, 0.12, 0, GOLD);
+    // pans de jupe fendus, cordons d'or des épaulières, sabre court au côté
+    for (const s of [-1, 1]) p.box(0.036, 0.04, 0.008, s * 0.022, 0.06, 0.03, LACQ);
+    for (const s of [-1, 1]) p.box(0.032, 0.004, 0.052, s * 0.05, 0.196, 0, GOLD);
+    p.add(new THREE.BoxGeometry(0.01, 0.07, 0.012), 0.046, 0.09, -0.008, INK, 0, false, 0, -0.3);
   },
+  shin: (p) => greaves(p, LACQ),
+  sleeve: (p) => { p.box(0.027, 0.026, 0.031, 0, -0.064, 0, INK); p.box(0.028, 0.004, 0.032, 0, -0.05, 0, GOLD); },
   head(p) {
     // casque rond, couvre-nuque, houppe rouge au sommet
     p.sphere(0.031, 0, 0.252, 0, INK, 1, 0.8);
@@ -194,7 +256,14 @@ const blackLamellar: Kit = {
     p.add(new THREE.CylinderGeometry(0.02, 0.02, 0.006, 10).rotateX(Math.PI / 2), 0, 0.16, 0.031, GOLD);
     p.box(0.05, 0.07, 0.008, 0, 0.05, 0.03, LACQ);
     for (const s of [-1, 1]) p.box(0.034, 0.028, 0.056, s * 0.052, 0.18, 0, LACQ);
+    // bandes d'or des épaulières, nœud de ceinture, carquois de flèches à l'arrière, étendard dorsal
+    for (const s of [-1, 1]) p.box(0.036, 0.004, 0.058, s * 0.052, 0.19, 0, GOLD);
+    p.box(0.016, 0.02, 0.01, 0, 0.12, 0.032, LACQ);
+    p.box(0.004, 0.16, 0.004, 0.02, 0.15, -0.034, INK);
+    p.box(0.003, 0.05, 0.036, 0.02, 0.255, -0.054, LACQ); p.box(0.0035, 0.012, 0.036, 0.02, 0.28, -0.054, GOLD);
   },
+  shin: (p) => greaves(p, INK),
+  sleeve: (p) => { p.box(0.027, 0.026, 0.031, 0, -0.064, 0, LACQ); for (const y of [-0.056, -0.046]) p.box(0.028, 0.003, 0.032, 0, y, 0, GOLD); },
   head(p) {
     // casque à large bord et à long plumet rouge
     p.sphere(0.031, 0, 0.255, 0, INK, 1, 0.85);
@@ -214,11 +283,20 @@ const strawRifle: Kit = {
     p.add(new THREE.BoxGeometry(0.01, 0.1, 0.004), 0, 0.15, 0.029, LACQ, 0, false, 0.45);
     p.box(0.086, 0.02, 0.06, 0, 0.12, 0, INK);
     p.box(0.05, 0.026, 0.016, 0, 0.11, 0.03, LEATHER);
+    // boutons, col montant, sac de toile et natte roulée dans le dos
+    for (let k = 0; k < 3; k++) p.box(0.005, 0.005, 0.004, 0.014, 0.15 + k * 0.016, 0.03, GOLD);
+    p.box(0.05, 0.012, 0.046, 0, 0.198, 0, LACQ);
+    p.box(0.05, 0.05, 0.022, 0, 0.13, -0.04, STRAW);
+    p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.066, 6).rotateZ(Math.PI / 2), 0, 0.19, -0.042, 0xa88a50);
   },
+  shin: (p) => wraps(p, 0xe8e0c8),
+  sleeve: (p) => { p.box(0.026, 0.012, 0.03, 0, -0.058, 0, LACQ); },
   head(p) {
     // grand chapeau conique de paille
     p.cone(0.065, 0.04, 10, 0, 0.255, 0, STRAW);
     p.cyl(0.03, 0.03, 0.006, 8, 0, 0.255, 0, 0xa88a50);
+    p.cyl(0.004, 0.006, 0.01, 6, 0, 0.292, 0, LACQ);
+    for (const x of [-0.02, 0.02]) p.box(0.003, 0.034, 0.003, x, 0.218, 0.01, INK);
   },
   right: (p) => longRifle(p, { wood: 0x5a3a22, metal: 0x5a5f66, len: 0.16 }),
   left() {},
@@ -233,8 +311,16 @@ const jadeNow: Kit = {
     for (const s of [-1, 1]) p.box(0.014, 0.012, 0.004, s * 0.018, 0.2, 0.031, LACQ);
     for (const x of [-0.022, 0.022]) p.box(0.018, 0.022, 0.008, x, 0.15, 0.034, 0x2e3828);
     p.box(0.088, 0.012, 0.064, 0, 0.118, 0, INK);
+    // sac et natte, bidon, étui, pelle pliante
+    p.box(0.056, 0.064, 0.026, 0, 0.13, -0.045, 0x3a4632);
+    p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.062, 6).rotateZ(Math.PI / 2), 0, 0.2, -0.045, 0x5a6a48);
+    p.add(new THREE.CylinderGeometry(0.011, 0.011, 0.024, 6), 0.046, 0.1, -0.012, 0x2e3828);
+    p.box(0.014, 0.024, 0.018, -0.046, 0.098, 0.004, INK);
   },
+  shin(p) { p.box(0.033, 0.026, 0.037, 0, -0.08, 0.002, 0x6a6a5a); },
+  sleeve(p) { for (const x of [-0.0125, 0.0125]) { p.box(0.002, 0.014, 0.016, x, -0.012, 0, LACQ); p.box(0.0025, 0.005, 0.005, x, -0.01, 0, GOLD); } },
   head(p) {
+    p.box(0.012, 0.012, 0.004, 0, 0.262, 0.032, LACQ);
     p.sphere(0.033, 0, 0.25, 0, 0x3a4632, 1, 0.8);
     p.cyl(0.042, 0.04, 0.008, 10, 0, 0.238, 0, 0x3a4632);
     p.box(0.066, 0.007, 0.066, 0, 0.255, 0, LACQ);
@@ -253,6 +339,19 @@ const inkExo: Kit = {
     for (const y of [0.13, 0.16]) p.box(0.07, 0.004, 0.004, 0, y, 0.033, 0xff4a3a, 0, 'neon');
     p.box(0.09, 0.012, 0.066, 0, 0.118, 0, GOLD);
     p.box(0.056, 0.08, 0.03, 0, 0.13, -0.046, 0x24242a);
+    // plaques de jupe en lamelles, tuyères, sabre-plasma sur le dos
+    for (const s of [-1, 1]) p.box(0.036, 0.034, 0.008, s * 0.022, 0.07, 0.03, LACQ);
+    for (const s of [-1, 1]) p.cyl(0.011, 0.013, 0.02, 6, s * 0.016, 0.11, -0.058, 0x24242a);
+    p.add(new THREE.BoxGeometry(0.008, 0.14, 0.008), 0, 0.17, -0.065, INK, 0, false, 0.6);
+    p.add(new THREE.BoxGeometry(0.004, 0.06, 0.004), 0.04, 0.228, -0.066, 0xff4a3a, 0, 'neon', 0.6);
+  },
+  shin(p) {
+    p.box(0.034, 0.018, 0.01, 0, -0.054, 0.016, LACQ);
+    p.box(0.004, 0.026, 0.004, 0, -0.076, 0.019, 0xff4a3a, 0, 'neon');
+  },
+  sleeve(p) {
+    p.box(0.028, 0.028, 0.032, 0, -0.062, 0, LACQ);
+    p.box(0.029, 0.004, 0.033, 0, -0.044, 0, 0xff4a3a, 0, 'neon');
   },
   head(p) {
     // casque à cornes basses dorées et visière rouge

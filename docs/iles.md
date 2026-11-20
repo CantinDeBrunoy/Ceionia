@@ -73,3 +73,5 @@ Un lot (`Lot`) : sorte (`TownKind`), centre (cases du monde), emprise `w` × `d`
 - **Ajouter une sorte de lot** : `TownKind` et, pour un monument, `SIZE` (`rivalTown.ts`) ; sa place dans `drawTown` ; son `case` dans `townModel` ; s'il n'a pas de socle, l'exclure dans `RivalTowns.place`.
 - **Changer la densité** : `HOUSE_SHARE`, le pas de la grille et la taille des maisons dans `drawTown`.
 - **Essayer** : en développement, `?n=384&seed=11` lance une partie de 384 cases ; `__game.sim.age = 3` change l'âge (la ville suit), `__game.rivalTowns.plans` donne les plans et leurs points.
+
+- **Détails de l’Antiquité (villes rivales)** : peuple oriental : pinacles de terre, frise peinte (`frieze`), portes en plein cintre, claustras de bois en saillie (`mashrabiya`), coupoles de terre, palmiers, torches, contreforts des remparts ; peuple asiatique : poteaux laqués, véranda, fenêtres de papier, lanternes, faîtage à planches croisées (`oldRidge`), toits de bardeaux aux coins relevés sur la tour et la porte, balustrades, tambour d’alarme. Un palmier reste dans le lot (test `villesPeuples`, lot + 0,6).
