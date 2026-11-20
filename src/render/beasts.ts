@@ -60,6 +60,32 @@ function onSeg(p: V3, q: V3, r1: number, r2: number, t: number, a: number, lift 
   return { at: [c[0] + n.x * r, c[1] + n.y * r, c[2] + n.z * r], rot: rotTo(n) };
 }
 
+type LoftRing = { c: V3; rx: number; ry: number; bone: string | [string, string] };
+/**
+ * Point d'une coque d'anneaux (`Rig.loft`) à la fraction `t` de sa longueur et à l'angle `a` autour de l'axe (0 = côté +x,
+ * π/2 = le haut pour un corps couché vers +z), sa normale et l'os de l'anneau le plus proche
+ */
+function onLoft(rings: LoftRing[], t: number, a: number, lift = 0.0012): { at: V3; rot: V3; bone: string } {
+  const f = Math.min(Math.max(t, 0), 1) * (rings.length - 1), i = Math.min(rings.length - 2, Math.floor(f)), u = f - i;
+  const A = rings[i], B = rings[i + 1], c = along(A.c, B.c, u), rx = A.rx + (B.rx - A.rx) * u, ry = A.ry + (B.ry - A.ry) * u;
+  const d = new THREE.Vector3(B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]).normalize();
+  const ex = new THREE.Vector3(1, 0, 0).addScaledVector(d, -d.x).normalize(), ey = new THREE.Vector3().crossVectors(d, ex);
+  const n = ex.clone().multiplyScalar(Math.cos(a) / rx).addScaledVector(ey, Math.sin(a) / ry).normalize();
+  const p = new THREE.Vector3(...c).addScaledVector(ex, rx * Math.cos(a)).addScaledVector(ey, ry * Math.sin(a)).addScaledVector(n, lift);
+  const b = u < 0.5 ? A.bone : B.bone;
+  return { at: [p.x, p.y, p.z], rot: rotTo(n), bone: Array.isArray(b) ? b[0] : b };
+}
+/** Tache plate : plaque irrégulière à `n` côtés (demi-largeurs rx, rz), un peu bombée, tournée vers +y */
+function patch(rx: number, rz: number, rnd: () => number, n = 6) {
+  const pts = Array.from({ length: n }, (_, k) => {
+    const a = (k / n) * TAU + (rnd() - 0.5) * 0.6, m = 0.72 + rnd() * 0.42;
+    return [Math.cos(a) * rx * m, Math.sin(a) * rz * m];
+  });
+  const pos: number[] = [];
+  for (let k = 0; k < n; k++) { const p = pts[k], q = pts[(k + 1) % n]; pos.push(0, 0.0005, 0, q[0], 0, q[1], p[0], 0, p[1]); }
+  return new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+}
+
 // ---------- Squelette ----------
 
 /**
@@ -136,11 +162,10 @@ class Rig {
    * Coque tendue sur des anneaux (corps, trompe, pattes) : l'axe passe par les centres, chaque anneau (demi-largeur `rx`,
    * demi-hauteur `ry`, perpendiculaire à l'axe) suit son os ou deux os à parts égales (jointure qui plie sans se casser) ;
    * longues facettes comme celles des modèles du pack ; dégradé du dessous (`color`) au dessus (`top`) sur la hauteur
-   * `range`, chaque face un peu nuancée (`mottle`), bandes plus sombres entre deux anneaux (`band`, rides) ; bouts fermés ;
-   * `paint` peut donner sa propre couleur à une face d'après son centre (taches de la robe)
+   * `range`, chaque face un peu nuancée (`mottle`), bandes plus sombres entre deux anneaux (`band`, rides) ; bouts fermés
    */
   loft(rings: { c: V3; rx: number; ry: number; bone: string | [string, string] }[], sides: number, color: number, top: number,
-    o: { range?: [number, number]; mottle?: number; band?: (i: number) => number; seed?: number; phase?: number; paint?: (x: number, y: number, z: number) => number | null } = {}) {
+    o: { range?: [number, number]; mottle?: number; band?: (i: number) => number; seed?: number; phase?: number } = {}) {
     const rnd = mulberry32(o.seed ?? 7), ph = o.phase ?? Math.PI / sides;
     const pts: THREE.Vector3[][] = [], C = rings.map((r) => new THREE.Vector3(...r.c));
     rings.forEach((r, i) => {
@@ -163,8 +188,7 @@ class Rig {
       const n = _w.subVectors(b, a).cross(_v.subVectors(c, a));
       if (n.dot(_v.subVectors(a, mid)) < 0) { [b, c] = [c, b]; [ib, ic] = [ic, ib]; }
       const t = smooth(((a.y + b.y + c.y) / 3 - lo) / Math.max(1e-6, hi - lo) * 1.3 - 0.15), m = k * (1 + (o.mottle ?? 0) * (rnd() * 2 - 1));
-      const own = o.paint?.((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3) ?? null;
-      const fc = own === null ? _cc.setRGB(_ca.r + (_cb.r - _ca.r) * t, _ca.g + (_cb.g - _ca.g) * t, _ca.b + (_cb.b - _ca.b) * t) : _cc.setHex(own);
+      const fc = _cc.setRGB(_ca.r + (_cb.r - _ca.r) * t, _ca.g + (_cb.g - _ca.g) * t, _ca.b + (_cb.b - _ca.b) * t);
       for (const [p, ri] of [[a, ia], [b, ib], [c, ic]] as [THREE.Vector3, number][]) {
         pos.push(p.x, p.y, p.z);
         col.push(fc.r * m, fc.g * m, fc.b * m);
@@ -907,63 +931,110 @@ function giraffe(c: Coat): { rig: Rig; clips: ClipDef[] } {
     r.bone(`h${L}2`, `h${L}1`, s * 0.022, 0.112, -0.07);
   });
 
-  // corps qui monte vers le garrot, ventre clair, taches
-  const hipC: V3 = [0, 0.226, -0.04], hipR: V3 = [0.034, 0.038, 0.056], ribC: V3 = [0, 0.238, 0.03], ribR: V3 = [0.038, 0.045, 0.06];
-  r.add('hips', ell(...hipR), hipC, c.belly, [0, 0, 0], c.base);
-  r.add('ribs', ell(...ribR), ribC, c.belly, [0, 0, 0], c.base);
-  r.add('chest', ell(0.03, 0.03, 0.036), [0, 0.268, 0.046], c.base, [0.3, 0, 0]);
-  const spot = (b: string, at: V3, rot: V3, k = 1) => r.add(b, ell(0.011 * k * (0.8 + rnd() * 0.4), 0.0025, 0.01 * k * (0.8 + rnd() * 0.4), 0), at, c.spot, [rot[0], rot[1], rot[2]]);
-  // taches en réseau : réparties en rangées sur les flancs et le dos
-  for (const [b, C, Rr] of [['hips', hipC, hipR], ['ribs', ribC, ribR]] as [string, V3, V3][])
-    for (let row = 0; row < 4; row++)
-      for (let i = 0; i < 8; i++) {
-        const o = onEll(C, Rr, -0.45 + row * 0.42 + (rnd() - 0.5) * 0.15, (i + (row % 2) * 0.5) * (TAU / 8) + (rnd() - 0.5) * 0.2);
-        spot(b, o.at, o.rot, 1.35);
-      }
-  // cou : deux segments, crinière, taches
-  r.put('n1', seg(n0, n1, 0.026, 0.02, 7), c.base);
-  r.put('n2', seg(n1, n2, 0.02, 0.016, 7), c.base);
-  for (const [b, p, q, r1, r2] of [['n1', n0, n1, 0.026, 0.02], ['n2', n1, n2, 0.02, 0.016]] as [string, V3, V3, number, number][]) {
-    for (let i = 0; i < 14; i++) {
-      const o = onSeg(p, q, r1, r2, 0.08 + (i / 14) * 0.88, (i * 2.4) % TAU);
-      spot(b, o.at, o.rot, 0.95);
-    }
-    // crinière courte le long de la nuque
-    const back = new THREE.Vector3(0, q[2] - p[2], -(q[1] - p[1])).normalize();
-    for (let i = 0; i < 4; i++) {
-      const a = along(p, q, i / 4 + 0.05), w = r1 + (r2 - r1) * (i / 4);
-      r.put(b, seg([0, a[1] + back.y * w * 0.8, a[2] + back.z * w * 0.8], [0, a[1] + back.y * (w + 0.008), a[2] + back.z * (w + 0.008)], 0.006, 0.003, 4), c.mane);
-    }
-  }
-  // tête : crâne, museau, naseaux, yeux, ossicônes, oreilles
-  r.add('head', ell(0.017, 0.018, 0.026), [0, 0.443, 0.124], c.base);
-  r.add('head', ell(0.013, 0.013, 0.022), [0, 0.432, 0.152], c.muzzle, [0.15, 0, 0]);
-  r.both((s) => {
-    r.add('head', ell(0.003, 0.003, 0.002, 0), [s * 0.007, 0.436, 0.172], 0x2a1e1a);
-    r.add('head', ell(0.0045, 0.0045, 0.0035, 0), [s * 0.016, 0.448, 0.13], 0x161010);
-    r.put('head', seg([s * 0.008, 0.455, 0.114], [s * 0.011, 0.476, 0.11], 0.0042, 0.0034, 5), c.base);
-    r.add('head', ell(0.005, 0.005, 0.005, 0), [s * 0.011, 0.478, 0.11], c.mane);
+  const mot = { mottle: 0.04 };
+  type Ring = LoftRing;
+  // corps d'une pièce : croupe qui tombe, garrot haut, poitrail profond ; ventre clair sans taches
+  const body: Ring[] = [
+    { c: [0, 0.233, -0.096], rx: 0.011, ry: 0.014, bone: 'hips' },
+    { c: [0, 0.233, -0.086], rx: 0.023, ry: 0.027, bone: 'hips' },
+    { c: [0, 0.231, -0.066], rx: 0.031, ry: 0.035, bone: 'hips' },
+    { c: [0, 0.23, -0.036], rx: 0.033, ry: 0.037, bone: 'hips' },
+    { c: [0, 0.233, -0.006], rx: 0.035, ry: 0.041, bone: ['hips', 'ribs'] },
+    { c: [0, 0.239, 0.024], rx: 0.037, ry: 0.046, bone: 'ribs' },
+    { c: [0, 0.247, 0.048], rx: 0.034, ry: 0.049, bone: 'chest' },
+    { c: [0, 0.258, 0.066], rx: 0.027, ry: 0.043, bone: 'chest' },
+    { c: [0, 0.266, 0.075], rx: 0.022, ry: 0.034, bone: ['chest', 'n1'] },
+  ];
+  r.loft(body, 12, c.belly, c.base, { ...mot, range: [0.19, 0.27], seed: 51, phase: Math.PI / 2 });
+  // long cou d'une coque, de plus en plus fin, aux plaques plus petites
+  const neck: Ring[] = [
+    { c: [0, 0.262, 0.066], rx: 0.024, ry: 0.03, bone: 'chest' },
+    { c: [0, 0.29, 0.076], rx: 0.021, ry: 0.026, bone: 'n1' },
+    { c: [0, 0.318, 0.086], rx: 0.019, ry: 0.0225, bone: 'n1' },
+    { c: [0, 0.342, 0.094], rx: 0.0175, ry: 0.02, bone: ['n1', 'n2'] },
+    { c: [0, 0.37, 0.101], rx: 0.016, ry: 0.018, bone: 'n2' },
+    { c: [0, 0.4, 0.107], rx: 0.0145, ry: 0.0165, bone: 'n2' },
+    { c: [0, 0.427, 0.112], rx: 0.0135, ry: 0.015, bone: ['n2', 'head'] },
+    { c: [0, 0.442, 0.116], rx: 0.0135, ry: 0.015, bone: 'head' },
+  ];
+  r.loft(neck, 9, c.belly, c.base, { ...mot, range: [0.26, 0.3], seed: 52, phase: Math.PI / 2 });
+  // crinière courte en arête sur la nuque
+  const mane: Ring[] = neck.slice(1, 7).map((n) => {
+    const w = n.ry + 0.003;
+    return { c: [0, n.c[1] + 0.3 * w, n.c[2] - 0.95 * w] as V3, rx: 0.0028, ry: 0.0055, bone: n.bone };
   });
-  r.add('jaw', ell(0.01, 0.006, 0.018, 0), [0, 0.422, 0.15], c.muzzle);
+  r.loft(mane, 4, c.mane, c.mane, { mottle: 0.08, seed: 53, phase: 0 });
+  // robe réticulée : plaques brunes irrégulières posées sur la coque, en quinconce, chacune sa nuance ; ventre et gorge clairs
+  const spot = (rings: Ring[], t: number, a: number, w: number) => {
+    const o = onLoft(rings, t, a);
+    r.add(o.bone, patch(w * (0.85 + rnd() * 0.3), w * (0.85 + rnd() * 0.3), rnd), o.at, _cc.setHex(c.spot).multiplyScalar(0.88 + rnd() * 0.24).getHex(), o.rot);
+  };
+  for (let i = 0; i < 9; i++)
+    for (let j = 0; j < 9; j++) {
+      const a = -0.55 + (j + (i % 2) * 0.5) * 0.53 + (rnd() - 0.5) * 0.12;
+      if (a > Math.PI + 0.55) continue;
+      spot(body, 0.08 + i * 0.1 + (rnd() - 0.5) * 0.03, a, 0.0115);
+    }
+  for (let i = 0; i < 10; i++)
+    for (let j = 0; j < 4; j++) {
+      // autour du cou, sauf la gorge (a = −π/2) et la crinière (π/2)
+      const a = -Math.PI / 2 + 0.75 + (j + (i % 2) * 0.5) * 0.62 + (rnd() - 0.5) * 0.1, k = 1 - i * 0.05;
+      if (Math.abs(Math.sin(a) - 1) < 0.08) continue;
+      spot(neck, 0.06 + i * 0.088, a, 0.0088 * k);
+      spot(neck, 0.06 + i * 0.088, Math.PI - a, 0.0088 * k);
+    }
+  // tête : crâne, front, long chanfrein, museau clair
+  r.loft([
+    { c: [0, 0.449, 0.106], rx: 0.011, ry: 0.012, bone: 'head' },
+    { c: [0, 0.451, 0.119], rx: 0.0165, ry: 0.0172, bone: 'head' },
+    { c: [0, 0.446, 0.134], rx: 0.0152, ry: 0.0158, bone: 'head' },
+    { c: [0, 0.438, 0.149], rx: 0.0122, ry: 0.0132, bone: 'head' },
+    { c: [0, 0.431, 0.163], rx: 0.0108, ry: 0.0115, bone: 'head' },
+    { c: [0, 0.427, 0.173], rx: 0.0094, ry: 0.0094, bone: 'head' },
+    { c: [0, 0.425, 0.178], rx: 0.005, ry: 0.005, bone: 'head' },
+  ], 8, c.muzzle, c.base, { ...mot, range: [0.42, 0.462], seed: 54, phase: Math.PI / 2 });
+  r.both((s) => {
+    // naseaux, œil sombre sous une arcade, ossicônes velus aux bouts noirs
+    r.add('head', ell(0.0022, 0.0035, 0.0028, 0), [s * 0.0068, 0.43, 0.174], 0x2a1e1a, [0.2, 0, -s * 0.3]);
+    r.add('head', ell(0.0045, 0.0045, 0.0035, 0), [s * 0.0158, 0.448, 0.134], 0x161010);
+    r.add('head', ell(0.0055, 0.0022, 0.006, 0), [s * 0.0152, 0.4525, 0.134], c.base, [0, 0, -s * 0.3]);
+    r.put('head', seg([s * 0.0075, 0.462, 0.114], [s * 0.011, 0.48, 0.109], 0.0042, 0.0034, 6), c.base);
+    r.add('head', ell(0.0048, 0.0048, 0.0048, 0), [s * 0.0112, 0.481, 0.109], c.mane);
+  });
+  r.add('jaw', ell(0.0095, 0.0058, 0.017, 0), [0, 0.421, 0.155], c.muzzle);
   // langue (rentrée dans la bouche, elle sort pour cueillir)
   r.add('tongue', bx(0.006, 0.003, 0.022), [0, 0.426, 0.152], 0x3a2a4a);
-  r.both((s, L) => r.add(`e${L}`, ell(0.012, 0.005, 0.006, 0), [s * 0.024, 0.448, 0.116], c.base, [0, 0, s * 0.4]));
-  // queue fine à toupet sombre
-  r.put('tail1', seg([0, 0.245, -0.09], [0, 0.17, -0.104], 0.0035, 0.0025, 4), c.base);
-  r.add('tail1', ell(0.006, 0.016, 0.006, 0), [0, 0.162, -0.106], c.mane);
-  // hautes pattes : cuisses, genoux saillants, sabots
+  // oreilles en feuille : dos de la robe, creux clair
   r.both((s, L) => {
-    const x = s * 0.022;
-    r.add(`f${L}1`, ell(0.018, 0.04, 0.022), [x, 0.198, 0.055], c.base);
-    r.put(`f${L}1`, seg([x, 0.2, 0.055], [x, 0.112, 0.057], 0.011, 0.009), c.base);
-    r.add(`f${L}2`, ell(0.01, 0.011, 0.01, 0), [x, 0.112, 0.057], c.base);
-    r.put(`f${L}2`, seg([x, 0.112, 0.057], [x, 0.012, 0.058], 0.008, 0.0075), c.belly);
-    r.add(`h${L}1`, ell(0.02, 0.044, 0.026), [x, 0.19, -0.062], c.base);
-    r.put(`h${L}1`, seg([x, 0.19, -0.062], [x, 0.112, -0.07], 0.012, 0.009), c.base);
-    r.add(`h${L}2`, ell(0.01, 0.011, 0.01, 0), [x, 0.112, -0.07], c.base);
-    r.put(`h${L}2`, seg([x, 0.112, -0.07], [x, 0.012, -0.064], 0.008, 0.0075), c.belly);
-    for (const [b, z] of [[`f${L}2`, 0.059], [`h${L}2`, -0.063]] as [string, number][]) r.put(b, seg([x, 0, z], [x, 0.013, z], 0.011, 0.0085, 6), c.hoof);
-    for (let i = 0; i < 2; i++) { const o = onSeg([x, 0.2, 0.055], [x, 0.112, 0.057], 0.011, 0.009, 0.3 + i * 0.4, s > 0 ? 0 : Math.PI); spot(`f${L}1`, o.at, o.rot, 0.6); }
+    r.add(`e${L}`, ell(0.012, 0.0048, 0.0058, 0), [s * 0.024, 0.449, 0.114], c.base, [0, 0, s * 0.4]);
+    r.add(`e${L}`, ell(0.0085, 0.0028, 0.0035, 0), [s * 0.0245, 0.4505, 0.1162], c.belly, [0, 0, s * 0.4]);
+  });
+  // queue fine à toupet sombre
+  r.put('tail1', seg([0, 0.245, -0.09], [0, 0.17, -0.104], 0.0035, 0.0025, 5), c.base);
+  r.add('tail1', ell(0.006, 0.018, 0.006, 0), [0, 0.16, -0.106], c.mane);
+  // hautes pattes : cuisse fondue dans le corps (quelques plaques), genou saillant, canon clair, boulet, sabot fendu
+  r.both((s, L) => {
+    for (const [u, x, z] of [['f', s * 0.022, 0.055], ['h', s * 0.022, -0.062]] as [string, number, number][]) {
+      const b1 = `${u}${L}1`, b2 = `${u}${L}2`, fore = u === 'f', k = fore ? 0 : 1;
+      const leg: Ring[] = [
+        { c: [x * 0.75, 0.245, z - k * 0.004], rx: fore ? 0.014 : 0.016, ry: fore ? 0.028 : 0.034, bone: b1 },
+        { c: [x, 0.196, z - k * 0.004], rx: fore ? 0.015 : 0.017, ry: fore ? 0.02 : 0.026, bone: b1 },
+        { c: [x, 0.152, z + 0.001 - k * 0.006], rx: 0.0098, ry: fore ? 0.0112 : 0.0135, bone: b1 },
+        { c: [x, 0.122, z + 0.002 - k * 0.008], rx: 0.0078, ry: 0.0088, bone: b1 },
+        { c: [x, 0.112, z + 0.002 - k * 0.008], rx: 0.0092, ry: fore ? 0.0104 : 0.0115, bone: [b1, b2] },
+        { c: [x, 0.098, z + 0.002 - k * 0.007], rx: 0.0068, ry: 0.0075, bone: b2 },
+        { c: [x, 0.032, z + 0.003 - k * 0.001], rx: 0.006, ry: 0.0065, bone: b2 },
+        { c: [x, 0.019, z + 0.003], rx: 0.0074, ry: 0.0076, bone: b2 },
+        { c: [x, 0.012, z + 0.004], rx: 0.0064, ry: 0.0064, bone: b2 },
+      ];
+      r.loft(leg, 7, c.belly, c.base, { ...mot, range: [0.1, 0.2], seed: 55 + (fore ? 0 : 2) + s });
+      // quelques taches plus petites sur la cuisse et le bras, du côté extérieur
+      for (const [t, a] of [[0.07, 0.1], [0.14, -0.9], [0.21, 0.7], [0.28, -0.2]]) {
+        const o = onLoft(leg, t, s > 0 ? a : Math.PI - a);
+        r.add(b1, patch(0.0058, 0.0068, rnd, 5), o.at, c.spot, o.rot);
+      }
+      for (const o of [-1, 1]) r.put(b2, seg([x + o * 0.0034, 0, z + 0.007], [x + o * 0.003, 0.012, z + 0.003], 0.0052, 0.0034, 5), c.hoof);
+    }
   });
 
   const pace = { hL: 0, fL: 0.06, hR: 0.5, fR: 0.56 };
