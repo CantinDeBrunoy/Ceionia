@@ -57,8 +57,9 @@ describe('la cinématique d’ouverture : la partition', () => {
     const neuve = { fresh: true, sandbox: false, age: 0, off: false };
     expect(openingDue(neuve)).toBe(true);
     expect(openingDue({ ...neuve, fresh: false })).toBe(false);
-    expect(openingDue({ ...neuve, sandbox: true })).toBe(false);
-    expect(openingDue({ ...neuve, age: 2 })).toBe(false);
+    // (bac à sable et âge de départ avancé compris : toute partie neuve)
+    expect(openingDue({ ...neuve, sandbox: true })).toBe(true);
+    expect(openingDue({ ...neuve, sandbox: true, age: 2 })).toBe(true);
     expect(openingDue({ ...neuve, off: true })).toBe(false);
   });
 

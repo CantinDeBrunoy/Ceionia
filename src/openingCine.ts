@@ -88,5 +88,8 @@ export function openViewAt(k: number, from: { x: number; z: number }, to: { x: n
  * paramètres. Jamais en reprenant une partie
  */
 export function openingDue(s: { fresh: boolean; sandbox: boolean; age: number; off: boolean }): boolean {
-  return s.fresh && !s.sandbox && s.age === 0 && !s.off;
+  // (dans tous les modes et à tous les âges de départ, bac à sable compris : « c'est juste quand la partie se lance »,
+  // demande de l'auteur du 20 nov. 2026 ; `sandbox` et `age` restent dans la signature pour les appels existants)
+  void s.sandbox; void s.age;
+  return s.fresh && !s.off;
 }
