@@ -1415,3 +1415,48 @@ body.dockMin #dock > #homeBack { margin-bottom: 26px; }
 .expFind input::-webkit-search-cancel-button { display: none; }
 .expFind:focus-within { border-color: var(--hGold); box-shadow: 0 0 0 2px rgba(224, 173, 69, 0.35); }
 @media (max-width: 600px) { .expFind input { width: 90px; } }
+
+/* ---------- Écran de portable (820 px de haut ou moins : 1366 × 768, 1280 × 720, 1024 × 768) : les grandes fenêtres
+   resserrent leur en-tête pour laisser la place au contenu (testeurs v6, 19 nov. 2026) ---------- */
+@media (max-height: 820px) and (min-width: 861px) {
+  /* liste des expéditions : en-tête, filtres et équipes plus bas ; la liste voit deux rangées de cartes au lieu d'une et demie */
+  .overlay > .modal.expModal { height: calc(100dvh - 24px); }
+  .expModal .mtitle { padding-top: 12px; padding-bottom: 6px; margin-bottom: 4px; }
+  .expModal .exEmblem { width: 46px; height: 46px; }
+  .expModal .exTitle > span { font-size: 25px; }
+  .expModal .exTitle small { font-size: 13px; line-height: 1.3; }
+  .expModal .mtitle .x { min-height: 40px; min-width: 40px; }
+  .expNav { gap: 6px; margin-bottom: 8px; padding: 4px; }
+  .expNav button { min-height: 38px; padding: 0 14px; font-size: 14px; }
+  .expModal .teams { margin-bottom: 6px; padding: 5px 14px; }
+  .expModal .missions { padding-top: 18px; }
+  /* « Lancer une expédition » : îlot, titre, cartes et équipement tiennent sans faire défiler le milieu */
+  .overlay > .modal.sendModal { max-height: calc(100dvh - 40px); }
+  .sendModal .sScroll { gap: 6px; }
+  .sendModal .sTop, .sendModal .sTop.mart, .sendModal .sTop.mart.dio { height: clamp(64px, 11vh, 120px); }
+  .sendModal .sCap { gap: 2px; }
+  .sendModal .sCap h3 { font-size: 26px; }
+  .sendModal .sCap p { margin-top: 0; font-size: 14px; }
+  .sendModal .sEraRow .sLaur { width: 24px; height: 24px; }
+  .sendModal .sCards { margin-top: 2px; gap: 12px; }
+  .sendModal .sCard { gap: 5px; padding: 7px 10px 9px; }
+  .sendModal .scEmb { width: 52px; height: 42px; }
+  .sendModal .scName b { font-size: 18px; }
+  .sendModal .scBox { padding: 4px 8px; }
+  .sendModal .sSlim.sGear, .sendModal .gearNeed.sGear.sSlim { padding: 6px 14px; }
+  .sendModal .sSlim .gslot { width: 48px; height: 48px; }
+  .sendModal .sFoot { margin-top: 8px; }
+  /* Paramètres : moins de marge en haut, un paysage plus bas ; le panneau de droite gagne ce qu'ils rendent */
+  #ui > .overlay > .cePop.settings { margin-top: 44px; padding-bottom: 62px; }
+  #ui > .overlay > .cePop.settings .setPane { max-height: calc(100dvh - 250px); min-height: 300px; }
+}
+/* la bulle du tutoriel ouverte (étapes « L'équipement » et « Les expéditions », chapitres) : les fenêtres des expéditions se
+   rangent à gauche et lui laissent la colonne de droite, au lieu qu'elle couvre une carte de mission ou une approche */
+@media (min-width: 1200px) {
+  body:has(#tuto:not([hidden])) .overlay > .modal.expModal { max-width: min(1100px, calc(100vw - 470px)); margin-left: 36px; margin-right: auto; }
+  body:has(#tuto:not([hidden])) .overlay > .modal.sendModal { max-width: min(1040px, calc(100vw - 470px)); margin-left: 36px; margin-right: auto; }
+}
+/* (plus étroite, la liste des missions passe sur une colonne, comme sous 1 180 px) */
+@media (min-width: 1200px) and (max-width: 1640px) {
+  body:has(#tuto:not([hidden])) .expModal .missions { grid-template-columns: minmax(0, 1fr); }
+}
