@@ -11,10 +11,12 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   // la diplomatie de l'archipel : le monument de la concorde (la paix des trois peuples) ; le comptoir chez l'allié (l'or)
   | 'concord' | 'tradepost'
   // la guerre gagnée : l'obélisque, puis l'arc de triomphe ; la paix signée : l'ambassade, puis le siège des nations unies
-  | 'triumph' | 'embassy';
+  | 'triumph' | 'embassy'
+  // les décorations, libres : haie, clôture, parterre de fleurs, banc, statue, pavés, fontaine (et le lampadaire, plus haut)
+  | 'hedge' | 'fence' | 'flowerbed' | 'bench' | 'statue' | 'paving' | 'fountain';
 
 /** Rayons de la barre de construction */
-export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'war';
+export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'deco' | 'war';
 
 export interface KindDef {
   id: KindId;
@@ -243,7 +245,7 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [0, 0, 6, 12, 20, 24], joy: [0, 0, 6, 6, 8, 10],
   },
   lamp: {
-    id: 'lamp', size: 1, minAge: 0, icon: '💡', cat: 'home',
+    id: 'lamp', size: 1, minAge: 0, icon: '💡', cat: 'deco',
     names: ['Torche', 'Brasero', 'Lanterne', 'Lampadaire à gaz', 'Lampadaire LED', 'Luminaire holographique'],
     desc: 'Éclaire la nuit.',
     joy: [0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
@@ -529,6 +531,49 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Se pose sur une case libre ou sur une route (elle l’enjambe, battants ouverts) ; elle se tourne d’elle-même dans l’axe du mur.',
     reqKind: 'watchtower',
   },
+  // ---- les décorations : petites, presque gratuites, sans rôle obligatoire (voir `isDecor`, DECOR_JOY_MAX) ----
+  hedge: {
+    id: 'hedge', size: 1, minAge: 0, icon: '🌳', cat: 'deco',
+    names: ['Haie d’épineux', 'Haie de myrtes', 'Haie vive', 'Haie de buis', 'Haie taillée', 'Haie lumineuse'],
+    desc: 'Une haie qui borde un jardin ou une rue. Posées côte à côte, les haies se raccordent.',
+    joy: [0.1],
+  },
+  fence: {
+    id: 'fence', size: 1, minAge: 0, icon: '🪵', cat: 'deco',
+    names: ['Palissade de pieux', 'Muret de pierres sèches', 'Plessis', 'Barrière blanche', 'Grille de jardin', 'Barrière de lumière'],
+    desc: 'Une clôture pour fermer un jardin ou le bord d’une place. Posées côte à côte, les clôtures se raccordent.',
+    joy: [0.05],
+  },
+  flowerbed: {
+    id: 'flowerbed', size: 1, minAge: 0, icon: '🌷', cat: 'deco',
+    names: ['Fleurs sauvages', 'Rosiers', 'Jardin de simples', 'Parterre de tulipes', 'Massif fleuri', 'Jardin suspendu'],
+    desc: 'Un carré de fleurs. Les habitants aiment en avoir devant chez eux.',
+    joy: [0.3],
+  },
+  bench: {
+    id: 'bench', size: 1, minAge: 0, icon: '🪑', cat: 'deco',
+    names: ['Rondins', 'Banc de marbre', 'Banc de chêne', 'Banc de square', 'Banc public', 'Banc flottant'],
+    desc: 'Un banc où s’asseoir pour regarder passer le village.',
+    joy: [0.2],
+  },
+  statue: {
+    id: 'statue', size: 1, minAge: 0, icon: '🗿', cat: 'deco',
+    names: ['Totem', 'Statue de marbre', 'Statue de saint', 'Statue de bronze', 'Sculpture', 'Statue holographique'],
+    desc: 'Une statue sur son socle, fierté du quartier.',
+    joy: [0.4],
+  },
+  paving: {
+    id: 'paving', size: 1, minAge: 0, icon: '🧱', cat: 'deco',
+    names: ['Pierres plates', 'Dallage de marbre', 'Pavés', 'Pavage de briques', 'Dalles', 'Dalles lumineuses'],
+    desc: 'Une case pavée, pour une petite place ou une allée. On y passe à pied.',
+    joy: [0.05],
+  },
+  fountain: {
+    id: 'fountain', size: 1, minAge: 0, icon: '⛲', cat: 'deco',
+    names: ['Source aménagée', 'Fontaine', 'Fontaine de pierre', 'Fontaine de fonte', 'Fontaine à jets', 'Fontaine en apesanteur'],
+    desc: 'Une petite fontaine, son bassin et son filet d’eau.',
+    joy: [0.5],
+  },
 };
 
 /** Les défenses : au village comme sur l'île du portail, où l'on ne bâtit qu'elles */
@@ -537,30 +582,43 @@ export const DEFENSES: KindId[] = ['watchtower', 'barracks', 'wall', 'gate'];
 export const GARRISONS: KindId[] = ['watchtower', 'barracks'];
 /** Les remparts : un pan de mur se trace en ligne, la porte se pose seule ; tous deux se raccordent à leurs voisins */
 export const isRampart = (k: KindId) => k === 'wall' || k === 'gate';
+/** Les décorations libres (rayon Décorations), sans le lampadaire, plus ancien, qu'on range avec elles */
+export const DECOR: KindId[] = ['hedge', 'fence', 'flowerbed', 'bench', 'statue', 'paving', 'fountain'];
+/** Une décoration, lampadaire compris : ni porte, ni incendie, ni route qui y mène */
+export const isDecor = (k: KindId) => k === 'lamp' || DECOR.includes(k);
+/** Les décorations qu'on traverse à pied (les pavés, le lampadaire dans son coin) ; les autres se contournent */
+export const walkableDecor = (k: KindId) => k === 'lamp' || k === 'paving';
+/** Haies et clôtures : posées côte à côte, elles se raccordent à leurs voisines de même genre (voir `ModelOpts.mask`) */
+export const isLinear = (k: KindId) => k === 'hedge' || k === 'fence';
+/** Plafond du bien-être que donnent toutes les décorations ensemble (le lampadaire, plus ancien, compte à part) */
+export const DECOR_JOY_MAX = 3;
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
   { id: 'prod', icon: '🌾', label: 'Production' },
   { id: 'service', icon: '🏥', label: 'Services' },
   { id: 'life', icon: '🎭', label: 'Vie & culture' },
+  { id: 'deco', icon: '🌷', label: 'Décorations' },
   { id: 'war', icon: '⚔️', label: 'Militaire' },
 ];
 
 /** Groupes de lecture d'un rayon (titres dans la rangée de vignettes) */
 export interface BuildSub { id: string; label: string }
 export const BUILD_SUBS: Record<BuildCat, BuildSub[]> = {
-  home: [{ id: 'logis', label: 'Logements' }, { id: 'eau', label: 'Eau' }, { id: 'lumiere', label: 'Éclairage' }],
+  home: [{ id: 'logis', label: 'Logements' }, { id: 'eau', label: 'Eau' }],
   prod: [{ id: 'nourriture', label: 'Nourriture' }, { id: 'materiaux', label: 'Matériaux' }, { id: 'industrie', label: 'Industrie' }],
   service: [{ id: 'sante', label: 'Santé' }, { id: 'savoir', label: 'Savoir' }, { id: 'securite', label: 'Sécurité' }, { id: 'transport', label: 'Transport' }],
   war: [{ id: 'defense', label: 'Défense' }, { id: 'remparts', label: 'Remparts' }],
+  deco: [{ id: 'jardin', label: 'Jardins' }, { id: 'mobilier', label: 'Mobilier' }, { id: 'ornements', label: 'Ornements' }],
   life: [{ id: 'parcs', label: 'Places publiques' }, { id: 'detente', label: 'Détente' }, { id: 'culte', label: 'Culte' }, { id: 'monuments', label: 'Monuments' }],
 };
 
 /** Le groupe de chaque bâtiment dans son rayon (n'a aucun effet sur le jeu ni sur la sauvegarde) */
 export const KIND_SUB: Record<KindId, string> = {
-  house: 'logis', manor: 'logis', arcology: 'logis', well: 'eau', watertower: 'eau', lamp: 'lumiere',
+  house: 'logis', manor: 'logis', arcology: 'logis', well: 'eau', watertower: 'eau', lamp: 'mobilier',
+  hedge: 'jardin', fence: 'jardin', flowerbed: 'jardin', paving: 'mobilier', bench: 'mobilier', statue: 'ornements', fountain: 'ornements',
   farm: 'nourriture', vfarm: 'nourriture', pen: 'nourriture', stable: 'nourriture', apiary: 'nourriture', pier: 'nourriture', fishmarket: 'nourriture', offshore: 'nourriture',
   lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
   workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie', tradepost: 'industrie', shipyard: 'industrie',
@@ -624,6 +682,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   watchtower: 'tours de garde', barracks: 'casernes de la garnison', wall: 'remparts', gate: 'portes de la ville',
   shipyard: 'chantiers navals', lighthouse: 'phares', fishmarket: 'halles aux poissons', offshore: 'fermes marines',
   concord: 'monuments de la concorde', tradepost: 'comptoirs', triumph: 'monuments de la victoire', embassy: 'ambassades',
+  hedge: 'haies', fence: 'clôtures', flowerbed: 'parterres de fleurs', bench: 'bancs', statue: 'statues', paving: 'pavés', fountain: 'fontaines',
 };
 
 /**
@@ -682,7 +741,7 @@ export const smallSize = (kind: KindId) => (OLD_SIZE[kind] ?? KINDS[kind].size -
 /** Emprise d'un bâtiment : celle de son genre, l'ancienne s'il est resté à l'ancienne taille (`small`) */
 export const sizeOf = (b: Building) => (b.small ? smallSize(b.kind) : KINDS[b.kind].size) as 1 | 2 | 3 | 4;
 
-/** Bâtiments sans porte ni chemin d'accès : le lampadaire, la place du village (qu'on rejoint de tous côtés), les remparts */
-export const hasDoor = (kind: KindId) => kind !== 'lamp' && kind !== 'gather' && !isRampart(kind);
+/** Bâtiments sans porte ni chemin d'accès : les décorations (lampadaire compris), la place du village (qu'on rejoint de tous côtés), les remparts */
+export const hasDoor = (kind: KindId) => !isDecor(kind) && kind !== 'gather' && !isRampart(kind);
 
 export const SEASONS = ['Printemps', 'Été', 'Automne', 'Hiver'];

@@ -4,7 +4,7 @@ import { World, N, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, Snapshot } from '
 import { sculpt, raiseVolcano, removeVolcano, SculptTool, SculptCtx, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
-import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize, isRampart } from './catalog';
+import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize, isRampart, isLinear, isDecor } from './catalog';
 import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin, doorCells, doorSide, orientable, sideToward } from './placement';
@@ -18,6 +18,7 @@ import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
 import { isStart, startRefusal, START_KIND } from './startLock';
 import { traceRampart, layRampart, rampartCost, RampartTrace, rampartMask, toggledTower } from './rampart';
+import { linearMask } from './decor';
 import { costLabel } from '../sim/economy';
 import { tr } from '../i18n';
 
@@ -61,6 +62,10 @@ export interface ToolHost {
   erupt(cell: number): void;
   /** routes automatiques jusqu'aux nouveaux bâtiments (réglage) */
   autoRoads: boolean;
+  /** l'habitant sous ce point de l'écran (pixels du canevas), s'il y en a un */
+  pickCitizen?(x: number, y: number): number | null;
+  /** l'habitant choisi change (null : aucun) */
+  onCitizen?(id: number | null): void;
 }
 
 /** Bâtiments de zone dont la surbrillance verte reste visible pendant la pose et à la sélection */
@@ -89,6 +94,8 @@ export class ToolController implements ToolInput {
   private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean } | null = null;
   /** bâtiment choisi d'un clic avec l'outil « Voir » : sa fiche s'affiche, on peut le déplacer, le tourner, le démolir */
   selected: number | null = null;
+  /** l'habitant choisi d'un clic (sa fiche à la place de celle d'un bâtiment) */
+  citizen: number | null = null;
   /** tracé d'une ligne de chemin de fer en cours : un clic sur un bâtiment le propose comme arrêt */
   picking = false;
   pickStop: ((b: Building | undefined) => void) | null = null;
@@ -204,7 +211,7 @@ export class ToolController implements ToolInput {
     const why = startRefusal(this.h.world, t, kind, KINDS[START_KIND].names[Math.max(this.h.getAge(), KINDS[START_KIND].minAge)]);
     if (why) { this.h.toast(why); return; }
     if (this.moveOrigin && (t !== 'move' && !(t === 'build'))) this.cancelMove();
-    if (t !== 'none') this.selected = null;
+    if (t !== 'none') { this.selected = null; if (this.citizen !== null) { this.citizen = null; this.h.onCitizen?.(null); } }
     // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route
     if (t !== this.tool || (kind && kind !== this.kind)) this.rotManual = false;
     if (t !== this.tool || (kind && kind !== this.kind)) { this.freeFrom = null; this.anchor = null; }
@@ -286,8 +293,19 @@ export class ToolController implements ToolInput {
   // ---------- Bâtiment sélectionné ----------
   /** Choisit un bâtiment (ou aucun) : sa fiche s'affiche, son emprise s'éclaire */
   select(id: number | null) {
-    if (this.selected === id) return;
+    if (this.selected === id && this.citizen === null) return;
     this.selected = id;
+    if (this.citizen !== null) { this.citizen = null; this.h.onCitizen?.(null); }
+    this.refreshVisuals();
+    this.h.changed();
+  }
+
+  /** Choisit un habitant : sa fiche s'ouvre (celle du bâtiment se ferme) */
+  selectCitizen(id: number) {
+    this.selected = null;
+    this.citizen = id;
+    this.h.onCitizen?.(id);
+    this.h.audio.sfxClick();
     this.refreshVisuals();
     this.h.changed();
   }
@@ -497,6 +515,17 @@ export class ToolController implements ToolInput {
     else if (VEG_TOOLS.includes(t) && !SINGLE_TOOLS.includes(t)) this.applyVeg();
     else if (t === 'road' && this.roadMode === 'line') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
+    // les petites décorations se posent aussi d'un glissé : une haie, une allée pavée, un parterre, case après case
+    else if (t === 'build' && !e.touch && isDecor(this.kind) && this.kind !== 'lamp') this.paintDecor();
+  }
+
+  /** Pose au glissé : une décoration sur chaque case neuve sous la souris, sans redire « Emplacement occupé » à chaque case */
+  private paintDecor() {
+    const hit = this.hit;
+    if (!hit) return;
+    const o = footprintOrigin(this.kind, hit.x, hit.z), cost = priceIn(this.h.world, this.kind, this.h.getAge());
+    if (this.placedAt === `${o.x},${o.z}` || this.h.world.canPlace(this.kind, o.x, o.z) || (cost && !canPay(this.h.world, cost))) return;
+    this.tryPlace();
   }
 
   up(e: PointerInfo) {
@@ -519,7 +548,11 @@ export class ToolController implements ToolInput {
       const pt = this.h.world.portal, hp = this.hit;
       if (this.picking && this.pickStop) this.pickStop(b);
       else if (!b && pt && hp && this.h.world.portalOpen && this.h.openPortal && Math.hypot(hp.x - pt.x, hp.z - pt.z) < 2.6) this.h.openPortal();
-      else this.select(b ? b.id : null);
+      else {
+        // un habitant sous le clic passe avant le bâtiment derrière lui
+        const who = this.h.pickCitizen?.(e.x, e.y) ?? null;
+        if (who !== null) this.selectCitizen(who); else this.select(b ? b.id : null);
+      }
     }
     this.downAt = null;
     if (this.pressed) {
@@ -1107,7 +1140,7 @@ export class ToolController implements ToolInput {
       const reason = w.canPlace(kind, o.x, o.z);
       const age = this.h.getAge();
       // un rempart : l'aperçu prend le masque qu'aurait la pièce posée ici (la porte se tourne dans l'axe du mur ou de la rue)
-      const mask = isRampart(kind) ? rampartMask(w, { kind, x: o.x, z: o.z } as Building) : undefined;
+      const mask = isRampart(kind) ? rampartMask(w, { kind, x: o.x, z: o.z } as Building) : isLinear(kind) ? linearMask(w, { kind, x: o.x, z: o.z, rot: this.ghostRot }) : undefined;
       const key = `${kind}|${age}|${mask ?? ''}`;
       if (key !== this.ghostKey) {
         this.ghostKey = key;

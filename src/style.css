@@ -244,6 +244,14 @@ button.pop:hover { background: rgba(255, 255, 255, 0.7); }
 .crow.note b, .crow.note em { color: #b06d0e; }
 #census .hint { margin: 8px 0 0; font-size: 12px; }
 #census .hint.ok { color: var(--good); font-weight: 700; }
+/* ce qui retient les nouveaux venus, et l'avancée vers le prochain habitant */
+#census .cgrow { display: flex; gap: 6px; align-items: flex-start; margin: 0 0 8px; font-size: 12.5px; font-weight: 700; line-height: 1.35; }
+#census .cgrow .ic { flex: none; margin-top: 1px; }
+#census .cgrow.warn { color: var(--bad); }
+#census .cgrow.full { color: #b06d0e; }
+#census .cgrow.ok { color: var(--good); margin-bottom: 4px; }
+#census .gbar { height: 5px; margin: 0 0 10px; border-radius: 3px; background: var(--line); overflow: hidden; }
+#census .gbar i { display: block; height: 100%; background: var(--good); border-radius: 3px; transition: width 0.4s; }
 
 /* à droite : l'horloge (picto de la saison, heure, saison et jour), pause et vitesse, puis expéditions, cloche et réglages */
 #hudR { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }

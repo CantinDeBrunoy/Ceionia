@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World } from '../world/world';
-import { Building, KINDS, sizeOf } from '../build/catalog';
+import { Building, KINDS, isDecor, sizeOf } from '../build/catalog';
 import { reaches } from '../sim/coverage';
 import { Puffs } from './particles';
 import { tr } from '../i18n';
@@ -68,7 +68,7 @@ export class Fires {
    * sources passent par ici : foudre, bombes de lave, feux accidentels des secours
    */
   ignite(b: Building) {
-    if (!this.world.disasters || b.kind === 'lamp' || this.list.some((f) => f.b.id === b.id)) return false;
+    if (!this.world.disasters || isDecor(b.kind) || this.list.some((f) => f.b.id === b.id)) return false;
     this.list.push({ b, t: 0, seed: Math.random() * 10, doused: 0, throw: 0 });
     this.news.push(tr('🔥 Incendie : {b}', { b: KINDS[b.kind].names[b.age] }));
     return true;

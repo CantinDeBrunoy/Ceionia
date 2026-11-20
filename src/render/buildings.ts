@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { World, WorldListener } from '../world/world';
-import { Building, KINDS, sizeOf, isRampart } from '../build/catalog';
+import { Building, KINDS, sizeOf, isRampart, isLinear, isDecor } from '../build/catalog';
 import { getModel, ModelOpts } from './models';
 import { rampartMask } from '../build/rampart';
+import { linearMask } from '../build/decor';
 import { mats, crowdMat, CROWD, mergeLit } from './materials';
 import { GeoBatch } from './batch';
 import { hash2 } from '../core/rng';
@@ -254,6 +255,8 @@ export class BuildingView implements WorldListener {
     const o: ModelOpts = { v: Math.floor(hash2(b.x, b.z, 7) * 6), L: false, R: false, F: false, small: !!b.small };
     if (b.kind === 'house' || b.kind === 'workshop') o.tier = skylineTier(b.x, b.z);
     if (isRampart(b.kind)) { o.mask = rampartMask(this.world, b); return o; }
+    // haies et clôtures : les côtés où elles rejoignent leurs voisines (le modèle se tourne lui-même)
+    if (isLinear(b.kind)) { o.mask = linearMask(this.world, b); return o; }
     if (b.kind !== 'house') return o;
     const w = this.world;
     const f = FRONT[b.rot], r = RIGHT[b.rot];
@@ -355,7 +358,8 @@ export class BuildingView implements WorldListener {
     const hs: number[] = [];
     for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) hs.push(w.h(b.x + i, b.z + j));
     hs.sort((p, q) => p - q);
-    const low = b.kind === 'lamp' || b.kind === 'pier', open = low || b.kind === 'gather';
+    // (les décorations aussi : au plus bas de leur case, sans socle ; le sol les borde du côté où il monte)
+    const low = isDecor(b.kind) || b.kind === 'pier', open = low || b.kind === 'gather';
     // l'enclos a un sol continu (son pré) : il se pose au plus haut de son emprise pour que le terrain ne le traverse pas,
     // sur une butte de terre à sa largeur
     const raised = b.kind === 'pen' || b.kind === 'stable';
@@ -413,7 +417,7 @@ export class BuildingView implements WorldListener {
       }
     }
     // un rempart s'oriente par son masque (le modèle se tourne lui-même) : sa rotation de bâtiment, prise face à la route, l'annulerait
-    e.group.rotation.y = isRampart(b.kind) ? 0 : b.rot * Math.PI / 2;
+    e.group.rotation.y = isRampart(b.kind) || isLinear(b.kind) ? 0 : b.rot * Math.PI / 2;
     e.moved = true;
     const off = b.kind === 'lamp' ? 0.32 : 0;
     if (!m.vane?.whole) {
