@@ -3,6 +3,7 @@ import { Building, KINDS, sizeOf } from '../build/catalog';
 import { tr as tx } from '../i18n';
 import { Agents, Heap } from './agents';
 import { FREIGHT_KINDS, gap, isStation, RAIL_REACH } from './freight';
+import { hasPerk, RAIL_SPEED } from './legacy';
 
 /** Couleurs des lignes, dans l'ordre où on les trace */
 /** Jamais de rouge : il est réservé au tracé impossible de l’éditeur */
@@ -261,7 +262,9 @@ export class Railway {
     }
     // il prend de la vitesse au départ, freine à l'approche du quai
     const leg = tr.leg!, left = leg.s1 - tr.s;
-    tr.speed = Math.min(tr.speed + ACCEL * dt, SPEED, Math.sqrt(2 * ACCEL * Math.max(0, left)) + 0.08);
+    // (le grand tracé, expédition « Le tracé du chemin de fer » : des trains plus rapides)
+    const top = SPEED * (hasPerk(this.world, 'railfast') ? RAIL_SPEED : 1);
+    tr.speed = Math.min(tr.speed + ACCEL * dt, top, Math.sqrt(2 * ACCEL * Math.max(0, left)) + 0.08);
     const step = tr.speed * dt;
     if (step < left) { tr.s += step; return; }
     tr.s = leg.s1; tr.speed = 0; tr.at += tr.dir; tr.arrived = leg.eb; tr.phase = 'dwell'; tr.t = 0;

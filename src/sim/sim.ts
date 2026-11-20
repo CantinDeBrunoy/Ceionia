@@ -11,7 +11,8 @@ import { archipelagoOn, canExpand } from '../world/expand';
 import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from './crossroads';
 import { CONFLICT_LABEL, conflictItem } from './diplomacy';
 import { SEEDS_PERK, SEEDS_FIELDS } from './isleMissions';
-import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
+import { guardReach, perkFood, perkJoy } from './legacy';
+import { allServed, isStation, railNet, railStation, railWant, spaceRail, freightBonus, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -134,16 +135,19 @@ export class Sim {
       const a = b.age;
       counts[b.kind] = (counts[b.kind] ?? 0) + 1;
       const decor = DECOR.includes(b.kind);
-      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) if (!decor) add(need, b.kind, k[need]?.[a] ?? 0);
+      // les savoir-faire des expéditions (`legacy.ts`) : chalutiers et îles de culture nourrissent davantage, la station météo
+      // du sommet amène du monde aux clubs alpins, les épices aux tavernes
+      const fk = perkFood(w, b.kind), alp = (k.joy?.[a] ?? 0) > 0 ? perkJoy(w, b.kind) : 0;
+      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) if (!decor) add(need, b.kind, (k[need]?.[a] ?? 0) * (need === 'food' ? fk : 1) + (need === 'joy' ? alp : 0));
       if (decor) { const s = this.src.joy.get('decor') ?? { n: 0, v: 0 }; s.n++; this.src.joy.set('decor', s); }
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) add('water', 'riverside', k.housing?.[a] ?? 0);
       H += k.housing?.[a] ?? 0;
-      F += k.food?.[a] ?? 0;
+      F += (k.food?.[a] ?? 0) * fk;
       W += k.water?.[a] ?? 0;
       J += k.jobs?.[a] ?? 0;
       // (les décorations comptent à part, plafonnées ensemble : DECOR_JOY_MAX)
       if (DECOR.includes(b.kind)) deco += k.joy?.[a] ?? 0;
-      else Jy += k.joy?.[a] ?? 0;
+      else Jy += (k.joy?.[a] ?? 0) + alp;
       He += k.health?.[a] ?? 0;
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += k.housing?.[a] ?? 0;
     }
@@ -161,7 +165,7 @@ export class Sim {
     Jy += forests * 0.08;
     Jy += Math.min(DECOR_JOY_MAX, deco);
     { const s = this.src.joy.get('decor'); if (s) s.v = Math.min(DECOR_JOY_MAX, deco); }
-    this.coverage = computeCoverage(w.buildings.values());
+    this.coverage = computeCoverage(w.buildings.values(), guardReach(w));
     Jy += this.coverage.joy;
     this.counts = counts;
     this.housing.cap = H;
@@ -432,7 +436,7 @@ export class Sim {
     if (!prod.length || prod.some((b) => railStation(w, b, st))) return null;
     this.messageKind = 'station';
     const names = [...new Set(prod.map((b) => this.nameOf(b.kind).toLowerCase()))].slice(0, 3).join(', ');
-    return tr('Astuce : posez « {name} » ({where}) à {n} cases au plus d’un bâtiment qui produit ({names}) et reliez-la à une autre gare par un train de marchandises : il produira {pct} % de plus.', { name: this.nameOf('station'), where: this.whereOf('station'), n: RAIL_REACH, names, pct: Math.round(FREIGHT_BONUS * 100) });
+    return tr('Astuce : posez « {name} » ({where}) à {n} cases au plus d’un bâtiment qui produit ({names}) et reliez-la à une autre gare par un train de marchandises : il produira {pct} % de plus.', { name: this.nameOf('station'), where: this.whereOf('station'), n: RAIL_REACH, names, pct: Math.round(freightBonus(this.world) * 100) });
   }
 
   /**

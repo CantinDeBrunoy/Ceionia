@@ -64,6 +64,7 @@ import { allyIsle, allyView, onAllyIsle, allyPostReady, allyHarborSpot } from '.
 import { SpotBeacon } from './render/spotBeacon';
 import { AGES, BUILD_CATS, KINDS, KIND_ORDER, Building, sizeOf, type KindId } from './build/catalog';
 import { MISSIONS, VICTORY, applyEffects } from './sim/missions';
+import { hasPerk, WAKE_WARN, SAT_WAKE_WARN } from './sim/legacy';
 import { stepGoals, rewardEffects, type GoalCtx } from './sim/goals';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
 import { L_GONE, L_LIFT } from './render/expeditionScenes';
@@ -339,7 +340,7 @@ class Game implements UIHost {
   private followRaw: [number, number] | null = null;
   /** réveil spontané d'un volcan : délai (secondes de jeu) et secousses annonciatrices en cours */
   private quakeTimer = 0;
-  private quake: { cell: number; t: number } | null = null;
+  private quake: { cell: number; t: number; rumble: boolean } | null = null;
   tools: ToolController;
   ui: UI;
   /** tutoriel guidé (bulles d'aide), s'il est activé */
@@ -576,7 +577,8 @@ class Game implements UIHost {
     this.emergencies.ignite = (b) => ignite(b);
     // (une fois sur deux seulement : les incendies restent des événements)
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
-    this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
+    // (les digues et tranchées de l'expédition « Le village sous le volcan » détournent la lave : plus d'incendie)
+    this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && !hasPerk(w, 'dikes') && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
@@ -1823,6 +1825,8 @@ class Game implements UIHost {
       return;
     }
     if (!w.disasters || this.eruptions.active) return;
+      // (annoncé plus tôt par les satellites : le grondement vient dans les dernières secondes)
+      if (this.quake.rumble && this.quake.t <= WAKE_WARN) { this.quake.rumble = false; audio.sfxRumble(WAKE_WARN); }
     this.quakeTimer -= gdt;
     if (this.quakeTimer > 0) return;
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 5);
@@ -1830,10 +1834,12 @@ class Game implements UIHost {
     for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_VOLCANO) vols.push(k);
     if (!vols.length) return;
     const cell = vols[Math.floor(Math.random() * vols.length)];
-    this.quake = { cell, t: 18 };
-    audio.sfxRumble(18);
+    // les satellites (expédition « Premier vol de fusée ») le voient se réveiller bien avant les premières secousses
+    const sat = hasPerk(w, 'satellites');
+    this.quake = { cell, t: sat ? SAT_WAKE_WARN : WAKE_WARN, rumble: sat };
+    if (!sat) audio.sfxRumble(WAKE_WARN);
     // le message mène au volcan qui se réveille (on ne savait pas lequel)
-    this.ui.toast(tr('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.'), () => this.ensureSurface(() => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); }), 'danger');
+    this.ui.toast(sat ? tr('Les satellites voient un volcan se réveiller : éruption dans une minute. Cliquez ici pour le voir.') : tr('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.'), () => this.ensureSurface(() => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); }), 'danger');
   }
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
@@ -2637,7 +2643,7 @@ class Game implements UIHost {
     let shake = uv || hv || gdt === 0 ? 0 : this.eruptions.shakeAt(this.cam.target.x, this.cam.target.z);
     if (this.quake && !uv) {
       const v = this.quake.cell, d = Math.hypot((v % N) + 0.5 - this.cam.target.x, Math.floor(v / N) + 0.5 - this.cam.target.z);
-      shake = Math.max(shake, (1 - this.quake.t / 18) * 0.7 * Math.max(0, 1 - d / 70));
+      shake = Math.max(shake, (1 - this.quake.t / WAKE_WARN) * 0.7 * Math.max(0, 1 - d / 70));
     }
     // les cris du roi des Enfers, l'effondrement de son royaume
     shake = Math.max(shake, this.kingStage.shake());

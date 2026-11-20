@@ -23,6 +23,7 @@ import type { RailEditState } from '../build/trackEdit';
 import { isleName, kindOffered, CONFLICT_LABEL, allyPostReadyNow, boonsMatter, talkRisk, TALK_RISK } from '../sim/diplomacy';
 import { peoplesView } from '../sim/peoples';
 import { peoplesHtml } from './peoples';
+import { legacyOf } from '../sim/legacy';
 import { boonText, effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
@@ -34,7 +35,7 @@ import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/cros
 import { waysHtml, type ConflictWay } from './ways';
 import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
 import { flowOf, flowOfBuilding, ledgerOf, LedgerRow, Flow, refundTotal, shortText } from '../sim/ledger';
-import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
+import { gap, railBoost, railStation, railWant, freightBonus, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
@@ -176,7 +177,7 @@ function folded(text: string, k: string) {
  * ce qu'il faudrait pour en avoir une), une gare de voyageurs au cosmodrome ; pour une gare, les bâtiments qu'elle sert
  */
 function railStat(h: UIHost, b: Building): [string, string] | null {
-  const w = h.world, r = h.railway, want = railWant(b.kind), t = ic('train', 14, 2), bonus = Math.round(FREIGHT_BONUS * 100);
+  const w = h.world, r = h.railway, want = railWant(b.kind), t = ic('train', 14, 2), bonus = Math.round(freightBonus(w) * 100);
   // [pastille courte, explication complète en info-bulle]
   if (want === 'freight') {
     const st = railStation(w, b);
@@ -1458,7 +1459,7 @@ export class UI {
       const short = stops.map((s) => (!s ? '?' : s.id === b.id ? `<b>${tr('ici')}</b>` : shortStop(r.stopName(s)))).join(' → ');
       const tip = `${r.lineLabel(l)}\n${tr(l.freight ? 'Marchandises' : 'Voyageurs')}${train ? tr(' · train {where}', { where: trainWhere(r, train) }) : tr(' · pas de train')}`;
       return `<div class="rline" title="${attr(tip)}">${dot(l.color)}<span class="grow">${short}</span>
-        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? tr('Train de marchandises : les ateliers et carrières à côté de ses gares produisent {n} % de plus. Cliquer pour en faire un train de voyageurs', { n: Math.round(FREIGHT_BONUS * 100) }) : tr('Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises')}" aria-label="${tr(l.freight ? 'Train de marchandises' : 'Train de voyageurs')}">${l.freight ? '📦' : '🧳'}</button>
+        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? tr('Train de marchandises : les ateliers et carrières à côté de ses gares produisent {n} % de plus. Cliquer pour en faire un train de voyageurs', { n: Math.round(freightBonus(h.world) * 100) }) : tr('Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises')}" aria-label="${tr(l.freight ? 'Train de marchandises' : 'Train de voyageurs')}">${l.freight ? '📦' : '🧳'}</button>
         <button data-act="follow:${l.id}" title="${tr('Suivre le train')}" aria-label="${tr('Suivre le train')}">${ic('eye', 14, 2)}</button><button data-act="edit:${l.id}" title="${tr('Modifier la ligne : ses arrêts et le tracé de sa voie')}" aria-label="${tr('Modifier la ligne')}">${ic('road', 14, 2)}</button><button data-act="drop:${l.id}" title="${tr('Fermer la ligne')}" aria-label="${tr('Fermer la ligne')}">${ic('close', 14, 2)}</button></div>`;
     }).join('')}</div>` : ''}</div>`
       : '';
@@ -2572,6 +2573,7 @@ export class UI {
           ${this.missionPills(m)}
           ${this.boonHtml(m)}
           ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
+          ${this.legacyHtml(m, done)}
           ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m, true)}</p>` : ''}
           <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${SEND_ICON} ${label}</button>
         </div></div>`;
@@ -3080,6 +3082,16 @@ export class UI {
 
   /** Le bâtiment qu'une expédition réussie a débloqué se bâtit maintenant, et n'est pas encore bâti : on le met en avant */
   private canBuildNow(k: KindId, done: boolean) { return done && !this.lockOf(k) && !(this.host.sim.counts[k] ?? 0); }
+
+  /**
+   * Le savoir-faire durable d'une expédition qui ne débloque pas de bâtiment (`legacy.ts`) : la même ligne « Débloque : … »,
+   * son effet complet en infobulle
+   */
+  private legacyHtml(m: Mission, done: boolean) {
+    const l = m.unlocks ? null : legacyOf(m.id);
+    if (!l) return '';
+    return `<p class="unlock" title="${attr(effectSummary([{ t: 'perk', id: l.perk }]))}">${pic(l.icon, 15)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${tr(l.label)}</b></p>`;
+  }
 
   /** Récit du retour d'une expédition */
   showReport(r: Report) {

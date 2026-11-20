@@ -1,5 +1,6 @@
 import { Building, KindId, sizeOf } from '../build/catalog';
 import type { World } from '../world/world';
+import { hasPerk, RAIL_FREIGHT } from './legacy';
 
 /**
  * Le rail au service du village : une gare desservie par un train de marchandises fait produire davantage les ateliers et
@@ -64,10 +65,15 @@ export function railStation(w: World, b: Building, stations?: { freight: Buildin
   return nearest(b, stations ? stations[want] : servedStations(w, want === 'freight'));
 }
 
-/** Multiplicateur de production d'un bâtiment : 1 + FREIGHT_BONUS (1,75) s'il est servi par une gare de marchandises, 1 sinon */
+/**
+ * Multiplicateur de production d'un bâtiment : 1 + FREIGHT_BONUS (1,75) s'il est servi par une gare de marchandises, 1 sinon ;
+ * 2 avec le grand tracé (expédition « Le tracé du chemin de fer », `RAIL_FREIGHT`)
+ */
 export function railBoost(w: World, b: Building, stations?: { freight: Building[]; passenger: Building[] }) {
-  return railWant(b.kind) === 'freight' && railStation(w, b, stations) ? 1 + FREIGHT_BONUS : 1;
+  return railWant(b.kind) === 'freight' && railStation(w, b, stations) ? 1 + freightBonus(w) : 1;
 }
+/** Production en plus d'un bâtiment servi par une gare de marchandises, selon le savoir-faire du grand tracé */
+export const freightBonus = (w: { exp: { perks: readonly string[] } }) => (hasPerk(w, 'railfast') ? RAIL_FREIGHT : FREIGHT_BONUS);
 
 /** Les gares servies des deux genres, à calculer une fois pour tout le village */
 export function allServed(w: World) { return { freight: servedStations(w, true), passenger: servedStations(w, false) }; }

@@ -26,7 +26,7 @@ Le joueur trace des lignes de gare en gare ; la voie se pose toute seule entre d
 
 **Bonus de proximité** (`freight.ts`) :
 - `RAIL_REACH = 8` : cases vides entre les deux bâtiments, d'un bord à l'autre (`gap`, la plus grande des deux distances x et z).
-- `FREIGHT_BONUS = 0.75` : un bâtiment de `FREIGHT_KINDS` (briqueterie, mine, carrière, scierie `lumber`, puits `oilwell`, raffinerie) à portée d'une gare desservie par une ligne de marchandises produit ×1,75 (`railBoost`, utilisé par `Expeditions.yields` et `refining`). La gare « la plus proche » est prise (`nearest`).
+- `FREIGHT_BONUS = 0.75` : un bâtiment de `FREIGHT_KINDS` (briqueterie, mine, carrière, scierie `lumber`, puits `oilwell`, raffinerie) à portée d'une gare desservie par une ligne de marchandises produit ×1,75 (`railBoost`, utilisé par `Expeditions.yields` et `refining`). La gare « la plus proche » est prise (`nearest`). Le grand tracé (savoir-faire `railfast` de l'expédition « Le tracé du chemin de fer », `legacy.ts`) porte le bonus à ×2 (`freightBonus`, `RAIL_FREIGHT`) et la vitesse des trains à ×1,25 (`RAIL_SPEED`, `Railway.step`).
 - `PASSENGER_KINDS = ['spaceport']` : un cosmodrome à portée d'une gare de voyageurs réduit le risque des expéditions spatiales (`SPACE_RAIL_RISK = 0.75`) et la durée des préparatifs (`SPACE_RAIL_WORK = 0.25`, soustrait de `c.work`). Voir [expeditions.md](expeditions.md).
 - Une gare compte seulement si une ligne **en service** (`l.ok !== false`, deux arrêts au moins) du bon genre s'y arrête (`servedStations`).
 
