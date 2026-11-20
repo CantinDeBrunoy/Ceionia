@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { MISSIONS, readExpState, newExpState } from '../src/sim/missions';
 import { GEAR_BY, emptyStock, gearGaps, loadout, gearKnown, gearPower } from '../src/sim/gear';
+import { newArmy, recruit, recruitWhy, cancelRecruit, stepArmy, troopStats, troopStatsOf, OBSIDIAN_DMG } from '../src/sim/army';
 
 const choice = (id: string, ci: number) => MISSIONS.find((m) => m.id === id)!.choices[ci];
 /** Le risque en Normal (×1,25), l'équipe munie de cette réserve (sans les bâtiments qui le baissent) */
@@ -49,5 +50,21 @@ describe('les armes d’obsidienne', () => {
     // une sauvegarde sans les nouvelles pièces : leur réserve à 0
     const s = readExpState({ done: [], perks: [], gear: { spear: 3 } });
     expect([s.gear.spear, s.gear.obsidianSpear, s.gear.obsidianSword]).toEqual([3, 0, 0]);
+  });
+
+  it('le chevalier prend l’épée d’obsidienne s’il y en a une, et frappe plus fort ; annulé, il la rend', () => {
+    const a = newArmy(), stock = { ...emptyStock(), obsidianSword: 1, armor: 2, sword: 1 }, ctx = { age: 2, stock, barracks: 2, pop: 100 };
+    expect(recruit(a, 'knight', ctx)).toBeNull();
+    expect([stock.obsidianSword, stock.sword, stock.armor]).toEqual([0, 1, 1]);
+    cancelRecruit(a, 0, stock);
+    expect([stock.obsidianSword, stock.sword]).toEqual([1, 1]);
+    // sans épée de fer, l'épée d'obsidienne suffit
+    const s2 = { ...emptyStock(), obsidianSword: 1, armor: 1 };
+    expect(recruitWhy(newArmy(), 'knight', { age: 2, stock: s2, barracks: 1, pop: 100 })).toBeNull();
+    const b = newArmy();
+    recruit(b, 'knight', { age: 2, stock: s2, barracks: 1, pop: 100 });
+    const t = stepArmy(b, 1e4, 1, 2).joined[0];
+    expect(t.gear).toContain('obsidianSword');
+    expect(troopStatsOf(t, 2).dmg).toBeCloseTo(troopStats('knight', 2).dmg * OBSIDIAN_DMG, 1);
   });
 });
