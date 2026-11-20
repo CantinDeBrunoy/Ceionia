@@ -78,6 +78,7 @@ import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
 import { ExpeditionView, followPoint } from './render/expeditionView';
+import { PavingView } from './render/paving';
 import { Festivities } from './render/festivities';
 import { Trophies, trophiesWon } from './render/trophies';
 import { HomeButton, awayFromHome } from './ui/homeButton';
@@ -251,6 +252,7 @@ class Game implements UIHost {
   /** chemin de fer : ses lignes de gare en gare, le train que la caméra suit (numéro de sa ligne) */
   railway: Railway;
   railView: RailView;
+  private paving: PavingView;
   trainCam: number | null = null;
   /** l'habitant que suit la caméra (bouton « Suivre » de sa fiche), jusqu'à Échap, un clic ailleurs ou un glissé de la vue */
   citizenCam: number | null = null;
@@ -493,6 +495,9 @@ class Game implements UIHost {
     this.roads = new RoadView(w);
     this.veg = new VegView(w);
     this.buildings = new BuildingView(w);
+    // les cases pavées : un habillage du sol, sous les bâtiments et les routes
+    this.paving = new PavingView(w);
+    this.scene.add(this.paving.group);
     this.env = new Environment(this.scene, renderer, coarse);
     // effets de la météo coupés dans les réglages (absents des anciennes sauvegardes : tout s'affiche)
     this.env.show = { rain: !settings.hideRain, snow: !settings.hideSnow, fog: !settings.hideFog };
@@ -2791,6 +2796,7 @@ class Game implements UIHost {
     }
     else {
       this.buildings.update(dt, this.sim.age, { x: this.cam.target.x, z: this.cam.target.z, dist: this.cam.dist });
+      this.paving.update(this.sim.age);
       // (pendant la cinématique « Explorer le monde », pas de bêtes appelées près de la vue : leur recensement coûtait
       // 200 à 300 ms toutes les 3 s au-dessus de la mer, d'où les à-coups du survol)
       this.fauna.quiet = this.voyageStage.playing;

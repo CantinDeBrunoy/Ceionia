@@ -565,7 +565,7 @@ export const KINDS: Record<KindId, KindDef> = {
   paving: {
     id: 'paving', size: 1, minAge: 0, icon: '🧱', cat: 'deco',
     names: ['Pierres plates', 'Dallage de marbre', 'Pavés', 'Pavage de briques', 'Dalles', 'Dalles lumineuses'],
-    desc: 'Une case pavée, pour une petite place ou une allée. On y passe à pied.',
+    desc: 'Pave une case du sol, bord à bord, pour une place ou une allée. On peut ensuite bâtir, poser une décoration ou tracer une route par-dessus. Glissez pour en paver plusieurs.',
     joy: [0.05],
   },
   fountain: {

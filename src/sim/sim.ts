@@ -152,6 +152,14 @@ export class Sim {
       const v = w.veg[i];
       if (v === 2) { fields++; if (w.ash[i]) fertile++; } else if (v === 1) forests++;
     }
+    // les cases pavées : un habillage du sol, compté comme une décoration (le nombre affiché sur la carte du rayon, le bien-être)
+    let paved = 0;
+    for (let i = 0; i < w.paving.length; i++) if (w.paving[i]) paved++;
+    if (paved) {
+      counts.paving = paved;
+      deco += paved * (KINDS.paving.joy?.[0] ?? 0);
+      const s = this.src.joy.get('decor') ?? { n: 0, v: 0 }; s.n += paved; this.src.joy.set('decor', s);
+    }
     this.land = { fields, fertile, forests };
     // les champs semés sur les cendres d'une coulée donnent double récolte
     this.baseFood = F;

@@ -407,7 +407,9 @@ export class ToolController implements ToolInput {
       this.h.changed();
     }
   }
-  private endStroke() { this.pre = null; this.lastRoad = null; this.lastRift = null; this.refunded(this.strokeBack); this.strokeBack = null; }
+  /** cases déjà démolies pendant ce geste (une route, puis son pavé, demandent deux gestes) */
+  private razed = new Set<number>();
+  private endStroke() { this.razed.clear(); this.pre = null; this.lastRoad = null; this.lastRift = null; this.refunded(this.strokeBack); this.strokeBack = null; }
 
   // ---------- Entrées ----------
   private pickAt(e: PointerInfo) {
@@ -894,7 +896,10 @@ export class ToolController implements ToolInput {
     if (disc) { this.bulldozeDisc(this.hit!.x, this.hit!.z, this.radius); return; }
     const k = w.inCells(c.x, c.z) ? w.ci(c.x, c.z) : -1;
     if (k < 0) return;
-    if (w.road[k]) { this.mark(); w.setRoad(c.x, c.z, false); this.h.audio.sfxDestroy(); }
+    // (une couche par case et par geste : glisser sur une rue pavée retire la route, pas aussi le pavé dessous)
+    if (this.razed.has(k)) return;
+    if (w.road[k]) { this.mark(); w.setRoad(c.x, c.z, false); this.razed.add(k); this.h.audio.sfxDestroy(); }
+    else if (w.paving[k]) { this.mark(); w.setPaving(c.x, c.z, false); this.razed.add(k); this.h.audio.sfxDestroy(); }
     else if (w.rift[k]) {
       // une case d'un ravin : tout le ravin se comble (la gomme, elle, comble case par case)
       this.mark(); w.fillRiftGroup(k); this.h.audio.sfxDestroy();
@@ -921,7 +926,9 @@ export class ToolController implements ToolInput {
           this.mark(); this.addBack(refund(w, b)); w.removeBuilding(b.id); any = true;
           continue;
         }
-        if (w.road[k]) { this.mark(); w.setRoad(cx, cz, false); any = true; }
+        if (this.razed.has(k)) continue;
+        if (w.road[k]) { this.mark(); w.setRoad(cx, cz, false); this.razed.add(k); any = true; }
+        else if (w.paving[k]) { this.mark(); w.setPaving(cx, cz, false); this.razed.add(k); any = true; }
         else if (!w.decor[k]) {
           // plantations, et le décor sauvage de la carte (arbres isolés, buissons) : comme la gomme
           const had = !!w.veg[k];
@@ -1044,6 +1051,15 @@ export class ToolController implements ToolInput {
       this.h.audio.sfxClick();
       this.refreshVisuals();
       this.h.changed();
+      return;
+    }
+    if (this.kind === 'paving') {
+      // les pavés : la case se pave (un habillage du sol, sous ce qu'on y bâtira), sans bâtiment ni chemin
+      this.mark();
+      pay(w, cost);
+      w.setPaving(o.x, o.z, true);
+      this.placedAt = `${o.x},${o.z}`;
+      this.h.audio.sfxPlace();
       return;
     }
     const rot = an ? this.anchorRot() : this.rotManual ? this.ghostRot : facingRoadRot(w, this.kind, o.x, o.z, this.ghostRot);

@@ -92,6 +92,8 @@ export interface Snapshot {
   cleared?: Uint8Array;
   /** cases des ravins creusés au pinceau Faille (absent : celles d'avant restent) */
   rift?: Uint8Array;
+  /** cases pavées (absent : celles d'avant restent) */
+  paving?: Uint8Array;
   buildings: Building[];
   nextId: number;
   /** stocks de bois, de pierre et de briques (un bâtiment annulé rend ce qu'il avait coûté) */
@@ -238,6 +240,13 @@ export class World {
   biomePaint = new Uint8Array(N * N);
   /** change à chaque coup de pinceau de biome (la neige des toits se refait) */
   biomeVersion = 0;
+  /**
+   * Cases pavées (1) : un habillage du sol, pas un bâtiment. Le pavé couvre toute la case, bord à bord ; on bâtit, pose une
+   * décoration ou trace une route par-dessus, il reste dessous (voir `PavingView`, `setPaving`)
+   */
+  paving = new Uint8Array(N * N);
+  /** change à chaque case pavée ou dépavée (la vue des pavés se refait) */
+  pavingVersion = 0;
   /**
    * Cases défrichées à la gomme : le décor sauvage des prairies (arbres isolés, buissons, fougères, champignons, cailloux)
    * n'est rangé nulle part, il se tire de la case (voir `VegView.meadow`) ; ici, il ne pousse plus. Sauvegardé
@@ -1287,6 +1296,8 @@ export class World {
   }
 
   canPlace(kind: KindId, x: number, z: number, size = KINDS[kind].size): string | null {
+    // les pavés : un habillage du sol, qui se pose sous un bâtiment ou une route comme sur l'herbe
+    if (kind === 'paving') return this.pavingWhy(x, z);
     const s = size;
     if (!this.inCells(x, z) || !this.inCells(x + s - 1, z + s - 1)) return tr('Hors de la carte');
     let mn = 99, mx = -99;
@@ -1475,7 +1486,32 @@ export class World {
     return false;
   }
 
+  /** Pourquoi la case ne peut pas être pavée (null : elle le peut) */
+  pavingWhy(x: number, z: number): string | null {
+    if (!this.inCells(x, z)) return tr('Hors de la carte');
+    const k = this.ci(x, z);
+    if (this.paving[k]) return tr('Déjà pavé');
+    if (this.decor[k]) return tr('Une grotte ou une faille est ici');
+    if (this.veg[k] === VEG_VOLCANO) return tr('Le cratère d’un volcan est ici');
+    if (this.lake[k]) return tr('Un lac est ici');
+    if (this.cellMin(x, z) < 0.05) return tr('Trop proche de l’eau : reculez sur la terre ferme');
+    return this.playWhy(x, z);
+  }
+
+  /** Pave la case (ou la dépave) ; faux si rien n'a changé */
+  setPaving(x: number, z: number, on: boolean): boolean {
+    if (!this.inCells(x, z)) return false;
+    const k = this.ci(x, z), v = on ? 1 : 0;
+    if (this.paving[k] === v) return false;
+    this.paving[k] = v;
+    this.pavingVersion++;
+    this.version++;
+    return true;
+  }
+
   place(kind: KindId, x: number, z: number, rot: number, auto: boolean, age: number, animate = true, small = false): Building {
+    // les pavés ne sont pas un bâtiment : la case se pave, et l'on rend un bâtiment fantôme (numéro 0, jamais dans la liste)
+    if (kind === 'paving') { this.setPaving(x, z, true); return { id: 0, kind, x, z, rot, auto, age }; }
     const s = small ? smallSize(kind) : KINDS[kind].size;
     // Aplanit l'empreinte, sans toucher aux coins partagés avec les voisins ; le quai du port est remblayé au-dessus de l'eau
     const avg = kind === 'harbor' ? Math.min(QUAY_MAX, Math.max(this.flatTarget(x, z, s), 0.12)) : this.flatTarget(x, z, s);
@@ -1748,6 +1784,7 @@ export class World {
       biomePaint: this.biomePaint.slice(),
       cleared: this.cleared.slice(),
       rift: this.rift.slice(),
+      paving: this.paving.slice(),
       buildings: [...this.buildings.values()].map((b) => ({ ...b })),
       nextId: this.nextId,
       wood: this.wood,
@@ -1765,6 +1802,7 @@ export class World {
     if (s.biomePaint) { this.biomePaint.set(s.biomePaint); this.biomeVersion++; }
     if (s.cleared) this.cleared.set(s.cleared);
     if (s.rift) this.rift.set(s.rift);
+    if (s.paving) { this.paving.set(s.paving); this.pavingVersion++; }
     this.occ.fill(0);
     this.buildings.clear();
     for (const b0 of s.buildings) {
@@ -1800,6 +1838,8 @@ export class World {
     const cleared: number[] = [], rift: number[] = [];
     for (let i = 0; i < this.cleared.length; i++) if (this.cleared[i]) cleared.push(i);
     for (let i = 0; i < this.rift.length; i++) if (this.rift[i]) rift.push(i);
+    const paving: number[] = [];
+    for (let i = 0; i < this.paving.length; i++) if (this.paving[i]) paving.push(i);
     const order = new Map([...this.buildings.keys()].map((id, i) => [id, i]));
     return {
       n: N,
@@ -1816,6 +1856,7 @@ export class World {
       biomes,
       cleared,
       rift,
+      ...(paving.length ? { paving } : {}),
       // décors de la carte (grottes, failles, épaves) déjà posés : ceux que le joueur efface ne reviennent pas au chargement
       ...(this.decorDone ? { decor: 1 } : {}),
       // le cap des grottes tournées à la pose (case, angle en centièmes de radian), seulement celles qui existent encore
@@ -1925,7 +1966,11 @@ export class World {
     const buildings: Building[] = [];
     let id = 1;
     const ids: number[] = [];
+    const paving = new Uint8Array(N * N);
+    for (const k of Array.isArray(d.paving) ? d.paving : []) if (k >= 0 && k < N * N) paving[k] = 1;
     for (const r of d.buildings ?? []) {
+      // les pavés posés comme une décoration (avant qu'ils ne deviennent un habillage du sol) : leur case devient pavée
+      if (r[0] === 'paving') { ids.push(-1); const k = (r[2] | 0) * N + (r[1] | 0); if (k >= 0 && k < N * N) paving[k] = 1; continue; }
       ids.push(KINDS[r[0] as KindId] ? id : -1);
       if (!KINDS[r[0] as KindId]) continue;
       buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0, ...(r[6] ? { small: true } : {}), ...(r[7] === 1 ? { tower: true } : r[7] === 2 ? { tower: false } : {}) });
@@ -1962,7 +2007,7 @@ export class World {
     this.caveYaw.clear();
     const cy = Array.isArray(d.caveYaw) ? d.caveYaw : [];
     for (let i = 0; i + 1 < cy.length; i += 2) if (cy[i] >= 0 && cy[i] < N * N && Number.isFinite(cy[i + 1])) this.caveYaw.set(cy[i], cy[i + 1] / 100);
-    this.restore({ heights, road, veg, biomePaint, cleared, rift, buildings, nextId: id });
+    this.restore({ heights, road, veg, biomePaint, cleared, rift, paving, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.basalt.fill(0);
     const lava = d.basalt ?? [];

@@ -797,7 +797,8 @@ registerDict('catalog', {
   'Totem': 'Totem', 'Statue de marbre': 'Marble statue', 'Statue de saint': 'Statue of a saint', 'Statue de bronze': 'Bronze statue', 'Sculpture': 'Sculpture', 'Statue holographique': 'Holographic statue',
   'Une statue sur son socle, fierté du quartier.': 'A statue on its plinth, the pride of the neighbourhood.',
   'Pierres plates': 'Flat stones', 'Dallage de marbre': 'Marble paving', 'Pavés': 'Cobbles', 'Pavage de briques': 'Brick paving', 'Dalles': 'Paving slabs', 'Dalles lumineuses': 'Glowing slabs',
-  'Une case pavée, pour une petite place ou une allée. On y passe à pied.': 'A paved square, for a small plaza or a path. People walk across it.',
+  'Pave une case du sol, bord à bord, pour une place ou une allée. On peut ensuite bâtir, poser une décoration ou tracer une route par-dessus. Glissez pour en paver plusieurs.': 'Paves one square of ground, edge to edge, for a plaza or a path. You can then build, place a decoration or lay a road on top. Drag to pave several.',
+  'Déjà pavé': 'Already paved',
   'Source aménagée': 'Walled spring', 'Fontaine de pierre': 'Stone fountain', 'Fontaine de fonte': 'Cast-iron fountain', 'Fontaine à jets': 'Jet fountain', 'Fontaine en apesanteur': 'Zero-gravity fountain',
   'Une petite fontaine, son bassin et son filet d’eau.': 'A small fountain, its basin and its trickle of water.',
 });

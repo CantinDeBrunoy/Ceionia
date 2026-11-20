@@ -68,7 +68,51 @@ describe('décorations', () => {
     const back = new World();
     back.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
     const kinds = [...back.buildings.values()].map((b) => b.kind).sort();
-    expect(kinds).toEqual(['paving', 'statue']);
+    expect(kinds).toEqual(['statue']);
     expect(back.buildingAt(30, 30)?.rot).toBe(2);
+    expect(back.paving[back.ci(31, 30)]).toBe(1);
+  });
+});
+
+describe('pavés : un habillage du sol', () => {
+  beforeAll(() => setMapSize(96));
+
+  it('une case pavée n’est pas un bâtiment : on bâtit, pose une décoration ou trace une route par-dessus', () => {
+    const w = flat();
+    w.place('paving', 20, 20, 0, false, 2, false);
+    w.place('paving', 21, 20, 0, false, 2, false);
+    expect(w.buildings.size).toBe(0);
+    expect(w.occ[w.ci(20, 20)]).toBe(0);
+    expect(w.canPlace('paving', 20, 20)).toBe('Déjà pavé');
+    expect(w.canPlace('fountain', 20, 20)).toBeNull();
+    w.place('fountain', 20, 20, 0, false, 2, false);
+    expect(w.canRoad(21, 20)).toBe(true);
+    w.setRoad(21, 20, true);
+    // le pavé reste dessous
+    expect(w.paving[w.ci(20, 20)]).toBe(1);
+    expect(w.paving[w.ci(21, 20)]).toBe(1);
+    // et sous un bâtiment déjà posé, on peut encore paver
+    w.place('house', 30, 30, 0, false, 2, false);
+    expect(w.canPlace('paving', 30, 30)).toBeNull();
+  });
+
+  it('Ctrl+Z : la prise de vue du monde garde les pavés', () => {
+    const w = flat(), before = w.snapshot();
+    w.setPaving(10, 10, true);
+    expect(w.paving[w.ci(10, 10)]).toBe(1);
+    w.restore(before);
+    expect(w.paving[w.ci(10, 10)]).toBe(0);
+  });
+
+  it('les anciennes sauvegardes : un pavé posé comme une décoration devient une case pavée, les lignes de train gardent leurs arrêts', () => {
+    const w = flat();
+    w.place('statue', 40, 40, 0, false, 1, false);
+    const d = JSON.parse(JSON.stringify(w.toJSON()));
+    d.buildings.unshift(['paving', 41, 40, 0, 0, 1], ['paving', 42, 40, 0, 0, 1]);
+    const back = new World();
+    back.fromJSON(d);
+    expect([...back.buildings.values()].map((b) => b.kind)).toEqual(['statue']);
+    expect(back.paving[back.ci(41, 40)] + back.paving[back.ci(42, 40)]).toBe(2);
+    expect(back.toJSON().paving).toEqual([back.ci(41, 40), back.ci(42, 40)]);
   });
 });
