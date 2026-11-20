@@ -373,8 +373,12 @@ const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string;
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
 const reqOf = (label: string) => (label === CHOICE_LABEL ? 'choice' : label === CONFLICT_LABEL ? 'conflict' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
-/** Le bâtiment est-il proposé dans cette partie ? (la diplomatie ; le comptoir : seulement avec l'archipel) */
-const offered = (w: World, k: KindId) => kindOffered(w, k) && (k !== 'tradepost' || archipelagoOn(w));
+/**
+ * Le bâtiment est-il proposé dans cette partie ? (la diplomatie ; le comptoir : seulement avec l'archipel). Au bac à sable, les
+ * monuments de la diplomatie (arc de triomphe, ambassade, concorde) s'ouvrent à leur âge sans guerre ni paix, comme le reste
+ * (retour de l'auteur, 20 nov. 2026) ; le comptoir reste à l'archipel, il ne se pose que chez l'allié
+ */
+const offered = (w: World, k: KindId) => (w.sandbox ? k !== 'tradepost' || archipelagoOn(w) : kindOffered(w, k) && (k !== 'tradepost' || archipelagoOn(w)));
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;

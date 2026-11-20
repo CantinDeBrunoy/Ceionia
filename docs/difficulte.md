@@ -25,6 +25,7 @@ Trois difficultés, choisies au début d'une partie et sauvegardées avec elle :
 | `calamity` (catastrophes naturelles : chance qu'un âge en ait une, dégâts) | 1, `none` (spectacle seul) | 0,5, `light` (champs noyés seulement) | 1, `full` |
 
 Le bac à sable et Facile ne diffèrent que par `unlimited`. Le détail des règles est dans les fichiers de chaque système.
+- **Bâtiments débloqués par les expéditions ou la diplomatie** : au bac à sable, tout ce qui est de l'âge s'ouvre (`lockOf` ne regarde ni `reqMission` ni `reqKind`). Les monuments de la diplomatie (arc de triomphe, ambassade, monument de la concorde) y sont aussi proposés sans guerre ni paix (`offered` dans `ui.ts`, demande de l'auteur du 20 nov. 2026). Le comptoir reste réservé à l'archipel : il ne se pose que chez l'allié.
 
 ### Où chaque réglage agit
 - `unlimited` : `World.unlimited` (getter : `rulesOf(...).unlimited ?? unlimitedSetting`). Effets : `priceIn` renvoie `null`, `gearShort` / `payGear` ne prélèvent rien, `Expeditions.burning` vaut 0, conditions de minerai et de briques réputées remplies, fiches en « ∞ ». Le réglage « Ressources » (`unlimitedSetting`, sauvegardé avec les réglages) n'a d'effet qu'en Facile ; l'écran de réglages affiche le mode imposé en Bac à sable (« Illimitées ») et en Normal (« Comptées ») via `DIFF_TEXT.resForced`.
