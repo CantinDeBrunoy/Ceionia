@@ -4303,6 +4303,21 @@ function concord(p: Parts, age: number) {
   figure(p, 0.24, 0.5, TURQ, -2.6);
   figure(p, 0.08, -0.6, LACQ, 0.4);
   if (age >= 4) for (const s of [-1, 1]) lampPost(p, s * 0.2, 0.84);
+  // le dallage : joints rayonnants et un anneau intérieur plus clair ; au pied de chaque pilier, la plaque de bronze du traité
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; p.box(0.004, 0.002, 0.5, Math.cos(a) * 0.5, 0.03, Math.sin(a) * 0.5, dark(STONE, 0.86), Math.PI / 2 - a); }
+  p.add(new THREE.RingGeometry(0.2, 0.26, 24).rotateX(-Math.PI / 2), 0, 0.031, 0, 0xf4ecda);
+  for (let k = 0; k < 3; k++) {
+    const a = Math.PI / 2 + k * (Math.PI * 2) / 3, x = Math.cos(a) * 0.48, z = Math.sin(a) * 0.48;
+    p.add(new THREE.BoxGeometry(0.1, 0.03, 0.006).rotateX(-0.6), x, 0.04, z, 0x8a6a3a, Math.PI / 2 - a);
+  }
+  // une haie basse taillée autour de la place, ouverte sur l'allée ; arbres d'alignement ; massifs le long de l'allée
+  for (let k = 0; k < 20; k++) { const a = (k / 20) * Math.PI * 2; if (Math.abs(Math.sin(a) - 1) < 0.03 || (Math.sin(a) > 0.95)) continue; p.box(0.2, 0.05, 0.05, Math.cos(a) * 0.88, 0.012, Math.sin(a) * 0.88, 0x5f9a4e, Math.PI / 2 - a); }
+  for (const [x, z] of [[-0.88, 0.0], [0.88, 0.0], [0, -0.9]]) tree(p, x, z, 0.7);
+  for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) p.sphere(0.02, sx * 0.19, 0.03, 0.78 + k * 0.05, [C.pink, C.butter, 0xd84a3e][k], 0, 0.8);
+  // pigeons sur le dallage, une enfant qui leur jette du grain, le panneau qui raconte la paix
+  for (let k = 0; k < 6; k++) { const a = k * 1.1, x = 0.3 + Math.cos(a) * 0.08, z = 0.25 + Math.sin(a) * 0.06; p.add(new THREE.IcosahedronGeometry(0.012, 0).scale(1, 0.8, 1.5), x, 0.04, z, k % 2 ? 0x9a9aa4 : 0x7a7a86, a); }
+  figure(p, 0.38, 0.36, 0xf2a6c8, -2.4, false, 0x8a5a3a);
+  p.box(0.012, 0.12, 0.012, -0.3, 0.012, 0.86, 0x5a5a60); p.box(0.14, 0.09, 0.012, -0.3, 0.1, 0.86, 0x3a4a5a); p.box(0.12, 0.07, 0.004, -0.3, 0.11, 0.867, 0xe8e0cf);
 }
 
 /**
