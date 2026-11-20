@@ -38,7 +38,7 @@ export const WAR_TIP_TEXT: Record<WarTipId, string> = {
   isle: '🗼 Portail ouvert ! Posez une caserne sur son île pour y recruter. Cliquez pour y aller.',
   garrison: '⚔️ Vos soldats sont sur l’île : menez-les aux Enfers. Cliquez pour les commander.',
   orders: '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. « ? » : aide.',
-  hell: '🔥 Les Enfers (facultatif) : abattez les forteresses ; chaque âge ouvre une zone. 🌀 Île : retour.',
+  hell: '🔥 Les Enfers (facultatif) : abattez les forteresses. Chaque âge ouvre une zone. 🌀 Île : retour.',
   ageLock: '🔒 Les démons d’après sont trop forts : montez d’âge pour ouvrir la zone suivante.',
   base: '🏕️ Zone conquise ! Posez un camp de base (rangée « Base »), puis caserne et infirmerie.',
   kingdom: '👑 Le royaume est ouvert ! Fuyez les cercles rouges des boules de feu. Combat facultatif.',

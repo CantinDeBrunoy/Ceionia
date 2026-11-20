@@ -42,12 +42,12 @@ registerDict('war', {
   'Caserne avancée': 'Forward barracks',
   'Recrute sur place : les recrues arrivent directement au camp, sans passer par l’île.': 'Recruits on the spot: recruits arrive straight at camp, without going through the island.',
   'Forge': 'Forge',
-  'Répare et affûte l’équipement des troupes de la base (+20 % de dégâts, coups reçus adoucis) ; forge contre du minerai les lances, arcs et armures qui manquent à la réserve du village pour recruter sur place.': 'Repairs and sharpens the base troops’ gear (+20% damage, softer hits taken); forges, for ore, the spears, bows and armor missing from the village stock so you can recruit on the spot.',
+  'Répare et affûte l’équipement des troupes de la base (+20 % de dégâts, coups reçus adoucis). Elle forge aussi, contre du minerai, les lances, arcs et armures qui manquent à la réserve du village pour recruter sur place.': 'Repairs and sharpens the base troops’ gear (+20% damage, softer hits taken). It also forges, for ore, the spears, bows and armor missing from the village stock so you can recruit on the spot.',
   'Infirmerie': 'Infirmary',
-  'Soigne vite les troupes de la base ; un soldat tombé dans les Enfers y est soigné (deux fois plus vite) au lieu de rentrer sur l’île.': 'Heals the base troops quickly; a soldier who falls in Hell is healed here (twice as fast) instead of going back to the island.',
+  'Soigne vite les troupes de la base. Un soldat tombé dans les Enfers y est soigné (deux fois plus vite) au lieu de rentrer sur l’île.': 'Heals the base troops quickly. A soldier who falls in Hell is healed here (twice as fast) instead of going back to the island.',
   'Ses archers tirent sur les démons qui approchent.': 'Its archers shoot the demons that come near.',
   'Palissade': 'Palisade',
-  'Cliquez et glissez pour tracer un mur de pieux : il bloque le passage et ralentit les démons qui le longent. Un clic de plus prolonge le mur ; Échap arrête. Laissez toujours un passage, ou posez une porte.': 'Click and drag to draw a wall of stakes: it blocks the way and slows the demons walking along it. One more click extends the wall; Esc stops. Always leave a gap, or build a gate.',
+  'Cliquez et glissez pour tracer un mur de pieux : il bloque le passage et ralentit les démons qui le longent. Un clic de plus prolonge le mur, Échap arrête. Laissez toujours un passage, ou posez une porte.': 'Click and drag to draw a wall of stakes: it blocks the way and slows the demons walking along it. One more click extends the wall, Esc stops. Always leave a gap, or build a gate.',
   'Porte': 'Gate',
   'À poser sur un mur de palissade : vos troupes la franchissent librement, pas les démons, qui doivent l’abattre.': 'Goes on a palisade wall: your troops walk through freely, the demons can’t and must smash it.',
   'Brasero': 'Brazier',
@@ -56,7 +56,7 @@ registerDict('war', {
 
   // ---- barre de commandement : aide des contrôles ----
   'Clic': 'Click',
-  'choisir une troupe (double-clic : toutes celles de la même sorte ; Maj : ajouter)': 'select a troop (double-click: all of the same kind; Shift: add)',
+  'choisir une troupe (double-clic : toutes celles de la même sorte, Maj : ajouter)': 'select a troop (double-click: all of the same kind, Shift: add)',
   'Glisser': 'Drag',
   'tracer un cadre autour des troupes à choisir': 'draw a box around the troops to select',
   'Clic droit': 'Right-click',
@@ -66,18 +66,18 @@ registerDict('war', {
   'H · R': 'H · R',
   'tenir la position · se replier': 'hold position · fall back',
   'Clic droit glissé': 'Right-drag',
-  'tourner la vue ; en le montant ou le descendant, incliner la caméra (clavier : Page haut / Page bas)': 'rotate the view; moving up or down tilts the camera (keyboard: Page Up / Page Down)',
+  'tourner la vue, et en le montant ou le descendant, incliner la caméra (clavier : Page haut / Page bas)': 'rotate the view, and moving up or down tilts the camera (keyboard: Page Up / Page Down)',
   'Espace': 'Space',
   'pause active : les ordres se donnent en pause': 'active pause: orders can be given while paused',
   '🌀 · 🔥': '🌀 · 🔥',
-  'passer le portail ; « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île': 'cross the portal; “See Hell” leads there, “Reinforcements” brings in the island garrison',
+  'passer le portail. « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île': 'cross the portal. “See Hell” leads there, “Reinforcements” brings in the island garrison',
 
   // ---- barre de commandement : pose des bâtiments, murs ----
-  'Mur : cliquez pour choisir le début (A), puis la fin (B) ; ou glissez de A à B. G : porte ici.': 'Wall: click to choose the start (A), then the end (B); or drag from A to B. G: gate here.',
+  'Mur : cliquez pour choisir le début (A), puis la fin (B), ou glissez de A à B. G : porte ici.': 'Wall: click to choose the start (A), then the end (B), or drag from A to B. G: gate here.',
   'Mur de {len} : {cost}. Clic : poser jusqu’ici · G : porte ici · Échap : arrêter.': 'Wall of {len}: {cost}. Click: build up to here · G: gate here · Esc: stop.',
   'rien à poser': 'nothing to build',
-  'Porte : commencez un mur (clic au point A), puis G au point voulu ; ou choisissez « Porte » et survolez un pan.': 'Gate: start a wall (click point A), then press G at the spot you want; or choose “Gate” and hover over a wall piece.',
-  '{icon} Palissade : un clic au point A, un clic au point B (ou glissez) : le mur se pose en ligne libre, droite ou en diagonale ({cost} le pan). B devient le début du suivant ; G : porte ici ; Échap ou clic droit : arrêter.': '{icon} Palisade: click point A, then point B (or drag): the wall is built in a free line, straight or diagonal ({cost} per piece). B becomes the start of the next one; G: gate here; Esc or right-click: stop.',
+  'Porte : commencez un mur (clic au point A), puis G au point voulu, ou choisissez « Porte » et survolez un pan.': 'Gate: start a wall (click point A), then press G at the spot you want, or choose “Gate” and hover over a wall piece.',
+  '{icon} Palissade : un clic au point A, un clic au point B (ou glissez) : le mur se pose en ligne libre, droite ou en diagonale ({cost} le pan). B devient le début du suivant. G : porte ici. Échap ou clic droit : arrêter.': '{icon} Palisade: click point A, then point B (or drag): the wall is built in a free line, straight or diagonal ({cost} per piece). B becomes the start of the next one. G: gate here. Esc or right-click: stop.',
   '{icon} Porte : survolez un pan de mur (elle s’y insère, en le remplaçant) et cliquez ({cost}). Échap ou clic droit : arrêter.': '{icon} Gate: hover over a wall piece (it fits in, replacing it) and click ({cost}). Esc or right-click: stop.',
   '{icon} {name} : cliquez au sol pour le poser ({cost}). Échap ou clic droit : arrêter.': '{icon} {name}: click the ground to build it ({cost}). Esc or right-click: stop.',
   '{icon} {name} : c’est posé ! La base peut s’étendre autour (cercle vert).': '{icon} {name}: built! The base can spread around it (green circle).',
@@ -194,7 +194,7 @@ registerDict('war', {
 
   // ---- menu « Ma base » ----
   'd’abord le Camp': 'Camp first',
-  'La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’{zone}': 'The forward base: build at the portal threshold or in a conquered zone; the mist opens up to {zone}',
+  'La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise, et la brume s’ouvre jusqu’{zone}': 'The forward base: build at the portal threshold or in a conquered zone, and the mist opens up to {zone}',
   'Ma base': 'My base',
   'Bâtir': 'Build',
   'Recruter': 'Recruit',
@@ -228,7 +228,7 @@ registerDict('war', {
   '{name} ({cost}) : {legend}': '{name} ({cost}): {legend}',
   'verrouillée : demande {age}': 'locked: needs {age}',
   'fermée : abattez d’abord la forteresse de la zone d’avant': 'closed: take down the previous zone’s fortress first',
-  'La zone où se trouve la vue ; un clic sur le portail ramène au village': 'The zone the view is in; a click on the portal takes you back to the village',
+  'La zone où se trouve la vue. Un clic sur le portail ramène au village': 'The zone the view is in. A click on the portal takes you back to the village',
 
   // ---- murs (palissade, porte) ----
   'Trop long : {n} pans au plus d’un coup (cliquez plus près, puis prolongez).': 'Too long: {n} pieces at most in one go (click closer, then extend).',
@@ -236,10 +236,10 @@ registerDict('war', {
   'Il y a déjà un pan ici.': 'There is already a wall piece here.',
   '{n} pans de {name} posés': '{n} {name} pieces built',
   '{name} : c’est posé': '{name}: built',
-  '. Cliquez plus loin pour prolonger le mur ; G : porte ici ; Échap : arrêter.': '. Click further to extend the wall; G: gate here; Esc: stop.',
+  '. Cliquez plus loin pour prolonger le mur. G : porte ici. Échap : arrêter.': '. Click further to extend the wall. G: gate here. Esc: stop.',
   'Déjà posé.': 'Already built.',
   'Rien à poser ici.': 'Nothing to build here.',
-  'Porte posée. Cliquez plus loin pour prolonger le mur ; Échap : arrêter.': 'Gate built. Click further to extend the wall; Esc: stop.',
+  'Porte posée. Cliquez plus loin pour prolonger le mur. Échap : arrêter.': 'Gate built. Click further to extend the wall. Esc: stop.',
 
   // ---- pose d'un bâtiment : refus ----
   'La brume barre {zone} : conquérez d’abord la zone d’avant.': 'The mist blocks {zone}: conquer the previous zone first.',
@@ -284,7 +284,7 @@ registerDict('war', {
   '💥 Le camp de base {zone} est tombé. Rebâtissez-le pour rouvrir la base.': '💥 The base camp in {zone} has fallen. Rebuild it to reopen the base.',
   '🩹 Un {troop} est tombé : on le porte à l’infirmerie de la base, il s’y soigne.': '🩹 One {troop} fell: it is carried to the base infirmary to heal.',
   '🩹 Un {troop} est tombé : on le ramène blessé à la caserne, il s’y soigne.': '🩹 One {troop} fell: it is brought back wounded to the barracks to heal.',
-  '🏴 La zone {zone} est conquise ! La brume se lève sur {next} ; vous pouvez bâtir une base avancée ici.': '🏴 Zone conquered: {zone}! The mist lifts over {next}; you can build a forward base here.',
+  '🏴 La zone {zone} est conquise ! La brume se lève sur {next}. Vous pouvez bâtir une base avancée ici.': '🏴 Zone conquered: {zone}! The mist lifts over {next}. You can build a forward base here.',
   '🌫️ Les démons {zone} sont trop forts : montez à {age} pour y aller.': '🌫️ The demons of {zone} are too strong: reach {age} to go there.',
   '🌫️ La brume infernale barre {zone} : abattez d’abord la forteresse {prev}.': '🌫️ The infernal mist blocks {zone}: take down the fortress of {prev} first.',
   '👑 Le roi des Enfers se lève de son trône ! Gare à ses boules de feu : écartez-vous des cercles rouges.': '👑 The King of Hell rises from his throne! Beware his fireballs: stay away from the red circles.',
@@ -294,7 +294,7 @@ registerDict('war', {
   // ---- île du portail, alerte d'incursion, bannière ----
   'île du portail : une caserne': 'portal island: a barracks',
   'Monde des Enfers': 'World of Hell',
-  '{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.': '{zone}: the demon kingdom lies at the very end. Optional expedition; the portal leads back to the island.',
+  '{zone} : le royaume démoniaque est tout au fond. L’expédition est facultative, et le portail ramène sur l’île.': '{zone}: the demon kingdom lies at the very end. The expedition is optional, and the portal leads back to the island.',
   '{text} Cliquez ici pour voir l’île.': '{text} Click here to see the island.',
   '{text} Cliquez ici pour y aller.': '{text} Click here to go there.',
   '🔥 Incursion sur l’île du portail : {n} !': '🔥 Raid on the portal island: {n}!',

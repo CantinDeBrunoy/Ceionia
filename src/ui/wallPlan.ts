@@ -167,7 +167,7 @@ export class WallPlan {
     if (r.built > 0 || (r.why === null && tw.cells.length)) {
       // (B, même s'il existait déjà : le mur suivant part de là)
       this.a = tw.cells[tw.cells.length - 1]; this.built = true; this.key = '';
-      return r.built ? `${d.icon} ${r.built > 1 ? tr('{n} pans de {name} posés', { n: r.built, name: d.name.toLowerCase() }) : tr('{name} : c’est posé', { name: d.name })}${r.why ? ` (${r.why})` : ''}${tr('. Cliquez plus loin pour prolonger le mur ; G : porte ici ; Échap : arrêter.')}` : tr('Déjà posé.');
+      return r.built ? `${d.icon} ${r.built > 1 ? tr('{n} pans de {name} posés', { n: r.built, name: d.name.toLowerCase() }) : tr('{name} : c’est posé', { name: d.name })}${r.why ? ` (${r.why})` : ''}${tr('. Cliquez plus loin pour prolonger le mur. G : porte ici. Échap : arrêter.')}` : tr('Déjà posé.');
     }
     return r.why ?? tr('Rien à poser ici.');
   }
@@ -184,6 +184,6 @@ export class WallPlan {
     const g = war.buildBase('gate', gate[0], gate[1]);
     if (typeof g === 'string') return g;
     this.a = gate; this.built = true; this.key = '';
-    return `${BASE_DEFS.gate.icon} ${tr('Porte posée. Cliquez plus loin pour prolonger le mur ; Échap : arrêter.')}`;
+    return `${BASE_DEFS.gate.icon} ${tr('Porte posée. Cliquez plus loin pour prolonger le mur. Échap : arrêter.')}`;
   }
 }
