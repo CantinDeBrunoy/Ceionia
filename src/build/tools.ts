@@ -488,7 +488,7 @@ export class ToolController implements ToolInput {
       else if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) {
         this.mark(); this.h.audio.sfxPlace();
         // on ne savait pas comment s'en défaire : on le dit dès la pose
-        this.h.toast(tr('Volcan posé. Pour le retirer : la Gomme ou Démolir sur son cône le rase ; Ctrl+Z annule.'));
+        this.h.toast(tr('Volcan posé. Pour le retirer : la Gomme ou Démolir sur son cône le rase. Ctrl+Z annule.'));
       }
     } else if (SCULPT_TOOLS.includes(t)) {
       this.ctx.target = this.hit.y;
@@ -828,7 +828,7 @@ export class ToolController implements ToolInput {
     this.endStroke();
     if (r.built) this.h.audio.sfxPlace();
     const msg = r.built === 0 ? tr('Rien à poser ici : le tracé ne passe que sur des routes, des bâtiments ou de l’eau.')
-      : (r.built > 1 ? tr('{n} pans posés', { n: r.built }) : tr('Un pan posé')) + (r.skipped ? tr(' ({n} cases sautées : routes, bâtiments ou eau)', { n: r.skipped }) : '') + tr('. Cliquez plus loin pour prolonger le mur ; Échap : arrêter.');
+      : (r.built > 1 ? tr('{n} pans posés', { n: r.built }) : tr('Un pan posé')) + (r.skipped ? tr(' ({n} cases sautées : routes, bâtiments ou eau)', { n: r.skipped }) : '') + tr('. Cliquez plus loin pour prolonger le mur. Échap : arrêter.');
     this.h.toast(msg);
     // B devient le point A du mur suivant
     this.freeFrom = [c.x + 0.5, c.z + 0.5];

@@ -13,7 +13,7 @@ registerDict('citizens', {
   'J’aimerais aller à l’école, mais il n’y en a pas.': 'I’d like to go to school, but there isn’t one.',
   'Ma cousine voudrait venir vivre ici, mais il n’y a plus de maison libre.': 'My cousin would like to come and live here, but there’s no free house left.',
   'Le puits est loin de chez moi.': 'The well is far from my home.',
-  'Ma rue est loin des pompiers et des gardes, ça m’inquiète.': 'My street is far from the firemen and the guards, and it worries me.',
+  'Ma rue est loin des pompiers et des gardes, ça m’inquiète.': 'My street is far from the firemen and the guards. It worries me.',
   'Brr, qu’il fait froid. Vivement le printemps.': 'Brr, it’s cold. Bring on the spring.',
   'J’ai froid. Vivement le printemps.': 'I’m cold. Bring on the spring.',
   'Quelle pluie ! Je reste au sec.': 'What rain! I’m staying dry.',

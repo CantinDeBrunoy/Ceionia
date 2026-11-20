@@ -59,8 +59,8 @@ export class DiploChoice {
     const choice = (a: string, cls: string, icon: string, title: string, sub: string, on = false, off = false) => `<button data-a="${a}" class="${cls}${on ? ' on' : ''}"${off ? ' disabled' : ''}>${icon}<span><b>${title}</b><small>${sub}</small></span></button>`;
     if (this.mode === 'ally') {
       const card = (p: People) => choice(p, 'pcGo dcPeople', crest(p), cap(peopleName(p)), p === 'orient'
-        ? tr('{isle} : dunes, palmiers et coupoles blanches ; marchands et navigateurs', { isle: cap(isleName(p)) })
-        : tr('{isle} : forêts humides, pitons et pagodes ; artisans et jardiniers', { isle: cap(isleName(p)) }));
+        ? tr('{isle}, ses dunes, ses palmiers et ses coupoles blanches. Un peuple de marchands et de navigateurs.', { isle: cap(isleName(p)) })
+        : tr('{isle}, ses forêts humides, ses pitons et ses pagodes. Un peuple d’artisans et de jardiniers.', { isle: cap(isleName(p)) }));
       this.el.innerHTML = `<div class="dcCrests">${crest('orient', 64)}${crest('asie', 64)}</div>
         <h4>${tr('Choisissez votre allié')}</h4>
         <p class="pcSub">${tr('Les Sablais et les Jadéens se font la guerre. Avec lequel de ces peuples ferez-vous alliance ?')}</p>

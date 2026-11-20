@@ -565,7 +565,7 @@ export class War {
       }
       // la progression dans les Enfers
       if (sim === this.faction) {
-        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: tr('🏴 La zone {zone} est conquise ! La brume se lève sur {next} ; vous pouvez bâtir une base avancée ici.', { zone: zoneOf(e.zone), next: zoneThe(e.zone + 1) }) });
+        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: tr('🏴 La zone {zone} est conquise ! La brume se lève sur {next}. Vous pouvez bâtir une base avancée ici.', { zone: zoneOf(e.zone), next: zoneThe(e.zone + 1) }) });
         else if (e.type === 'sealed') this.news.push({ kind: 'info', text: e.byAge ? tr('🌫️ Les démons {zone} sont trop forts : montez à {age} pour y aller.', { zone: zoneOf(e.zone), age: zoneAgeText(e.zone) }) : tr('🌫️ La brume infernale barre {zone} : abattez d’abord la forteresse {prev}.', { zone: zoneThe(e.zone), prev: zoneOf(e.zone - 1) }) });
         // le combat du roi
         else if (e.type === 'boss') this.news.push({ kind: 'boss', text: e.phase === 1 ? tr('👑 Le roi des Enfers se lève de son trône ! Gare à ses boules de feu : écartez-vous des cercles rouges.') : e.phase === 2 ? tr('😡 Le roi des Enfers enrage : le sol s’embrase par plaques, sortez des zones qui rougeoient !') : tr('👑 Le roi des Enfers est abattu ! Sa citadelle vacille : abattez-la.') });
