@@ -12292,6 +12292,9 @@ function futureLamp(p: Parts) {
   p.add(new THREE.TorusGeometry(0.07, 0.008, 4, 16).rotateX(Math.PI / 2), 0.085, 0.62, 0, F.neon, 0, 'neon');
   p.sphere(0.035, 0.085, 0.62, 0, 0xfaf6e6);
   p.add(new THREE.IcosahedronGeometry(0.03, 0), 0.085, 0.62, 0, 0xfaf6e6, 0, true);
+  // la cage de verre du globe : six côtes blanches, une coupe nacrée dessous, un chapeau en disque
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.004, 0.09, 0.004, 0.085 + Math.cos(a) * 0.046, 0.575, Math.sin(a) * 0.046, F.white); }
+  p.cyl(0.05, 0.03, 0.014, 10, 0.085, 0.565, 0, F.pearl); p.cyl(0.058, 0.044, 0.012, 10, 0.085, 0.666, 0, F.white); p.cyl(0.012, 0.018, 0.02, 6, 0.085, 0.678, 0, F.pearl);
   p.box(0.014, 0.014, 0.022, -0.016, 0.6, 0.012, F.dark); p.box(0.008, 0.008, 0.004, -0.016, 0.6, 0.024, 0xff4a3a, 0, true);
   { const f = sway([-0.016, 0.52, 0], [0, 1, 0], 0.2, 0.7); f.box(0.004, 0.13, 0.05, 0, -0.07, -0.03, F.pink, 0, 'neon'); f.box(0.005, 0.02, 0.05, 0, -0.02, -0.03, F.white); }
   p.box(0.04, 0.09, 0.03, 0.09, 0, 0.06, F.white); p.box(0.03, 0.02, 0.004, 0.09, 0.06, 0.076, F.mint, 0, 'neon');
