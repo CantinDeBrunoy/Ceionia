@@ -2643,9 +2643,13 @@ export class UI {
   closeTop(): boolean {
     const ovs = this.root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay');
     const top = ovs[ovs.length - 1];
-    if (!top?.close || top.id === 'menu' || top.classList.contains('victory')) return false;
-    top.close();
-    return true;
+    if (top?.close && top.id !== 'menu' && !top.classList.contains('victory')) { top.close(); return true; }
+    if (top) return false;
+    // puis les panneaux du haut : conditions de l'âge, fiche d'un besoin ou d'un stock, habitants (Échap ne les fermait pas, v6)
+    if ($('#agePanel').classList.contains('open')) { $('#agePanel').classList.remove('open'); this.update(); return true; }
+    if (this.needOpen || this.resOpen) { this.closeNeed(); return true; }
+    if (!$('#census').hidden) { this.closeCensus(); return true; }
+    return false;
   }
 
   /** Décision à prendre sur l'imprévu en cours d'une équipe */
