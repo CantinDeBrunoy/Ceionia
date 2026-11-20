@@ -1538,6 +1538,20 @@ export class UI {
     }));
   }
 
+  /**
+   * Sa maison, son lieu de travail (un clic dans la fiche d'un habitant) : la vue y va et le cadre, la caméra cesse de suivre
+   * l'habitant, et le bâtiment est choisi (sa fiche s'ouvre), comme d'un clic sur la carte
+   */
+  private goBuilding(id: number) {
+    const h = this.host, b = h.world.buildings.get(id);
+    if (!b) return;
+    h.audio.sfxClick();
+    h.followCitizen(null);
+    const s = sizeOf(b);
+    h.cam.goTo(b.x + s / 2, b.z + s / 2, Math.min(Math.max(h.cam.dist, 6 + s * 2), 16));
+    h.tools.select(id);
+  }
+
   /** La fiche d'un habitant, dans la carte du bâtiment choisi (voir citizenCard.ts) ; il n'est plus montré : elle se ferme */
   private renderCitizen(box: HTMLElement, id: number) {
     const h = this.host, tl = h.tools, card = citizenCard(h, id);
@@ -1554,7 +1568,8 @@ export class UI {
       if (act === 'close') tl.select(null);
       else if (act === 'follow') { h.audio.sfxClick(); h.followCitizen(h.citizenCam === id ? null : id); this.selKey = ''; this.renderSelection(); }
       else if (act === 'exp' && el.dataset.m) { h.audio.sfxClick(); this.gotoMission(el.dataset.m); }
-      else if (act === 'home') { const c = h.agents.citizen(id); if (c && h.world.buildings.has(c.home)) { h.audio.sfxClick(); h.followCitizen(null); tl.select(c.home); } }
+      else if (act === 'home') { const c = h.agents.citizen(id); if (c) this.goBuilding(c.home); }
+      else if (act?.startsWith('go:')) this.goBuilding(+act.slice(3));
     }));
   }
 

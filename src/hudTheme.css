@@ -1577,3 +1577,6 @@ button.round.off:hover { opacity: 0.85; }
 /* fiche d'un habitant : trois boutons au plus (« Voir l'expédition », « Suivre », « Sa maison ») ; ils passent à la ligne s'il le faut */
 #selCard.citizen .xacts { flex-wrap: wrap; }
 #selCard.citizen .xacts button { flex: 1 1 auto; }
+/* fiche d'un habitant : sa maison et son lieu de travail se cliquent (la vue y va), comme des liens */
+#selCard .stat .golink { min-height: 0; padding: 0; margin: 0; border: none; background: none; box-shadow: none; border-radius: 0; font: inherit; font-weight: 700; color: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted rgba(110, 80, 40, 0.45); text-underline-offset: 3px; }
+#selCard .stat .golink:hover { color: #8A5A12; text-decoration: underline solid; background: none; }
