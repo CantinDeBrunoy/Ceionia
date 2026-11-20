@@ -9,12 +9,12 @@ import { tube } from './festivities';
  * Les trophées de la grande place : un par gros monstre vaincu, posé sur son socle (pierre brute à la Préhistoire, marbre à
  * l'Antiquité, pierre taillée au Moyen Âge, plaque de bronze ensuite, liseré lumineux à l'âge futuriste) : les défenses du
  * mammouth en arche au-dessus de son crâne, le tentacule du kraken qui s'enroule près de son bec, la dent du mégalodon devant
- * sa mâchoire, le crâne cornu du dragon. Ils ne font pas partie du modèle de la place : on les pose par-dessus, aux places
+ * sa mâchoire, le crâne cornu du dragon, les bois dorés du cerf blanc sur leur écusson. Ils ne font pas partie du modèle de la place : on les pose par-dessus, aux places
  * que laisse libres le décor de son âge
  */
 
 /** Les trophées possibles, dans l'ordre (chacun a sa place sur la place du village) ; un nouveau monstre s'ajoute au bout */
-export const TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon', 'hellking'] as const;
+export const TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon', 'hellking', 'stag'] as const;
 export type TrophyId = (typeof TROPHIES)[number];
 
 /**
@@ -205,7 +205,41 @@ function hellking(p: Parts, age: number) {
   for (const s of [-1, 1]) p.sphere(0.009, s * 0.045, cy + 0.028, 0.062, 0xb050e0);
 }
 
-const DRAW: Record<TrophyId, (p: Parts, age: number) => void> = { mammoth, kraken, megalodon, dragon, hellking };
+/**
+ * Les bois du cerf blanc : sa tête blanche, mufle vers le bas, montée sur un écusson de bois sombre, et ses bois immenses et
+ * dorés, en lyre, hérissés d'andouillers, qui débordent largement de l'écusson
+ */
+function stag(p: Parts, age: number) {
+  const y = plinth(p, age, 0.3), wood = age >= 3 ? 0x4a3226 : 0x5a3e28, gold = 0xe2c98a, tip = 0xfff1c4, white = 0xf4f1e8;
+  // le pied et l'écusson, arrondi en bas, liseré clair
+  p.box(0.035, 0.12, 0.03, 0, y, -0.03, wood);
+  p.box(0.15, 0.17, 0.024, 0, y + 0.1, -0.035, wood);
+  p.add(new THREE.CylinderGeometry(0.075, 0.075, 0.024, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI), 0, y + 0.1, -0.035, wood);
+  p.box(0.158, 0.012, 0.028, 0, y + 0.268, -0.035, 0xc8a868);
+  // la tête : chanfrein qui descend vers le mufle gris, yeux sombres, oreilles
+  p.add(new THREE.IcosahedronGeometry(0.05, 1).scale(0.75, 1.25, 0.8), 0, y + 0.19, 0.0, white);
+  p.add(new THREE.IcosahedronGeometry(0.03, 1).scale(0.85, 1, 0.9), 0, y + 0.13, 0.02, 0xd9d2c4);
+  p.sphere(0.009, 0, y + 0.115, 0.042, 0x3a302c);
+  for (const s of [-1, 1]) {
+    p.sphere(0.009, s * 0.03, y + 0.2, 0.03, 0x1a1412);
+    p.add(new THREE.IcosahedronGeometry(0.022, 0).scale(1.6, 0.6, 0.4), s * 0.065, y + 0.235, 0.0, white, 0, false, s * 0.5);
+  }
+  // les bois : le merrain monte en s'écartant, revient un peu vers l'intérieur ; andouillers vers l'avant et le haut
+  for (const s of [-1, 1]) {
+    const beam: number[][] = [];
+    for (let k = 0; k <= 8; k++) {
+      const t = k / 8;
+      beam.push([s * (0.025 + Math.sin(t * 2.2) * 0.14), y + 0.235 + t * 0.32, 0.005 + Math.sin(t * 3) * 0.03]);
+    }
+    curve(p, beam, 0.013, 0.004, (k) => (k > 0.7 ? tip : gold), 6);
+    for (const [t, dx, dy, dz] of [[0.12, 0.01, 0.05, 0.06], [0.3, 0.035, 0.07, 0.05], [0.5, 0.05, 0.08, 0.03], [0.68, 0.025, 0.08, 0.035], [0.85, -0.03, 0.07, 0.03]]) {
+      const k = Math.min(7, Math.floor(t * 8)), b = beam[k];
+      curve(p, [b, [b[0] + s * dx * 0.5, b[1] + dy * 0.55, b[2] + dz * 0.5], [b[0] + s * dx, b[1] + dy, b[2] + dz]], 0.007, 0.002, (q) => (q > 0.5 ? tip : gold), 5);
+    }
+  }
+}
+
+const DRAW: Record<TrophyId, (p: Parts, age: number) => void> = { mammoth, kraken, megalodon, dragon, hellking, stag };
 
 /** Ajoute à `p` le trophée de ce monstre, posé en (0, 0, 0), sa face (sa plaque) vers +z, pour une place de cet âge */
 export function trophyParts(p: Parts, id: TrophyId, age: number) { DRAW[id](p, Math.max(0, Math.min(5, age))); }

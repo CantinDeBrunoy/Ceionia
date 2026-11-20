@@ -250,7 +250,9 @@ export class CommandUI implements ToolInput {
   private showHeld() {
     if (this.hovering) return;
     const held = this.placing ? `build:${this.placing}` : this.theater?.kind === 'isle' && this.host.isleHeld?.() ? `ibuild:${this.host.isleHeld()}` : null;
-    const tile = held ? this.bar.querySelector<HTMLElement>(`[data-a="${held}"]`) : null;
+    // (la tuile qui porte la carte : la liste « à faire » de l'île a aussi un bouton « ibuild:… », sans nom ni texte, et la
+    // carte de la caserne en main s'intitulait « undefined », testeurs v6)
+    const tile = held ? this.bar.querySelector<HTMLElement>(`[data-a="${held}"][data-xn]`) : null;
     this.showCard(tile, tile ? this.hint() : '');
   }
 
@@ -399,14 +401,20 @@ export class CommandUI implements ToolInput {
       ok = this.host.war.canBuildBase(kind, x, z) === null;
       line = [{ x, z, ok, gate: true }];
     }
+    // (les autres : la raison du refus sous le curseur, dans la bulle ; on ne la lisait qu'au clic, Karim v6)
+    if (ok === null && !line) { const why = this.host.war.canBuildBase(kind, p[0], p[1]); ok = why === null; this.placeWhy = why; this.showInfo(); }
     t.ghost?.(kind, p[0], p[1], ok ?? (line ? line.some((c) => c.ok) : this.host.war.canBuildBase(kind, p[0], p[1]) === null), ring, line);
   }
+  /** pourquoi le bâtiment en main ne se pose pas sous le curseur (null : il se pose) */
+  private placeWhy: string | null = null;
 
   /** La phrase d'aide du tracé de mur, mise à jour sous le curseur sans refaire toute la barre */
   private wallInfo = '';
   private showInfo() {
     const el = this.bar.querySelector('.thint');
-    if (el && this.placing === 'palisade' && el.textContent !== this.wallInfo) el.textContent = this.wallInfo;
+    if (!el || !this.placing || this.placing === 'gate') return;
+    const text = this.placing === 'palisade' ? this.wallInfo : this.hint();
+    if (el.textContent !== text) el.textContent = text;
   }
   /** le dernier point du sol visé (pour la touche « porte ici ») */
   private lastP: [number, number] | null = null;
@@ -542,12 +550,35 @@ export class CommandUI implements ToolInput {
     else {
       this.baseOpen = true;
       this.cmd.armed = null; this.wall.reset();
-      this.tool = 'select'; this.moving = null; this.razeAsk = null;
+      this.tool = 'select'; this.moving = null; this.razeAsk = null; this.placeWhy = null;
+      if (kind === 'camp' && this.campHint()) { this.render(); return; }
       this.host.toast(kind === 'palisade' ? tr('{icon} Palissade : un clic au point A, un clic au point B (ou glissez) : le mur se pose en ligne libre, droite ou en diagonale ({cost} le pan). B devient le début du suivant ; G : porte ici ; Échap ou clic droit : arrêter.', { icon: BASE_DEFS.palisade.icon, cost: costText(BASE_DEFS.palisade.cost) }) : kind === 'gate' ? tr('{icon} Porte : survolez un pan de mur (elle s’y insère, en le remplaçant) et cliquez ({cost}). Échap ou clic droit : arrêter.', { icon: BASE_DEFS.gate.icon, cost: costText(BASE_DEFS.gate.cost) }) : tr('{icon} {name} : cliquez au sol pour le poser ({cost}). Échap ou clic droit : arrêter.', { icon: BASE_DEFS[kind!].icon, name: BASE_DEFS[kind!].name, cost: costText(BASE_DEFS[kind!].cost) }));
     }
     this.render();
   }
-  stopPlacing() { this.placing = null; this.wall.reset(); this.theater?.ghost?.(null); this.host.canvas.style.cursor = ''; this.render(); }
+  /**
+   * Le camp en main : s'il ne se pose pas là où l'on regarde, la vue va à l'emplacement valable le plus proche (une zone tenue :
+   * le Seuil du portail tant qu'aucune forteresse n'est tombée) et un message le dit. Karim (v6) le cherchait dans les Grottes
+   * de braise, encore aux démons : l'aperçu restait rouge partout, sans dire pourquoi. Vrai si le message a été donné
+   */
+  private campHint(): boolean {
+    const t = this.theater, war = this.host.war, m = t?.sim.map as { W: number } | undefined;
+    if (!t || !m) return false;
+    const from = this.lastP ?? this.center();
+    if (war.canBuildBase('camp', from[0], from[1]) === null) return false;
+    let best: [number, number] | null = null, bd = Infinity;
+    const H = HELL_ZONES[HELL_ZONES.length - 1].z0 + 40;
+    for (let z = 0; z < H; z++) for (let x = 0; x < m.W; x++) {
+      const d = Math.hypot(x + 0.5 - from[0], z + 0.5 - from[1]);
+      if (d < bd && war.canBuildBase('camp', x + 0.5, z + 0.5) === null) { bd = d; best = [x + 0.5, z + 0.5]; }
+    }
+    if (!best) { this.deny(war.canBuildBase('camp', from[0], from[1])!); return true; }
+    this.host.follow?.(false);
+    t.focus(best[0], best[1], 18);
+    this.host.toast(tr('{icon} Camp de base : il se pose dans une zone tenue ({zone}, ou une zone dont la forteresse est tombée), loin de la brume. La vue y va : cliquez au sol ({cost}).', { icon: BASE_DEFS.camp.icon, zone: zoneThe(zoneOfZ(Math.floor(best[1]))), cost: costText(BASE_DEFS.camp.cost) }));
+    return true;
+  }
+  stopPlacing() { this.placeWhy = null; this.placing = null; this.wall.reset(); this.theater?.ghost?.(null); this.host.canvas.style.cursor = ''; this.render(); }
 
   private placeAt(x: number, y: number) {
     const t = this.theater!, p = t.pick(x, y), kind = this.placing!;
@@ -809,6 +840,7 @@ export class CommandUI implements ToolInput {
     const n = this.cmd.selected.size;
     if (this.placing === 'palisade') return this.wallInfo || tr('Mur : cliquez pour choisir le début (A), puis la fin (B).');
     if (this.placing === 'gate') return tr('Porte : survolez un pan de mur et cliquez : elle s’y insère. Échap ou clic droit pour arrêter.');
+    if (this.placing && this.placeWhy) return `✗ ${this.placeWhy}`;
     if (this.placing) return tr('Cliquez au sol pour poser : {name}. Échap ou clic droit pour arrêter.', { name: BASE_DEFS[this.placing].name });
     const held = this.theater?.kind === 'isle' ? this.host.isleHeld?.() : null;
     if (held) return tr('Cliquez sur l’île pour poser : {name} · R : tourner · Échap ou clic droit : lâcher.', { name: this.host.defenseInfo(held).name });

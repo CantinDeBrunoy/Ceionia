@@ -48,6 +48,7 @@ const CAPTION: Record<string, () => string> = {
   kraken: () => tr('Le tentacule du kraken rejoint la place'),
   megalodon: () => tr('La dent du mégalodon rejoint la place'),
   dragon: () => tr('Le crâne du dragon rejoint la place'),
+  stag: () => tr('Les bois du cerf blanc rejoignent la place'),
 };
 
 /** l'orientation des trophées, tournés vers la vue d'ensemble (voir trophies.ts) : on les voit de face de ce côté */

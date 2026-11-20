@@ -1,5 +1,5 @@
 import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS } from '../world/world';
-import { Building, hasDoor, sizeOf } from './catalog';
+import { Building, hasDoor, isDecor, sizeOf } from './catalog';
 import { FRONT, doorCells, doorSide, facingRoadRot, nearRoadSide, sideCells } from './placement';
 import { Heap } from '../sim/agents';
 
@@ -123,7 +123,7 @@ function nearDoor(w: World, self: Building, same: (k: number) => boolean = () =>
   // la place du village, sans porte, s'aborde de n'importe quelle case qui la borde (sa façade ne se tourne pas pour autant)
   const plazas: number[] = [];
   for (const o of w.buildings.values()) {
-    if (o.id === self.id || o.kind === 'lamp' || !same(w.ci(o.x, o.z))) continue;
+    if (o.id === self.id || isDecor(o.kind) || !same(w.ci(o.x, o.z))) continue;
     if (!hasDoor(o.kind)) { plazas.push(...ringCells(w, o)); continue; }
     const own = doorSide(o.kind, o.rot);
     // (une case devant deux portes : celle qui s'y ouvre déjà l'emporte)
@@ -349,7 +349,7 @@ function joinHamlet(w: World, b: Building) {
   if (touch === undefined) return 0;
   const net = component(w, touch);
   let served = 0;
-  for (const o of w.buildings.values()) if (o.kind !== 'lamp' && ringCells(w, o).some((k) => net.has(k))) served++;
+  for (const o of w.buildings.values()) if (!isDecor(o.kind) && ringCells(w, o).some((k) => net.has(k))) served++;
   if (served !== HAMLET) return 0;
   const path = wisest(w, [...net], (k) => w.road[k] === 1 && !net.has(k), MAX_JOIN, () => 0, -1);
   return path ? lay(w, path) : 0;

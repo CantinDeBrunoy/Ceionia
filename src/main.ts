@@ -60,9 +60,11 @@ import { UI, showMenu, UIHost, chooseControls } from './ui/ui';
 import { Controls, loadControls, saveControls, guessLayout } from './core/controls';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
-import { allyIsle, allyView, onAllyIsle, allyPostReady } from './sim/allyLand';
-import { AGES, KINDS, KIND_ORDER, Building, sizeOf, type KindId } from './build/catalog';
-import { MISSIONS, VICTORY } from './sim/missions';
+import { allyIsle, allyView, onAllyIsle, allyPostReady, allyHarborSpot } from './sim/allyLand';
+import { SpotBeacon } from './render/spotBeacon';
+import { AGES, BUILD_CATS, KINDS, KIND_ORDER, Building, sizeOf, type KindId } from './build/catalog';
+import { MISSIONS, VICTORY, applyEffects } from './sim/missions';
+import { stepGoals, rewardEffects, type GoalCtx } from './sim/goals';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
 import { L_GONE, L_LIFT } from './render/expeditionScenes';
 import { Parade, Spot } from './render/parade';
@@ -71,7 +73,7 @@ import { Traffic } from './render/traffic';
 import { Halos } from './render/halos';
 import { RailBoost } from './render/railBoost';
 import { UpgradeBadges } from './render/upgradeBadges';
-import { Expeditions } from './sim/expeditions';
+import { Expeditions, type Report } from './sim/expeditions';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
@@ -167,6 +169,29 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const FOLLOW_FAST = 2;
 const goalName = (g: BattleGoal) => ({ plage: tr('la plage'), remparts: tr('les remparts'), port: tr('le port'), palais: tr('le palais') })[g];
 
+/** Les récits d'expédition gardés le temps du rechargement de la traversée (`sessionStorage`) */
+const LATE_REPORTS = 'village-lowpoly:late-reports';
+function keepLateReports(rs: Report[]) {
+  try {
+    if (!rs.length) { sessionStorage.removeItem(LATE_REPORTS); return; }
+    sessionStorage.setItem(LATE_REPORTS, JSON.stringify(rs.map((r) => ({ m: r.m.id, c: r.m.choices.indexOf(r.c), ok: r.ok, text: r.text, summary: r.summary, notes: r.notes, redo: r.redo }))));
+  } catch { /* stockage refusé : le récit est perdu, comme avant */ }
+}
+/** Relit (et efface) les récits gardés ; ceux dont la mission ou le choix n'existe plus sont oubliés */
+function readLateReports(): Report[] {
+  try {
+    const raw = sessionStorage.getItem(LATE_REPORTS);
+    sessionStorage.removeItem(LATE_REPORTS);
+    const list = JSON.parse(raw ?? '[]') as { m: string; c: number; ok: boolean; text: string; summary: string; notes: string[]; redo: boolean }[];
+    const out: Report[] = [];
+    for (const o of Array.isArray(list) ? list : []) {
+      const m = MISSIONS.find((x) => x.id === o.m), c = m?.choices[o.c];
+      if (m && c) out.push({ m, c, ok: !!o.ok, text: String(o.text ?? ''), summary: String(o.summary ?? ''), notes: Array.isArray(o.notes) ? o.notes.map(String) : [], redo: !!o.redo });
+    }
+    return out;
+  } catch { return []; }
+}
+
 class Game implements UIHost {
   scene = new THREE.Scene();
   cam = new CameraRig(canvas);
@@ -202,6 +227,8 @@ class Game implements UIHost {
   /** routes automatiques jusqu'aux nouveaux bâtiments */
   autoRoads = true;
   hideUpBadges = false;
+  /** les petits objectifs de la barre du haut : masqués si vrai (Paramètres › Partie) */
+  hideGoals = false;
   /** comment le joueur déplace la vue : retenu pour ce navigateur ; avant le premier choix, le clavier (comme avant) */
   controls: Controls = loadControls() ?? { mode: 'keys', layout: guessLayout(getLang()) };
   fires: Fires;
@@ -216,6 +243,8 @@ class Game implements UIHost {
   /** le conflit vivant entre les deux îles rivales (décor : escarmouches, puis commerce ou patrouilles) */
   naval: NavalConflict;
   halos: Halos;
+  /** la balise ⚓ de l'emplacement du port chez l'allié (voir `stepBeacon`) */
+  harborBeacon = new SpotBeacon();
   /** pastilles « ⬆ » sur les bâtiments qui peuvent évoluer */
   upBadges: UpgradeBadges;
   expeditions: Expeditions;
@@ -223,6 +252,8 @@ class Game implements UIHost {
   railway: Railway;
   railView: RailView;
   trainCam: number | null = null;
+  /** l'habitant que suit la caméra (bouton « Suivre » de sa fiche), jusqu'à Échap, un clic ailleurs ou un glissé de la vue */
+  citizenCam: number | null = null;
   /** ligne en cours de tracé : ses arrêts dans l'ordre, ses points de passage, et la ligne qu'elle remplacera (null : une nouvelle) */
   railEdit: RailEditState | null = null;
   /** clé du dernier calcul des arrêts possibles mis en valeur */
@@ -453,6 +484,7 @@ class Game implements UIHost {
     this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? (weak ? 2 : 0))));
     this.autoRoads = settings.autoRoads ?? true;
     this.hideUpBadges = settings.hideUpBadges ?? false;
+    this.hideGoals = settings.hideGoals ?? false;
     w.disasters = settings.disasters ?? true;
     w.unlimited = settings.unlimited ?? false;
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 4);
@@ -549,7 +581,7 @@ class Game implements UIHost {
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
     this.applyQuality();
 
     const host = this;
@@ -563,6 +595,8 @@ class Game implements UIHost {
       erupt: (cell) => this.erupt(cell),
       openPortal: () => { if (this.war.ensure()) void this.enterHell(); },
       get autoRoads() { return host.autoRoads; },
+      pickCitizen: (x, y) => (this.mode === 'surface' && !this.isleCmd ? this.agents.pickAt(x, y, this.cam.camera, canvas.clientWidth, canvas.clientHeight) : null),
+      onCitizen: (id) => { this.agents.selected = id; if (this.citizenCam !== id) this.citizenCam = null; },
     });
     this.cam.handler = this.tools;
     // prendre un outil du village (barre du bas, vignette) depuis les Enfers ou le commandement de l'île : on remonte d'abord
@@ -644,7 +678,7 @@ class Game implements UIHost {
       },
       syncTrophies: () => { this.trophyT = 0; this.syncTrophies(); },
       release: () => {
-        this.follow(null); this.trainCam = null; this.incidentCam = null; this.hellFollow = false;
+        this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null; this.hellFollow = false;
         // l'outil en main se pose le temps de la cinématique (rendu à la fin, `resume`)
         const t = this.tools;
         this.trophyTool = t.tool !== 'none' ? { t: t.tool, k: t.kind } : null;
@@ -656,15 +690,20 @@ class Game implements UIHost {
     this.expeditions.onNews = (m) => this.ui.toast(m, undefined, m.startsWith('⚔️') ? 'danger' : 'info');
     this.railway.onNews = (m) => this.ui.info(m);
     // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
-    this.cam.onPan = () => { this.hellFollow = false; this.trainCam = null; this.incidentCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
+    this.cam.onPan = () => { this.hellFollow = false; this.trainCam = null; this.incidentCam = null; this.citizenCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
     // tracer une ligne : un clic sur une gare l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
     this.tools.overlay = this.trackEdit;
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
+    // sans réponse, l'équipe a choisi d'elle-même : on le dit (l'imprévu disparaissait sans un mot, testeur v6)
+    this.expeditions.onAuto = (a, ev, i) => this.ui.toast(tr('{icon} « {mission} » : sans réponse, l’équipe a choisi d’elle-même « {option} ».', { icon: a.m.icon, mission: a.m.title, option: ev.options[i].label }));
     this.expeditions.onReport = (r) => {
+      // (en attente jusqu'à ce que le récit s'ouvre : le grand choix l'attend, la traversée le garde)
+      this.reportsDue.add(r);
       // pas en plein geste sur la carte : le récit (et la cinématique du trophée) attendent la fin de la pose
       if (this.midGesture()) { setTimeout(() => this.expeditions.onReport?.(r), 250); return; }
       const show = () => {
+        this.reportsDue.delete(r);
         // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
         if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: tr('le village'), pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
         else this.ui.showReport(r);
@@ -676,10 +715,11 @@ class Game implements UIHost {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       show();
     };
-    // les îles découvertes (fin de la cinématique) : la carte du choix de l'allié, obligatoire
+    // les îles découvertes (fin de la cinématique) : la carte du choix de l'allié, obligatoire (un récit d'expédition gardé
+    // pendant la traversée passe d'abord : la carte vient ensuite, au calme, par `stepDiplo`)
     // la carte paix ou guerre attend le port et le comptoir chez l'allié (le tutoriel de l'or y mène)
     bindPostReady(allyPostReady);
-    this.onIslesRevealed = () => { if (allyPending(this.world)) this.diploChoice.showAlly(); };
+    this.onIslesRevealed = () => { if (allyPending(this.world) && !this.lateReports.length) this.diploChoice.showAlly(); };
     // la diplomatie de l'archipel : pas de passage d'âge pendant la bataille (le conflit à régler est une condition de l'âge)
     this.sim.beforeAdvance = () => {
       const why = ageGate(this.allyBattle);
@@ -822,7 +862,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -1007,7 +1047,7 @@ class Game implements UIHost {
     if (this.mode === 'hell') { this.ensureSurface(() => this.commandIsle(), true); return; }
     const p = this.world.portal;
     if (this.mode !== 'surface' || !p || !this.war.ensure()) return;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.tools.setTool('none');
     this.cam.goTo(p.x, p.z + 1, Math.min(Math.max(this.cam.dist, 18), 26));
     // trois quarts plutôt que presque de dessus (l'inclinaison reste réglable : clic droit glissé)
@@ -1108,7 +1148,7 @@ class Game implements UIHost {
     const p = this.world.portal, v = this.cam.view();
     this.isleNear = this.mode === 'surface' && !!p && this.world.portalOpen && nearIsle(this.isleNear, Math.hypot(v.x - p.x, v.z - p.z), p.r);
     if (!this.isleNear) { if (this.isleCmd) this.leaveIsle(); return; }
-    if (this.isleCmd || this.fading || this.tools.tool !== 'none' || this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.railEdit || this.kingStage.playing || this.trophyStage.playing) return;
+    if (this.isleCmd || this.fading || this.tools.tool !== 'none' || this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.citizenCam !== null || this.railEdit || this.kingStage.playing || this.trophyStage.playing) return;
     this.enterIsle();
   }
 
@@ -1119,16 +1159,51 @@ class Game implements UIHost {
   /** La vue va sur l'île de l'allié, là où l'on peut bâtir (loin de leur ville) */
   goAlly() {
     if (this.mode !== 'surface') { this.ensureSurface(() => this.goAlly(), true); return; }
-    const v = allyView(this.world);
+    // pas encore de port chez l'allié : la vue cadre la rive où il se pose (la plus proche de notre île), de près ; avant, elle
+    // allait au milieu des collines et la rive dorée ne se voyait qu'au bord de l'écran (v6 : trois joueurs sur trois bloqués)
+    const spot = this.allyHarborTarget();
+    const v = spot ?? allyView(this.world);
     if (!v) return;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
-    this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
+    // (la rive au milieu de l'écran : la bulle du guide se tient à côté, l'ancre de la balise au-dessus)
+    if (spot) this.cam.goTo(spot.x, spot.z, 38);
+    else this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
+  }
+
+  /** l'emplacement du port chez l'allié, gardé tant qu'il reste valable (sa recherche coûte quelques dizaines de ms) */
+  private allySpot: { x: number; z: number; v: number } | null = null;
+  /** Où poser le port chez l'allié (null : allié pas choisi, port déjà bâti, ou aucune rive) */
+  private allyHarborTarget(): { x: number; z: number } | null {
+    const w = this.world;
+    if (!allyIsle(w) || this.harborsByIsle().ally) return (this.allySpot = null);
+    const c = this.allySpot, h = KINDS.harbor.size / 2;
+    if (c && (c.v === w.version || w.canPlace('harbor', c.x - h, c.z - h) === null)) { c.v = w.version; return c; }
+    const s = allyHarborSpot(w);
+    this.allySpot = s ? { x: s.x, z: s.z, v: w.version } : null;
+    return this.allySpot;
+  }
+
+  private beaconT = 0;
+  /**
+   * La balise ⚓ sur la rive où poser le port chez l'allié, tant qu'il n'y est pas : le port en main, ou le chapitre « L'or
+   * des voisins » une fois le port de notre île bâti. Revue deux fois par seconde
+   */
+  private stepBeacon(dt: number) {
+    this.harborBeacon.update(dt);
+    if ((this.beaconT -= dt) > 0) return;
+    this.beaconT = 0.5;
+    const t = this.tools, held = t.tool === 'build' && t.kind === 'harbor';
+    const want = this.mode === 'surface' && !!allyIsle(this.world) && (held || (this.tutorial.chapterOn === 'arch' && this.harborsByIsle().home > 0));
+    const spot = want ? this.allyHarborTarget() : null;
+    if (spot) this.harborBeacon.show(spot.x, spot.z, this.world.hAt(spot.x, spot.z));
+    else this.harborBeacon.hide();
   }
 
   /** La vue regarde-t-elle l'île de l'allié ? */
   private lookingAtAlly() {
     const isle = allyIsle(this.world);
-    return this.mode === 'surface' && !!isle && isle.lobes.some((l) => Math.hypot(this.cam.target.x - l.x, this.cam.target.z - l.z) < l.r + 6);
+    const t = this.cam.target, spot = this.allySpot;
+    return this.mode === 'surface' && !!isle && (isle.lobes.some((l) => Math.hypot(t.x - l.x, t.z - l.z) < l.r + 6) || (!!spot && Math.hypot(t.x - spot.x, t.z - spot.z) < 14));
   }
 
   /** Ports bâtis sur notre île et chez l'allié */
@@ -1149,7 +1224,7 @@ class Game implements UIHost {
     if (this.mode === 'hell') { this.ensureSurface(() => this.goIsle(), true); return; }
     const p = this.world.portal;
     if (!p || this.mode !== 'surface') return;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.cam.goTo(p.x, p.z, Math.min(Math.max(this.cam.dist, 20), 32));
   }
 
@@ -1178,7 +1253,8 @@ class Game implements UIHost {
     if (cs && cs.kind !== this.naval.state.kind) this.naval.state = cs;
     // (une partie déjà au-delà du Médiéval : le conflit est réputé réglé, sans rien de plus)
     settleLate(d, this.sim.age, true);
-    if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine) return;
+    // (un récit d'expédition en attente, sa cinématique de trophée : ils passent avant les cartes)
+    if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine || this.reportsDue.size || this.lateReports.length || this.trophyStage.playing) return;
     if (allyPending(w)) this.diploChoice.showAlly();
     else if (d.cine) this.playPeace();
     // (les éclaireurs revenus : la carte « Lancer l'assaut », une fois par session ; la bataille ne part plus d'elle-même)
@@ -1252,7 +1328,7 @@ class Game implements UIHost {
     d.cine = false;
     if (!lay || !d.ally) return;
     this.peaceCine = true;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     const ally = isleOf(w, d.ally)!, rival = isleOf(w, rivalOf(d.ally))!, back = this.cam.view();
     const home = this.villageCenter() ?? [back.x, back.z];
     const steps: [number, () => void][] = [
@@ -1278,9 +1354,9 @@ class Game implements UIHost {
     const w = this.world, d = w.diplo;
     if (this.rivalBattle || !battleReady(d, w.exp.clock) || !d.ally || this.mode !== 'surface') return false;
     let b: RivalBattle;
-    try { b = new RivalBattle(w, rivalOf(d.ally), Math.max(1, this.sim.age), w.difficulty === 'easy' || w.sandbox, undefined, d.intel); } catch { return false; }
+    try { b = new RivalBattle(w, rivalOf(d.ally), Math.max(1, this.sim.age), w.difficulty === 'easy' || w.sandbox, undefined, d.intel, d.boons); } catch { return false; }
     this.leaveIsle(true);
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.tools.setTool('none');
     this.rivalBattle = b;
     this.allyBattle = true;
@@ -1466,9 +1542,15 @@ class Game implements UIHost {
     const w = this.world;
     if (w.reveal && this.revealReady()) { w.reveal = false; this.popups.taken(); this.revealIsles(); return; }
     if (this.voyageStage.playing) return;
+    // les récits gardés pendant la traversée : au calme, après la cinématique des îles
+    if (this.lateReports.length && !w.reveal && !this.revealing && this.portalCalm > 3 && this.popups.open && !this.popupBusy() && !this.diploChoice.visible) { for (const r of this.lateReports.splice(0)) this.expeditions.onReport?.(r); return; }
     if (w.crossroads) return;
     const { hell, world } = this.ways();
     if (crossroadsSettled(w, hell, world)) { w.crossroads = true; this.ui.update(); return; }
+    // le récit d'une expédition (et la cinématique de son trophée) passe avant : on choisissait sa voie avant de savoir qu'on
+    // avait vaincu le kraken, et « Explorer le monde » rechargeait la page par-dessus le récit (Bernard, Karim, v6)
+    if (this.reportsDue.size || this.trophyStage.playing) return;
+    if (this.crossroadsWanted && this.portalCalm > 3 && this.popups.open) { this.crossroadsWanted = false; this.popups.taken(); this.worldChoice.show(); return; }
     if (this.crossroadsAsked || this.portalCalm <= 3 || !this.popups.open || this.tutorial.active) return;
     const ap = this.sim.ageProgress(), others = !!ap && ap.items.every((i) => i.label === CHOICE_LABEL || i.have >= i.need);
     if (crossroadsDue(w, this.sim.age, hell, world, others)) { this.crossroadsAsked = true; this.popups.taken(); this.worldChoice.show(); }
@@ -1480,8 +1562,16 @@ class Game implements UIHost {
   openCrossroads() {
     const { hell, world } = this.ways();
     if (crossroadsSettled(this.world, hell, world)) return;
+    // un récit d'expédition attend : il passe d'abord, la carte s'ouvre juste après (`stepCrossroads`)
+    if (this.reportsDue.size || this.trophyStage.playing) { this.crossroadsWanted = true; this.ui.toast(tr('📜 Le récit de l’expédition d’abord : le grand choix s’ouvrira juste après.')); return; }
     this.worldChoice.show();
   }
+  /** la carte du grand choix demandée pendant qu'un récit d'expédition attendait : elle s'ouvre après lui */
+  private crossroadsWanted = false;
+  /** les récits d'expédition pas encore ouverts (la cinématique du trophée, un geste en cours…) */
+  private reportsDue = new Set<Report>();
+  /** les récits gardés pendant la traversée (rechargement de « Explorer le monde »), à montrer au calme */
+  private lateReports: Report[] = readLateReports();
 
   /**
    * La cinématique des îles peut partir : au sortir de la traversée, tout de suite (elle tient la brume tant que l'écran de
@@ -1557,6 +1647,8 @@ class Game implements UIHost {
       save.world.exploredAt = this.sim.age;
       if (!saveSlot(save)) { this.ui.toast(tr('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
       sessionStorage.setItem(AUTOSTART, `${w.mapId}|continue|voyage`);
+      // un récit d'expédition pas encore montré survit au rechargement (il s'ouvre après la cinématique des îles)
+      keepLateReports([...this.reportsDue]);
       film.mark();
       location.reload();
     });
@@ -1627,6 +1719,10 @@ class Game implements UIHost {
       } else if (n.kind === 'invasionDone') {
         this.ui.banner(tr('Invasion repoussée !'), tr('Plus aucune attaque sur l’île. Les Enfers sont ouverts : suivez le guide pour y mener vos troupes.'));
         this.ui.toast(n.text);
+      } else if (n.kind === 'routed') {
+        // plus aucune des nôtres debout dans les Enfers : une bannière et le compte rendu (pertes, démons abattus, soins)
+        this.ui.banner(tr('Repli forcé'), tr('Vos troupes sont tombées dans les Enfers'));
+        this.ui.toast(n.text, undefined, 'danger');
       } else if (n.kind === 'raid' && n.text.startsWith('🔥')) this.ui.info(n.text);
       else if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(tr('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
       else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell' && (n.kind !== 'zone' || /repris|reprendre|tombé|retaken|retake|has fallen/.test(n.text))) this.ui.toast(tr('{text} Cliquez ici pour y aller.', { text: n.text }), () => this.enterHell());
@@ -1748,6 +1844,30 @@ class Game implements UIHost {
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
+  setHideGoals(on: boolean) { this.hideGoals = on; this.applySettings(); this.ui.update(); }
+  /** Les petits objectifs n'avancent pas au bac à sable ni pendant le tutoriel guidé (ils viennent après) */
+  get goalsOn() { return !this.world.sandbox && !!this.tutorial && !(this.tutorial.on && this.tutorial.guiding); }
+  /** Ce que les objectifs lisent du village */
+  goalCtx(): GoalCtx {
+    const s = this.sim, w = this.world;
+    return {
+      age: s.age, pop: s.pop, day: this.time.days, season: this.time.season, counts: s.counts, brick: w.brick, missions: w.exp.done, security: s.coverage.share,
+      ok: { food: s.food.ok, water: s.water.ok, jobs: s.jobs.ok, joy: s.joy.ok, health: s.health.ok, housing: s.housing.ok },
+    };
+  }
+  /** Fait avancer les objectifs ; un objectif atteint : sa récompense, un son et un mot de félicitation */
+  private stepGoals() {
+    // (masqués : ils attendent, rien ne se gagne ni ne se dit)
+    if (!this.goalsOn || this.hideGoals) return;
+    for (const g of stepGoals(this.world.goals, this.goalCtx())) {
+      const r = g.reward, w = this.world;
+      w.wood += r.wood ?? 0; w.stone += r.stone ?? 0;
+      const fx = rewardEffects(r);
+      if (fx.length) applyEffects(w, fx, this.time.dayLen); else w.version++;
+      audio.sfxFeast();
+      this.ui.goalWon(g);
+    }
+  }
   /** Contrôles de la vue : retenus pour ce navigateur et appliqués à la caméra */
   setControls(c: Controls) { this.controls = c; saveControls(c); this.applyControls(); }
   private applyControls() {
@@ -1789,7 +1909,7 @@ class Game implements UIHost {
     if (!i) { this.incidentCam = null; return; }
     if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.followIncident(key)); return; }
     // une seule chose suivie à la fois : la vue lâche l'équipe (et sa descente sous terre) ou le train
-    this.follow(null); this.trainCam = null;
+    this.follow(null); this.trainCam = null; this.citizenCam = null;
     this.incidentCam = i.key;
     // sous terre, on remonte droit sur l'incident
     if (this.mode === 'under') this.exitUnder(Math.floor(i.z) * N + Math.floor(i.x));
@@ -1996,8 +2116,8 @@ class Game implements UIHost {
   goHome(overview = true) {
     if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.goHome(overview)); return; }
     // la vue suivait quelque chose : elle revient au village, même si l'équipe en partait à peine
-    const tracked = this.following !== null || this.trainCam !== null || this.incidentCam !== null;
-    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    const tracked = this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.citizenCam !== null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     if (this.mode === 'under') { this.exitUnder(); return; }
     const c = this.villageCenter(), v = this.cam.view();
     if (!c || (overview && !tracked && this.cam.settled() && Math.hypot(v.x - c[0], v.z - c[1]) < 2 && v.dist < VILLAGE_DIST * 1.2)) { this.cam.reset(); return; }
@@ -2010,10 +2130,20 @@ class Game implements UIHost {
     if (!p) return;
     if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.followTrain(line)); return; }
     // une seule chose suivie à la fois
-    this.follow(null); this.incidentCam = null;
+    this.follow(null); this.incidentCam = null; this.citizenCam = null;
     if (this.mode === 'under') this.exitUnder(Math.floor(p[1]) * N + Math.floor(p[0]));
     this.trainCam = line;
     this.cam.follow(p[0], p[1], 14);
+  }
+
+  /** La caméra suit cet habitant (null : elle le lâche) ; la vue s'approche s'il le faut */
+  followCitizen(id: number | null) {
+    if (id === null) { this.citizenCam = null; return; }
+    const p = this.agents.posOf(id);
+    if (!p || this.mode !== 'surface' || this.isleCmd) return;
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.citizenCam = id;
+    this.cam.follow(p[0], p[1], 9);
   }
 
   // ---------- Tracer une ligne de chemin de fer ----------
@@ -2100,7 +2230,7 @@ class Game implements UIHost {
     if (a && (this.mode === 'hell' || this.isleCmd)) { this.ensureSurface(() => this.follow(id, far)); return; }
     this.following = a ? a.id : null;
     // une seule chose suivie à la fois : suivre l'équipe lâche le train et l'incident
-    if (a) { this.trainCam = null; this.incidentCam = null; }
+    if (a) { this.trainCam = null; this.incidentCam = null; this.citizenCam = null; }
     // on cesse de suivre : la vue reste où elle est
     if (!a) return;
     this.followPhase = ''; this.followLast = null; this.followSm = null; this.followRaw = null; this.followFar = far;
@@ -2362,11 +2492,11 @@ class Game implements UIHost {
         else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
         return;
       }
-      // ? : la liste des raccourcis ; J : les expéditions ; N : les notifications ; Maj+1 … 5 : les rayons de Bâtir
+      // ? : la liste des raccourcis ; J : les expéditions ; N : les notifications ; Maj+1 … 6 : les rayons de Bâtir
       if (k === '?') { e.preventDefault(); this.ui.openKeys(); return; }
       if (k === 'j') { this.ui.toggleExpeditions(); return; }
       if (k === 'n') { this.ui.toggleNotifPanel(); return; }
-      if (e.shiftKey && digit !== undefined && +digit >= 1 && +digit <= 5) { if (this.isleCmd) this.leaveIsle(true); this.ui.openCat(+digit - 1); return; }
+      if (e.shiftKey && digit !== undefined && +digit >= 1 && +digit <= BUILD_CATS.length) { if (this.isleCmd) this.leaveIsle(true); this.ui.openCat(+digit - 1); return; }
       // R tourne le bâtiment en main ou celui qu'on a choisi ; sinon c'est l'outil Route
       if (k === 'r' && (this.tools.holding() || this.tools.selected !== null)) { this.tools.rotate(); return; }
       const tool = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) ? undefined : map[k];
@@ -2602,6 +2732,7 @@ class Game implements UIHost {
     // la guerre : la faction des Enfers, ses incursions sur l'île, la garnison
     this.stepWar(dt, gdt);
     this.stepDiplo();
+    this.stepBeacon(dt);
     this.stepRivalBattle(dt, gdt);
     this.stepFarewell(dt);
     this.stepKingCrowd();
@@ -2714,6 +2845,8 @@ class Game implements UIHost {
       const train = this.trainCam === null ? undefined : this.railway.trains.get(this.trainCam), tp = train ? this.railway.trainAt(train) : null;
       if (tp) this.cam.follow(tp[0], tp[1]);
       else this.trainCam = null;
+      // l'habitant suivi : la vue reste sur lui (chez lui, sur sa maison) ; il n'est plus montré, elle le lâche
+      if (this.citizenCam !== null) { const cp = this.agents.posOf(this.citizenCam); if (cp) this.cam.follow(cp[0], cp[1]); else { this.citizenCam = null; this.ui.update(); } }
       // l'incident suivi : la caméra reste dessus (sur le véhicule en route), jusqu'à ce qu'il soit fini
       if (this.incidentCam) { const i = this.incidents().find((x) => x.key === this.incidentCam); if (i) this.cam.follow(i.x, i.z); else this.incidentCam = null; }
       this.halos.update(dt, this.env.night);
@@ -2741,7 +2874,7 @@ class Game implements UIHost {
     if ((this.spotT -= dt) <= 0) { this.spotT = 0.25; this.syncSpots(!uv && !hv); }
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.stepGoals(); this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) {
       // (le bouton reste là tant que la vue glisse vers le village : il disparaissait sous la souris, et un second clic
       // tombait sur un bâtiment)

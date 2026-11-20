@@ -16,17 +16,19 @@ import { matches } from './search';
 import { readSlot, SaveData, savedAgo, Quality } from '../save/save';
 import { helpOn, setHelpOn } from './warTips';
 import { MAPS, newSeed } from '../world/mapgen';
-import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
+import { Expeditions, Report, ActiveExpedition, nextTeamAt } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { isleName, kindOffered, CONFLICT_LABEL } from '../sim/diplomacy';
-import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
+import { isleName, kindOffered, CONFLICT_LABEL, allyPostReadyNow, boonsMatter, talkRisk, TALK_RISK } from '../sim/diplomacy';
+import { peoplesView } from '../sim/peoples';
+import { peoplesHtml } from './peoples';
+import { boonText, effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
 import { choiceStyles, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
-import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, RES_NAME } from '../sim/economy';
+import { priceIn, canPay, costLabel, haveLabel, shortLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, RES_NAME } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
 import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/crossroads';
 import { waysHtml, type ConflictWay } from './ways';
@@ -39,7 +41,11 @@ import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { eyeClick } from './homeButton';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
+import { citizenCard, missingText } from './citizenCard';
+import { firstName, familyName } from '../sim/citizens';
+import { folkTraits } from '../render/folk';
 import { pic, hudPic, leadPic, withPic } from './pics';
+import { activeGoals, progressOf, type GoalCtx, type GoalDef, type GoalReward } from '../sim/goals';
 import { POPUP_PICS, preloadPics } from './preload';
 import { menuBg, LOGO_PEAKS } from './loading';
 import { MiniMap } from './minimap';
@@ -99,6 +105,11 @@ export interface UIHost {
   /** flèches d'amélioration au-dessus des bâtiments, masquées ou non */
   hideUpBadges: boolean;
   setHideUpBadges(on: boolean): void;
+  /** petits objectifs de la barre du haut : masqués ou non ; `goalsOn` : ils avancent (pas au bac à sable ni pendant le tutoriel) */
+  hideGoals: boolean;
+  setHideGoals(on: boolean): void;
+  goalsOn: boolean;
+  goalCtx(): GoalCtx;
   /** comment le joueur déplace la vue (souris ou clavier, et la disposition du clavier) ; voir `core/controls.ts` */
   controls: Controls;
   setControls(c: Controls): void;
@@ -110,6 +121,9 @@ export interface UIHost {
   /** chemin de fer de gare en gare, et la caméra qui suit le train */
   railway: Railway;
   followTrain(line: number): void;
+  /** l'habitant que suit la caméra (sa fiche, bouton « Suivre »), et le suivre ou le lâcher */
+  citizenCam: number | null;
+  followCitizen(id: number | null): void;
   /** incendies, malaises, cambriolages en cours, et la caméra qui en suit un */
   incidents(): { key: string; icon: string; title: string; status: string; progress: number; x: number; z: number }[];
   incidentCam: string | null;
@@ -291,8 +305,41 @@ const SECURITY_NEED = { k: 'security' as const, icon: 'shield', label: 'Sécurit
 const NEED_PIC: Record<NeedId | 'security', string> = { food: 'nourriture', water: 'eau', housing: 'logement', jobs: 'travail', joy: 'bienetre', health: 'sante', security: 'securite' };
 const RES_PIC: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', brick: 'briques', crude: 'carburant', fuel: '⛽', gold: '💰' };
 const resPic = (r: Resource, size: number) => RES_PIC[r].length > 2 ? hudPic(RES_PIC[r], size) : pic(RES_PIC[r], size);
+/** La barre du haut tient sur une ligne dès cette largeur d'écran (voir `UI.fitHud` et `style.css`) */
+const ONE_LINE_MIN = 1100;
+/** marge de sécurité de la barre du haut sur une ligne (arrondis, bordures des pilules) */
+const FIT_SLACK = 8;
+/** durée de la pastille dorée d'un objectif atteint */
+const GOAL_WIN_MS = 5000;
+/**
+ * Une case qui ne tient pas entière dans sa fenêtre de défilement (stocks, besoins) est masquée : on ne voit plus un bout du stock
+ * suivant, ses chiffres coupés (« 31 » pour 318, testeuse v6). Refait à chaque défilement
+ */
+function hidePeek(v: HTMLElement) {
+  const box = v.getBoundingClientRect();
+  for (const e of v.querySelectorAll<HTMLElement>('.res, .need')) {
+    const r = e.getBoundingClientRect();
+    e.classList.toggle('peek', r.left < box.left - 1 || r.right > box.right + 1);
+  }
+}
+/** La récompense d'un objectif en petites pastilles : « +25 [pierre] », « [bien-être] +2 · 4 j » */
+function rewardChips(r: GoalReward) {
+  const out: string[] = [];
+  for (const k of ['wood', 'stone', 'ore'] as const) if (r[k]) out.push(`<span class="gc">+${r[k]} ${resPic(k, 15)}</span>`);
+  if (r.joy) out.push(`<span class="gc">${hudPic('bienetre', 15)} +${r.joy.n} · ${tr('{n} j', { n: r.joy.days })}</span>`);
+  return out.length ? `<span class="gr">${out.join('')}</span>` : '';
+}
+/** La même, en mots : « +25 pierre, bien-être +2 pendant 4 jours » */
+function rewardWords(r: GoalReward) {
+  const out: string[] = [];
+  if (r.wood) out.push(tr('+{n} bois', { n: r.wood }));
+  if (r.stone) out.push(tr('+{n} pierre', { n: r.stone }));
+  if (r.ore) out.push(tr('+{n} minerai', { n: r.ore }));
+  if (r.joy) out.push(tr('bien-être +{n} pendant {d} jours', { n: r.joy.n, d: r.joy.days }));
+  return out.length ? tr('Récompense : {r}', { r: out.join(', ') }) : '';
+}
 const SEASON_PIC = ['printemps', 'ete', 'automne', 'hiver'];
-const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', war: 'militaire' };
+const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', deco: 'printemps', war: 'militaire' };
 /** Le picto de la carte du village, qui suit l'âge : Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste */
 const AGE_PIC = ['age-0', 'age-1', 'age-2', 'age-3', 'age-4', 'age-5'];
 const TAB_PIC: Record<string, string> = { build: 'production', land: 'paysage' };
@@ -303,8 +350,8 @@ const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon
 /** Fiche d'une ressource : son icône, à quoi elle sert, comment en avoir plus, et le bâtiment qui la produit */
 /** (l'or n'a pas de bâtiment : sa fiche est le comptoir des voisins, `renderTrade`) */
 const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string; use: string; more: string; kind: KindId }> = {
-  wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Nature › Forêt).' },
-  stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Nature › Rochers). La mine en donne aussi.' },
+  wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Paysage › Nature › Forêt).' },
+  stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Paysage › Nature › Rochers). La mine en donne aussi.' },
   ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; certaines expéditions en rapportent aussi.' },
   brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’âge futuriste et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
   crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
@@ -454,6 +501,8 @@ export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty
 /** Les cartes de choix qui arrêtent le jeu tant qu'elles sont montrées (voir `UI.menuOpen`) */
 const CHOICE_CARDS = ['worldChoice', 'portalChoice', 'diploChoice'];
 
+/** les pixels que la fenêtre des stocks peut prendre en plus de sa place pour montrer une ressource entière (voir `fitResView`) */
+const RES_SLACK = 16;
 /** Fenêtre du jeu : titre, contenu, bouton de fermeture ; se ferme aussi d'un clic à côté */
 /** `sticky` : une fenêtre qu'on ne peut pas écarter (ni croix, ni clic à côté, ni Échap) : seule sa propre réponse la ferme */
 function modal(root: HTMLElement, cls: string, title: string, body: string, onClose?: () => void, sticky = false): { ov: HTMLElement; close: () => void } {
@@ -580,7 +629,8 @@ export class UI {
         </div>
         <div id="needsPanel">
           <div id="resPanel" class="panel hudPill"><button class="resNav" id="resPrev" title="${tr('Ressources précédentes')}" aria-label="${tr('Ressources précédentes')}">${ic('chevLeft', 16, 2.4)}</button><div id="resView"><div id="res"></div></div><button class="resNav" id="resNext" title="${tr('Ressources suivantes')}" aria-label="${tr('Ressources suivantes')}">${ic('chevRight', 16, 2.4)}</button><span class="hsep"></span><button class="pop" id="pop" title="${tr('État des habitants')}" aria-label="${tr('État des habitants')}" aria-expanded="false"></button></div>
-          <div id="needsBox" class="panel hudPill"><div id="needs"></div></div>
+          <div id="needsBox" class="panel hudPill"><button class="resNav" id="needPrev" title="${tr('Besoins précédents')}" aria-label="${tr('Besoins précédents')}">${ic('chevLeft', 16, 2.4)}</button><div id="needView"><div id="needs"></div></div><button class="resNav" id="needNext" title="${tr('Besoins suivants')}" aria-label="${tr('Besoins suivants')}">${ic('chevRight', 16, 2.4)}</button></div>
+          <div id="goalBox" class="panel hudPill" hidden></div>
         </div>
         <div id="hudR">
           <div id="timePanel">
@@ -590,6 +640,7 @@ export class UI {
           </div>
           <nav id="menuBtns">
             <button id="bExp" class="round" title="${tr('Expéditions (J)')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span id="expBadge"></span></button>
+            <button id="bPeoples" class="round" title="${tr('Peuples')}" aria-label="${tr('Peuples')}" style="display:none">${ic('flag', 21)}</button>
             <button id="bBell" class="round" title="${tr('Notifications (N)')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
             <button id="bSettings" class="round" title="${tr('Paramètres')}" aria-label="${tr('Paramètres')}">${ic('gear', 21)}</button>
           </nav>
@@ -709,7 +760,31 @@ export class UI {
     $('#resPrev').onclick = () => step(-1);
     $('#resNext').onclick = () => step(1);
     view.addEventListener('scroll', () => this.syncResNav(), { passive: true });
-    addEventListener('resize', () => this.syncResNav());
+    addEventListener('resize', () => { this.fitHud(); this.syncResNav(); this.syncNeedNav(); });
+    // la place laissée aux stocks change avec la fenêtre et avec ce qu'il y a à côté (les besoins) : la fenêtre se recale (sur deux
+    // lignes ; sur une ligne, c'est `fitHud` qui la taille)
+    new ResizeObserver(() => { this.fitResView(); this.syncResNav(); }).observe($('#resPanel'));
+    // les besoins aussi, quand la barre du haut tient sur une ligne : deux à la fois au moins (nourriture et eau d'abord)
+    const nview = $('#needView'), nstep = (d: number) => {
+      const item = nview.querySelector<HTMLElement>('.need');
+      nview.scrollBy({ left: d * (item ? item.offsetWidth + 2 : 50), behavior: 'smooth' });
+      this.host.audio.sfxClick();
+    };
+    $('#needPrev').onclick = () => nstep(-1);
+    $('#needNext').onclick = () => nstep(1);
+    nview.addEventListener('scroll', () => this.syncNeedNav(), { passive: true });
+    // l'objectif du moment : un point en choisit un autre ; un clic ailleurs mène au bâtiment, aux expéditions ou au besoin
+    $('#goalBox').onclick = (e) => {
+      const dot = (e.target as HTMLElement).closest<HTMLElement>('[data-gi]');
+      if (dot) { this.goalIdx = +dot.dataset.gi!; this.goalKey = ''; this.renderGoals(); this.host.audio.sfxClick(); return; }
+      const g = this.goalShown;
+      if (!g || this.goalWin) return;
+      this.host.audio.sfxClick();
+      if (g.exp) { this.openExpeditions(); return; }
+      const k = g.kinds?.find((x) => !this.lockOf(x)) ?? g.kinds?.[0];
+      if (k) { this.pick(k); return; }
+      if (g.pic === 'content' || g.pic === 'nourriture') this.openNeed(this.host.sim.food.ok ? 'water' : 'food');
+    };
     // fiche d'une ressource : un clic sur son stock (d'où elle vient, à quoi elle sert, quoi bâtir pour en avoir plus)
     $('#res').onclick = (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
@@ -785,6 +860,7 @@ export class UI {
     };
     $('#bSettings').onclick = () => this.openSettings();
     $('#bExp').onclick = () => this.openExpeditions();
+    $('#bPeoples').onclick = () => { this.host.audio.sfxClick(); this.openPeoples(); };
     $('#bPhoto').onclick = () => host.setPhoto(true);
     $('#pExit').onclick = () => host.setPhoto(false);
     $('#pCap').onclick = () => host.capture();
@@ -889,7 +965,10 @@ export class UI {
   private markFirst() {
     const first = this.host.world.buildings.size === 0;
     // la place du village a été démolie : on la remet en lumière, sans rien verrouiller ni armer (le joueur reste libre)
-    const counts = this.host.sim.counts as Record<string, number>, lost = !first && lineOf('gather').every((k) => !(counts[k] ?? 0));
+    // (lue dans les bâtiments du monde, pas dans `sim.counts` : au chargement, ce compte est vide jusqu'au premier recomptage,
+    // et le message partait à tort, la place bien là ; Chloé, Margot, v6)
+    let lost = false;
+    if (!first) { const line = lineOf('gather'); lost = true; for (const b of this.host.world.buildings.values()) if (line.includes(b.kind)) { lost = false; break; } }
     if (lost && !this.plazaLostSaid) { this.plazaLostSaid = true; this.toast(tr('La place du village a disparu : reposez-la (le bouton qui luit) pour retrouver son bien-être et partir en expédition.')); }
     if (!lost) this.plazaLostSaid = false;
     const sel = ['#modes [data-t="build"]', `#subcats [data-c="${KINDS.gather.cat}"]`, '#items [data-kind="gather"]'];
@@ -1171,9 +1250,61 @@ export class UI {
     const range = (a: number[], f: (n: number) => string) => { const lo = Math.min(...a), hi = Math.max(...a); return lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`; };
     const risks = cs.map((c) => this.host.expeditions.preview(c).risk);
     const lvl = Math.max(...risks) <= 0.12 ? 'low' : Math.max(...risks) <= 0.22 ? 'mid' : 'high';
-    const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(c.win)).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
+    const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(this.winOf(c))).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
     return `<div class="mpills"><span title="${tr('Habitants dans l’équipe')}">${ic('team', 15, 2)} ${range(cs.map((c) => c.party), String)}</span><span title="${tr('Durée')}">${ic('clock', 15, 2)} ${['courte', 'moyenne', 'longue'].filter((l) => cs.some((c) => workLabel(c.work) === l)).map((l) => tr(l)).join('–')}</span><span class="crisk ${lvl}" title="${tr('Risque d’échec')}">${ic('alert', 14, 2.2)} ${range(risks, (r) => `${Math.round(r * 100)}`)} %</span></div>
       ${gains.length ? `<div class="mgains">${gains.map((c) => `<span class="chip" title="${attr(c.title)}">${pic(c.icon, 26)}</span>`).join('')}</div>` : ''}`;
+  }
+
+  /**
+   * Les gains d’un choix à montrer : sans les avantages du dénouement une fois le conflit réglé (ils ne serviraient plus)
+   */
+  private winOf(c: Mission['choices'][number]) { return boonsMatter(this.host.world) ? c.win : c.win.filter((e) => e.t !== 'boon'); }
+
+  /**
+   * Ce qu'une expédition des îles apporte au dénouement de l'archipel (demande de l'auteur, 20 nov. 2026 : l'avantage
+   * affiché clairement) : « Pour la bataille : +4 troupes alliées · Pour la paix : +10 % de chances ». Le plus fort de ses
+   * choix pour chaque avantage. Pour un pourparler de la paix : son risque, et ce que la bonne volonté en a ôté. Rien une fois
+   * le conflit réglé, ni pour une mission déjà réussie (refaite, elle ne rapporte plus d'avantage)
+   */
+  private boonHtml(m: Mission) {
+    const w = this.host.world;
+    if (!boonsMatter(w)) return '';
+    if (m.talks) {
+      const r = Math.round(talkRisk(w.diplo) * 100), base = Math.round(TALK_RISK * 100);
+      return `<p class="mboon">${ic('alert', 14, 2.2)} ${r === base ? tr('Les pourparlers peuvent échouer ({r} %) : les expéditions sur les îles rendent la paix plus sûre.', { r }) : tr('Risque d’échec : {base} % → {r} %, grâce à vos expéditions sur les îles.', { base, r })}</p>`;
+    }
+    if (this.host.expeditions.done(m)) return '';
+    const best = new Map<string, number>();
+    for (const c of m.choices) for (const e of c.win) if (e.t === 'boon') { const v = best.get(e.kind); if (v === undefined || Math.abs(e.n) > Math.abs(v)) best.set(e.kind, e.n); }
+    if (!best.size) return '';
+    const war = ['allies', 'ours', 'foes'].filter((k) => best.has(k)).map((k) => boonText(k as 'allies', best.get(k)!, true));
+    const peace = best.get('peace');
+    const parts = [war.length ? `<span>${pic('⚔', 16)} <b>${tr('Pour la bataille :')}</b> ${war.join(' · ')}</span>` : '', peace ? `<span class="${peace < 0 ? 'neg' : ''}">${pic('📜', 16)} <b>${tr('Pour la paix :')}</b> ${boonText('peace', peace, true)}</span>` : ''];
+    return `<p class="mboon">${parts.filter(Boolean).join('')}</p>`;
+  }
+
+  /**
+   * Le panneau « Peuples » (bouton rond `#bPeoples`, voir `docs/diplomatie.md`) : une fiche par peuple de l'archipel, son humeur,
+   * son état, et les gestes possibles ; ceux pas encore possibles sont grisés avec la raison. Il ne fait que mener aux gestes
+   * qui existent : la carte de l'allié, la carte de la paix ou de la guerre (`openDiploChoice`), une expédition, le comptoir
+   */
+  openPeoples() {
+    this.root.querySelector('.peoplesModal')?.closest<HTMLElement & { close?: () => void }>('.overlay')?.close?.();
+    const h = this.host, w = h.world;
+    const ways = h.ways?.(), canExplore = ways?.world !== 'none';
+    const view = peoplesView(w, { age: h.sim.age, tradeOpen: h.sim.tradeOpen, postReady: allyPostReadyNow(w), canExplore, waysTab: !!ways && waysTabShown(w, ways.hell, ways.world) });
+    const { ov, close } = modal(this.root, 'peoplesModal', `${ic('flag', 22)} ${tr('Les peuples de l’archipel')}`, peoplesHtml(view));
+    ov.querySelectorAll<HTMLButtonElement>('[data-g]').forEach((b) => (b.onclick = () => {
+      const [i, k] = b.dataset.g!.split(':').map(Number), g = view.cards[i]?.gestures[k];
+      if (!g?.on) return;
+      h.audio.sfxClick();
+      close();
+      if (g.go === 'ally' || g.go === 'path') h.openDiploChoice?.();
+      else if (g.go === 'mission' && g.mission) this.gotoMission(g.mission);
+      else if (g.go === 'trade') this.openRes('gold');
+      else if (g.go === 'post') { h.goAlly?.(); this.pick('tradepost'); }
+      else if (g.go === 'visit') h.goAlly?.();
+    }));
   }
 
   /** Ouvre les expéditions sur une mission : l'onglet des missions, sa carte amenée sous les yeux et mise en avant */
@@ -1238,12 +1369,21 @@ export class UI {
   /** la raison du refus montrée par la fiche (elle se redessine quand le curseur passe sur un endroit refusé pour une autre raison) */
   private infoWhy: string | null = null;
   private infoStage = 0;
+  private infoHave = '';
+  /** ce que montre la ligne du coût de la fiche : le prix payable ou non, et ce qu'on a quand il manque quelque chose */
+  private haveNow() {
+    const tl = this.host.tools, k = this.hover ? this.hover.kind ?? null : tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null;
+    if (!k) return '';
+    const w = this.host.world, c = priceIn(w, k, this.host.sim.age);
+    return c && !canPay(w, c) ? haveLabel(w, c) : '';
+  }
 
   /** Fiche de l'outil ou du bâtiment survolé, sinon du bâtiment qu'on s'apprête à poser */
   private renderInfo() {
     const tl = this.host.tools, box = $('#info');
     this.infoWhy = tl.placeWhy;
     this.infoStage = tl.placeStage;
+    this.infoHave = this.haveNow();
     const held = tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null;
     const k = this.hover ? this.hover.kind ?? null : held, tool = this.hover?.tool;
     box.classList.toggle('show', !!(k || tool));
@@ -1273,7 +1413,7 @@ export class UI {
     box.innerHTML = `<div class="ihead">${this.cardThumb(k, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub">${d.size} × ${d.size} · ${AGES[a].name}</small><small class="xcount">${count}</small></div></div>
       <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${k === 'wall' && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) })}${rich ? '' : tr(' — vous avez {have}', { have: haveLabel(w, cost) })}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap : lâcher')}</p>` : ''}`;
+      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && tl.placeWhy && !(cost && !rich && tl.placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap : lâcher')}</p>` : ''}`;
   }
 
   /**
@@ -1283,9 +1423,15 @@ export class UI {
   private renderSelection() {
     const h = this.host, tl = h.tools, box = $('#selCard');
     const b = tl.selected !== null ? h.world.buildings.get(tl.selected) : undefined;
+    if (!b && tl.citizen !== null) { this.renderCitizen(box, tl.citizen); return; }
     if (!b) { if (this.selKey) { this.selKey = ''; box.classList.remove('show'); } return; }
     const d = KINDS[b.kind], a = Math.max(b.age, d.minAge), stats: string[] = [];
-    if (b.kind === 'house') { const n = h.agents.agents.filter((x) => x.home === b.id).length; stats.push(`${ic('house', 14, 2)} ${nplural(n, 'habitant', 'habitants')}`); }
+    if (b.kind === 'house' || b.kind === 'manor') {
+      // ceux qu'on voit de la maisonnée, par leur nom (un clic ouvre leur fiche)
+      const folk = h.agents.agents.filter((x) => x.home === b.id), n = folk.length;
+      const names = folk.slice(0, 6).map((x) => `<button class="who" data-act="cit:${x.id}">${firstName(x.id, h.sim.age, folkTraits(x.id, x.child).woman)}</button>`).join(' ');
+      stats.push(`${ic('house', 14, 2)} ${n ? tr('Famille {family} : {names}', { family: familyName(b.id, h.sim.age), names }) : nplural(n, 'habitant', 'habitants')}`);
+    }
     if (b.kind === 'pen' || b.kind === 'stable') {
       const herds = penHerds(h.world), list = (b.kind === 'pen' ? herds.pens : herds.stables).get(b.id) ?? [];
       const names: Record<string, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] }, count = new Map<string, number>();
@@ -1331,11 +1477,13 @@ export class UI {
     const upgrades = (ups ? `<div class="acts ups">${ups}</div>${upChk}` : '') + node;
     // ce qu'il produit ou consomme par jour, gare de marchandises comprise
     const flow = flowChips(flowOfBuilding(h.world, b));
-    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${flow}|${railChip}|${rails}|${upgrades}`;
+    // (« Commander la garnison » n'a de sens que le portail ouvert : avant, le bouton ne menait à rien, testeur v6)
+    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${flow}|${railChip}|${rails}|${upgrades}|${h.world.portalOpen}`;
     if (key === this.selKey) return;
     const same = box.dataset.id === String(b.id) && box.classList.contains('show');
     this.selKey = key;
     box.dataset.id = String(b.id);
+    box.classList.remove('citizen');
     // d'un rendu à l'autre du même bâtiment (les trains roulent), on garde ce qui est déplié et où l'on a défilé
     const opened = same ? [...box.querySelectorAll<HTMLDetailsElement>('details[open]')].map((x) => x.dataset.k) : [];
     const scroll = same ? box.scrollTop : 0, listScroll = same ? box.querySelector('.rlist')?.scrollTop ?? 0 : 0;
@@ -1346,7 +1494,7 @@ export class UI {
     const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = tr(b.auto ? 'façade tournée vers la route' : 'orientée à la main');
     box.innerHTML = `<div class="ihead">${this.cardThumb(b.kind, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub" title="${attr(`${AGES[b.age].name}${size ? tr(' · {size} cases', { size }) : ''} · ${facing}`)}">${sizeOf(b)} × ${sizeOf(b)} · ${AGES[b.age].name}</small></div><button class="xfold" data-act="fold" title="${tr('Replier ou déplier')}" aria-label="${tr('Replier ou déplier')}">▾</button><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
       ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${upgrades}
-      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
+      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle && h.world.portalOpen ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
       <div class="acts xacts"><button data-act="move">${hudPic('deplacer', 18)} ${tr('Déplacer')}</button><button data-act="rot">${ic('rotate', 16, 2)} ${tr('Tourner')} <kbd>R</kbd></button><button data-act="del" class="danger xdel" title="${tr('Démolir')}" aria-label="${tr('Démolir')}">${ic('demolish', 17, 2)}</button></div>`;
     box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
     box.scrollTop = scroll;
@@ -1369,6 +1517,7 @@ export class UI {
       else if (act === 'tower') tl.toggleSelectedTower();
       else if (act?.startsWith('up:')) tl.upgradeSelected(act.slice(3) as KindId);
       else if (act?.startsWith('follow:')) h.followTrain(+act.slice(7));
+      else if (act?.startsWith('cit:')) { tl.selectCitizen(+act.slice(4)); return; }
       else if (act?.startsWith('cargo:')) { const l = h.world.lines.find((x) => x.id === +act.slice(6)); if (l) { h.audio.sfxClick(); h.railway.setFreight(l.id, !l.freight); this.selKey = ''; this.renderSelection(); } }
       else if (act?.startsWith('edit:')) { h.audio.sfxClick(); h.startRailEdit({ line: +act.slice(5) }); }
       else if (act?.startsWith('drop:')) {
@@ -1376,6 +1525,25 @@ export class UI {
         if (l && await confirmBox(this.root, tr('Fermer la ligne {line} ? Ses voies seront retirées.', { line: r.lineLabel(l) }), tr('Fermer la ligne'))) h.railway.removeLine(l.id);
       }
       this.renderSelection();
+    }));
+  }
+
+  /** La fiche d'un habitant, dans la carte du bâtiment choisi (voir citizenCard.ts) ; il n'est plus montré : elle se ferme */
+  private renderCitizen(box: HTMLElement, id: number) {
+    const h = this.host, tl = h.tools, card = citizenCard(h, id);
+    if (!card) { tl.select(null); return; }
+    if (card.key === this.selKey) return;
+    this.selKey = card.key;
+    box.dataset.id = `c${id}`;
+    box.innerHTML = card.html;
+    box.classList.add('show', 'citizen');
+    box.classList.remove('fold');
+    this.placeCards();
+    box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((el) => (el.onclick = () => {
+      const act = el.dataset.act;
+      if (act === 'close') tl.select(null);
+      else if (act === 'follow') { h.audio.sfxClick(); h.followCitizen(h.citizenCam === id ? null : id); this.selKey = ''; this.renderSelection(); }
+      else if (act === 'home') { const c = h.agents.citizen(id); if (c && h.world.buildings.has(c.home)) { h.audio.sfxClick(); h.followCitizen(null); tl.select(c.home); } }
     }));
   }
 
@@ -1467,9 +1635,162 @@ export class UI {
   private popDay = -1;
   private popPrev = 0;
   private popDelta: number | null = null;
+  // ---------------- Petits objectifs et barre du haut sur une ligne ----------------
+  /** l'objectif montré dans la pastille (parmi les trois en cours), celui qui vient d'être atteint et jusqu'à quand */
+  private goalIdx = 0;
+  private goalShown: GoalDef | null = null;
+  private goalWin: { g: GoalDef; until: number } | null = null;
+  private goalKey = '';
+  /** Un objectif atteint : la pastille le montre en doré quelques secondes, avec un mot de félicitation */
+  goalWon(g: GoalDef) {
+    this.goalWin = { g, until: performance.now() + GOAL_WIN_MS };
+    this.goalKey = '';
+    this.toast(`${tr('Objectif atteint : {goal}.', { goal: tr(g.text) })} ${tr(g.praise)} ${rewardWords(g.reward)}`.trim(), undefined, 'notice');
+    this.renderGoals();
+  }
+
+  /** La pastille de l'objectif : son picto, son texte, sa jauge, sa récompense et un point par objectif en cours */
+  private renderGoals() {
+    const h = this.host, box = $('#goalBox');
+    const win = this.goalWin && performance.now() < this.goalWin.until ? this.goalWin : null;
+    if (!win) this.goalWin = null;
+    const ctx = h.goalsOn && !h.hideGoals ? h.goalCtx() : null, act = ctx ? activeGoals(h.world.goals, ctx) : [];
+    const hide = !ctx || (!act.length && !win);
+    if (box.hidden !== hide) { box.hidden = hide; this.fitKey = ''; }
+    if (hide) { this.goalShown = null; return; }
+    if (this.goalIdx >= act.length) this.goalIdx = 0;
+    const g = win ? win.g : act[this.goalIdx];
+    this.goalShown = g;
+    const [have, need] = win ? [1, 1] : progressOf(g, h.world.goals, ctx!);
+    const dots = act.length > 1 && !win ? `<span class="gd">${act.map((x, i) => `<i data-gi="${i}" class="${i === this.goalIdx ? 'on' : ''}" title="${attr(tr(x.text))}"></i>`).join('')}</span>` : '';
+    const ico = win ? hudPic('etoile', 30) : g.pic ? hudPic(g.pic, 30) : pic(KINDS[g.kinds![0]].icon, 30);
+    // (le texte sur deux lignes au plus, puis une ligne : la jauge et le compte, ou le mot de félicitation, et la récompense)
+    const html = `<span class="gi">${ico}</span><span class="gt"><b class="g1">${win ? tr('Bravo !') : tr(g.text)}</b><span class="g2">`
+      + (win ? `<span class="gp">${tr(g.praise)}</span>` : `<span class="gb"><i style="width:${Math.round(Math.min(1, have / Math.max(1, need)) * 100)}%"></i></span><em>${Math.min(have, need)}/${need}</em>`)
+      + `${rewardChips(g.reward)}</span></span>${dots}`;
+    const key = `${html}|${getLang()}`;
+    if (key === this.goalKey) return;
+    this.goalKey = key;
+    box.innerHTML = html;
+    box.classList.toggle('won', !!win);
+    const rw = rewardWords(g.reward);
+    box.title = win ? '' : `${tr('Objectif : {goal}', { goal: tr(g.text) })} (${Math.min(have, need)}/${need})${rw ? ` — ${rw}` : ''}`;
+  }
+
+  /**
+   * Sur un écran d'ordinateur (dès 1100 px de large), la barre du haut tient sur une ligne : l'âge, les stocks, les besoins,
+   * l'objectif, l'heure et les boutons. Les stocks et les besoins défilent alors dans une fenêtre taillée à la place qui reste
+   * (deux de chaque au moins) ; plus étroit, ils passent à la ligne comme avant (demande de l'auteur, 20 nov. 2026)
+   */
+  private fitKey = '';
+  private fitHud() {
+    const one = innerWidth >= ONE_LINE_MIN, rv = $('#resView'), nv = $('#needView'), box = $('#goalBox');
+    const nRes = rv.querySelectorAll('.res').length, nNeed = nv.querySelectorAll('.need').length;
+    // (la largeur des stocks change avec leurs chiffres : 9 → 10 → 100)
+    const key = `${innerWidth}|${nRes}|${nNeed}|${box.hidden}|${document.body.className}|${[...rv.children[0]?.children ?? []].map((e) => (e as HTMLElement).offsetWidth).join()}|${$('#pop').offsetWidth}|${$('#hudR').offsetWidth}`;
+    if (key === this.fitKey) return;
+    this.fitKey = key;
+    // (le défilement est gardé : le joueur qui regardait l'or le voit encore après)
+    const keep = [rv.scrollLeft, nv.scrollLeft];
+    for (const v of [rv, nv]) { v.style.width = ''; v.style.maxWidth = ''; v.style.minWidth = ''; }
+    box.classList.remove('compact', 'mini');
+    if (!one || !nRes || !nNeed) { this.fitResView(); this.syncResNav(); this.syncNeedNav(); return; }
+    const hud = $('#hud'), gap = parseFloat(getComputedStyle(hud).columnGap) || 10;
+    const rp = $('#resPanel'), nb = $('#needsBox');
+    // (les cases n'ont pas toutes la même largeur : une fenêtre de n cases prend la largeur des n plus larges, pour en montrer n
+    // entières d'où que parte le défilement ; un bout de la suivante qui dépasserait est masqué, voir `hidePeek`)
+    const top = (q: NodeListOf<HTMLElement>) => [...q].map((e) => e.offsetWidth + 2).sort((a, b) => b - a);
+    const resWs = top(rv.querySelectorAll<HTMLElement>('.res')), needWs = top(nv.querySelectorAll<HTMLElement>('.need'));
+    const span = (ws: number[], n: number) => ws.slice(0, n).reduce((a, b) => a + b, 0);
+    // ce que chaque pilule prend en dehors de sa fenêtre (marges, séparateur, habitants), les flèches à part : mesuré pièce par
+    // pièce (la pilule elle-même peut être rétrécie par la place qui manque)
+    const navW = 2 * (parseFloat(getComputedStyle($('#resPrev')).width) || 24);
+    const chrome = (p: HTMLElement, v: HTMLElement) => {
+      const cs = getComputedStyle(p);
+      let w = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+      for (const c of p.children as HTMLCollectionOf<HTMLElement>) {
+        if (c === v || c.classList.contains('resNav')) continue;
+        const cc = getComputedStyle(c);
+        if (cc.display !== 'none') w += c.offsetWidth + parseFloat(cc.marginLeft) + parseFloat(cc.marginRight);
+      }
+      return w;
+    };
+    const chromeR = chrome(rp, rv), chromeN = chrome(nb, nv);
+    const fitIn = (goalW: number) => {
+      const free = hud.clientWidth - $('#hudL').offsetWidth - $('#hudR').offsetWidth - 3 * gap - (goalW ? goalW + gap : 0) - chromeR - chromeN - FIT_SLACK;
+      const cost = (r: number, n: number) => span(resWs, r) + span(needWs, n) + (r < nRes ? navW : 0) + (n < nNeed ? navW : 0);
+      let r = Math.min(2, nRes), n = Math.min(2, nNeed);
+      if (cost(r, n) > free) return null;
+      // une ressource, puis un besoin, tant qu'il reste de la place
+      for (let grew = true; grew;) {
+        grew = false;
+        if (r < nRes && cost(r + 1, n) <= free) { r++; grew = true; }
+        if (n < nNeed && cost(r, n + 1) <= free) { n++; grew = true; }
+      }
+      return [r, n];
+    };
+    let fit = fitIn(box.hidden ? 0 : box.offsetWidth);
+    // pas la place : l'objectif se resserre (sans sa jauge, puis sans sa récompense), puis les fenêtres ne gardent qu'un besoin,
+    // et enfin qu'une ressource
+    if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth); }
+    if (!fit && !box.hidden) { box.classList.add('mini'); fit = fitIn(box.offsetWidth); }
+    const [r, n] = fit ?? [Math.min(2, nRes), 1];
+    for (const [v, w] of [[rv, span(resWs, r) - 2], [nv, span(needWs, n) - 2]] as const) { v.style.maxWidth = 'none'; v.style.minWidth = '0'; v.style.width = `${w}px`; }
+    rv.scrollLeft = keep[0]; nv.scrollLeft = keep[1];
+    this.syncResNav(); this.syncNeedNav();
+  }
+
+  /** Les flèches des besoins, comme celles des stocks */
+  private syncNeedNav() {
+    const v = $('#needView'), hidden = v.scrollWidth > v.clientWidth + 2;
+    hidePeek(v);
+    $('#needsBox').classList.toggle('scrolls', hidden);
+    ($('#needPrev') as HTMLButtonElement).disabled = !hidden || v.scrollLeft <= 1;
+    ($('#needNext') as HTMLButtonElement).disabled = !hidden || v.scrollLeft + v.clientWidth >= v.scrollWidth - 2;
+  }
+
+  /** Un besoin qui manque, caché derrière les flèches, vient de lui-même dans la fenêtre (une fois, quand il se met à manquer) */
+  private needWarnKey = '';
+  private showNeedWarn() {
+    const v = $('#needView'), warn = [...v.querySelectorAll<HTMLElement>('.need.warn, .need.full')];
+    const key = warn.map((e) => e.id).join();
+    if (key === this.needWarnKey) return;
+    this.needWarnKey = key;
+    const el = warn[0];
+    if (!el || v.scrollWidth <= v.clientWidth + 2) return;
+    const left = el.offsetLeft - ($('#needs').offsetLeft);
+    if (left >= v.scrollLeft && left + el.offsetWidth <= v.scrollLeft + v.clientWidth) return;
+    v.scrollTo({ left, behavior: 'smooth' });
+  }
+
+  /**
+   * La fenêtre des stocks montre un nombre entier de ressources : à la largeur que lui laisse la barre, la dernière était
+   * coupée de quelques pixels, et ses chiffres avec (« 31 » pour 318, « 27( », testeuse v6 en 1440 × 900)
+   */
+  private fitResView() {
+    // (sur une ligne, `fitHud` taille déjà la fenêtre sur des ressources entières)
+    if (innerWidth >= ONE_LINE_MIN) return;
+    const v = $('#resView'), items = [...v.querySelectorAll<HTMLElement>('.res')];
+    v.style.width = ''; v.style.flexShrink = '';
+    // (au sous-pixel près : les largeurs arrondies laissaient encore 2 px de la dernière sous le bord)
+    const avail = v.getBoundingClientRect().width, rs = items.map((e) => e.getBoundingClientRect()), n = rs.length;
+    if (!avail || !n || rs[n - 1].right - rs[0].left <= avail + 0.5) return;
+    // le plus de ressources qui tiennent, d'où que parte le défilement (il s'arrête au début d'une ressource) ; il peut manquer
+    // quelques pixels (SLACK) : la fenêtre ne rétrécit plus et les besoins voisins les cèdent
+    for (let k = n - 1; k >= 1; k--) {
+      let worst = 0;
+      for (let i = 0; i + k <= n; i++) worst = Math.max(worst, rs[i + k - 1].right - rs[i].left);
+      if (worst > avail + RES_SLACK && k > 1) continue;
+      v.style.width = `${Math.ceil(worst)}px`;
+      v.style.flexShrink = '0';
+      return;
+    }
+  }
+
   /** Les flèches des stocks : montrées s'il y a des ressources cachées, éteintes au bout */
   private syncResNav() {
     const v = $('#resView'), hidden = v.scrollWidth > v.clientWidth + 2;
+    hidePeek(v);
     $('#resPanel').classList.toggle('scrolls', hidden);
     ($('#resPrev') as HTMLButtonElement).disabled = !hidden || v.scrollLeft <= 1;
     ($('#resNext') as HTMLButtonElement).disabled = !hidden || v.scrollLeft + v.clientWidth >= v.scrollWidth - 2;
@@ -1500,6 +1821,7 @@ export class UI {
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
       ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${resPic(r, 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
       : `<div class="res${short.has(r) ? ' short' : ''}" data-r="${r}" aria-label="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}${short.has(r) ? ' ' + attr(shortText(w, this.host.sim.age, short.get(r)!, true)) : ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b>${r === 'gold' ? `<em class="rate">${tr('échange')}</em>` : `<em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em>`}</span></div>`).join('');
+    this.fitResView();
     this.syncResNav();
   }
 
@@ -1544,7 +1866,12 @@ export class UI {
     const del = tl.tool === 'bulldoze' ? this.demolishHint() : '';
     const txt = del || (ps === 2 ? tr(tl.tool === 'cave' ? 'Cliquez du côté de l’ouverture' : 'Cliquez du côté de l’entrée') : st === 1 ? tr('Cliquez le point A') : st === 2 ? tr('Cliquez le point B') : '');
     if (txt !== this.hintTxt) { this.hintTxt = txt; el.innerHTML = txt; el.classList.toggle('show', !!txt); el.classList.toggle('b', !del && st === 2); el.classList.toggle('d', !!del); }
-    if (txt && this.cursorXY) el.style.transform = `translate(${this.cursorXY[0] + 18}px, ${this.cursorXY[1] + 20}px)`;
+    // près du bord droit ou du bas, l'étiquette passe de l'autre côté du curseur (elle sortait de l'écran, testeurs v6)
+    if (txt && this.cursorXY) {
+      const [x, y] = this.cursorXY, w = el.offsetWidth, h = el.offsetHeight;
+      const left = x + 18 + w > innerWidth - 8 ? x - 12 - w : x + 18, top = y + 20 + h > innerHeight - 8 ? y - 12 - h : y + 20;
+      el.style.transform = `translate(${Math.max(8, left)}px, ${Math.max(8, top)}px)`;
+    }
   }
 
   /**
@@ -1616,8 +1943,9 @@ export class UI {
    * Avec `act`, un clic dessus y mène.
    */
   toast(msg: string, act?: () => void, level?: NotifLevel) {
-    this.notifs.push(msg, performance.now(), { level, act });
+    const it = this.notifs.push(msg, performance.now(), { level, act });
     this.renderNotifs();
+    return it;
   }
 
   /** Une annonce discrète : seulement dans la cloche */
@@ -1723,11 +2051,13 @@ export class UI {
     const { sim, time, env } = this.host;
     this.renderRailEdit();
     this.renderCursorHint();
+    if (this.waitNotes.size) this.dropDecided();
     if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
     else if (!this.press && this.tilesNow() !== this.tilesKey) this.renderItems(true);
     this.markFirst();
-    if (this.host.tools.placeWhy !== this.infoWhy || this.host.tools.placeStage !== this.infoStage) this.renderInfo();
+    // (et quand les stocks bougent, une fiche qui dit « vous avez 15 bois » : elle restait à l'ancien compte, testeuse v6)
+    if (this.host.tools.placeWhy !== this.infoWhy || this.host.tools.placeStage !== this.infoStage || this.haveNow() !== this.infoHave) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
     // le logo de la carte du village change avec l'âge (picto et teinte du fond)
     const logo = $('#vLogo');
@@ -1761,6 +2091,9 @@ export class UI {
       el.classList.toggle('full', !need.ok && housing);
       el.setAttribute('aria-label', housing ? tr('{need} : {pop} habitants pour {cap} places', { need: tr(n.label), pop: Math.floor(sim.pop), cap: need.cap }) : tr('{need} : {cap} pour un besoin de {demand}', { need: tr(n.label), cap: num(need.cap), demand: num(need.demand) }));
     }
+    this.renderGoals();
+    this.fitHud();
+    this.showNeedWarn();
     { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('.pv', $('#n-security')).textContent = pctText(Math.round(s * 100)); $('#n-security').setAttribute('aria-label', tr('Sécurité : {pct} % des habitations couvertes (pompiers {fire} %, police {police} %)', { pct: Math.round(s * 100), fire: Math.round(sim.coverage.fireShare * 100), police: Math.round(sim.coverage.policeShare * 100) })); }
     // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
     const cs = this.census(), alert = cs.untreated ? tr('{n} sans soins', { n: cs.untreated }) : cs.hungry ? tr(cs.hungry > 1 ? '{n} ont faim' : '{n} a faim', { n: cs.hungry }) : cs.thirsty ? tr(cs.thirsty > 1 ? '{n} ont soif' : '{n} a soif', { n: cs.thirsty })
@@ -1857,7 +2190,7 @@ export class UI {
     if ((this.needOpen || this.resOpen) && !this.peek) return;
     this.peek = true;
     open();
-    $('#needInfo').classList.add('peek');
+    $('#needInfo').classList.add('hover');
   }
   private peekLeave() {
     if (!this.peek) return;
@@ -1869,13 +2202,13 @@ export class UI {
   private pin() {
     clearTimeout(this.peekT);
     this.peek = false;
-    $('#needInfo').classList.remove('peek');
+    $('#needInfo').classList.remove('hover');
   }
 
   private closeNeed() {
     clearTimeout(this.peekT);
     this.peek = false;
-    $('#needInfo').classList.remove('peek');
+    $('#needInfo').classList.remove('hover');
     this.needOpen = null;
     this.host.tools.coverage.set(false);
     this.resOpen = null;
@@ -2060,8 +2393,18 @@ export class UI {
     if (c.hungry) tips.push(tr('Une ferme, un champ ou un ponton de pêche nourrirait tout le monde.'));
     if (c.thirsty) tips.push(tr('Un point d’eau ou un puits de plus abreuverait tout le monde.'));
     if (c.unhappy) tips.push(tr('Un lieu de rencontre, une arène ou un lieu de culte rendrait le village plus heureux.'));
+    // ce qui retient les nouveaux venus (Chloé, v6 : « je n'ai pas compris ce qui manquait pour que des gens arrivent »)
+    const sim = this.host.sim, g = sim.growth();
+    const short = (k: NeedId) => Math.max(1, Math.ceil(sim[k].demand - sim[k].cap - 1e-6));
+    const lack = g.missing.map((k) => (k === 'jobs' ? tr('du travail ({n})', { n: nplural(short('jobs'), 'emploi', 'emplois') }) : k === 'health' ? tr('des soins ({n})', { n: nplural(short('health'), 'place', 'places') }) : missingText([k]))).join(', ');
+    // (un manque d'abord, s'il y en a : bâtir des maisons n'y changerait rien ; le village plein ensuite)
+    const full = g.full ? `<p class="cgrow full">${ic('house', 15, 2)} ${tr('Village plein : bâtissez des maisons pour accueillir de nouveaux habitants.')}</p>` : '';
+    const grow = g.missing.length ? `<p class="cgrow warn">${ic('alert', 15, 2)} ${tr('Personne de nouveau n’arrive : il manque {list}.', { list: lack })}</p>${full}`
+      : g.full ? full
+        : `<p class="cgrow ok">${ic('spring', 15, 2)} ${tr('De nouveaux habitants arrivent : le prochain est en route.')}${g.slow ? ` ${tr('(Plus lentement : le village se remet d’un manque.)')}` : ''}</p><div class="gbar"><i style="width:${Math.round(g.progress * 100)}%"></i></div>`;
     const html = `
       <h4>${ic('houses', 18, 2)} ${nplural(c.p, 'habitant', 'habitants')} <small>${tr('pour {n} places', { n: c.places })}${c.away ? tr(', dont {n} en expédition', { n: c.away }) : ''}</small></h4>
+      ${grow}
       <div class="cbar">${seg(c.employed, 'work', 'Au travail')}${seg(c.jobless, 'idle', 'Sans emploi')}${seg(c.others, 'kids', 'Enfants et anciens')}</div>
       ${row('hammer', 'Au travail', c.employed)}
       ${row('alert', 'Sans emploi', c.jobless, c.jobless ? 'warn' : '')}
@@ -2084,7 +2427,7 @@ export class UI {
     const h = this.host, ex = h.expeditions, list = $('#expList');
     // juste sous la barre du haut, quelle que soit sa hauteur (elle passe sur plusieurs lignes sur un téléphone)
     // (le bas des panneaux du haut, sans la colonne de gauche qui descend avec le conseil et les messages)
-    const hudB = Math.round(Math.max(...['#agePanel', '#resPanel', '#needsBox', '#hudR'].map((q) => $(q).getBoundingClientRect().bottom)));
+    const hudB = Math.round(Math.max(...['#agePanel', '#resPanel', '#needsBox', '#goalBox', '#hudR'].map((q) => $(q).getBoundingClientRect().bottom)));
     // les cartes des équipes : à gauche, sous la barre du haut ; la liste des conditions d'âge
     // dépliée : elles passent dessous au lieu d'être cachées
     const req = $('#agePanel').classList.contains('open') ? $('#ageReq').getBoundingClientRect().bottom : 0;
@@ -2170,6 +2513,11 @@ export class UI {
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
     $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
+    // le panneau des peuples : avec l'archipel ; avant, grisé dès l'Antiquité si le monde peut encore s'agrandir (il dit comment)
+    const arch = archipelagoOn(h.world), canMeet = h.ways?.().world !== 'none';
+    const pb = $('#bPeoples');
+    pb.style.display = arch || (canMeet && h.sim.age >= 1 && !h.world.sandbox) ? '' : 'none';
+    pb.classList.toggle('off', !arch);
     this.offerPending();
   }
 
@@ -2190,7 +2538,8 @@ export class UI {
     const ways = h.ways?.() ?? { hell: 'none' as WayState, world: 'none' as WayState };
     const waysOn = waysTabShown(h.world, ways.hell, ways.world);
     if (tab === 'ways' && !waysOn) tab = 'missions';
-    const next = max < partyLimit(1e9) ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: max * 30, pop }) : tr('Équipes au maximum');
+    const at = nextTeamAt(max);
+    const next = at !== null ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: at, pop }) : tr('Équipes au maximum');
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${pic(a.m.icon, 18)} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
     const rank = (m: Mission) => (ex.done(m) ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);
@@ -2219,6 +2568,7 @@ export class UI {
           ${tags ? `<div class="mtags">${tags}</div>` : ''}
           <p class="mtext">${splitIntro(m.intro).head}</p>
           ${this.missionPills(m)}
+          ${this.boonHtml(m)}
           ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
           ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m, true)}</p>` : ''}
           <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${SEND_ICON} ${label}</button>
@@ -2378,7 +2728,7 @@ export class UI {
       const t = e.target as HTMLElement;
       // une autre façon de partir : le panneau de droite se redessine
       const pick = t.closest<HTMLButtonElement>('button[data-pick]');
-      if (pick) { sel = +pick.dataset.pick!; h.audio.sfxClick(); root.innerHTML = body(); return; }
+      if (pick) { sel = +pick.dataset.pick!; this.lastChoice.set(m.id, sel); h.audio.sfxClick(); root.innerHTML = body(); return; }
       if (t.closest('button.sBack')) { h.audio.sfxClick(); close(); return; }
       // l'équipement qui manque : le fabriquer d'ici, ou aller à sa fiche dans l'onglet Équipement
       const mkAll = t.closest<HTMLButtonElement>('button[data-mkall]');
@@ -2433,6 +2783,7 @@ export class UI {
         f.textContent = why;
         return;
       }
+      this.lastChoice.set(m.id, ci);
       close();
       closeMain();
       h.audio.sfxClick();
@@ -2447,11 +2798,21 @@ export class UI {
   private defaultChoice(m: Mission) {
     const ex = this.host.expeditions, cs = m.choices, st = choiceStyles(cs);
     const ok = (i: number) => !ex.why(m, cs[i]);
+    // la façon de partir choisie la dernière fois pour cette mission (fenêtre refermée, mission ratée qu'on relance)
+    const last = this.lastChoice.get(m.id);
+    // (sauf si elle est devenue impossible alors qu'une autre ne l'est pas)
+    if (last !== undefined && last < cs.length && (ok(last) || !cs.some((_, i) => ok(i)))) return last;
     const bal = st.findIndex((x, i) => x.style === 'balanced' && ok(i));
     if (bal >= 0) return bal;
+    // sans équilibrée : la prudente, la première carte affichée (le premier choix des données, souvent l'audacieux, était
+    // retenu sans qu'on le voie : le kraken partait en « Trancher ses tentacules », testeurs v6)
+    const safe = st.findIndex((x, i) => x.style === 'cautious' && ok(i));
+    if (safe >= 0) return safe;
     const first = cs.findIndex((_, i) => ok(i));
     return first >= 0 ? first : 0;
   }
+  /** la dernière façon de partir choisie, par mission (le temps de la session) */
+  private lastChoice = new Map<string, number>();
 
   /**
    * La fenêtre de départ : à gauche l'illustration de la mission, son nom et sa phrase ; à droite la façon de partir
@@ -2477,7 +2838,7 @@ export class UI {
     const card = (k: number) => {
       const x = cs[k], sk = styles[k].style, name = sk ? tr(STYLE[sk]) : x.label, off = !!ex.why(m, x);
       const px = ex.preview(x), lv = px.risk <= 0.12 ? 'low' : px.risk <= 0.22 ? 'mid' : 'high';
-      const wx = done ? redoEffects(x.win) : x.win, sn = new Set<string>(), gx = effectChips(wx).filter((e) => (sn.has(e.icon) ? false : (sn.add(e.icon), true))).slice(0, 3);
+      const wx = done ? redoEffects(x.win) : this.winOf(x), sn = new Set<string>(), gx = effectChips(wx).filter((e) => (sn.has(e.icon) ? false : (sn.add(e.icon), true))).slice(0, 3);
       const phrase = cardPhrase(x.text), text = sk && x.label ? `<b>${x.label}</b>${phrase ? ` — ${phrase}` : ''}` : phrase;
       return `<button type="button" role="radio" data-pick="${k}" class="sCard ${k === i ? 'on' : ''} ${sk ?? ''} ${off ? 'off' : ''}" aria-checked="${k === i}" title="${attr(x.label)}">
         <span class="scHead">${sk ? `<img class="scEmb" src="./expeditions/depart/embleme-${EMB[sk]}.webp" alt="" decoding="async">` : pic(m.icon, 44)}<span class="scName"><b>${name}</b>${styles[k].effect ? `<small>${tr(EFFECT[styles[k].effect!])}</small>` : ''}</span></span>
@@ -2505,13 +2866,17 @@ export class UI {
     const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement nécessaire')}</b></span>
       ${ready || missing ? `<div class="gslots">${ready}${missing}</div>${gearNote}` : `<p class="gnote">${tr('Aucun équipement nécessaire : l’équipe part les mains libres.')}</p>`}<small class="sgP">${ic('team', 16, 2)} ${tr('{n} habitants', { n: c.party })}</small></div>`;
     // en bas : pourquoi on ne peut pas partir, sinon ce qui arrive en cas d'échec
-    const lose = effectSummary(c.lose);
+    // (un échec coûte une pièce emportée une fois sur deux, voir `Expeditions.finish` : l'aperçu disait « rien », testeur v6)
+    const carried = GEAR.some((g) => (pv.take[g.id] ?? 0) > 0);
+    const parts = c.lose.length ? [effectSummary(c.lose)] : [];
+    if (carried) parts.push(tr('peut-être une pièce d’équipement perdue'));
+    const lose = parts.length ? parts.join(' · ') : effectSummary(c.lose);
     const warn = why ?? (this.needsHtml(m) ? '' : lose ? tr('En cas d’échec : {what}', { what: lose }) : tr('Une expédition peut échouer : l’équipement la rend plus sûre.'));
     const needs = ex.missing(m).length ? `<div class="sNeeds req">${this.needsHtml(m)}</div>` : '';
     const L = './expeditions/depart/';
     return `<div class="sScroll">
       <div class="sTop mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" decoding="async">` : art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}</div>
-      <div class="sCap"><h3>${MISSION_DIO.has(m.id) ? '' : pic(m.icon, 28) + ' '}${m.title}</h3><span class="sEraRow"><img class="sLaur" src="${L}laurier-g.webp" alt="" decoding="async"><span class="sEra">${hudPic(AGE_PIC[m.age] ?? AGE_PIC[0], 16)} ${AGES[m.age].name}</span><img class="sLaur" src="${L}laurier-d.webp" alt="" decoding="async"></span><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div>
+      <div class="sCap"><h3>${MISSION_DIO.has(m.id) ? '' : pic(m.icon, 28) + ' '}${m.title}</h3><span class="sEraRow"><img class="sLaur" src="${L}laurier-g.webp" alt="" decoding="async"><span class="sEra">${hudPic(AGE_PIC[m.age] ?? AGE_PIC[0], 16)} ${AGES[m.age].name}</span><img class="sLaur" src="${L}laurier-d.webp" alt="" decoding="async"></span><p>${si.head}</p>${this.boonHtml(m)}${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div>
       ${cards}
       ${gearBox}
     </div>
@@ -2557,7 +2922,9 @@ export class UI {
     const card = (g: Gear) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), price = gearCostLabel(gearCost(g, h.world.difficulty));
         // l'objet peint, détouré, posé sur un halo doré en tête de carte ; une pièce pas encore illustrée garde son icône au trait
-        const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}.webp" alt="" loading="lazy" decoding="async">` : ic(g.icon, 40, 1.6);
+        // (sans chargement paresseux : la grille se refait à chaque fabrication, et une image paresseuse refaite restait vide
+        // un moment, la torche disparaissait après « Fabriquer », testeuse v6)
+        const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}.webp" alt="" decoding="sync">` : ic(g.icon, 40, 1.6);
         const crafting = st.craft.filter((x) => x === g.id).length;
         // fabricable : « Fabriquer » en bleu, le prix en info-bulle ; sinon une pilule grise avec le prix
         return `<div class="gear" data-gear="${g.id}" title="${g.desc}">
@@ -2587,9 +2954,17 @@ export class UI {
    * bâtir (sinon le message et la carte de l'équipe, qui clignote, y mènent)
    */
   expEvent(a: ActiveExpedition) {
-    this.toast(tr('{icon} « {mission} » : {event} — une décision vous attend (cliquez ici).', { icon: a.m.icon, mission: a.m.title, event: a.wait?.title.toLowerCase() ?? '' }), () => this.showDecision(a));
+    const ev = a.wait;
+    const it = this.toast(tr('{icon} « {mission} » : {event} — une décision vous attend (cliquez ici).', { icon: a.m.icon, mission: a.m.title, event: a.wait?.title.toLowerCase() ?? '' }), () => { if (a.wait === ev) this.showDecision(a); });
+    if (it && ev) this.waitNotes.set(it.id, { a, ev });
     this.forceDecision(a);
     this.update();
+  }
+
+  /** les messages « une décision vous attend » encore justes : leur équipe et l'imprévu (retirés une fois la décision prise) */
+  private waitNotes = new Map<number, { a: ActiveExpedition; ev: ExpEvent }>();
+  private dropDecided() {
+    for (const [id, { a, ev }] of this.waitNotes) if (a.wait !== ev) { this.notifs.retire(id); this.waitNotes.delete(id); }
   }
 
   /** l'imprévu de chaque équipe dont la fenêtre s'est déjà ouverte (une fois fermée sans choisir, elle ne se rouvre pas d'elle-même) */
@@ -2650,9 +3025,13 @@ export class UI {
   closeTop(): boolean {
     const ovs = this.root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay');
     const top = ovs[ovs.length - 1];
-    if (!top?.close || top.id === 'menu' || top.classList.contains('victory')) return false;
-    top.close();
-    return true;
+    if (top?.close && top.id !== 'menu' && !top.classList.contains('victory')) { top.close(); return true; }
+    if (top) return false;
+    // puis les panneaux du haut : conditions de l'âge, fiche d'un besoin ou d'un stock, habitants (Échap ne les fermait pas, v6)
+    if ($('#agePanel').classList.contains('open')) { $('#agePanel').classList.remove('open'); this.update(); return true; }
+    if (this.needOpen || this.resOpen) { this.closeNeed(); return true; }
+    if (!$('#census').hidden) { this.closeCensus(); return true; }
+    return false;
   }
 
   /** Décision à prendre sur l'imprévu en cours d'une équipe */
@@ -2724,7 +3103,7 @@ export class UI {
   }
 
   // ---------------- Réglages ----------------
-  /** Raccourci Maj+1 … 5 : ouvre le n-ième rayon de Bâtir (Habitat, Production, Services, Vie & culture, Militaire) */
+  /** Raccourci Maj+1 … 6 : ouvre le n-ième rayon de Bâtir, dans l'ordre de `BUILD_CATS` (Habitat … Décorations, Militaire) */
   openCat(i: number) {
     const c = BUILD_CATS[i];
     if (!c || document.body.classList.contains('photo')) return;
@@ -2751,7 +3130,7 @@ export class UI {
     const left = part(tr('Temps'), [[tr('Espace'), tr('Pause, reprendre')], ['− +', tr('Ralentir, accélérer (×1 à ×8)')]])
       + part(tr('Fenêtres'), [['J', tr('Expéditions')], ['N', tr('Notifications')], ['?', tr('Cette aide')], [tr('Échap'), tr('Fermer la fenêtre, lâcher l’outil')]])
       + part(tr('Vue'), [[`${k.move.join(' ')}`, tr('Déplacer (aussi les flèches)')], [k.turn.join(' '), tr('Tourner')], ['V', tr('Revenir au village')], ['P', tr('Mode photo')]]);
-    const right = part(tr('Bâtir'), [['B', tr('Reprendre le dernier bâtiment')], [tr('Maj+1 … 5'), tr('Rayons, d’Habitat à Militaire')], [tr('Ctrl+F'), tr('Chercher un bâtiment (ou /)')], ['R', tr('Tourner le bâtiment, sinon tracer une route')], ['X', tr('Démolir')], ['M', tr('Déplacer un bâtiment')], [tr('Ctrl+Z Ctrl+Y'), tr('Annuler, rétablir')]])
+    const right = part(tr('Bâtir'), [['B', tr('Reprendre le dernier bâtiment')], [tr('Maj+1 … {n}', { n: BUILD_CATS.length }), tr('Rayons, d’Habitat à Militaire')], [tr('Ctrl+F'), tr('Chercher un bâtiment (ou /)')], ['R', tr('Tourner le bâtiment, sinon tracer une route')], ['X', tr('Démolir')], ['M', tr('Déplacer un bâtiment')], [tr('Ctrl+Z Ctrl+Y'), tr('Annuler, rétablir')]])
       + part(tr('Paysage'), [['1 2 3 4 5', tr('Monter, baisser, aplanir, falaise, eau')], ['6 7 9 0', tr('Forêt, champ, gomme, montagne')], ['[ ]', tr('Taille du pinceau')]]);
     const note = az ? tr('− et + : les deux touches à droite du 0 (« ) » et « = » en AZERTY), ou le pavé numérique.') : tr('− et + : les deux touches à droite du 0, ou le pavé numérique.');
     modal(this.root, 'keysModal', tr('Raccourcis clavier'), `<div class="keysHelp"><div>${left}</div><div>${right}</div><p class="note">${note}</p></div>`);
@@ -2807,6 +3186,8 @@ export class UI {
         <p class="hint">${tr('Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.')}</p>
         <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
         <p class="hint">${tr('Une flèche dorée flotte au-dessus des bâtiments qu’on peut améliorer et dont on a de quoi payer l’amélioration.')}</p>
+        <div class="row"><label>${tr('Objectifs')}</label><button id="gGoals" class="${h.hideGoals ? '' : 'active'}">${tr(h.hideGoals ? 'Masqués' : 'Affichés')}</button></div>
+        <p class="hint">${tr('Trois petits objectifs à la fois dans la barre du haut, chacun avec une récompense.')}</p>
         <div class="row"><label>${tr('Ressources')}</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? tr(h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
         <p class="hint">${tr('Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.')}</p>
         <h4>${tr('Sauvegarde')}</h4>
@@ -2916,6 +3297,11 @@ export class UI {
       q('#gUnlimited').textContent = tr(h.world.unlimited ? 'Illimitées' : 'Normales');
       q('#gUnlimited').classList.toggle('active', h.world.unlimited);
       this.update();
+    };
+    q('#gGoals').onclick = () => {
+      h.setHideGoals(!h.hideGoals);
+      q('#gGoals').textContent = tr(h.hideGoals ? 'Masqués' : 'Affichés');
+      q('#gGoals').classList.toggle('active', !h.hideGoals);
     };
     q('#gBadges').onclick = () => {
       h.setHideUpBadges(!h.hideUpBadges);

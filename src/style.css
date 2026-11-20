@@ -164,7 +164,50 @@ img.pic { display: block; flex: none; }
 #resView .res { scroll-snap-align: start; flex: none; }
 #res { flex-wrap: nowrap !important; }
 .resNav { display: none; flex: none; align-items: center; justify-content: center; width: 24px; height: 40px; min-height: 0; min-width: 0; padding: 0; border: none; border-radius: 10px; background: transparent; box-shadow: none; color: var(--hInk); cursor: pointer; }
-#resPanel.scrolls .resNav { display: flex; }
+#resPanel.scrolls .resNav, #needsBox.scrolls .resNav { display: flex; }
+/* les besoins défilent comme les stocks quand la barre du haut tient sur une ligne (la fenêtre est taillée par `UI.fitHud`) */
+#needView { flex: 0 1 auto; min-width: 0; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+#needView::-webkit-scrollbar { display: none; }
+#needView .need { scroll-snap-align: start; flex: none; }
+/* une case à moitié dans sa fenêtre est masquée (`hidePeek`, ui.ts) : pas de chiffres coupés au bord */
+#resView .peek, #needView .peek { visibility: hidden; }
+#needsBox.scrolls { padding-left: 4px; padding-right: 4px; }
+/* (le compteur d'habitants et le séparateur gardent leur largeur : c'est la fenêtre des stocks qui cède) */
+#resPanel > .pop, #resPanel > .hsep { flex: none; }
+
+/* l'objectif du moment : une pastille dorée, son picto, son texte, sa jauge, sa récompense, et un point par objectif en cours */
+#goalBox { flex: none; width: 214px; gap: 8px; padding: 5px 8px 5px 7px; cursor: pointer; }
+#goalBox[hidden] { display: none; }
+#hud #goalBox:hover:not(.won) { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+#goalBox .gi { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff3d0, #f4cf7a); box-shadow: inset 0 0 0 1.5px rgba(200, 140, 40, 0.45); }
+#goalBox .gt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+#goalBox .g1 { font-size: 12.5px; font-weight: 800; line-height: 1.15; color: var(--hInk); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+#goalBox .g2 { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: var(--hInk2); }
+#goalBox .g2 em { font-style: normal; font-variant-numeric: tabular-nums; }
+#goalBox .gb { flex: 1; min-width: 24px; height: 5px; border-radius: 4px; background: rgba(40, 50, 70, 0.1); overflow: hidden; }
+#goalBox .gb > i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #f6cd6a, var(--hGold)); }
+#goalBox .gr { display: flex; gap: 5px; flex: none; flex-wrap: nowrap; }
+#goalBox .gc { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 800; color: #9a6a14; white-space: nowrap; }
+#goalBox .gd { display: flex; flex-direction: column; gap: 5px; flex: none; }
+#goalBox .gd i { width: 7px; height: 7px; border-radius: 50%; background: rgba(40, 50, 70, 0.2); cursor: pointer; }
+#goalBox .gd i.on { background: var(--hGold); }
+#goalBox .gd i:hover { box-shadow: 0 0 0 2px rgba(224, 173, 69, 0.35); }
+/* atteint : la pastille dorée, le mot de félicitation et la récompense, quelques secondes */
+#hud #goalBox.won { background: linear-gradient(180deg, #fff6d8, #ffe39a); border-color: var(--hGold); box-shadow: 0 0 0 1px var(--hGold), var(--hShadow); animation: goalWon 0.7s ease-out; cursor: default; }
+#goalBox.won .g1 { color: #8a5a0c; }
+#goalBox .gp { flex: 1; min-width: 0; font-weight: 700; line-height: 1.15; color: var(--hInk); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+@keyframes goalWon { 0% { transform: scale(0.9); } 55% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { #goalBox.won { animation: none; } }
+/* trop serré : sans la jauge ; le compte et la récompense restent */
+#goalBox.compact { width: 160px; }
+#goalBox.compact .gb { display: none; }
+#goalBox.compact.won .gr { display: none; }
+/* plus serré encore : le texte et le compte seulement (la récompense reste dans l'infobulle et dans le message de félicitation) */
+#goalBox.mini { width: 108px; }
+#goalBox.mini .gr { display: none; }
+#goalBox.mini .gi { display: none; }
+#goalBox.compact .gi { width: 34px; height: 34px; }
+#goalBox.compact .gi img.pic { width: 24px; height: 24px; }
 .resNav:hover:not(:disabled) { background: rgba(255, 255, 255, 0.7); }
 .resNav:disabled { opacity: 0.25; cursor: default; }
 .res { display: flex; align-items: center; gap: 7px; padding: 4px 8px; border-radius: 14px; color: var(--hInk); cursor: pointer; }
@@ -244,6 +287,14 @@ button.pop:hover { background: rgba(255, 255, 255, 0.7); }
 .crow.note b, .crow.note em { color: #b06d0e; }
 #census .hint { margin: 8px 0 0; font-size: 12px; }
 #census .hint.ok { color: var(--good); font-weight: 700; }
+/* ce qui retient les nouveaux venus, et l'avancée vers le prochain habitant */
+#census .cgrow { display: flex; gap: 6px; align-items: flex-start; margin: 0 0 8px; font-size: 12.5px; font-weight: 700; line-height: 1.35; }
+#census .cgrow .ic { flex: none; margin-top: 1px; }
+#census .cgrow.warn { color: var(--bad); }
+#census .cgrow.full { color: #b06d0e; }
+#census .cgrow.ok { color: var(--good); margin-bottom: 4px; }
+#census .gbar { height: 5px; margin: 0 0 10px; border-radius: 3px; background: var(--line); overflow: hidden; }
+#census .gbar i { display: block; height: 100%; background: var(--good); border-radius: 3px; transition: width 0.4s; }
 
 /* à droite : l'horloge (picto de la saison, heure, saison et jour), pause et vitesse, puis expéditions, cloche et réglages */
 #hudR { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
@@ -721,7 +772,10 @@ body.under #selCard, body.photo #selCard { display: none; }
 .cePop .credits li::marker { color: #d39a45; }
 .cePop .credits a, .cePop.credits .hint a { color: #a8620e; font-weight: 700; text-decoration-color: rgba(168, 98, 14, 0.4); text-underline-offset: 2px; }
 #ui > .overlay > .cePop.credits .hint { margin: 0; font-size: 13px; font-weight: 500; line-height: 1.45; }
-@media (max-height: 760px) and (min-width: 721px) {
+/* écran de portable (820 px de haut ou moins) : titre plus petit, marge du bas réduite ; l'accueil tient sans ascenseur (il
+   défilait de 22 px en 1280 × 720 et de 19 px en 1366 × 768) */
+@media (max-height: 820px) and (min-width: 721px) {
+  .mInner { padding-bottom: 24px; }
   .mPeaks { width: 140px; }
   #menu h1 { font-size: 78px; }
   .mMode { flex-basis: 240px; }
@@ -859,18 +913,42 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   .need { width: 47px; }
   #resView { max-width: 310px; }
 }
-/* quand la place manque, la pilule des besoins passe à la ligne, centrée ; les stocks restent au milieu de la première */
-@media (max-width: 1439px) {
+/* d'ordinateur (1100 px et plus) : une seule ligne ; les stocks et les besoins défilent dans des fenêtres taillées à la place
+   (`UI.fitHud`), l'horloge et les boutons ronds se resserrent */
+@media (max-width: 1439px) and (min-width: 1100px) {
+  /* (38 px : avec le bouton « Peuples » de l'archipel, nourriture et eau tiennent encore côte à côte en 1280) */
+  button.round { width: 38px; height: 38px; }
+  #agePanel { width: 224px; }
+  #agePct { white-space: nowrap; }
+  .resNav { width: 18px; }
+  /* le nombre d'habitants sans le mot « habitants » (la tendance de la veille et les alertes restent) */
+  .pn small:not([class]) { display: none; }
+  /* (plus précis que `hudTheme.css`, chargé après) */
+  #needs .need { width: 51px; }
+  #needs .need > span { font-size: 9.5px; }
+  #res .res { padding-left: 4px; padding-right: 4px; }
+  #resPanel .hsep { margin-left: 3px; margin-right: 3px; }
+  #resPanel button.pop { padding-left: 4px; padding-right: 4px; gap: 5px; }
+  #timePanel, #menuBtns { gap: 6px; }
+  #hudR { gap: 6px; }
+  #clock { padding: 4px 10px 4px 8px; gap: 7px; }
+  #clock img.pic { width: 30px; height: 30px; }
+  #clock small { font-size: 10.5px; }
+  .hudPill { padding: 5px 8px; }
+}
+/* quand la place manque (sous 1100 px), la pilule des besoins passe à la ligne, centrée ; les stocks restent au milieu de la première */
+@media (max-width: 1099px) {
   #hud { flex-wrap: wrap; row-gap: 8px; }
   #needsPanel { display: contents; }
   #resPanel { order: 1; }
   #hudR { order: 2; }
   #needsBox { order: 5; margin: 0 auto; }
+  #goalBox { order: 6; }
 }
 /* écran moyen : une grille fixe, pas un retour à la ligne qui dépend de la largeur du contenu. Le bloc de l'âge à gauche, l'horloge
    et ses boutons à droite, les stocks au milieu (ils rétrécissent et défilent), les besoins dessous. Avant, une heure, un stock ou
    un souci plus long faisait passer l'horloge à la ligne, puis revenir : les boutons bougeaient sous la souris (testeurs v6) */
-@media (max-width: 1439px) and (min-width: 861px) {
+@media (max-width: 1099px) and (min-width: 861px) {
   #hud { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; row-gap: 8px; }
   #hudL { grid-column: 1; grid-row: 1; }
   #resPanel { grid-column: 2; grid-row: 1; justify-self: center; max-width: 100%; }
@@ -879,7 +957,7 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
 }
 /* plus étroit : les stocks descendent à côté des besoins, sur la deuxième ligne, toujours */
 @media (max-width: 1099px) and (min-width: 861px) {
-  #needsPanel { display: flex; grid-column: 1 / -1; grid-row: 2; justify-content: center; gap: var(--gap); min-width: 0; }
+  #needsPanel { display: flex; flex-wrap: wrap; grid-column: 1 / -1; grid-row: 2; justify-content: center; gap: var(--gap); min-width: 0; }
   #resPanel, #needsBox { grid-column: auto; grid-row: auto; }
 }
 
@@ -1328,8 +1406,9 @@ button.bgo:hover { background: #0f9270; }
 .report .sum { font-weight: 800; font-size: 14px; }
 
 /* Âge futuriste : la retransmission en direct de la Lune, l'écran de fin de partie */
-.spacecast { position: absolute; right: 14px; top: calc(var(--hudB, 82px) + 14px); width: 380px; padding: 10px; opacity: 0; transform: translateY(12px) scale(0.96); transition: opacity 0.4s ease, transform 0.4s ease; pointer-events: none !important; z-index: 6; }
-.spacecast.show { opacity: 1; transform: none; }
+/* (cachée, elle n'est plus dans le texte de la page : les lecteurs d'écran lisaient « En direct de la Lune » dès la Préhistoire) */
+.spacecast { position: absolute; right: 14px; top: calc(var(--hudB, 82px) + 14px); width: 380px; padding: 10px; opacity: 0; visibility: hidden; transform: translateY(12px) scale(0.96); transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s linear 0.4s; pointer-events: none !important; z-index: 6; }
+.spacecast.show { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .spacecast canvas { display: block; width: 360px; height: 216px; border-radius: 10px; background: #05070d; }
 .sc-head { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
 .sc-head .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); animation: rec 1s steps(2) infinite; }
@@ -2183,7 +2262,7 @@ img.pic { display: inline-block; flex: none; vertical-align: -0.22em; object-fit
 
 /* Enfers, écran allégé : le haut du village caché (carte, besoins, horloge, expéditions, nouvelles, habitants : on les retrouve
    en rentrant) ; en bas, les troupes au milieu, et à droite l'aide, « Ma base » (un tiroir fermé à l'arrivée) et « Village » */
-body.hell #hudL, body.hell #needsBox, body.hell #clock, body.hell #bExp, body.hell #bBell, body.hell #resPanel .hsep, body.hell #resPanel .pop { display: none !important; }
+body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsBox, body.hell #clock, body.hell #bExp, body.hell #bPeoples, body.hell #bBell, body.hell #resPanel .hsep, body.hell #resPanel .pop { display: none !important; }
 #troopBar .tfg { display: inline-flex; align-items: center; gap: 7px; margin-left: 2px; padding: 4px 12px 4px 6px; border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 999px; background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font: inherit; font-size: 12.5px; font-weight: 800; white-space: nowrap; }
 #troopBar button.tfg { cursor: pointer; }
 #troopBar button.tfg:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }

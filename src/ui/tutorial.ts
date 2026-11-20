@@ -3,7 +3,7 @@ import { ic } from './icons';
 import { tr, localize, colon } from '../i18n';
 import type { UI, UIHost } from './ui';
 import { layoutKeys } from '../core/controls';
-import { GEAR, GearId, dangersOf, gearCurrent } from '../sim/gear';
+import { GEAR, GEAR_BY, GearId, dangersOf, gearCurrent } from '../sim/gear';
 import { MISSIONS } from '../sim/missions';
 
 /**
@@ -93,13 +93,16 @@ export const TUTO_TEXT = {
     expeditions: {
       title: 'Les expéditions',
       text: 'Le bouton {compass} envoie une équipe chercher des ressources et de nouveaux bâtiments.',
-      choose: 'Choisissez une mission, puis « Partir ».',
+      choose: 'Choisissez une mission, puis « Lancer l’expédition ».',
       none: 'Personne n’est libre pour partir : passez à la suite.',
+      blocked: 'L’équipe ne peut pas partir pour l’instant (la raison est en bas de la fenêtre) : vous pouvez terminer le tutoriel.',
       wait: 'L’équipement sort bientôt de fabrication : attendez-le pour partir mieux protégé.',
       tasks: ['Ouvrir les expéditions', 'Lancer une expédition'],
     },
   },
   kindTask: (name: string) => tr('Poser : {name}', { name }),
+  /** l'étape de l'équipement nomme la pièce à fabriquer (sans nom, on fabriquait la première venue, une torche) */
+  craftTask: (name: string) => tr('Fabriquer : {name}', { name }),
   /** la vignette désignée est hors de la rangée visible du menu : la flèche d'abord */
   scroll: (arrow: string, name: string) => tr('Cliquez sur la flèche {arrow} pour faire paraître « {name} », puis sur le bâtiment.', { arrow, name }),
   locked: 'Le tutoriel vous le fera bâtir un peu plus tard.',
@@ -350,6 +353,8 @@ const GATE: Partial<Record<StepId, KindId[]>> = {
   habitat: ['gather', 'house', 'well'],
   food: ['gather', 'house', 'well', 'farm', 'lumber', 'quarry'],
 };
+/** après un passage automatique à l'étape suivante, un « Suivant » arrivé dans ce délai (ms) visait l'étape d'avant : ignoré */
+const LATE_MS = 900;
 /** les bâtiments que le tutoriel fait poser : un village qui en compte d'autres n'est plus un village neuf */
 const GUIDED = new Set<string>(['gather', 'house', 'well', 'farm', 'lumber', 'quarry']);
 
@@ -383,6 +388,10 @@ export class Tutorial {
   private body: HTMLElement;
   private arrow: HTMLElement;
   private ring: HTMLElement;
+  /** l'étape où le bouton de la bulle a été enfoncé, et l'instant du dernier passage automatique (voir `LATE_MS`) */
+  private downOn = '';
+  private autoAt = -Infinity;
+  private at() { return this.ch ? `${this.ch}|${this.ci}` : `|${this.i}`; }
   /** clics repérés pendant l'étape : un bouton à `data-a` (son action) */
   private clicks = new Set<string>();
   /** l'outil Route a été pris pendant cette étape */
@@ -468,10 +477,19 @@ export class Tutorial {
           const tab = m.querySelector('[data-tab="gear"]');
           if (!tab?.classList.contains('on')) return tab;
           const g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
-          const mine = g ? m.querySelector(`button[data-craft="${g}"]:not([disabled])`) : null;
+          // la pièce de la mission, même pas encore fabricable (la note dit pourquoi) : jamais une autre à sa place
+          const mine = g ? m.querySelector(`button[data-craft="${g}"]`) : null;
           const b = mine && mine.getClientRects().length ? mine : [...m.querySelectorAll('button[data-craft]:not([disabled])')].find((x) => x.getClientRects().length);
           if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
           return b ?? m.querySelector('.arsenal');
+        },
+        tasks: () => {
+          const g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
+          return [T.gear.tasks[0], g ? TUTO_TEXT.craftTask(GEAR_BY[g].name) : T.gear.tasks[1]];
+        },
+        note: () => {
+          const g = tutoGear(h.sim.age, (k) => h.expeditions.has(k)), b = g ? q(`.expModal button[data-craft="${g}"][disabled]`) : null;
+          return b && !this.ticks[1] ? b.getAttribute('title') ?? '' : '';
         },
         check: () => {
           const st = h.expeditions.state, g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
@@ -501,6 +519,10 @@ export class Tutorial {
           const m = q('.sendModal') ?? q('.expModal');
           if (!m || this.ticks[1]) return '';
           if (q('.sendModal') && h.expeditions.state.craft.length) return T.expeditions.wait;
+          // la fenêtre de départ : ses approches restent cliquables même quand l'équipe ne peut pas partir (pas assez
+          // d'habitants libres) ; c'est « Lancer l'expédition » qui le dit
+          const go = q('.sendModal .sGo');
+          if (go) return (go as HTMLButtonElement).disabled ? T.expeditions.blocked : T.expeditions.choose;
           return m.querySelector('button.choice:not([disabled]), button[data-send]:not([disabled])') ? T.expeditions.choose : T.expeditions.none;
         },
       },
@@ -518,10 +540,16 @@ export class Tutorial {
     ui.root.append(this.ring, this.box);
     // un clic sur la bulle ne tombe jamais sur la carte (ni ne pose un bâtiment avec l'outil en main)
     for (const t of ['pointerdown', 'pointerup', 'mousedown', 'touchstart']) this.box.addEventListener(t, (e) => e.stopPropagation());
+    this.box.addEventListener('pointerdown', () => (this.downOn = this.at()));
     this.box.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button');
       if (!b) return;
       b.blur();
+      // « Suivant » visé sur une étape que le tutoriel vient de passer de lui-même (« Bien joué ! ») : le clic tombait sur le
+      // bouton de l'étape d'après et la sautait (étapes 4 et 6 jamais vues, v6)
+      const late = (!!this.downOn && this.downOn !== this.at()) || performance.now() - this.autoAt < LATE_MS;
+      this.downOn = '';
+      if (b.classList.contains('tNext') && late) return;
       h.audio.sfxClick();
       if (b.classList.contains('tNext')) this.next();
       else if (b.classList.contains('tSkip')) this.skip();
@@ -715,7 +743,7 @@ export class Tutorial {
     const all = this.ticks.filter(Boolean).length >= (s.need ?? this.ticks.length);
     if (all && !s.read) {
       if (!this.doneAt) this.doneAt = performance.now();
-      else if (performance.now() - this.doneAt > 1000) { this.next(); return; }
+      else if (performance.now() - this.doneAt > 1000) { this.autoAt = performance.now(); this.next(); return; }
     }
     // une fenêtre ouverte (réglages, récit, décision) cache la bulle, sauf celle des expéditions à leur étape ; un chapitre
     // attend que le joueur soit là où il se passe ; la suite principale se cache sous terre et dans les Enfers ; tout se tait
@@ -807,12 +835,12 @@ export class Tutorial {
     // les conditions de l'âge, la fiche du bâtiment, l'équipement à fabriquer, les onglets du bas)
     const rects = (q: string) => [...this.ui.root.querySelectorAll<HTMLElement>(q)].filter((e) => e !== box && !e.hidden && e.offsetParent).map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
     const blocks: Block[] = [
-      ...rects('#needInfo, #census, #selCard, #info, .expCard, #agePanel.open #ageReq, .overlay > .modal, #agePanel, #resPanel, #needsBox, #hudR, #msg, ' + DOCK).map((b) => ({ r: b, k: 1 })),
+      ...rects('#needInfo, #census, #selCard, #info, .expCard, #agePanel.open #ageReq, .overlay > .modal, #agePanel, #resPanel, #needsBox, #goalBox, #hudR, #msg, ' + DOCK).map((b) => ({ r: b, k: 1 })),
     ];
     if (!this.ui.root.querySelector('.overlay')) blocks.push({ r: { left: W * 0.3, right: W * 0.7, top: H * 0.3, bottom: H * 0.68 }, k: 0.7 });
     // les places fixes, quand rien n'est montré ou que les côtés de l'élément sont pris : sous le HUD à droite et à gauche,
     // au-dessus de la barre du bas à gauche et à droite
-    const hudB = Math.max(80, ...rects('#hud > *, #needsBox, #hudNotes').map((b) => b.bottom)) + 12;
+    const hudB = Math.max(80, ...rects('#hud > *, #needsBox, #goalBox, #hudNotes').map((b) => b.bottom)) + 12;
     const dockT = Math.min(H - 8, ...rects(DOCK).map((b) => b.top)) - 12;
     const fixed: Spot[] = [
       { x: W - w - 12, y: hudB, side: '' }, { x: 12, y: hudB, side: '' },

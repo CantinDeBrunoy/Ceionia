@@ -73,6 +73,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - Guerre : `war.ageUp`, unités par âge ([armee-combat.md](armee-combat.md)).
 - Expéditions : obligatoires par âge, déblocage de bâtiments ([expeditions.md](expeditions.md)).
 - Tutoriel : verrous de bâtiments ([tutoriel.md](tutoriel.md)).
+- Petits objectifs : une liste par âge, entre les conditions, avec récompense ([objectifs.md](objectifs.md)).
 
 ## Pièges et invariants
 - Pas de retour en arrière d'âge : ne pas permettre Annuler par-dessus un passage (`onAgeUp` vide les piles).

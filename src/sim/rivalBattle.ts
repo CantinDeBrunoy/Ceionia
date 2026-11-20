@@ -6,7 +6,7 @@ import { CombatMap, Hell, HellUnit, HellBuilding, DemonKind, UnitStats } from '.
 import { BALANCE_EASY, BALANCE_NORMAL, powerOf } from './hellBalance';
 import { troopStats, TroopKind } from './army';
 import { defenseK } from './isleBattle';
-import type { Intel } from './diplomacy';
+import type { Intel, Boons } from './diplomacy';
 
 /**
  * La bataille de l'archipel (la voie de la guerre, au Médiéval), « façon gouffre de Helm » (demande de l'auteur) : épique
@@ -289,6 +289,23 @@ export function armyOf(age: number): TroopKind[] {
   return [...Array(OURS[0]).fill(melee), ...Array(OURS[1]).fill('archer')];
 }
 /** Nombre d'ennemis de toute la bataille (renforts et chef compris) */
+/**
+ * Les groupes ennemis, moins ceux que les expéditions des îles ont ôtés (`Boons.foes` : espionnage, sabotage, transfuge) :
+ * on retire d'abord au port, puis à la contre-attaque, aux vagues (chacune), aux remparts, à la plage ; un soldat avant un
+ * archer, et chaque groupe garde au moins un homme (un objectif sans défenseur se prendrait sans combat)
+ */
+export function foeGroups(cut: number): Record<keyof typeof FOES, [number, number]> {
+  const g = Object.fromEntries(Object.entries(FOES).map(([k, v]) => [k, [v[0], v[1]]])) as Record<keyof typeof FOES, [number, number]>;
+  let left = Math.max(0, Math.floor(cut));
+  for (const k of ['port', 'contre', 'vague', 'remparts', 'plage'] as const) {
+    const per = k === 'vague' ? WAVES : 1;
+    while (left >= per && g[k][0] + g[k][1] > 1) {
+      if (g[k][0] > 0 && g[k][0] >= g[k][1]) g[k][0]--; else g[k][1]--;
+      left -= per;
+    }
+  }
+  return g;
+}
 export const FOE_TOTAL = Object.entries(FOES).reduce((n, [k, [s, a]]) => n + (s + a) * (k === 'vague' ? WAVES : 1), 0) + 1;
 
 export class RivalBattle {
@@ -345,7 +362,18 @@ export class RivalBattle {
    * `intel` : ce que les éclaireurs ont appris (la plage moins gardée, les renforts plus tardifs, la porte affaiblie, le
    * chef moins coriace) ; `troops` : notre armée (par défaut celle de l'âge)
    */
-  constructor(world: World, rival: People, readonly age: number, easy = false, troops: TroopKind[] = armyOf(age), readonly intel: Intel[] = []) {
+  /** les groupes ennemis de cette bataille (`foeGroups`) ; les troupes alliées de la première vague (renforts des îles compris) */
+  readonly sizes: Record<keyof typeof FOES, [number, number]>;
+  private allyFirstWave: [number, number];
+  /**
+   * `boons` : les avantages des expéditions des îles (voir `Boons`) : troupes alliées de plus à la première vague, nos
+   * soldats de plus (une barque de plus), ennemis en moins (`foeGroups`)
+   */
+  constructor(world: World, rival: People, readonly age: number, easy = false, troops: TroopKind[] = armyOf(age), readonly intel: Intel[] = [], readonly boons: Boons = { allies: 0, ours: 0, foes: 0, peace: 0 }) {
+    this.sizes = foeGroups(boons.foes);
+    const ex = Math.max(0, Math.floor(boons.allies));
+    this.allyFirstWave = [ALLY_FIRST[0] + Math.ceil(ex / 2), ALLY_FIRST[1] + Math.floor(ex / 2)];
+    troops = [...troops, ...Array(Math.max(0, Math.floor(boons.ours))).fill(age >= 2 ? 'knight' : 'soldier')];
     const plan = townPlans(world).find((p) => p.people === rival);
     if (!plan) throw new Error('pas de ville rivale');
     this.plan = plan;
@@ -375,11 +403,11 @@ export class RivalBattle {
     this.gate = this.sim.addPlayerBuilding('gate', gate[0], gate[1], 1.1, 1, gateHp / 300);
     this.gate.side = 'hell';
     // les défenseurs : la plage (un peu en retrait), le port, les remparts (derrière la porte), le palais et le chef
-    const beachFoes: [number, number] = intel.includes('scoutBeach') ? [FOES.plage[0] - 2, FOES.plage[1] - 1] : [...FOES.plage];
+    const sz = this.sizes, beachFoes: [number, number] = intel.includes('scoutBeach') ? [Math.max(1, sz.plage[0] - 2), Math.max(0, sz.plage[1] - 1)] : [...sz.plage];
     this.post('plage', beachFoes, this.goalAt.plage, true);
-    this.post('port', FOES.port, this.goalAt.port, true);
-    this.post('remparts', FOES.remparts, inside);
-    this.post('palais', FOES.palais, this.goalAt.palais);
+    this.post('port', sz.port, this.goalAt.port, true);
+    this.post('remparts', sz.remparts, inside);
+    this.post('palais', sz.palais, this.goalAt.palais);
     const cs = foeOf('soldier', age), ck = intel.includes('scoutChief') ? 0.75 : 1;
     const [cx, cz] = this.spot(this.goalAt.palais[0], this.goalAt.palais[1]);
     const chief = this.sim.addRaider('warlord' as unknown as DemonKind, { ...cs, hp: Math.round(cs.hp * CHIEF_HP * ck), dmg: Math.round(cs.dmg * CHIEF_DMG * 10) / 10, radius: cs.radius * 1.4 }, cx, cz);
@@ -544,18 +572,18 @@ export class RivalBattle {
     const g = this.current;
     // les barques suivantes, puis la première vague de l'allié
     if (this.boats.length && this.t >= this.boatN * BOAT_EVERY) this.landBoat();
-    if (!this.allyLanded && this.t >= ALLY_LANDS) { this.allyLanded = true; this.landAllies(ALLY_FIRST, this.beach); this.news.push({ type: 'allyLands' }); }
+    if (!this.allyLanded && this.t >= ALLY_LANDS) { this.allyLanded = true; this.landAllies(this.allyFirstWave, this.beach); this.news.push({ type: 'allyLands' }); }
     // la contre-attaque : elle sort de la ville vers la plage (quand la plage faiblit, passé `COUNTER_T`, au plus tard `COUNTER_MAX`)
     if (g === 'plage' && !this.countered && ((this.t >= COUNTER_T && this.enemies('plage').length <= 3) || this.t >= COUNTER_MAX)) {
       this.countered = true;
-      this.charge('contre', FOES.contre, this.outside);
+      this.charge('contre', this.sizes.contre, this.outside);
       this.news.push({ type: 'counter' });
     }
     // les vagues de renfort : du palais vers les remparts, pendant leur assaut (plus tard si les éclaireurs ont compté la relève)
     const late = this.intel.includes('scoutGarrison') ? 25 : 0;
     if (g === 'remparts' && this.wavesSent < WAVES && this.phaseT >= late + WAVE_AT[this.wavesSent]) {
       this.wavesSent++;
-      this.charge('vague', FOES.vague, this.goalAt.palais);
+      this.charge('vague', this.sizes.vague, this.goalAt.palais);
       this.news.push({ type: 'wave', n: this.wavesSent });
     }
     // le renfort allié : au moment de bascule (au plus tard `RELIEF_T` s dans l'assaut des remparts, ou quand nos forces fondent)

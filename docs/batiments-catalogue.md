@@ -5,7 +5,7 @@
 > Voir aussi : [placement-construction.md](placement-construction.md), [rendu-modeles.md](rendu-modeles.md), [interface.md](interface.md), [traduction.md](traduction.md), [ages.md](ages.md), [economie-ressources.md](economie-ressources.md), [besoins-population.md](besoins-population.md), [difficulte.md](difficulte.md)
 
 ## En bref
-`KINDS` (`catalog.ts`) est la table de tous les genres de bâtiments, indexée par `KindId` (65 genres). Un genre donne sa taille, son âge minimum, son rayon dans le menu, ses noms par âge et ses apports (logement, vivres, eau, travail, bien-être, soins) par âge. Un `Building` posé ne stocke que son genre, sa case, sa rotation et un âge d'affichage : tout le reste se lit dans le catalogue. Les règles de terrain sont ailleurs (`World.canPlace`, voir [placement-construction.md](placement-construction.md)).
+`KINDS` (`catalog.ts`) est la table de tous les genres de bâtiments, indexée par `KindId` (76 genres). Un genre donne sa taille, son âge minimum, son rayon dans le menu, ses noms par âge et ses apports (logement, vivres, eau, travail, bien-être, soins) par âge. Un `Building` posé ne stocke que son genre, sa case, sa rotation et un âge d'affichage : tout le reste se lit dans le catalogue. Les règles de terrain sont ailleurs (`World.canPlace`, voir [placement-construction.md](placement-construction.md)).
 
 ## Règles du jeu
 - **Âges** : index 0 à 5 (Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste, `AGES`). Un bâtiment se pose à partir de `minAge`. Les bâtiments du village changent de modèle tout seuls quand l'âge monte (voir plus bas).
@@ -27,8 +27,9 @@
   - Normal : tout coûte, `bois = round(taille × (5 + 3a))`, `pierre = round(taille × (3 + 3a))` (enclos : pierre `1 + a`) ; un pan de rempart compte `0,34` ; la place du village compte pour 1 ; le premier bûcheron et le premier pierrier sont gratuits (`PRODUCERS`) ;
   - briques en plus (`BRICK_PRICE` : gare 10, gare centrale 30, usine auto 20, raffinerie 30 ; ×1,5 en Normal).
   Une amélioration coûte le prix du nouveau bâtiment, entier.
-- **Rayons du menu** (`BuildCat` : `home`, `prod`, `service`, `life`, `war` ; `BUILD_CATS`) et **groupes** (`BUILD_SUBS`, `KIND_SUB`). Les groupes ne servent qu'à ranger les vignettes (aucun effet sur le jeu ni la sauvegarde). Rayon `war` : défense, remparts.
-- **Ordre du menu** : `KIND_ORDER` (64 genres). Seul `manor` en est absent : on ne l'obtient qu'en améliorant une maison.
+- **Décorations** (rayon `deco`, demande des testeurs v6 : « le village est pratique, mais pas encore à moi ») : haie (`hedge`), clôture (`fence`), parterre de fleurs (`flowerbed`), banc (`bench`), statue (`statue`), pavés (`paving`), fontaine (`fountain`), plus le lampadaire (`lamp`), rangé là depuis l'Habitat (groupe Mobilier). Une case, dès la Préhistoire, un nom et un modèle par âge (« Haie d'épineux » … « Haie lumineuse », « Totem » … « Statue holographique »), sans porte ni chemin (`isDecor`, `hasDoor`), gratuites en Facile, au quart du prix d'un petit bâtiment en Normal (`costOf`), un petit bien-être plafonné (voir [besoins-population.md](besoins-population.md)). Elles ne brûlent pas, les routes automatiques et la terre battue des rues les ignorent ; on traverse à pied les pavés et le lampadaire (`walkableDecor`), on contourne les autres. Groupes : Jardins (haie, clôture, parterre), Mobilier (pavés, banc, lampadaire), Ornements (statue, fontaine).
+- **Rayons du menu** (`BuildCat` : `home`, `prod`, `service`, `life`, `deco`, `war` ; `BUILD_CATS`) et **groupes** (`BUILD_SUBS`, `KIND_SUB`). Les groupes ne servent qu'à ranger les vignettes (aucun effet sur le jeu ni la sauvegarde). Rayon `war` : défense, remparts.
+- **Ordre du menu** : `KIND_ORDER` (75 genres). Seul `manor` en est absent : on ne l'obtient qu'en améliorant une maison.
 - **Évolutions** (`UPGRADES`, bouton « Améliorer » de la fiche) : maison → manoir, puits → château d'eau, gare centrale → gare maglev, ponton → port, atelier → usine auto, ferme → ferme verticale. `lineOf(k)` donne un genre et toutes ses améliorations (une maison devenue manoir compte comme une maison).
 
 ## Fonctionnement dans le code

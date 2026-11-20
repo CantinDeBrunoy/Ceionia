@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { World, setMapSize } from '../src/world/world';
 import { KINDS, KindId, Building } from '../src/build/catalog';
-import { Expeditions } from '../src/sim/expeditions';
+import { Expeditions, MAX_CRAFT } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { newArmy, recruit, recruitWhy, onlyGearMissing, gearToCraft, troopKit, TROOP_KINDS, TROOPS, RecruitCtx } from '../src/sim/army';
 import { GEAR_BY, GearId } from '../src/sim/gear';
@@ -68,7 +68,7 @@ describe('Moyen Âge : recruter puis fabriquer l’équipement', () => {
     expect(ex.whyCraftAll(['sword', 'armor'], AGE)).toBe('Il faut 3 minerai en tout pour épée et armure');
     w.ore = 3;
     expect(ex.whyCraftAll(['sword', 'armor'], AGE)).toBeNull();
-    w.exp.craft.push('spear', 'spear', 'spear', 'spear', 'spear');
+    w.exp.craft.push(...Array<'spear'>(MAX_CRAFT - 1).fill('spear'));
     expect(ex.whyCraftAll(['sword', 'armor'], AGE)).toMatch(/file de fabrication est pleine/);
   });
 

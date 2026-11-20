@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Parts } from './parts';
+import { loft, plate } from './helis';
 import { mats } from './materials';
 import { balloonBasketGeo, balloonEnvelopeGeo } from './balloon';
 import { AirKind, BALLOON_SCALE } from '../sim/airlift';
@@ -12,48 +13,91 @@ const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
 /** Vitesse des pales à plein régime (radians par seconde) */
 const ROTOR = 30;
 
+/** Profil de la caisse de l'hélicoptère de transport (rayon, z), de l'arrière au nez ; son axe à HY, un peu plus étroite (SX) */
+const HAUL: [number, number][] = [[0.07, -0.3], [0.12, -0.25], [0.155, -0.18], [0.17, -0.08], [0.17, 0.12], [0.158, 0.21], [0.128, 0.27], [0.08, 0.31], [0, 0.33]];
+const HY = 0.2, SX = 0.95;
+/** Le rotor principal sur son mât, le rotor de queue au flanc de la dérive */
+const ROTOR_AT: [number, number, number] = [0, 0.415, -0.01], TAIL_AT: [number, number, number] = [0.03, 0.29, -0.77];
+
 /**
- * L'hélicoptère de transport des expéditions, avant = +z, posé sur ses patins à y = 0, à l'échelle des habitants : cabine
- * ouverte sur les côtés, deux bancs (trois places derrière, deux devant) où l'équipe prend place à la vue de tous, cockpit et
- * son pilote, toit porté par quatre montants, cloison du moteur, poutre de queue à dérive ; livrée jaune à bandeau bleu nuit
+ * L'hélicoptère de transport des expéditions, avant = +z, posé sur ses patins à y = 0, à l'échelle des habitants : caisse
+ * profilée jaune ouverte sur les flancs du cockpit à l'arrière, deux bancs (trois places derrière, deux devant) où l'équipe prend place à la vue de
+ * tous, portes coulissantes repoussées vers l'arrière ; nez vitré, tableau de bord et son
+ * pilote ; capot moteur à prises d'air et tuyères, mât, poutre de queue effilée, dérive et quille, plan fixe, patins relevés,
+ * réservoirs de flanc, marchepieds ; livrée jaune à bandeau bleu nuit ; projecteur, feux de position et feu anticollision
  */
 function haulerGeo() {
-  const p = new Parts(), body = 0xf2c23a, band = 0x22305a, steel = 0x5d6878, seat = 0x3a3f4e;
-  // patins et leurs jambes, ventre de la caisse, plancher
+  const p = new Parts(), body = 0xf2c23a, band = 0x22305a, steel = 0x5d6878, seat = 0x3a3f4e, glass = 0x35566c, grey = 0x8a8f96;
+  const hull = (g: THREE.BufferGeometry) => g.scale(SX, 1, 1).translate(0, HY, 0), PI = Math.PI;
+  // la caisse : le ventre jusqu'aux bancs, le compartiment moteur fermé, le toit ; ouverte sur les flancs entre les deux
+  p.add(hull(loft(HAUL, -0.3, 0.33, 1, -PI * 0.42, PI * 0.84, 8)), 0, 0, 0, body);
+  for (const a of [0.36, 1.58]) p.add(hull(loft(HAUL, -0.3, 0.3, 1.012, PI * a, PI * 0.06, 1)), 0, 0, 0, band);
+  p.add(hull(loft(HAUL, -0.3, -0.16, 1, PI * 0.42, PI * 1.16, 8)), 0, 0, 0, body);
+  p.add(hull(loft(HAUL, -0.16, 0.2, 1, PI * 0.7, PI * 0.6, 4)), 0, 0, 0, body);
+  // le nez vitré et la nervure du pare-brise (le cockpit reste ouvert sur les flancs : on y voit le pilote)
+  p.add(hull(loft(HAUL, 0.2, 0.33, 1, PI * 0.42, PI * 1.16, 8)), 0, 0, 0, glass);
+  p.add(hull(loft(HAUL, 0.195, 0.33, 1.02, PI - 0.03, 0.06, 1)), 0, 0, 0, body);
+  p.add(hull(loft(HAUL, 0.195, 0.205, 1.02, PI * 0.42, PI * 1.16, 8)), 0, 0, 0, body);
+  // montants de l'ouverture, portes coulissantes repoussées, rails, plancher et marchepieds
   for (const s of [-1, 1]) {
-    p.box(0.012, 0.012, 0.52, s * 0.14, 0, -0.02, steel);
-    for (const z of [-0.12, 0.12]) p.add(new THREE.BoxGeometry(0.009, 0.075, 0.009), s * 0.133, 0.038, z, steel, 0, false, s * 0.18);
+    for (const z of [-0.16, 0.2]) p.box(0.014, 0.16, 0.014, s * 0.146, 0.15, z, body);
+    p.box(0.012, 0.14, 0.12, s * 0.172, 0.15, -0.2, body);
+    p.box(0.013, 0.05, 0.08, s * 0.173, 0.22, -0.2, glass);
+    p.box(0.01, 0.008, 0.34, s * 0.168, 0.302, -0.06, steel);
+    p.box(0.014, 0.006, 0.14, s * 0.13, 0.048, -0.02, steel);
+    // le réservoir de flanc et ses sangles
+    p.add(new THREE.CapsuleGeometry(0.026, 0.1, 3, 8).rotateX(PI / 2), s * 0.16, 0.08, -0.22, 0xe4e2dc);
+    for (const z of [-0.25, -0.19]) p.add(new THREE.TorusGeometry(0.027, 0.003, 3, 8).rotateY(PI / 2).rotateZ(PI / 2), s * 0.16, 0.08, z, steel, 0, false, 0, PI / 2);
   }
-  p.box(0.26, 0.04, 0.44, 0, 0.03, -0.02, body);
-  p.box(0.28, 0.014, 0.48, 0, 0.07, 0, band);
-  // bancs et dossiers : derrière (face à l'avant), devant ; cloison du moteur
+  p.box(0.27, 0.012, 0.42, 0, 0.074, 0, 0x5a5e66);
+  // bancs et dossiers : derrière (face à l'avant), devant
   p.box(0.26, 0.03, 0.05, 0, 0.084, -0.1, seat); p.box(0.26, 0.09, 0.012, 0, 0.114, -0.14, seat);
   p.box(0.2, 0.03, 0.05, 0, 0.084, 0.01, seat); p.box(0.2, 0.08, 0.012, 0, 0.114, -0.03, seat);
-  p.box(0.28, 0.23, 0.1, 0, 0.084, -0.2, body);
-  p.box(0.284, 0.03, 0.102, 0, 0.17, -0.2, band);
-  // bords de cabine, montants et toit
-  for (const s of [-1, 1]) p.box(0.012, 0.03, 0.34, s * 0.14, 0.084, 0.02, band);
-  for (const sx of [-1, 1]) for (const z of [-0.14, 0.2]) p.box(0.012, 0.216, 0.012, sx * 0.14, 0.084, z, steel);
-  p.box(0.3, 0.012, 0.4, 0, 0.3, 0.02, body);
-  p.box(0.16, 0.05, 0.2, 0, 0.312, -0.06, 0xe4e2dc);
-  // cockpit : tableau de bord, pare-brise, le pilote (veste orange) et le siège vide à côté
-  p.box(0.28, 0.06, 0.03, 0, 0.084, 0.22, steel);
-  p.add(new THREE.BoxGeometry(0.28, 0.17, 0.008), 0, 0.14, 0.235, 0x86c4d8, 0, false, 0, -0.5);
-  for (const s of [-1, 1]) p.box(0.012, 0.15, 0.012, s * 0.14, 0.15, 0.225, steel);
+  // cockpit : tableau de bord et ses écrans, le pilote (veste orange, casque blanc) et le siège vide à côté
+  p.box(0.24, 0.06, 0.03, 0, 0.11, 0.24, steel);
+  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.04, 0.026, 0.004), s * 0.05, 0.155, 0.245, 0x6ad8ff, 0, true, 0, -0.5);
   p.box(0.07, 0.03, 0.05, -0.07, 0.084, 0.14, seat); p.box(0.07, 0.08, 0.012, -0.07, 0.114, 0.11, seat);
   p.box(0.05, 0.03, 0.06, -0.07, 0.114, 0.165, 0x3a3a48);
   p.box(0.055, 0.07, 0.035, -0.07, 0.125, 0.14, 0xe8742a);
-  p.box(0.034, 0.034, 0.034, -0.07, 0.195, 0.14, 0xe8b894); p.box(0.038, 0.02, 0.038, -0.07, 0.222, 0.14, 0xf4f2ee);
+  p.box(0.034, 0.034, 0.034, -0.07, 0.195, 0.14, 0xe8b894); p.sphere(0.024, -0.07, 0.228, 0.14, 0xf4f2ee, 1, 0.85);
   p.box(0.07, 0.03, 0.05, 0.07, 0.084, 0.14, seat); p.box(0.07, 0.08, 0.012, 0.07, 0.114, 0.11, seat);
-  // poutre de queue, dérive, plan fixe, mât du rotor
-  p.box(0.05, 0.05, 0.5, 0, 0.18, -0.5, body);
-  p.box(0.012, 0.15, 0.09, 0, 0.18, -0.74, band);
-  p.box(0.15, 0.008, 0.05, 0, 0.2, -0.68, body);
-  p.cyl(0.012, 0.016, 0.05, 6, 0, 0.36, 0, steel);
-  // feux de position : rouge à bâbord, vert à tribord, blanc à la queue
-  p.box(0.014, 0.014, 0.014, 0.145, 0.12, 0.2, 0xff4a3a, 0, true);
-  p.box(0.014, 0.014, 0.014, -0.145, 0.12, 0.2, 0x3aff7a, 0, true);
-  p.box(0.012, 0.012, 0.012, 0, 0.27, -0.76, 0xfff4e0, 0, true);
+  p.add(new THREE.BoxGeometry(0.006, 0.08, 0.006), -0.07, 0.13, 0.2, 0x26262a, 0, false, 0, 0.4);
+  // le capot moteur, ses prises d'air, ses tuyères ; le mât et le plateau cyclique
+  p.box(0.15, 0.05, 0.26, 0, 0.35, -0.1, body);
+  p.box(0.12, 0.02, 0.2, 0, 0.4, -0.1, body);
+  for (const s of [-1, 1]) {
+    p.box(0.006, 0.03, 0.05, s * 0.076, 0.36, 0.0, 0x26262a);
+    for (let k = 0; k < 3; k++) p.box(0.007, 0.003, 0.05, s * 0.077, 0.364 + k * 0.009, 0.0, grey);
+    p.add(new THREE.CylinderGeometry(0.016, 0.022, 0.06, 8).rotateX(-PI / 2 - 0.3), s * 0.05, 0.38, -0.25, 0x3c3c40);
+  }
+  p.cyl(0.018, 0.024, 0.02, 8, 0, ROTOR_AT[1] - 0.025, ROTOR_AT[2], grey);
+  p.cyl(0.03, 0.03, 0.008, 10, 0, ROTOR_AT[1] - 0.012, ROTOR_AT[2], 0x3c3c40);
+  // la poutre de queue effilée, son bandeau, la dérive et sa quille, le plan fixe et ses dérives d'extrémité
+  p.add(new THREE.CylinderGeometry(0.055, 0.024, 0.48, 8).rotateX(PI / 2), 0, 0.25, -0.5, body);
+  p.add(new THREE.CylinderGeometry(0.056, 0.046, 0.1, 8, 1, true).rotateX(PI / 2), 0, 0.25, -0.33, band);
+  p.add(plate([[-0.72, 0.23], [-0.8, 0.23], [-0.83, 0.42], [-0.79, 0.42], [-0.745, 0.3]], 0.018), 0, 0, 0, band);
+  p.add(plate([[-0.73, 0.25], [-0.79, 0.25], [-0.81, 0.15], [-0.775, 0.15]], 0.014), 0, 0, 0, body);
+  p.box(0.26, 0.01, 0.06, 0, 0.245, -0.64, body);
+  for (const s of [-1, 1]) p.box(0.008, 0.06, 0.05, s * 0.13, 0.225, -0.645, band);
+  p.cyl(0.01, 0.01, 0.022, 6, 0.012, TAIL_AT[1] - 0.011, TAIL_AT[2], grey);
+  // les patins relevés à l'avant, leurs traverses cintrées jusqu'au ventre
+  for (const s of [-1, 1]) {
+    p.box(0.014, 0.012, 0.5, s * 0.14, 0, -0.04, steel);
+    p.add(new THREE.BoxGeometry(0.014, 0.012, 0.08), s * 0.14, 0.022, 0.24, steel, 0, false, 0, -0.55);
+    for (const z of [-0.14, 0.12]) {
+      p.add(new THREE.BoxGeometry(0.012, 0.07, 0.012), s * 0.125, 0.035, z, steel, 0, false, s * 0.35);
+      p.box(0.2, 0.012, 0.012, s * 0.02, 0.064, z, steel);
+    }
+  }
+  // le projecteur sous le nez, l'antenne
+  p.box(0.04, 0.02, 0.03, 0, 0.032, 0.25, 0x3c3c40);
+  p.box(0.03, 0.014, 0.004, 0, 0.035, 0.266, 0xfff1c9, 0, true);
+  p.cyl(0.002, 0.002, 0.07, 3, -0.04, 0.37, -0.32, 0x26262a);
+  // feux de position : rouge à bâbord, vert à tribord, blanc à la queue ; le feu anticollision rouge sur la dérive
+  p.box(0.016, 0.016, 0.016, 0.165, 0.17, 0.16, 0xff4a3a, 0, true);
+  p.box(0.016, 0.016, 0.016, -0.165, 0.17, 0.16, 0x3aff7a, 0, true);
+  p.box(0.014, 0.014, 0.014, 0, 0.25, -0.79, 0xfff4e0, 0, true);
+  p.box(0.016, 0.016, 0.02, 0, 0.425, -0.82, 0xff3a2a, 0, true);
   return p.build(false);
 }
 /**
@@ -157,7 +201,7 @@ export class AirFleet {
       hull.add(body);
       if (heli.glow) hull.add(new THREE.Mesh(heli.glow, mats.glow));
       const rotor = new THREE.Mesh(heli.rotor, mats.body), tail = new THREE.Mesh(heli.tail, mats.body);
-      rotor.position.set(0, 0.41, 0); tail.position.set(0.03, 0.2, -0.76);
+      rotor.position.set(...ROTOR_AT); tail.position.set(...TAIL_AT);
       rotor.castShadow = true;
       hull.add(rotor, tail);
       this.group.add(root);

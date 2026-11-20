@@ -31,6 +31,8 @@ export interface Settings {
   unlimited?: boolean;
   /** flèches d'amélioration au-dessus des bâtiments : masquées si vrai */
   hideUpBadges?: boolean;
+  /** petits objectifs de la barre du haut masqués ; absent : affichés */
+  hideGoals?: boolean;
   /** effets de la météo masqués (pluie, neige qui tombe, brouillard et brume) ; absents : affichés. Le temps qu'il fait continue */
   hideRain?: boolean;
   hideSnow?: boolean;

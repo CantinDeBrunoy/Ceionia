@@ -64,7 +64,7 @@ const joy = (n: number, days?: number): Effect => ({ t: 'need', need: 'joy', n, 
 
 export const EVENTS: ExpEvent[] = [
   // ---------------- La diplomatie de l'archipel : le premier contact, puis les pourparlers de la paix ----------------
-  // (les pourparlers ne peuvent pas échouer : leurs options changent le récit et les petits gains, jamais le risque)
+  // (les options des pourparlers changent le récit et les petits gains, jamais le risque : il ne dépend que de la bonne volonté, voir `talkRisk`)
   {
     id: 'patrolboat', where: ['river'], missions: ['allywar'], water: 'sea', title: 'Une patrouille rivale',
     text: 'Une galère rivale passe au ras de l’eau, lanternes masquées. Elle vient droit sur la barque des éclaireurs.',
@@ -79,6 +79,71 @@ export const EVENTS: ExpEvent[] = [
     options: [
       { label: 'Approcher pour écouter', risk: 1.2, bonus: [{ t: 'diplo', act: 'scoutChief' }], text: 'On a approché sans bruit : on sait où se tiendra le chef rival.' },
       { label: 'Noter l’endroit et passer', risk: 0.9, text: 'On a noté l’endroit sur la carte et poursuivi la reconnaissance.' },
+    ],
+  },
+  // ---------------- Les visites sur les îles (expéditions facultatives de l'archipel, voir `isleMissions.ts`) ----------------
+  {
+    id: 'pickpocket', where: ['river'], missions: ['isleFair'], water: 'sea', from: 0.4, title: 'Un coupe-bourse',
+    text: 'Dans la foule de la foire, un gamin vif comme l’éclair vient de nous prendre une bourse.',
+    options: [
+      { label: 'Le poursuivre dans la foule', risk: 1.1, bonus: [{ t: 'gold', n: 3 }], text: 'Un garde de la foire l’a rattrapé : la bourse est revenue, et le marchand d’à côté nous en a donné une autre pour la peine.' },
+      { wait: true, label: 'Laisser filer, garder l’œil', risk: 0.9, work: 6, text: 'On l’a laissé filer, et l’on a gardé l’œil sur nos étoffes jusqu’au soir.' },
+    ],
+  },
+  {
+    id: 'aftershock', where: ['river'], missions: ['isleRebuild'], water: 'sea', from: 0.4, title: 'Une seconde bourrasque',
+    text: 'Le ciel se noircit de nouveau sur le port : une seconde bourrasque arrive, et la jetée tient à peine.',
+    options: [
+      { label: 'Étayer la jetée', risk: 0.9, work: 4, text: 'On a dressé des étais sous la jetée : elle a tenu sous la rafale.' },
+      { label: 'Mettre leurs barques à l’abri', risk: 1, bonus: [{ t: 'boon', kind: 'allies', n: 1 }], text: 'On a tiré leurs barques sur le rivage : les pêcheurs nous en sont reconnaissants.' },
+    ],
+  },
+  {
+    id: 'masterTest', where: ['river'], missions: ['isleSmiths'], water: 'sea', from: 0.4, title: 'L’épreuve du maître',
+    text: 'Le vieux maître croise les bras : avant de montrer ses secrets, il veut voir ce que nous savons faire.',
+    options: [
+      { label: 'Forger une lame devant lui', risk: 1.1, bonus: [{ t: 'need', need: 'jobs', n: 1, days: 6 }], text: 'Nos apprentis ont forgé une lame sous ses yeux : il a hoché la tête, et ouvert son atelier.' },
+      { label: 'Lui montrer nos lingots', risk: 0.9, text: 'Nos lingots l’ont fait sourire : de quoi parler métier jusqu’au soir.' },
+    ],
+  },
+  {
+    id: 'capsized', where: ['river'], missions: ['isleRegatta'], water: 'sea', from: 0.4, title: 'Un concurrent chavire',
+    text: 'Devant nous, un voilier allié a chaviré sur une risée : un marin se débat dans l’eau.',
+    options: [
+      { label: 'Le secourir', risk: 0.9, work: 6, bonus: [{ t: 'boon', kind: 'allies', n: 1 }, { t: 'boon', kind: 'peace', n: 5 }], text: 'On s’est arrêté pour repêcher le marin. Course perdue, mais toute l’île en parle.' },
+      { label: 'Filer vers la ligne', risk: 1.1, bonus: [{ t: 'gold', n: 4 }], text: 'Leurs barques de garde se sont occupées du marin : on a filé droit vers la ligne.' },
+    ],
+  },
+  {
+    id: 'lantern', where: ['river'], missions: ['isleSpy'], water: 'sea', from: 0.4, title: 'Un fanal approche',
+    text: 'Une barque de garde sort du port rival, sa lanterne au bout d’une perche. Elle vient de notre côté.',
+    options: [
+      { wait: true, label: 'Éteindre nos feux et se taire', risk: 0.85, work: 6, text: 'Feux éteints, couchés au fond du bateau : la garde est passée sans nous voir.' },
+      { label: 'Se faire passer pour des pêcheurs', risk: 1.15, bonus: [{ t: 'boon', kind: 'foes', n: 1 }], text: 'Le filet à l’eau, on a bavardé avec la garde : elle nous a même dit où mouillent les navires.' },
+    ],
+  },
+  {
+    id: 'family', where: ['river'], missions: ['isleDefector'], water: 'sea', from: 0.4, title: 'Il n’est pas seul',
+    text: 'Le transfuge n’est pas venu seul : sa femme et son fils attendent un peu plus loin.',
+    options: [
+      { label: 'Prendre toute la famille', risk: 1.15, bonus: [{ t: 'need', need: 'jobs', n: 1 }, { t: 'boon', kind: 'peace', n: 5 }], text: 'Toute la famille est montée à bord : chez eux, on parle de notre bonté.' },
+      { label: 'Lui seul, et vite', risk: 0.9, text: 'Il les a embrassés : ils viendront plus tard, quand la paix sera faite.' },
+    ],
+  },
+  {
+    id: 'sentry', where: ['river'], missions: ['isleSabotage'], water: 'sea', from: 0.4, title: 'Une sentinelle',
+    text: 'Une sentinelle fait sa ronde sur le quai rival, sa torche à la main. Elle vient vers nous.',
+    options: [
+      { wait: true, label: 'Attendre qu’elle passe', risk: 0.9, work: 7, text: 'Tapis dans l’ombre, on a attendu que la sentinelle passe son chemin.' },
+      { label: 'Une diversion : un caillou dans l’eau', risk: 1.1, text: 'Un caillou dans l’eau, plus loin : la sentinelle est partie voir, et nous avons eu le champ libre.' },
+    ],
+  },
+  {
+    id: 'gardener', where: ['river'], missions: ['isleSeeds'], water: 'sea', from: 0.4, title: 'Le jardinier vous voit',
+    text: 'Le jardinier du palais vient vers nous, sa bêche à l’épaule. Il nous a vus.',
+    options: [
+      { label: 'Lui glisser une pièce', risk: 0.85, text: 'Une petite bourse a changé de main : le jardinier a regardé ailleurs.' },
+      { wait: true, label: 'Se cacher dans les massifs', risk: 1.1, work: 6, text: 'Cachés dans les massifs, on a attendu que le jardinier passe.' },
     ],
   },
   {
@@ -312,6 +377,60 @@ export const EVENTS: ExpEvent[] = [
       { label: 'Reculer et laisser l’arche s’apaiser', wait: true, risk: 0.85, work: 6, text: 'On a reculé le temps que l’arche s’apaise, puis on s’est remis à l’ouvrage.' },
       { label: 'Lever les boucliers et continuer', needs: ARMORS, risk: 0.75, work: 2, text: 'Derrière les boucliers, l’équipe a continué malgré la pluie d’étincelles.' },
       { label: 'Finir au plus vite', risk: 1.25, work: -4, text: 'On a fini en hâte, les étincelles plein les cheveux.' },
+    ],
+  },
+  // ---------------- La chasse au cerf blanc ----------------
+  {
+    id: 'gaze', where: ['forest'], scenes: ['stag'], from: 0.3, title: 'Le regard du cerf blanc',
+    text: 'Le cerf blanc s’arrête au bord de la clairière et fixe les chasseurs. Une lumière pâle l’entoure. Personne n’ose bouger.',
+    options: [
+      { label: 'Bander l’arc sans bruit', risk: 0.85, work: 4, text: 'On a bandé l’arc sans un bruit, accroupis dans les fougères.' },
+      { label: 'Baisser les armes et le saluer', risk: 1.15, bonus: [joy(2, 6)], text: 'On a baissé les armes et salué le cerf blanc. Le village ne parle que de ce moment.' },
+    ],
+  },
+  // ---------------- En partant pour le volcan : sur la rive d'en face (ou à son pied) ----------------
+  {
+    id: 'ash', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent', 'eruption'], arrive: true, title: 'Une pluie de cendres',
+    text: 'Le vent rabat la fumée du volcan : une cendre grise tombe sur l’équipe et lui pique les yeux.',
+    options: [
+      { wait: true, label: 'Attendre sous une bâche', risk: 0.85, work: 6, text: 'On a tendu une bâche et attendu que la cendre cesse de tomber.' },
+      { label: 'Partir le visage couvert', risk: 1.15, work: -2, text: 'Un foulard sur le visage, on est parti sous la cendre.' },
+    ],
+  },
+  {
+    id: 'islander', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent', 'eruption'], arrive: true, title: 'Un vieux pêcheur de l’île',
+    text: 'Sur la rive, un vieux pêcheur de l’île raccommode ses filets. Il connaît tous les sentiers du volcan.',
+    options: [
+      { label: 'Le prendre pour guide', risk: 0.8, work: 4, text: 'Le vieux pêcheur nous a montré le bon sentier, celui que la lave n’a jamais pris.' },
+      { label: 'Lui acheter du poisson séché', risk: 1, bonus: [food(1, 4)], text: 'On a acheté au vieux pêcheur un panier de poisson séché.' },
+      { label: 'Le saluer et partir', risk: 1.05, work: -2, text: 'On a salué le vieux pêcheur, et l’on est parti sans attendre.' },
+    ],
+  },
+  // ---------------- Sur le volcan (sur ses flancs : jamais à l'arrivée) ----------------
+  {
+    id: 'tremor', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent', 'eruption'], from: 0.3, title: 'Le volcan gronde',
+    text: 'Le sol tremble sous les pieds. Au-dessus de l’équipe, des pierres se détachent et roulent sur la pente.',
+    options: [
+      { wait: true, label: 'S’abriter derrière un gros rocher', risk: 0.85, work: 8, text: 'On s’est serré derrière un gros rocher jusqu’à ce que la pente se calme.' },
+      { label: 'Continuer en courant', risk: 1.25, work: -4, text: 'On a continué en courant, entre les pierres qui roulaient.' },
+    ],
+  },
+  {
+    id: 'fumes', where: ['river', 'mountain'], scenes: ['obsidian', 'ascent'], from: 0.3, title: 'Des fumées jaunes',
+    text: 'Une fissure s’ouvre près du sentier et crache une fumée jaune qui pique les yeux et la gorge.',
+    options: [
+      { label: 'Se couvrir le nez d’un linge mouillé', risk: 0.9, work: 6, text: 'Un linge mouillé sur le nez, l’équipe a traversé la fumée sans tousser.' },
+      { wait: true, label: 'Attendre que le vent tourne', risk: 0.85, work: 10, text: 'On a attendu que le vent emporte la fumée de l’autre côté.' },
+      { label: 'Passer vite, en retenant son souffle', risk: 1.3, work: -4, text: 'On a passé la fumée d’une traite, en retenant son souffle.' },
+    ],
+  },
+  {
+    id: 'lavaflow', where: ['river', 'mountain'], scenes: ['eruption', 'ascent'], from: 0.3, title: 'La lave coupe le sentier',
+    text: 'Une langue de lave descend la pente et coupe le sentier qui mène à la plage.',
+    options: [
+      { label: 'Poser des pierres pour passer', risk: 0.95, work: 6, text: 'On a posé de grosses pierres sur la lave qui se figeait, et l’on est passé dessus.' },
+      { wait: true, label: 'Attendre qu’elle se fige', risk: 0.85, work: 10, text: 'On a attendu que la coulée noircisse et se fige avant de passer.' },
+      { label: 'Sauter par-dessus', risk: 1.35, work: -3, text: 'On a sauté par-dessus la lave, d’un seul élan. Les semelles fumaient.' },
     ],
   },
   // ---------------- Les grands Jeux du village ----------------

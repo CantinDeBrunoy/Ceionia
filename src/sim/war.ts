@@ -4,10 +4,10 @@ import { isleDefenses, villageBarracks, repelWave, ISLE_SECURE } from '../world/
 import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats, SECURE_WAVES, SITES, DEMON_POWER, INVASION_DELAY, INVASION_WAVES, INVASION_GAP } from './hell';
 import { IsleBattle, defenseK } from './isleBattle';
 import { balanceOf, powerOf } from './hellBalance';
-import { tr, plural } from '../i18n';
-import { gearName, Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName } from './army';
+import { tr, plural, nplural } from '../i18n';
+import { gearName, Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName, andJoin } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
-import { HELL_ZONES, zoneOf, zoneThe, zoneAgeText } from '../world/hell';
+import { HELL_ZONES, zoneOf, zoneOfZ, zoneThe, zoneAgeText } from '../world/hell';
 import type { BaseKind } from './hell';
 import { GEAR_BY } from './gear';
 import { penHerds } from './missions';
@@ -57,7 +57,7 @@ export function bigOf(kinds: DemonKind[]) {
   return parts.length ? tr(', dont {list}', { list: parts.length > 1 ? tr('{a} et {b}', { a: parts.slice(0, -1).join(', '), b: parts[parts.length - 1] }) : parts[0] }) : '';
 }
 
-export interface WarNews { text: string; kind: 'raid' | 'invasion' | 'invasionReady' | 'portalSealed' | 'invasionStart' | 'invasionDone' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'zone' | 'boss' | 'victory' }
+export interface WarNews { text: string; kind: 'raid' | 'invasion' | 'invasionReady' | 'portalSealed' | 'invasionStart' | 'invasionDone' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'zone' | 'boss' | 'victory' | 'routed' }
 
 export interface WarSave {
   army: Army;
@@ -512,9 +512,43 @@ export class War {
     }
   }
 
+  /**
+   * La sortie en cours dans les Enfers : nos troupes tombées (par sorte), les démons abattus, où est tombé le dernier des
+   * nôtres. Quand plus aucune des nôtres n'y tient debout, un compte rendu (`routed`) le dit : avant (Karim, v6), six troupes
+   * tombaient en quelques secondes à ×8, chacune d'un petit message, et l'on croyait qu'elles avaient disparu
+   */
+  private sortie = { fallen: new Map<string, number>(), slain: 0, x: 0, z: 0 };
+
+  /** Le compte rendu de la sortie, quand le dernier des nôtres est tombé dans les Enfers */
+  private routReport() {
+    const s = this.sortie, f = this.faction, m = this.hellMap;
+    let n = 0;
+    for (const k of s.fallen.values()) n += k;
+    if (!n || !f || !m) return;
+    if (f.alive('player').length || this.army.troops.some((t) => t.where === 'hell' && t.heal <= 0 && this.unitOf.has(t.id))) return;
+    const who = andJoin([...s.fallen].map(([k, c]) => nplural(c, this.nm(k as TroopKind), this.nm(k as TroopKind) + 's')));
+    // devant quoi : le bâtiment démoniaque debout le plus proche du dernier tombé
+    let site = '';
+    let bd = 8;
+    for (const b of f.buildings.values()) {
+      if (b.side !== 'hell' || b.hp <= 0) continue;
+      const d = Math.hypot(b.site.x - s.x, b.site.z - s.z) - b.site.r;
+      if (d < bd) { bd = d; site = b.site.kind === 'fortress' ? tr('devant la forteresse') : b.site.kind === 'outpost' ? tr('devant l’avant-poste') : b.site.kind === 'forge' ? tr('devant la forge') : tr('devant la citadelle'); }
+    }
+    const zone = zoneOf(zoneOfZ(Math.floor(s.z)));
+    const care = this.base?.countOf('infirmary') ? tr('Ils se soignent à l’infirmerie de la base.') : tr('Blessés, ils sont ramenés à la caserne de l’île et s’y soignent ({s} s).', { s: HEAL_TIME });
+    this.news.push({ kind: 'routed', text: tr('⚔️ Repli forcé {zone} : {who} tombés {site}, {k} abattus. {care} Revenez plus nombreux, ou avec une forge et une infirmerie dans la base.', { zone, who, site: site || tr('au combat'), k: nplural(s.slain, 'démon', 'démons'), care }) });
+    this.sortie = { fallen: new Map(), slain: 0, x: 0, z: 0 };
+  }
+
   /** Les événements de combat : les soldats abattus sont ramenés blessés à la caserne ; le reste va aux vues */
   private collect(sim: Hell, fx: HellEvent[]) {
+    let fell = false;
     for (const e of sim.events.splice(0)) {
+      if (sim === this.faction && e.type === 'death') {
+        if (e.side === 'hell') this.sortie.slain++;
+        else if (this.troopOf.has(e.id)) { const st = this.sortie; st.fallen.set(e.kind, (st.fallen.get(e.kind) ?? 0) + 1); st.x = e.x; st.z = e.z; fell = true; }
+      }
       if (e.type === 'death' && e.side === 'player') {
         const t = this.troopOf.get(e.id);
         if (t) {
@@ -540,6 +574,7 @@ export class War {
       fx.push(e);
     }
     if (fx.length > 400) fx.splice(0, fx.length - 400);
+    if (fell) this.routReport();
   }
 
   /** Nouvel âge : la garnison gagne en vie et en force (au combat aussi) */

@@ -68,7 +68,7 @@ export const DIFFICULTY: Record<Difficulty, DifficultyRules> = {
   normal: {
     unlimited: false,
     price: { wood: 5, woodAge: 3, stone: 3, stoneAge: 3, penStone: 1, penStoneAge: 1 },
-    startWood: 50, startStone: 40,
+    startWood: 60, startStone: 40,
     foodK: 1.25, famine: 0.004, growK: 0.75, recoverK: 0.5, recoverT: 100, riskK: 1.25,
     newOnly: true, gearPrice: true, refund: 0.5,
   },

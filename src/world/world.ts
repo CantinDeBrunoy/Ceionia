@@ -8,6 +8,7 @@ import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/diffic
 import { GEN, GEN_FIXED, GEN_VAR, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
 import { archLayout, ARCH_N, type ArchLayout } from './archipelago';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
+import { GoalState, newGoalState, readGoalState } from '../sim/goals';
 import { TradeState, newTradeState, readTradeState, saveTradeState } from '../sim/trade';
 import { allyLand, awayWhy, tradepostWhy } from '../sim/allyLand';
 import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
@@ -320,6 +321,8 @@ export class World {
   oil = new Uint8Array(N * N);
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
   exp: ExpState = newExpState();
+  /** les petits objectifs entre les conditions d'âge (voir `sim/goals.ts`) */
+  goals: GoalState = newGoalState();
   /** difficulté de la partie (sauvegardée) */
   /** (Facile par défaut ici : une partie neuve reçoit la sienne, `Normal` sans choix, à sa création dans `Game`) */
   difficulty: Difficulty = 'easy';
@@ -1327,7 +1330,7 @@ export class World {
     // une station de ski : au pied d'une grosse montagne, pas d'une simple colline
     if (kind === 'alpine' && !this.bigPeakNear(x + s / 2, z + s / 2)) return tr('Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline');
     if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return tr('À poser en lisière ou dans une forêt');
-    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return tr('À poser près des rochers ou dans la montagne (des rochers se posent avec Nature › Rochers)');
+    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return tr('À poser près des rochers ou dans la montagne (des rochers se posent avec Paysage › Nature › Rochers)');
     // le puits de pétrole se fore sur un gisement
     if (kind === 'oilwell' && !this.onOil(x, z, s)) return tr('Un puits de pétrole ne se fore que sur un gisement (les taches sombres où le brut suinte)');
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
@@ -1839,6 +1842,7 @@ export class World {
       trade: saveTradeState(this.trade),
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       exp: this.exp,
+      goals: this.goals,
       ...(saveDiplo(this.diplo) ? { diplo: this.diplo } : {}),
       difficulty: this.difficulty,
       diffV: DIFF_VERSION,
@@ -1980,6 +1984,8 @@ export class World {
     // (`claimed`, `mined`, `dug`, `digs`) sont ignorés
     this.mined = new Set(); this.claimed = new Set(); this.dug = new Set(); this.digs = [];
     this.exp = readExpState(d.exp);
+    // (absents : une partie d'avant les objectifs, ce qui est déjà rempli comptera fait, sans récompense)
+    this.goals = readGoalState(d.goals);
     // (une partie d'avant la diplomatie : personne de rencontré)
     this.diplo = readDiplo(d.diplo);
     this.difficulty = readDifficulty(d.difficulty, d.diffV);

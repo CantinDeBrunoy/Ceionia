@@ -38,7 +38,9 @@ Un fichier par zone, chacun `registerDict('zone', { 'texte français': 'English 
 - `gear` : équipement, onglet Équipement et messages divers (incendies, pose, lieux) ; `army` : troupes, recrutement, commandement ;
 - `war` : guerre, Enfers, nouvelles du front, barre de commandement, base avancée ;
 - `tutorial` : tutoriel, aides (`warTips`), conseils du village, bannières, écrans de victoire, royaume des Enfers ;
-- `menu` : accueil, réglages, difficultés, crédits ; `ui` : barre du haut, barre de construction, fenêtres, notifications ; `misc` : le reste.
+- `menu` : accueil, réglages, difficultés, crédits ; `ui` : barre du haut, barre de construction, fenêtres, notifications ; `citizens` : fiche d'un habitant, arrivées de nouveaux venus, décorations ; `misc` : le reste.
+
+Les noms des habitants ne passent pas par `tr` : `citizens.ts` a ses listes en français et en anglais, choisies par `isEnglish()`.
 
 `en/index.ts` importe `../data` puis chaque zone ; **un nouveau fichier de zone doit y être importé**. `main.ts` importe `./i18n/en` dès sa deuxième ligne, avant tout code qui appelle `tr`.
 

@@ -314,6 +314,9 @@ export class ExpeditionView {
     } else if (a.c.carry === 'guests') {
       // les jongleurs et leur tambour, qui viennent faire la fête au village
       (['juggler', 'juggler', 'drummer'] as FolkRole[]).forEach((r, i) => person(r, a.id * 17 + i));
+    } else if (a.c.carry === 'refugees') {
+      // les pêcheurs du village sauvé du volcan, qui viennent vivre chez nous
+      (['fisher', 'villager', 'fisher'] as FolkRole[]).forEach((r, i) => person(r, a.id * 23 + i));
     }
   }
 }

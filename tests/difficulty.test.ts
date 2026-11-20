@@ -376,9 +376,9 @@ describe('équipement des expéditions selon la difficulté', () => {
       for (const d of ['easy', 'sandbox'] as Difficulty[]) expect(gearCost(g, d)).toEqual({ wood: 0, stone: 0, ore: g.ore, ...(g.fuel ? { fuel: g.fuel } : {}) });
     }
     // le bois du manche et la pierre de la pointe pour la lance ; le minerai seul pour l'épée
-    expect(gearCost(GEAR_BY.spear, 'normal')).toEqual({ wood: 2, stone: 1, ore: 0 });
+    expect(gearCost(GEAR_BY.spear, 'normal')).toEqual({ wood: 1, stone: 1, ore: 0 });
     expect(gearCost(GEAR_BY.sword, 'normal')).toEqual({ wood: 0, stone: 0, ore: 1 });
-    expect(gearCostLabel(gearCost(GEAR_BY.spear, 'normal'))).toBe('2 bois et 1 pierre');
+    expect(gearCostLabel(gearCost(GEAR_BY.spear, 'normal'))).toBe('1 bois et 1 pierre');
     expect(gearCostLabel(gearCost(GEAR_BY.sword, 'easy'))).toBe('1 minerai');
     expect(gearCostLabel(gearCost(GEAR_BY.bow, 'easy'))).toBe('');
   });
@@ -387,14 +387,14 @@ describe('équipement des expéditions selon la difficulté', () => {
     const w = flatWorld('normal'), ex = expOf(w);
     w.wood = 10; w.stone = 5;
     expect(ex.craft('spear', 0)).toBe(true);
-    expect([w.wood, w.stone]).toEqual([8, 4]);
+    expect([w.wood, w.stone]).toEqual([9, 4]);
     ex.cancelCraft(0);
     expect([w.wood, w.stone]).toEqual([10, 5]);
-    w.wood = 1;
-    expect(ex.whyCraft(GEAR_BY.spear, 0)).toBe('Il faut 2 bois et 1 pierre');
+    w.wood = 0;
+    expect(ex.whyCraft(GEAR_BY.spear, 0)).toBe('Il faut 1 bois et 1 pierre');
     expect(ex.craft('spear', 0)).toBe(false);
     expect(w.exp.craft).toEqual([]);
-    expect([w.wood, w.stone]).toEqual([1, 5]);
+    expect([w.wood, w.stone]).toEqual([0, 5]);
   });
 
   it('en Facile, les pièces sans métal restent gratuites et le métal se paie en minerai', () => {
