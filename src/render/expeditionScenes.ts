@@ -30,6 +30,8 @@ export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: [
  * cases ; à égalité, la plus proche de 6 cases. Null s'il n'y en a pas
  */
 export const OFFING_NEAR = 4, OFFING_FAR = 11, OFFING_ROOM = 2.5;
+/** Une visite accoste à la mer ouverte la plus proche du port ou de la plage, à cette distance au plus (cases), puis finit par l'eau qui y mène */
+export const LAGOON_REACH = 30;
 export function offing(w: World, sea: Uint8Array, port: [number, number]): [number, number] | null {
   const room = seaRoomMap(sea);
   let best: [number, number] | null = null, score = -Infinity;
@@ -40,6 +42,15 @@ export function offing(w: World, sea: Uint8Array, port: [number, number]): [numb
     if (!sea[z * N + x] || r < OFFING_ROOM) continue;
     const sc = Math.min(r, 6) - Math.abs(d - 6) * 0.3;
     if (sc > score) { score = sc; best = [x + 0.5, z + 0.5]; }
+  }
+  if (best) return best;
+  // (un port au fond d'une lagune, comme celui des Jadéens chez Inès : pas de mer ouverte si près. La pleine mer la plus proche,
+  // jusqu'à `LAGOON_REACH` cases, avec un peu d'eau libre autour)
+  let bd = Infinity;
+  for (let dz = -LAGOON_REACH; dz <= LAGOON_REACH; dz++) for (let dx = -LAGOON_REACH; dx <= LAGOON_REACH; dx++) {
+    const x = Math.floor(port[0]) + dx, z = Math.floor(port[1]) + dz, d = Math.hypot(dx, dz);
+    if (d > LAGOON_REACH || d >= bd || !w.inCells(x, z) || !sea[z * N + x] || room[z * N + x] < 1.5) continue;
+    bd = d; best = [x + 0.5, z + 0.5];
   }
   return best;
 }
@@ -5488,7 +5499,12 @@ export class ExpeditionScene {
     } else {
       // on accoste au port (chez l'allié, ou pour le port lui-même), à la plage sinon (on ne se montre pas chez le rival)
       const land = v.to === 'ally' || v.at === 'port' ? P.port : P.plage;
-      route = this.waterRoute(wx, wz, land[0], land[1], SCOUT_REACH, sea);
+      // (la mer ouverte jusqu'au plus près, puis, si le port donne sur une lagune ou un bras d'eau peu profond, la fin du chemin
+      // par cette eau-là, `LAGOON_REACH` cases au plus : sans elle, un port en lagune, comme celui des Jadéens chez Bernard,
+      // n'avait plus de route et la visite retombait en simple voyage au large)
+      const far = this.waterRoute(wx, wz, land[0], land[1], LAGOON_REACH, sea), last = far?.[far.length - 1];
+      const near = last && Math.hypot(last[0] - land[0], last[1] - land[1]) > 2.5 ? this.waterRoute(last[0], last[1], land[0], land[1], SCOUT_REACH) : null;
+      route = far && near && near.length > 1 ? [...far, ...near.slice(1)] : far;
       if (!route) return false;
       const end = route[route.length - 1], ashore = this.dockOf(end);
       if (v.at === 'port') { meet = this.dryOn(P.port, [town.x, town.z], [0.08, 0.12, 0.05, 0.16, 0.2, 0.25]) ?? ashore; face = end; walk = [ashore, meet]; }

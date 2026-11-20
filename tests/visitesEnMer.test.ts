@@ -8,7 +8,7 @@ import { it, expect, afterAll } from 'vitest';
  * sur la mer reliée au large (`openWater`), le tour de la régate aussi, et le mouillage au large du port est en eau libre, à
  * bonne distance du quai
  */
-import { World, N, MOUNTAIN_H, setMapSize } from '../src/world/world';
+import { World, N, MOUNTAIN_H, SEA, setMapSize } from '../src/world/world';
 import { newWorld, CONTINENT } from '../src/world/mapgen';
 import { GEN_ARCH } from '../src/world/continent';
 import { mulberry32 } from '../src/core/rng';
@@ -16,7 +16,11 @@ import { Expeditions, openWater, seaRoomMap } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { ISLE_MISSIONS } from '../src/sim/isleMissions';
 import { ExpeditionView } from '../src/render/expeditionView';
-import { offing, OFFING_NEAR, OFFING_FAR, OFFING_ROOM } from '../src/render/expeditionScenes';
+import { offing, OFFING_NEAR, OFFING_FAR, OFFING_ROOM, LAGOON_REACH } from '../src/render/expeditionScenes';
+import { MISSIONS } from '../src/sim/missions';
+
+/** La fin d'une route à terre peut passer par la lagune d'un port, sur cette distance au plus (`SCOUT_REACH` de la scène) */
+const SCOUT_REACH = 12;
 import { townPlans } from '../src/world/rivalTown';
 
 function stubCanvas() {
@@ -51,7 +55,7 @@ function archipel(seed: number) {
   return w;
 }
 
-const SEEDS = [11, 7313];
+const SEEDS = [11, 7313, 20974, 68380];
 
 it('le mouillage au large d’un port : mer ouverte, eau libre autour, à bonne distance du quai', { timeout: 300000 }, () => {
   for (const seed of SEEDS) {
@@ -61,9 +65,10 @@ it('le mouillage au large d’un port : mer ouverte, eau libre autour, à bonne 
       expect(p, `${seed} ${plan.people}`).not.toBeNull();
       const k = Math.floor(p![1]) * N + Math.floor(p![0]), d = Math.hypot(p![0] - plan.points.port[0], p![1] - plan.points.port[1]);
       expect(sea[k]).toBe(1);
-      expect(room[k]).toBeGreaterThanOrEqual(OFFING_ROOM);
       expect(d).toBeGreaterThanOrEqual(OFFING_NEAR - 1);
-      expect(d).toBeLessThanOrEqual(OFFING_FAR + 1);
+      // (un port au fond d'une lagune : la pleine mer la plus proche, plus loin, avec moins d'eau libre)
+      if (d <= OFFING_FAR + 1) expect(room[k]).toBeGreaterThanOrEqual(OFFING_ROOM);
+      else { expect(d).toBeLessThanOrEqual(LAGOON_REACH + 1); expect(room[k]).toBeGreaterThanOrEqual(1.5); }
     }
   }
 });
@@ -85,13 +90,65 @@ it('chaque visite sur les îles navigue sur la mer ouverte, jamais dans une mare
       const sc = (view as unknown as { shows: Map<number, { scene: { scout: { route: [number, number][]; post: [number, number]; trip?: { kind: string; loop?: { route: [number, number][] } } } | null } | null }> }).shows.get(a.id)?.scene;
       const trip = sc?.scout;
       if (!trip?.trip) { bad.push(`${seed} ${m.id}/${ci} : pas de visite sur l'île`); continue; }
-      // (le premier point est le mouillage de départ, sur la côte de notre île)
-      const off = trip.route.slice(1).filter(([x, z]) => !wet(x, z));
-      if (off.length) bad.push(`${seed} ${m.id}/${ci} : ${off.length} points de la route hors de la mer ouverte (${off[0].map((v) => v.toFixed(1))})`);
+      // (le premier point est le mouillage de départ, sur la côte de notre île ; un port au fond d'une lagune se gagne par
+      // elle, sur la fin du trajet seulement)
+      const v = m.choices[ci].visit!, ship = v.at === 'offport' || v.at === 'islet', end = trip.route[trip.route.length - 1];
+      const off = trip.route.slice(1).filter(([x, z]) => !wet(x, z) && (ship || Math.hypot(x - end[0], z - end[1]) > SCOUT_REACH + 2));
+      if (off.length) bad.push(`${seed} ${m.id}/${ci} : ${off.length} points de la route hors de la mer ouverte (${off[0].map((n) => n.toFixed(1))})`);
       const lp = trip.trip.loop?.route.slice(1, -1).filter(([x, z]) => !wet(x, z)) ?? [];
       if (lp.length) bad.push(`${seed} ${m.id}/${ci} : le tour de la régate sort de la mer ouverte`);
-      if (m.choices[ci].visit!.at === 'offport' && !wet(trip.post[0], trip.post[1])) bad.push(`${seed} ${m.id}/${ci} : mouillage hors de la mer ouverte`);
+      if (v.at === 'offport' && !wet(trip.post[0], trip.post[1])) bad.push(`${seed} ${m.id}/${ci} : mouillage hors de la mer ouverte`);
       // (on rend l'équipe, la suivante part du même village)
+      ex.active.length = 0;
+    }
+  }
+  expect(bad.join('\n')).toBe('');
+});
+
+/**
+ * Retour de l'auteur (21 nov. 2026) : « les expéditions qui doivent aller chez nos alliés n'y arrivent jamais ». Chaque visite
+ * chez l'allié, et les émissaires, jouées de bout en bout : l'équipe atteint le lieu de la visite (à terre, ou le bateau au
+ * tour de la petite île), puis l'expédition se termine et rend son récit. Sur l'archipel de Bernard (graine 20974, allié les
+ * Jadéens, dont le port donne sur une lagune), la route par la seule mer ouverte n'arrivait plus au port
+ */
+it('chaque visite chez l’allié arrive sur son île et se termine', { timeout: 900000 }, () => {
+  stubCanvas();
+  const bad: string[] = [];
+  for (const [seed, ally, lagoon] of [[11, 'orient', false], [11, 'orient', true], [20974, 'asie', false]] as const) {
+    const w = archipel(seed);
+    w.diplo.ally = ally; w.diplo.path = 'peace';
+    // (le port allié au fond d'une lagune, comme celui des Jadéens chez Bernard : l’eau à moins de 20 cases du port n'est pas
+    // reliée au large, une eau fermée au niveau de la mer)
+    if (lagoon) {
+      const port = townPlans(w).find((p) => p.people === ally)!.points.port;
+      for (let dz = -20; dz <= 20; dz++) for (let dx = -20; dx <= 20; dx++) {
+        const x = Math.floor(port[0]) + dx, z = Math.floor(port[1]) + dz;
+        if (Math.hypot(dx, dz) > 20 || !w.inCells(x, z) || w.cellAvg(x, z) >= -0.1) continue;
+        w.lake[w.ci(x, z)] = 1; w.lakeLevel[w.ci(x, z)] = SEA;
+      }
+    }
+    for (const m of [...ISLE_MISSIONS.filter((x) => x.isle!.to === 'ally'), MISSIONS.find((x) => x.id === 'envoys')!]) {
+      const agents = new Agents(w);
+      for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 40, 0);
+      const ex = new Expeditions(w, agents, () => 100, mulberry32(7));
+      ex.pop = () => 60; ex.missing = () => [];
+      let told = false;
+      ex.onReport = () => { told = true; };
+      const view = new ExpeditionView(w, agents, ex);
+      const a = ex.start(m, 0, 2);
+      if (!a) { bad.push(`${seed}${lagoon ? ' lagune' : ''} ${m.id} : refusée`); continue; }
+      let post: [number, number] | null = null, best = Infinity;
+      for (let i = 0; i < 12000 && ex.active.includes(a); i++) {
+        agents.update(0.1, 10, 2, false, 40, 0); ex.update(0.1); view.update(0.1);
+        if (a.wait) ex.decide(a, 0);
+        const sc = (view as unknown as { shows: Map<number, { scene: { scout: { post: [number, number] } | null } | null }> }).shows.get(a.id)?.scene;
+        if (sc?.scout) post = sc.scout.post;
+        if (post && a.phase === 'work') for (const [x, z] of agents.partyPositions(a.party)) best = Math.min(best, Math.hypot(x - post[0], z - post[1]));
+      }
+      if (!post) bad.push(`${seed}${lagoon ? ' lagune' : ''} ${m.id} : pas de route vers l'île (simple voyage)`);
+      else if (best > 1.5) bad.push(`${seed}${lagoon ? ' lagune' : ''} ${m.id} : l'équipe n'a pas atteint le lieu (au plus près ${best.toFixed(1)} cases)`);
+      if (ex.active.includes(a)) bad.push(`${seed}${lagoon ? ' lagune' : ''} ${m.id} : jamais finie (${a.phase})`);
+      else if (!told) bad.push(`${seed}${lagoon ? ' lagune' : ''} ${m.id} : finie sans récit`);
       ex.active.length = 0;
     }
   }
