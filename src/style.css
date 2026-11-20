@@ -2322,3 +2322,25 @@ body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsB
 /* le petit drapeau du blason dans Paramètres › Partie */
 .setPane .setFlag { display: inline-flex; margin-right: 6px; }
 .setPane .setFlag svg { display: block; filter: drop-shadow(0 1px 2px rgba(80, 55, 30, 0.25)); }
+/* l'onglet Blason de la fenêtre des expéditions (ui/blason.ts : blasonPickerHtml) : l'aperçu à gauche, les choix à droite,
+   dans l'or et l'encre brune du HUD peint ; tient en 1280 × 720 sans défiler */
+.expModal .blTab { padding: 4px 2px 8px; }
+.expModal .blTab .blHead { display: flex; align-items: center; gap: 14px; margin: 2px 0 12px; }
+.expModal .blTab .blHead > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.expModal .blTab .blHead b { font-family: var(--hSerif, 'Fraunces', Georgia, serif); font-size: 19px; color: var(--hInk, #3a2a14); }
+.expModal .blTab .blHead small { font-size: 13.5px; font-weight: 600; color: var(--hInk2, #6a5232); line-height: 1.35; }
+.expModal .blTab button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: #3a2a14; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(120, 85, 50, 0.14); }
+.expModal .blTab button:hover:not(:disabled) { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }
+.expModal .blTab button[aria-pressed="true"] { border-color: rgba(255, 236, 190, 0.9); background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; box-shadow: 0 3px 10px rgba(227, 154, 47, 0.35); }
+.expModal .blTab .blHead button { flex: none; min-height: 40px; padding: 0 16px; font-size: 14px; }
+.expModal .blTab .blWrap { display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
+.expModal .blTab .blShow { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px 8px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.9); background: radial-gradient(ellipse at 50% 30%, rgba(255, 255, 255, 0.85), rgba(244, 232, 210, 0.6)); }
+.expModal .blTab .blFlag svg { display: block; width: 190px; height: auto; filter: drop-shadow(0 3px 4px rgba(80, 55, 30, 0.25)); }
+.expModal .blTab .blMan svg { display: block; height: 150px; width: auto; }
+.expModal .blTab .blPick h4 { margin: 2px 0 6px; font-size: 13.5px; font-weight: 800; color: var(--hInk2, #6a5232); text-transform: none; letter-spacing: 0; }
+.expModal .blTab .blRow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.expModal .blTab .blSw { width: 34px; height: 34px; padding: 0; border-radius: 50%; }
+.expModal .blTab .blSw:disabled { opacity: 0.3; cursor: default; }
+.expModal .blTab .blEmb button { width: 44px; height: 44px; padding: 0; border-radius: 14px; color: #6a4a26; }
+.expModal .blTab .blShape button { min-height: 36px; padding: 0 14px; font-size: 13.5px; }
+@media (max-width: 640px) { .expModal .blTab .blWrap { grid-template-columns: 1fr; } .expModal .blTab .blShow { flex-direction: row; } }
