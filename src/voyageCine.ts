@@ -17,12 +17,12 @@
 export type VoyShot = 'horizon' | 'orient' | 'asie' | 'fleets' | 'home';
 export interface VoyPlan { id: VoyShot; dur: number }
 
-/** Le film (s) : sa durée, et ses bandeaux, au temps de la vidéo (la brume monte de 15,5 à 19,5 s, voir docs/grand-choix.md) */
+/** Le film (s) : sa durée, et ses bandeaux, au temps de la vidéo (deux plans collés à 9,5 s ; la brume monte de 15,5 à 19,5 s, voir docs/grand-choix.md) */
 export const VOY_FILM = {
-  dur: 20,
+  dur: 19.5,
   captions: [
     { at: 1.2, dur: 5.6, text: 'Un navire prend la mer', sub: 'Cap sur l’inconnu' },
-    { at: 15.6, dur: 4.4, text: 'La brume se lève…' },
+    { at: 15.6, dur: 3.9, text: 'La brume se lève…' },
   ] as { at: number; dur: number; text: string; sub?: string }[],
 };
 
