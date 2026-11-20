@@ -24,7 +24,7 @@ export interface WingRig {
   fold: number; tuck: number; leg: number;
 }
 
-class Plumage {
+export class Plumage {
   pos: number[] = []; col: number[] = []; wing: number[] = []; paint: number[] = [];
   private rnd: () => number;
   private c = new THREE.Color();
