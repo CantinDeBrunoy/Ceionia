@@ -35,20 +35,12 @@ export function soldierSvg(bl: Blason, h = 170) {
   </svg>`;
 }
 
-/**
- * Le choix du blason du village : deux couleurs, un emblème, la forme du drapeau, avec l'aperçu du drapeau et d'un soldat.
- * `preview` est appelé à chaque changement (le village se teint aussitôt) ; à la fermeture, la promesse rend le blason
- * choisi, ou null si le joueur renonce (« Plus tard » au premier lancement, la croix ensuite : `preview` est alors rappelé
- * avec le blason de départ)
- */
-export function chooseBlason(root: HTMLElement, cur: Blason, first = false, preview?: (b: Blason) => void): Promise<Blason | null> {
-  return new Promise((resolve) => {
-    const bl: Blason = { ...cur };
-    let done: Blason | null = null;
-    const swatch = (slot: 'a' | 'b', k: BlasonColor) =>
-      `<button type="button" class="blSw" data-${slot}="${k}" title="${tr(COLOR_NAME[k])}" aria-label="${tr(COLOR_NAME[k])}" style="--c:${hex(BLASON_COLORS[k])}"><i></i></button>`;
-    const { ov, close } = menuPop(root, 'blasonPick', 'options', tr('Le blason du village'), `
-      <div class="blWrap">
+const swatch = (slot: 'a' | 'b', k: BlasonColor) =>
+  `<button type="button" class="blSw" data-${slot}="${k}" title="${tr(COLOR_NAME[k])}" aria-label="${tr(COLOR_NAME[k])}" style="--c:${hex(BLASON_COLORS[k])}"><i></i></button>`;
+
+/** Le corps du choix : l'aperçu (drapeau, soldat) et les rangées de teintes, d'emblèmes et de formes */
+export function blasonPickerHtml() {
+  return `<div class="blWrap">
         <div class="blShow"><div class="blFlag"></div><div class="blMan"></div></div>
         <div class="blPick">
           <h4>${tr('Couleur du champ')}</h4><div class="blRow">${COLOR_KEYS.map((k) => swatch('a', k)).join('')}</div>
@@ -56,33 +48,56 @@ export function chooseBlason(root: HTMLElement, cur: Blason, first = false, prev
           <h4>${tr('Emblème')}</h4><div class="blRow blEmb">${EMBLEMS.map((e) => `<button type="button" data-e="${e}" title="${tr(EMBLEM_NAME[e])}" aria-label="${tr(EMBLEM_NAME[e])}">${emblemSvg(e, 'currentColor', 30, 'transparent')}</button>`).join('')}</div>
           <h4>${tr('Forme du drapeau')}</h4><div class="blRow blShape">${SHAPES.map((s) => `<button type="button" data-s="${s}">${tr(SHAPE_NAME[s])}</button>`).join('')}</div>
         </div>
-      </div>
-      <p class="hint">${tr('Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs. Vous pourrez le changer dans Paramètres › Partie.')}</p>
+      </div>`;
+}
+
+/**
+ * Branche le choix rendu par `blasonPickerHtml` dans `el` (et son bouton `[data-rand]` « Au hasard » s'il y en a un) : chaque
+ * clic redessine l'aperçu et appelle `change` avec le nouveau blason. Rend de quoi relire le blason en cours
+ */
+export function bindBlasonPicker(el: HTMLElement, cur: Blason, change: (b: Blason) => void) {
+  const bl: Blason = { ...cur };
+  const draw = (tell = true) => {
+    el.querySelectorAll<HTMLButtonElement>('[data-a]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.a === bl.a)));
+    el.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.b === bl.b)); b.disabled = b.dataset.b === bl.a; });
+    el.querySelectorAll<HTMLButtonElement>('[data-e]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.e === bl.e)));
+    el.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === bl.s)));
+    (el.querySelector('.blFlag') as HTMLElement).innerHTML = flagSvg(bl, 210);
+    (el.querySelector('.blMan') as HTMLElement).innerHTML = soldierSvg(bl, 170);
+    if (tell) change({ ...bl });
+  };
+  el.querySelectorAll<HTMLButtonElement>('[data-a]').forEach((b) => (b.onclick = () => {
+    const k = b.dataset.a as BlasonColor;
+    // la même teinte que l'emblème : ils échangent leurs couleurs
+    if (k === bl.b) bl.b = bl.a;
+    bl.a = k; draw();
+  }));
+  el.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => (b.onclick = () => { bl.b = b.dataset.b as BlasonColor; draw(); }));
+  el.querySelectorAll<HTMLButtonElement>('[data-e]').forEach((b) => (b.onclick = () => { bl.e = b.dataset.e as Blason['e']; draw(); }));
+  el.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => (b.onclick = () => { bl.s = b.dataset.s as Blason['s']; draw(); }));
+  const rand = el.querySelector<HTMLButtonElement>('[data-rand]');
+  if (rand) rand.onclick = () => { Object.assign(bl, randomBlason()); draw(); };
+  draw(false);
+  return () => ({ ...bl });
+}
+
+/**
+ * Le choix du blason du village dans sa fenêtre : deux couleurs, un emblème, la forme du drapeau, avec l'aperçu du drapeau et
+ * d'un soldat. `preview` est appelé à chaque changement (le village se teint aussitôt) ; à la fermeture, la promesse rend le
+ * blason choisi, ou null si le joueur renonce (« Plus tard » au premier lancement, la croix ensuite : `preview` est alors
+ * rappelé avec le blason de départ)
+ */
+export function chooseBlason(root: HTMLElement, cur: Blason, first = false, preview?: (b: Blason) => void): Promise<Blason | null> {
+  return new Promise((resolve) => {
+    let done: Blason | null = null;
+    const { ov, close } = menuPop(root, 'blasonPick', 'options', tr('Le blason du village'), `${blasonPickerHtml()}
+      <p class="hint">${tr('Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs. Vous pourrez le changer dans l’onglet Blason des expéditions.')}</p>
       <div class="popFoot"><button type="button" data-rand>${ic('dice', 16, 2)}${tr('Au hasard')}</button>${first ? `<button type="button" data-later>${tr('Plus tard')}</button>` : ''}<button type="button" data-r="1">${ic('check', 15, 2.2)}${tr('Valider')}</button></div>`,
     () => { if (!done) preview?.(cur); resolve(done); }, tr('Ses couleurs flottent sur vos drapeaux et habillent vos troupes.'));
     ov.style.zIndex = '40';
-    const draw = () => {
-      ov.querySelectorAll<HTMLButtonElement>('[data-a]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.a === bl.a)));
-      ov.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.b === bl.b)); b.disabled = b.dataset.b === bl.a; });
-      ov.querySelectorAll<HTMLButtonElement>('[data-e]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.e === bl.e)));
-      ov.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === bl.s)));
-      (ov.querySelector('.blFlag') as HTMLElement).innerHTML = flagSvg(bl, 210);
-      (ov.querySelector('.blMan') as HTMLElement).innerHTML = soldierSvg(bl, 170);
-      preview?.({ ...bl });
-    };
-    ov.querySelectorAll<HTMLButtonElement>('[data-a]').forEach((b) => (b.onclick = () => {
-      const k = b.dataset.a as BlasonColor;
-      // la même teinte que l'emblème : ils échangent leurs couleurs
-      if (k === bl.b) bl.b = bl.a;
-      bl.a = k; draw();
-    }));
-    ov.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => (b.onclick = () => { bl.b = b.dataset.b as BlasonColor; draw(); }));
-    ov.querySelectorAll<HTMLButtonElement>('[data-e]').forEach((b) => (b.onclick = () => { bl.e = b.dataset.e as Blason['e']; draw(); }));
-    ov.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => (b.onclick = () => { bl.s = b.dataset.s as Blason['s']; draw(); }));
-    (ov.querySelector('[data-rand]') as HTMLButtonElement).onclick = () => { Object.assign(bl, randomBlason()); draw(); };
+    const now = bindBlasonPicker(ov, cur, (b) => preview?.(b));
     const later = ov.querySelector('[data-later]') as HTMLButtonElement | null;
     if (later) later.onclick = () => close();
-    (ov.querySelector('[data-r="1"]') as HTMLButtonElement).onclick = () => { done = { ...bl }; close(); };
-    draw();
+    (ov.querySelector('[data-r="1"]') as HTMLButtonElement).onclick = () => { done = now(); close(); };
   });
 }

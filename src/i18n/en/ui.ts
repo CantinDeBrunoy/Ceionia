@@ -596,7 +596,8 @@ registerDict('goals', {
   // le blason du village (ui/blason.ts, sim/blason.ts)
   'Le blason du village': 'Village coat of arms', 'Ses couleurs flottent sur vos drapeaux et habillent vos troupes.': 'Its colours fly on your flags and dress your troops.',
   'Couleur du champ': 'Field colour', 'Couleur de l’emblème': 'Emblem colour', 'Emblème': 'Emblem', 'Forme du drapeau': 'Flag shape',
-  'Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs. Vous pourrez le changer dans Paramètres › Partie.': 'It flies on your towers, ships and banners, and your troops wear its colours. You can change it later in Settings › Game.',
+  'Blason': 'Coat of arms', 'Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs.': 'It flies on your towers, ships and banners, and your troops wear its colours.',
+  'Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs. Vous pourrez le changer dans l’onglet Blason des expéditions.': 'It flies on your towers, ships and banners, and your troops wear its colours. You can change it later in the Coat of arms tab of the expeditions.',
   'Au hasard': 'Random', 'Plus tard': 'Later', 'Blason du village': 'Village coat of arms', 'Drapeau': 'Flag', 'Changer le blason': 'Change the coat of arms',
   'Azur': 'Azure', 'Bleu nuit': 'Midnight blue', 'Pourpre': 'Purple', 'Bordeaux': 'Burgundy', 'Gueules': 'Red', 'Sinople': 'Green', 'Ocre': 'Ochre', 'Argent': 'Silver', 'Sable': 'Black',
   'Soleil': 'Sun', 'Arbre': 'Tree', 'Épis': 'Wheat', 'Étoile': 'Star', 'Vagues': 'Waves', 'Couronne': 'Crown',

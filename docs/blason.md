@@ -5,7 +5,7 @@
 > Voir aussi : [rendu-modeles.md](rendu-modeles.md), [armee-combat.md](armee-combat.md), [interface.md](interface.md), [sauvegarde.md](sauvegarde.md), [diplomatie.md](diplomatie.md) (les blasons des deux peuples rivaux)
 
 ## En bref
-Le village du joueur a **un seul drapeau** : deux couleurs (le champ, l'emblème), un emblème et une forme. Il flotte sur tous ses bâtiments, ses navires et sa base des Enfers, et ses troupes en portent les couleurs (tabards, boucliers, panaches, capes, caparaçons). Le joueur le choisit au début d'une partie neuve (facultatif) et le change quand il veut dans Paramètres › Partie : tout le jeu se teint à l'image suivante, sans rien recharger.
+Le village du joueur a **un seul drapeau** : deux couleurs (le champ, l'emblème), un emblème et une forme. Il flotte sur tous ses bâtiments, ses navires et sa base des Enfers, et ses troupes en portent les couleurs (tabards, boucliers, panaches, capes, caparaçons). Le joueur le choisit au début d'une partie neuve (facultatif) et le change quand il veut dans l'onglet « Blason » de la fenêtre des expéditions (ou dans Paramètres › Partie) : tout le jeu se teint à l'image suivante, sans rien recharger.
 
 ## Règles du jeu
 - Teintes (`BLASON_COLORS`) : azur, bleu nuit, pourpre, bordeaux, gueules (rouge), sinople (vert), ocre, or, argent, sable (noir). **Ni turquoise ni rouge laqué** : ce sont les couleurs des Sablais et des Jadéens (test).
@@ -38,7 +38,8 @@ Une pièce « au blason » reçoit au lieu d'une couleur un nombre négatif :
 ### Fenêtre (`ui/blason.ts`) et sauvegarde
 - `chooseBlason(racine, blason, premier, aperçu)` : fenêtre peinte (`menuPop`, classe `blasonPick`) : aperçu du drapeau (`flagSvg`, mêmes proportions que le shader) et d'un soldat (`soldierSvg`), deux rangées de teintes, les huit emblèmes, les trois formes ; « Au hasard » (`randomBlason` : un emblème clair sur un champ sombre et l'inverse), « Plus tard » au premier lancement, « Valider ».
 - Partie neuve : `askBlason` après `askControls` (dans `start`), seulement si `world.blasonSeen` est faux ; « Plus tard » ou la croix le passent à vrai.
-- Paramètres › Partie : la ligne « Blason du village » (petit drapeau, « Changer le blason »).
+- Onglet « Blason » de la fenêtre des expéditions (`openExpeditions('blason')`) : le même choix, en place (`blasonPickerHtml` rend le corps, `bindBlasonPicker` le branche ; la fenêtre les reprend aussi). Chaque clic appelle `Game.setBlason` : pas de « Valider », le blason est changé et sauvé aussitôt. Tient en 1280 × 720 sans défiler.
+- Paramètres › Partie : la ligne « Blason du village » (petit drapeau, « Changer le blason »), qui ouvre la fenêtre.
 - Sauvegarde : `world.blason` (`{ a, b, e, s }`, toujours écrit) et `blasonSeen` (1 si vu). Absent (ancienne partie) : le blason par défaut, et la fenêtre ne s'ouvre pas d'elle-même.
 
 ## Pièges et invariants

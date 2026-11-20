@@ -13,7 +13,7 @@ import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
 import { type Controls, type CamControl, type KbLayout, layoutKeys } from '../core/controls';
 import { type Blason, flagSvg } from '../sim/blason';
-import { chooseBlason } from './blason';
+import { chooseBlason, blasonPickerHtml, bindBlasonPicker } from './blason';
 import { setTeamBlason } from '../render/teamPaint';
 import { matches } from './search';
 import { readSlot, SaveData, savedAgo, Quality } from '../save/save';
@@ -2611,7 +2611,7 @@ export class UI {
       ...ms.map((m) => (MISSION_DIO.has(m.id) ? `./expeditions/dio-${m.id}.webp` : missionArt(m).src)).filter((s): s is string => !!s)]);
   }
 
-  openExpeditions(tab: 'missions' | 'gear' | 'rail' | 'ways' = 'missions') {
+  openExpeditions(tab: 'missions' | 'gear' | 'rail' | 'ways' | 'blason' = 'missions') {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
     // le chemin de fer ne vient qu'à l'âge industriel : avant, pas d'onglet
     const railOn = age >= 3;
@@ -2676,6 +2676,7 @@ export class UI {
         <button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('ex-gear', 19, 1.8)}${tr('Équipement')}</button>
         ${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('ex-rail', 19, 1.8)}${tr('Chemin de fer')}</button>` : ''}
         ${waysOn ? `<button data-tab="ways" class="${tab === 'ways' ? 'on' : ''}">${ic('compass', 19, 1.8)}${tr('Grands choix')}</button>` : ''}
+        <button data-tab="blason" class="${tab === 'blason' ? 'on' : ''}">${ic('flag', 19, 1.8)}${tr('Blason')}</button>
       </nav>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}
@@ -2685,7 +2686,13 @@ export class UI {
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
       ${railOn ? `<section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>` : ''}
-      ${waysOn ? `<section data-sec="ways" ${tab === 'ways' ? '' : 'hidden'}>${waysHtml(ways, h.conflictWay?.() ?? null)}</section>` : ''}`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
+      ${waysOn ? `<section data-sec="ways" ${tab === 'ways' ? '' : 'hidden'}>${waysHtml(ways, h.conflictWay?.() ?? null)}</section>` : ''}
+      <section data-sec="blason" class="blTab" ${tab === 'blason' ? '' : 'hidden'}>
+        <div class="blHead"><div><b>${tr('Le blason du village')}</b><small>${tr('Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs.')}</small></div><button type="button" data-rand>${ic('dice', 16, 2)}${tr('Au hasard')}</button></div>
+        ${blasonPickerHtml()}
+      </section>`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
+    // l'onglet Blason : chaque clic change le blason du village (sauvé, tout le jeu se teint aussitôt)
+    bindBlasonPicker($('[data-sec="blason"]', ov), h.world.blason, (b) => h.setBlason(b));
     $('.expModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, age))}.webp)`);
 
     // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section
