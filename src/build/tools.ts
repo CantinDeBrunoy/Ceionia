@@ -44,6 +44,9 @@ export interface Overlay {
 
 export interface ToolHost {
   world: World;
+  /** un fer céleste à ramasser sous le pointeur (après une pluie de météorites) ; `collect` le ramasse */
+  ironAt?: (x: number, z: number) => boolean;
+  collect?: (x: number, z: number) => boolean;
   /** vrai si un torrent ou un ruisseau passe par cette case (rien ne se plante dans l'eau) */
   wetCell?: (k: number) => boolean;
   terrain: TerrainView;
@@ -458,7 +461,7 @@ export class ToolController implements ToolInput {
     // l'éditeur du tracé d'une voie choisit son curseur (une poignée, la voie)
     const over = this.overlay?.hover(hit) ?? '';
     // et un bâtiment : un clic ouvre sa fiche
-    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.volcanoAt(hit.x, hit.z) >= 0 || this.hitBuilding || (!!w.portal && w.portalOpen && !!this.h.openPortal && Math.hypot(hit.x - w.portal.x, hit.z - w.portal.z) < 2.6)) ? 'pointer' : '');
+    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.volcanoAt(hit.x, hit.z) >= 0 || !!this.h.ironAt?.(hit.x, hit.z) || this.hitBuilding || (!!w.portal && w.portalOpen && !!this.h.openPortal && Math.hypot(hit.x - w.portal.x, hit.z - w.portal.z) < 2.6)) ? 'pointer' : '');
   }
 
   down(e: PointerInfo) {
@@ -471,6 +474,8 @@ export class ToolController implements ToolInput {
     const t = this.tool;
     // outil « Voir » : un clic sur un volcan le fait entrer en éruption
     if (t === 'none') {
+      // un fer céleste au fond d'un cratère : on le ramasse
+      if (this.h.collect?.(this.hit.x, this.hit.z)) { this.pressed = false; return; }
       const vol = this.h.world.volcanoAt(this.hit.x, this.hit.z);
       if (vol >= 0) { this.pressed = false; this.h.erupt(vol); return; }
       // un bâtiment se choisit au relâcher, si le pointeur n'a presque pas bougé

@@ -52,6 +52,7 @@ import { menuBg, LOGO_PEAKS } from './loading';
 import { MiniMap } from './minimap';
 import { placeCard } from './xcard';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
+import type { CalamityKind } from '../sim/calamity';
 
 export interface UIHost {
   tools: ToolController;
@@ -101,6 +102,9 @@ export interface UIHost {
   readonly gfxShown: { p: GfxParams; glow: boolean; fine: number; level: number; max: number };
   disasters: boolean;
   setDisasters(on: boolean): void;
+  /** catastrophes laissées une à une (crues, séismes, pluies de météorites) */
+  readonly calamities: Readonly<Record<CalamityKind, boolean>>;
+  setCalamity(k: CalamityKind, on: boolean): void;
   autoRoads: boolean;
   setAutoRoads(on: boolean): void;
   /** flèches d'amélioration au-dessus des bâtiments, masquées ou non */
@@ -396,6 +400,8 @@ const MAIN: (typeof GIVES)[number]['k'][] = ['housing', 'food', 'water', 'health
 
 const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: 'rain', snow: 'snow', fog: 'fog' };
 /** Effets de la météo qu'on peut éteindre dans les réglages : clé, icône, nom */
+/** Les catastrophes qu'on coupe une à une : leur icône et leur nom */
+const CALAM_FX: [CalamityKind, string, () => string][] = [['flood', 'waves', () => tr('Crues')], ['quake', 'crack', () => tr('Séismes')], ['meteor', 'flame', () => tr('Météorites')]];
 const WEATHER_FX: ['rain' | 'snow' | 'fog', string, () => string][] = [['rain', 'rain', () => tr('Pluie')], ['snow', 'snow', () => tr('Neige')], ['fog', 'fog', () => tr('Brouillard')]];
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
@@ -3196,6 +3202,8 @@ export class UI {
         <p class="hint">${DIFF_TEXT.settingHint}</p>
         <div class="row"><label>${tr('Catastrophes')}</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${tr(h.disasters ? 'Activées' : 'Désactivées')}</button></div>
         <p class="hint">${tr('Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.')}</p>
+        <div class="row"><label>${tr('Catastrophes naturelles')}</label>${CALAM_FX.map(([k, i, l]) => `<button data-calam="${k}" aria-pressed="${h.calamities[k]}" class="${h.calamities[k] ? 'active' : ''}">${ic(i, 16)} ${l()}</button>`).join('')}</div>
+        <p class="hint">${tr('Une au plus par âge, annoncée juste avant : une crue après une forte averse, un séisme, une pluie de météorites la nuit. Chacune se coupe à part.')}</p>
         <div class="row"><label>${tr('Routes auto')}</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${tr(h.autoRoads ? 'Activées' : 'Désactivées')}</button></div>
         <p class="hint">${tr('Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.')}</p>
         <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
@@ -3290,6 +3298,13 @@ export class UI {
       h.setQuality(b.dataset.q as Quality);
       ov.querySelectorAll('[data-q]').forEach((x) => x.classList.toggle('active', x === b));
       showQ();
+    }));
+    ov.querySelectorAll<HTMLButtonElement>('[data-calam]').forEach((b) => (b.onclick = () => {
+      const k = b.dataset.calam as CalamityKind, on = !h.calamities[k];
+      h.setCalamity(k, on);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+      a.sfxClick();
     }));
     q('#gDisasters').onclick = () => {
       h.setDisasters(!h.disasters);

@@ -12,6 +12,7 @@ import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from '
 import { CONFLICT_LABEL, conflictItem } from './diplomacy';
 import { SEEDS_PERK, SEEDS_FIELDS } from './isleMissions';
 import { guardReach, perkFood, perkJoy } from './legacy';
+import { DAMAGED_K } from './calamity';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, freightBonus, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -133,28 +134,32 @@ export class Sim {
     for (const b of w.buildings.values()) {
       const k = KINDS[b.kind];
       const a = b.age;
+      // un bâtiment abîmé par une catastrophe ne donne que la moitié pendant ses réparations
+      const dk = w.damaged.has(b.id) ? DAMAGED_K : 1, v = (need: NeedId) => (k[need]?.[a] ?? 0) * dk;
       counts[b.kind] = (counts[b.kind] ?? 0) + 1;
       const decor = DECOR.includes(b.kind);
       // les savoir-faire des expéditions (`legacy.ts`) : chalutiers et îles de culture nourrissent davantage, la station météo
       // du sommet amène du monde aux clubs alpins, les épices aux tavernes
-      const fk = perkFood(w, b.kind), alp = (k.joy?.[a] ?? 0) > 0 ? perkJoy(w, b.kind) : 0;
-      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) if (!decor) add(need, b.kind, (k[need]?.[a] ?? 0) * (need === 'food' ? fk : 1) + (need === 'joy' ? alp : 0));
+      const fk = perkFood(w, b.kind), alp = (k.joy?.[a] ?? 0) > 0 ? perkJoy(w, b.kind) * dk : 0;
+      const give = (need: NeedId) => v(need) * (need === 'food' ? fk : 1) + (need === 'joy' ? alp : 0);
+      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) if (!decor) add(need, b.kind, give(need));
       if (decor) { const s = this.src.joy.get('decor') ?? { n: 0, v: 0 }; s.n++; this.src.joy.set('decor', s); }
-      if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) add('water', 'riverside', k.housing?.[a] ?? 0);
-      H += k.housing?.[a] ?? 0;
-      F += (k.food?.[a] ?? 0) * fk;
-      W += k.water?.[a] ?? 0;
-      J += k.jobs?.[a] ?? 0;
+      if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) add('water', 'riverside', v('housing'));
+      H += v('housing');
+      F += give('food');
+      W += v('water');
+      J += v('jobs');
       // (les décorations comptent à part, plafonnées ensemble : DECOR_JOY_MAX)
-      if (DECOR.includes(b.kind)) deco += k.joy?.[a] ?? 0;
-      else Jy += (k.joy?.[a] ?? 0) + alp;
-      He += k.health?.[a] ?? 0;
-      if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += k.housing?.[a] ?? 0;
+      if (DECOR.includes(b.kind)) deco += v('joy');
+      else Jy += give('joy');
+      He += v('health');
+      if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += v('housing');
     }
     let fields = 0, fertile = 0, forests = 0;
     for (let i = 0; i < w.veg.length; i++) {
       const v = w.veg[i];
-      if (v === 2) { fields++; if (w.ash[i]) fertile++; } else if (v === 1) forests++;
+      // (un champ sous l'eau d'une crue ne donne rien)
+      if (v === 2) { if (w.flooded[i]) continue; fields++; if (w.ash[i]) fertile++; } else if (v === 1) forests++;
     }
     this.land = { fields, fertile, forests };
     // les champs semés sur les cendres d'une coulée donnent double récolte

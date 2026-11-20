@@ -14,15 +14,15 @@ import { tube } from './festivities';
  */
 
 /** Les trophées possibles, dans l'ordre (chacun a sa place sur la place du village) ; un nouveau monstre s'ajoute au bout */
-export const TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon', 'hellking', 'stag'] as const;
+export const TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon', 'hellking', 'stag', 'starstone'] as const;
 export type TrophyId = (typeof TROPHIES)[number];
 
 /**
  * Les trophées gagnés : une mission de ce nom réussie (le mammouth, le dragon), ou le trophée rapporté (les dents du mégalodon,
  * le tentacule du kraken : seulement celui-là, car une ancienne sauvegarde compte le kraken réussi quand son « monstre des mers »
- * était le mégalodon)
+ * était le mégalodon ; la pierre étoilée : le premier fer céleste ramassé après une pluie de météorites)
  */
-const BY_PERK = new Set<string>(['kraken', 'megalodon']);
+const BY_PERK = new Set<string>(['kraken', 'megalodon', 'starstone']);
 export function trophiesWon(s: { done: readonly string[]; perks: readonly string[] }): TrophyId[] {
   return TROPHIES.filter((id) => (s.done.includes(id) && !BY_PERK.has(id)) || s.perks.includes(id));
 }
@@ -239,7 +239,27 @@ function stag(p: Parts, age: number) {
   }
 }
 
-const DRAW: Record<TrophyId, (p: Parts, age: number) => void> = { mammoth, kraken, megalodon, dragon, hellking, stag };
+/**
+ * La pierre étoilée : le premier fer céleste ramassé après une pluie de météorites, un bloc de métal sombre et facetté, veiné
+ * d'un bleu froid qui luit la nuit, posé dans une coupe de pierre sur son socle
+ */
+function starstone(p: Parts, age: number) {
+  const y = plinth(p, age, 0.26), iron = 0x3c4150, dark = 0x2a2d38, vein = 0x6fa8ff;
+  // la coupe : un anneau bas de pierres taillées
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    p.add(new THREE.DodecahedronGeometry(0.03, 0).scale(1.2, 0.7, 1), Math.cos(a) * 0.075, y + 0.015, Math.sin(a) * 0.075, 0x8d877d, a);
+  }
+  // le bloc, de biais, et deux éclats plus petits à ses pieds
+  p.add(new THREE.OctahedronGeometry(0.07, 0).scale(1, 1.25, 0.85), 0, y + 0.1, 0, iron, 0.4, false, 0.25);
+  p.add(new THREE.DodecahedronGeometry(0.045, 0), 0.03, y + 0.15, -0.01, dark, 1.1);
+  for (const [x, z, r] of [[0.06, 0.03, 0.022], [-0.055, 0.035, 0.018]]) p.add(new THREE.OctahedronGeometry(r, 0), x, y + 0.03, z, iron, x * 20);
+  // les veines bleues, qui luisent de leur propre couleur
+  for (const [x, yy, z, ry, rz] of [[0.035, 0.1, 0.035, 0.6, 0.9], [-0.03, 0.13, 0.03, -0.5, -0.7], [0.0, 0.07, 0.05, 0.1, 0.2]])
+    p.box(0.05, 0.006, 0.006, x, y + yy, z, vein, ry, 'neon', rz);
+}
+
+const DRAW: Record<TrophyId, (p: Parts, age: number) => void> = { mammoth, kraken, megalodon, dragon, hellking, stag, starstone };
 
 /** Ajoute à `p` le trophée de ce monstre, posé en (0, 0, 0), sa face (sa plaque) vers +z, pour une place de cet âge */
 export function trophyParts(p: Parts, id: TrophyId, age: number) { DRAW[id](p, Math.max(0, Math.min(5, age))); }

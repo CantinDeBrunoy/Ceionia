@@ -13,7 +13,8 @@ Trois incidents de village : l'**incendie** (vraie conséquence : le bâtiment p
 **Déclencheurs** (tous passent par `Game.ignite`, `main.ts`, puis `Fires.ignite`) :
 - la foudre : `atmosphere.onStrike` ; une chance sur deux si un bâtiment occupe la case touchée ;
 - une bombe de lave : `eruptions.onImpact`, 30 % si `world.disasters` et si la case est occupée ; jamais avec les digues et tranchées (savoir-faire `dikes` de l'expédition « Le village sous le volcan ») ;
-- un feu accidentel : `Emergencies` (voir plus bas), toujours sur une maison à portée d'une caserne.
+- un feu accidentel : `Emergencies` (voir plus bas), toujours sur une maison à portée d'une caserne ;
+- une météorite (dégâts complets, [catastrophes.md](catastrophes.md)) : un impact sur quatre tombe sur un bâtiment.
 `Fires.ignite` refuse si les catastrophes sont désactivées (`world.disasters`, réglage sauvegardé, vrai par défaut), si le bâtiment est une lanterne (`lamp`) ou brûle déjà. Quand le feu prend : toast rouge « 🔥 Incendie : … », `agents.alert` (voir plus bas), son de destruction.
 
 **Évolution d'un feu** (constantes de `fires.ts`, en secondes **de jeu** : rien ne bouge en pause, tout va plus vite en accéléré, comme les secours) :
@@ -52,6 +53,7 @@ Messages : les nouvelles de `Fires.news` s'affichent en toast `danger` s'ils com
 
 ### Autres événements aléatoires
 - **Volcan qui se réveille** (`Game.wakeVolcano`) : si les catastrophes sont actives et qu'aucune éruption n'est en cours, tous les `5 à 10` jours de jeu (`dayLen × (5 + rnd × 5)`), un volcan au hasard (`VEG_VOLCANO`) tremble 18 s (`WAKE_WARN`, toast cliquable qui mène à lui), puis entre en éruption ; les bombes peuvent enflammer des bâtiments. Avec les satellites (savoir-faire `satellites` de l'expédition « Premier vol de fusée »), l'annonce vient une minute avant (`SAT_WAKE_WARN`, « Les satellites voient un volcan se réveiller ») et le grondement dans les 18 dernières secondes.
+- **Catastrophes naturelles** (crue, séisme, pluie de météorites : un impact peut mettre le feu par `ignite`) : une au plus par âge, chacune avec son interrupteur ; leurs cartes d'incident (`calam:flood`, `calam:quake`, `calam:meteor`, `calam:iron`, `calam:repair`) passent par `Game.incidents()`. Voir [catastrophes.md](catastrophes.md).
 - **Imprévus d'expédition** (`events.ts`) : décisions à prendre en cours de mission (`EVENTS`, `eventsFor(ctx)`, `pickEvent`). Filtrés par destination, mission, scène, âge, mer / eau douce, climat chaud. Jamais deux fois le même par expédition ; 70 % de préférence pour ceux propres à la mission. Voir [expeditions.md](expeditions.md).
 
 ## Fonctionnement dans le code

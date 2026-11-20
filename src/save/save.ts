@@ -37,6 +37,10 @@ export interface Settings {
   hideRain?: boolean;
   hideSnow?: boolean;
   hideFog?: boolean;
+  /** catastrophes coupées une à une (crues, séismes, pluies de météorites) ; absentes : elles peuvent venir */
+  noFlood?: boolean;
+  noQuake?: boolean;
+  noMeteor?: boolean;
 }
 
 /** « auto » : la qualité s'ajuste d'elle-même aux images qui traînent (voir `render/adaptive`) */
