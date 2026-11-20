@@ -559,7 +559,7 @@ const MISSION_DIO = new Set([
 /** Équipements illustrés (`public/icons/gear/`) : `{id}.webp` sans décor (cases, file), `{id}-bg.webp` avec décor (cartes) */
 const GEAR_ART = new Set<GearId>([
   'spear', 'rope', 'torch', 'bow', 'boat', 'sword', 'crossbow', 'armor', 'kit', 'rifle', 'lamp', 'assault', 'grenade',
-  'plasma', 'energyArmor', 'fieldShield',
+  'plasma', 'energyArmor', 'fieldShield', 'obsidianSpear', 'obsidianSword',
 ]);
 /** Icône au trait de la carte d'équipement : celles du pack de la maquette, sinon l'icône de la pièce */
 const GEAR_LINE: Partial<Record<GearId, string>> = {
