@@ -34,6 +34,13 @@ export function expandWorld(old: any, map: number, seed: number): any {
   if (!canExpand(old)) throw new Error('Seul le continent, sur la carte de 192, peut s’agrandir');
   const base = old.gen ?? GEN_FIXED;
   const n0 = MAIN_N, n = ARCH_N, f = archLayout(seed, n).main;
+  // le continent tel que généré, avant toute retouche du joueur : un sommet qui en diffère a été sculpté (ou aplani sous un
+  // bâtiment, creusé pour un port) et ne bouge pas d'un centième
+  setMapSize(n0);
+  const first = new World();
+  first.seed = seed;
+  newWorld(first, map, seed, base);
+  const untouched = (x: number, z: number) => Math.abs(Math.round(first.heights[z * (n0 + 1) + x] * 100) - old.heights[z * (n0 + 1) + x]) <= 1;
   setMapSize(n);
   const fresh = new World();
   fresh.seed = seed;
@@ -50,10 +57,12 @@ export function expandWorld(old: any, map: number, seed: number): any {
     if (Array.isArray(a)) for (let i = 0; i + 1 < a.length; i += 2) out.push(cell(a[i]), a[i + 1]);
     return out;
   };
-  // relief : l'ancien dans le cadre, tel quel. Seule sa pleine mer (sous `OPEN_SEA`) peut descendre vers le fond du large
-  // d'une partie neuve de l'archipel (`archHeights`), sur ses 12 dernières cases et sous -1, jamais monter. Avant (bug de
-  // l'auteur, 21 nov. 2026), ces 12 cases étaient fondues vers la carte neuve en les croyant en mer : une presqu'île bâtie
-  // près du bord de l'ancienne carte s'enfonçait ou montait en gradins, ses remparts et pontons restés sur place
+  // relief : l'ancien dans le cadre, tel quel. Seule sa pleine mer (sous `OPEN_SEA`) que le joueur n'a jamais retouchée peut
+  // descendre vers le fond du large d'une partie neuve de l'archipel (`archHeights`), sur ses 12 dernières cases et sous -1,
+  // jamais monter. Avant (bug de l'auteur, 21 nov. 2026 : « les zones abîmées sont celles que j'avais terraformées »), ces 12
+  // cases étaient fondues vers la carte neuve en les croyant en mer, et toute mer sous -1 du cadre allait vers la carte neuve,
+  // même là où elle était de la terre : une terre gagnée sur la mer s'enfonçait ou montait en gradins, un bassin creusé se
+  // comblait, et remparts, pontons et bâtiments restaient sur place
   const S0 = n0 + 1, S = n + 1, heights: number[] = neu.heights.slice();
   // (un sommet n'est en pleine mer que si ses voisins à deux sommets le sont aussi : une case de côte garde tous ses coins,
   // et le relief affiché, lissé entre voisins, ne bouge pas sur la côte)
@@ -68,7 +77,7 @@ export function expandWorld(old: any, map: number, seed: number): any {
   for (let z = 0; z <= n0; z++)
     for (let x = 0; x <= n0; x++) {
       const i = (z + f.z) * S + x + f.x, raw = old.heights[z * S0 + x], hm = raw / 100;
-      if (!openSea(x, z)) { heights[i] = raw; continue; }
+      if (!openSea(x, z) || !untouched(x, z)) { heights[i] = raw; continue; }
       const deep = Math.min(hm, neu.heights[i] / 100);
       // (sous -0,98, la mer rejoint déjà le fond du large ; près du bord, elle s'y fond tout à fait)
       const hs = hm > -0.98 ? hm : lerp(hm, deep, smoothstep(-0.98, -1.1, hm));
@@ -99,6 +108,10 @@ export function expandWorld(old: any, map: number, seed: number): any {
     basalt: pairs(old.basalt, neu.basalt),
     ash: list(old.ash, neu.ash),
     oil: list(old.oil, []),
+    // (oubliés jusqu'au 21 nov. 2026 : les pavés, le cap des grottes et le fer céleste restaient aux cases de l'ancienne carte)
+    ...(Array.isArray(old.paving) ? { paving: list(old.paving, []) } : {}),
+    ...(Array.isArray(old.caveYaw) ? { caveYaw: pairs(old.caveYaw, []) } : {}),
+    ...(Array.isArray(old.starIron) ? { starIron: list(old.starIron, []) } : {}),
     lines: (old.lines ?? []).map((l: any) => (Array.isArray(l?.v) ? { ...l, v: l.v.map((leg: unknown) => (Array.isArray(leg) ? leg.map(cell) : leg)) } : l)),
     portal: move(old.portal),
     war,
@@ -130,13 +143,29 @@ export function repairCoast(d: any, map: number, seed: number): any {
   fresh.seed = seed;
   newWorld(fresh, map, seed, GEN_ARCH);
   const heights: number[] = Array.from(d.heights as number[]);
+  /** le voisinage du sommet (x, z) vaut partout la hauteur de la carte neuve (comblé d'un bloc par l'ancien agrandissement) */
+  const sunk = (x: number, z: number) => {
+    for (let dz = -1; dz <= 1; dz++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const a = x + dx, b = z + dz;
+        if (a < 0 || b < 0 || a > n0 || b > n0) continue;
+        const j = (b + f.z) * S + a + f.x;
+        if (Math.abs(d.heights[j] - Math.round(fresh.heights[j] * 100)) > 2) return false;
+      }
+    return true;
+  };
   for (let z = 0; z <= n0; z++)
     for (let x = 0; x <= n0; x++) {
       const w = smoothstep(0, 12, Math.min(x, z, n0 - x, n0 - z));
-      if (w >= 1) continue;
-      const i = (z + f.z) * S + x + f.x, cur = heights[i] / 100, deep = Math.round(fresh.heights[i] * 100) / 100;
-      const was = w >= 0.07 ? (cur - (1 - w) * deep) / w : first[z * S0 + x];
-      if (!(was > OPEN_SEA) || Math.abs(was - cur) < 0.01) continue;
+      const i = (z + f.z) * S + x + f.x, cur = heights[i] / 100, deep = Math.round(fresh.heights[i] * 100) / 100, gen = first[z * S0 + x];
+      let was = w >= 1 ? cur : w >= 0.07 ? (cur - (1 - w) * deep) / w : gen;
+      // un bassin creusé par le joueur sous -1,1 avait pris la hauteur de la carte neuve, partout dans le cadre (souvent de la
+      // terre) : il vaut exactement celle-ci alors que le continent d'origine était plus haut. Sa profondeur est perdue : il
+      // redevient une eau profonde (-1,1)
+      // (tout le voisinage 3 × 3 aussi : un plateau sculpté qui croise par hasard la hauteur de la carte neuve ne devient pas un trou)
+      if (Math.abs(was - deep) < 0.02 && gen > -0.98 && Math.abs(gen - deep) > 0.1 && Math.abs(cur - gen) > 0.1 && sunk(x, z)) was = -1.1;
+      else if (!(was > OPEN_SEA)) continue;
+      if (Math.abs(was - cur) < 0.01) continue;
       heights[i] = Math.round(was * 100);
     }
   return { ...d, heights, coast: 1 };

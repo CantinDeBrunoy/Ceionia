@@ -27,7 +27,14 @@ describe('le monde s’agrandit : la côte du joueur reste telle quelle', () => 
     const S0 = MAIN_N + 1, z0 = 90;
     for (let z = z0 - 8; z <= z0 + 8; z++)
       for (let x = 0; x <= 30; x++) w.heights[z * S0 + x] = Math.abs(z - z0) <= 4 && x >= 3 ? 0.6 : -0.4;
+    // un bassin creusé au milieu de l'île, sous -1 (l'ancien agrandissement le ramenait vers le relief de la carte neuve)
+    const [sx, sz] = w.startSpot(), bx = sx + 12, bz = sz + 12;
+    for (let z = bz; z <= bz + 7; z++) for (let x = bx; x <= bx + 7; x++) w.heights[z * S0 + x] = -1.3;
     w.updateVis();
+    // des biomes peints, des pavés, du fer céleste
+    for (let x = 4; x < 12; x++) w.paintBiome(x, z0, 0);
+    w.paving[w.ci(sx + 2, sz + 4)] = 1;
+    w.starIron.push(w.ci(sx + 3, sz + 5));
     // des remparts le long de la langue, des maisons, un ponton au bout
     for (let x = 4; x < 28; x++) if (w.canPlace('wall', x, z0 - 3) === null) w.place('wall', x, z0 - 3, 0, true, 1, false);
     for (const x of [8, 14, 20]) if (w.canPlace('house', x, z0) === null) w.place('house', x, z0, 0, true, 1, false);
@@ -74,6 +81,11 @@ describe('le monde s’agrandit : la côte du joueur reste telle quelle', () => 
       }
     expect(diff).toEqual([]);
     expect(e.buildings.size).toBe(placed);
+    // le bassin creusé reste de l'eau profonde ; biomes peints, pavés et fer céleste décalés d'autant
+    expect(e.heights[(bz + 3 + f.z) * S + bx + 3 + f.x]).toBeCloseTo(-1.3, 1);
+    for (let x = 4; x < 12; x++) expect(e.biomePaint[(z0 + f.z) * ARCH_N + x + f.x]).toBe(r.biomePaint[z0 * MAIN_N + x]);
+    expect(e.paving[(sz + 4 + f.z) * ARCH_N + sx + 2 + f.x]).toBe(1);
+    expect(e.starIron).toEqual([(sz + 5 + f.z) * ARCH_N + sx + 3 + f.x]);
   }, 60000);
 
   it('une partie abîmée par l’ancien agrandissement se répare au chargement : la terre de la côte retrouve son relief', () => {
@@ -83,6 +95,8 @@ describe('le monde s’agrandit : la côte du joueur reste telle quelle', () => 
     newWorld(w, CONTINENT, SEED, GEN);
     const S0 = MAIN_N + 1, z0 = 90;
     for (let z = z0 - 8; z <= z0 + 8; z++) for (let x = 0; x <= 30; x++) w.heights[z * S0 + x] = Math.abs(z - z0) <= 4 && x >= 3 ? 0.6 : -0.4;
+    const [sx, sz] = w.startSpot(), bx = sx + 12, bz = sz + 12;
+    for (let z = bz; z <= bz + 7; z++) for (let x = bx; x <= bx + 7; x++) w.heights[z * S0 + x] = -1.3;
     w.updateVis();
     const old = JSON.parse(JSON.stringify(w.toJSON()));
     const f = archLayout(SEED, ARCH_N).main, S = ARCH_N + 1;
@@ -114,6 +128,9 @@ describe('le monde s’agrandit : la côte du joueur reste telle quelle', () => 
         if (h0 <= OPEN_SEA) continue;
         expect(Math.abs(r.heights[(z + f.z) * S + x + f.x] / 100 - h0)).toBeLessThan(0.08);
       }
+    // le bassin creusé, comblé vers la carte neuve par l'ancien agrandissement, redevient une eau profonde (sa profondeur
+    // exacte est perdue)
+    for (let z = bz + 1; z <= bz + 6; z++) for (let x = bx + 1; x <= bx + 6; x++) expect(r.heights[(z + f.z) * S + x + f.x] / 100).toBeLessThan(-0.98);
     // une partie déjà sûre, ou jamais agrandie, ne bouge pas
     expect(repairCoast(r, CONTINENT, SEED)).toBe(r);
     expect(repairCoast({ ...d, exploredAt: null }, CONTINENT, SEED).heights).toBe(d.heights);
