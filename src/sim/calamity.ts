@@ -27,6 +27,11 @@ export const FLOOD_HURT = 3;
 /** Le séisme : rayon des dégâts autour de l'épicentre, âge à partir duquel on bâtit parasismique */
 export const QUAKE_R = 16, QUAKE_SAFE_AGE = 4;
 
+/** Les météorites : chance qu'un impact tombe dans le village (dégâts complets), part des cratères qui gardent un fer céleste, minerai qu'il donne */
+export const METEOR_VILLAGE = 0.25, STAR_IRON = 0.5, STAR_ORE = 3;
+/** Le bonus de la pierre étoilée (le premier fer céleste ramassé) : son trophée sur la grande place */
+export const STAR_PERK = 'starstone';
+
 /** Bâtiments les pieds dans l'eau, que la crue ne touche pas */
 export const WATERPROOF: KindId[] = ['pier', 'harbor', ...SEASIDE];
 
@@ -241,6 +246,46 @@ export function rockfalls(w: World, x: number, z: number, rnd = Math.random): [n
     if (out.some(([px, pz]) => Math.hypot(px - cx, pz - cz) < 4)) continue;
     out.push([cx + 0.5, cz + 0.5]);
   }
+  return out;
+}
+
+export interface Impact {
+  x: number;
+  z: number;
+  /** le bâtiment touché (il prend feu), sinon un cratère dans la nature */
+  hit: number | null;
+  /** un fer céleste reste dans le cratère */
+  iron: boolean;
+}
+
+/** Case de nature où une météorite peut tomber : terre ferme presque plate, ni route, ni bâtiment à moins de 3 cases, ni grotte ni volcan */
+function wild(w: World, x: number, z: number) {
+  if (!w.inCells(x, z) || w.cellAvg(x, z) < 0.1 || w.cellSlope(x, z) > 0.5 || w.lake[z * N + x] || w.road[z * N + x] || w.veg[z * N + x] >= VEG_CAVE) return false;
+  for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) if (w.inCells(x + dx, z + dz) && w.occ[(z + dz) * N + x + dx]) return false;
+  return true;
+}
+
+/**
+ * Les impacts d'une pluie de météorites : 2 à 4, dans la nature à 8 à 36 cases du milieu du village (on les voit tomber) ;
+ * aux dégâts complets, un sur quatre tombe sur un bâtiment. Un cratère de nature sur deux garde un fer céleste (au moins un)
+ */
+export function impacts(w: World, harm: 'none' | 'light' | 'full', rnd = Math.random): Impact[] {
+  const [vx, vz] = villageMid(w), n = 2 + Math.floor(rnd() * 3), out: Impact[] = [];
+  const homes = [...w.buildings.values()].filter((b) => !isDecor(b.kind));
+  for (let i = 0; i < n; i++) {
+    if (harm === 'full' && homes.length && rnd() < METEOR_VILLAGE) {
+      const b = homes[Math.floor(rnd() * homes.length)], s = sizeOf(b);
+      out.push({ x: b.x + s / 2, z: b.z + s / 2, hit: b.id, iron: false });
+      continue;
+    }
+    for (let t = 0; t < 300; t++) {
+      const a = rnd() * Math.PI * 2, r = 8 + rnd() * 28, x = Math.floor(vx + Math.cos(a) * r), z = Math.floor(vz + Math.sin(a) * r);
+      if (!wild(w, x, z) || out.some((o) => Math.hypot(o.x - x, o.z - z) < 5)) continue;
+      out.push({ x: x + 0.5, z: z + 0.5, hit: null, iron: rnd() < STAR_IRON });
+      break;
+    }
+  }
+  if (out.length && !out.some((o) => o.iron)) { const o = out.find((p) => p.hit === null); if (o) o.iron = true; }
   return out;
 }
 

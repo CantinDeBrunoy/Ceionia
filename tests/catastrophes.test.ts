@@ -5,7 +5,8 @@ import { mulberry32 } from '../src/core/rng';
 import { Building, KindId } from '../src/build/catalog';
 import { Sim } from '../src/sim/sim';
 import { rulesOf, DIFFICULTIES } from '../src/sim/difficulty';
-import { CALAM_DAYS, FLOOD_RISE, QUAKE_R, floodSite, growFlood, planAge, quakeVictims, riverish, ruinedFields } from '../src/sim/calamity';
+import { trophiesWon } from '../src/render/trophies';
+import { CALAM_DAYS, FLOOD_RISE, QUAKE_R, STAR_PERK, floodSite, growFlood, impacts, planAge, quakeVictims, riverish, ruinedFields } from '../src/sim/calamity';
 
 /**
  * Un monde plat (hauteur 1) traversé du nord au sud par une rivière (colonnes 40 à 42, sous l'eau), aux berges basses
@@ -121,6 +122,41 @@ describe('catastrophes : le séisme', () => {
     // déjà abîmé : pas deux fois
     w.damaged.set(old[2].id, { t: 10, T: 10 });
     for (let i = 0; i < 20; i++) expect(quakeVictims(w, 24, 21, rnd)).not.toContain(old[2].id);
+  });
+});
+
+describe('catastrophes : la pluie de météorites', () => {
+  beforeAll(() => setMapSize(96));
+
+  it('2 à 4 impacts ; en Facile tous dans la nature, loin des bâtiments ; au moins un fer céleste', () => {
+    const w = riverWorld();
+    for (let i = 0; i < 6; i++) put(w, 'house', 20 + i * 2, 60, 1);
+    const rnd = mulberry32(11);
+    for (let n = 0; n < 30; n++) {
+      const list = impacts(w, 'light', rnd);
+      expect(list.length).toBeGreaterThanOrEqual(2);
+      expect(list.length).toBeLessThanOrEqual(4);
+      expect(list.some((i) => i.iron)).toBe(true);
+      for (const i of list) {
+        expect(i.hit).toBeNull();
+        for (const b of w.buildings.values()) expect(Math.max(Math.abs(b.x + 0.5 - i.x), Math.abs(b.z + 0.5 - i.z))).toBeGreaterThan(3);
+      }
+    }
+  });
+
+  it('dégâts complets : un impact sur quatre environ tombe sur un bâtiment (sans fer céleste)', () => {
+    const w = riverWorld();
+    for (let i = 0; i < 6; i++) put(w, 'house', 20 + i * 2, 60, 1);
+    const rnd = mulberry32(12);
+    let hit = 0, all = 0;
+    for (let n = 0; n < 200; n++) for (const i of impacts(w, 'full', rnd)) { all++; if (i.hit !== null) { hit++; expect(i.iron).toBe(false); } }
+    expect(hit / all).toBeGreaterThan(0.15);
+    expect(hit / all).toBeLessThan(0.35);
+  });
+
+  it('le premier fer céleste ramassé donne la pierre étoilée, trophée de la place', () => {
+    expect(trophiesWon({ done: [], perks: [] })).not.toContain('starstone');
+    expect(trophiesWon({ done: [], perks: [STAR_PERK] })).toContain('starstone');
   });
 });
 

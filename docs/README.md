@@ -40,7 +40,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [difficulte.md](difficulte.md) : la table des réglages par difficulté.
 - [habitants.md](habitants.md) : habitants instanciés, trajets, recherche de chemin, patrouilles et sentinelles.
 - [incidents.md](incidents.md) : incendies, cambriolages, interventions des secours, événements.
-- [catastrophes.md](catastrophes.md) : les catastrophes naturelles (une au plus par âge) : crues, séismes ; bâtiments abîmés et leurs réparations.
+- [catastrophes.md](catastrophes.md) : les catastrophes naturelles (une au plus par âge) : crues, séismes, pluies de météorites et fer céleste ; bâtiments abîmés et leurs réparations.
 - [bac-a-sable.md](bac-a-sable.md) : le mode bac à sable.
 - [grand-choix.md](grand-choix.md) : la carte à trois choix de la fin de l'Antiquité (les Enfers, explorer le monde, ni l'un ni l'autre), l'onglet « Grands choix » des expéditions, la cinématique de la traversée.
 - [tutoriel.md](tutoriel.md) : étapes, déclencheurs, verrous, chapitres de l'île et des Enfers.

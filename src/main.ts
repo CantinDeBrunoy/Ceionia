@@ -523,6 +523,10 @@ class Game implements UIHost {
       age: () => this.sim.age,
       toast: (m, act, level) => this.ui.toast(m, act, level),
       goTo: (x, z, d) => this.ensureSurface(() => { this.follow(null); this.cam.goTo(x, z, d); }),
+      lookUp: () => this.ensureSurface(() => { this.follow(null); this.cam.lookUp(); }),
+      shower: () => this.nightSky.force('shower', this.time),
+      ignite: (id) => { const b = w.buildings.get(id); if (b) ignite(b); },
+      astronomers: () => (this.sim.counts.observatory ?? 0) > 0,
     });
     // les catastrophes que le joueur a coupées (absentes des anciens réglages : toutes laissées)
     this.calam.enabled = { flood: !settings.noFlood, quake: !settings.noQuake, meteor: !settings.noMeteor };
@@ -606,6 +610,8 @@ class Game implements UIHost {
       refuse: (m) => this.ui.refuse(m),
       changed: () => { this.propsDirty = true; this.ui?.refreshTools(); },
       erupt: (cell) => this.erupt(cell),
+      ironAt: (x, z) => this.calam.ironAt(x, z) >= 0,
+      collect: (x, z) => this.calam.collect(x, z),
       openPortal: () => { if (this.war.ensure()) void this.enterHell(); },
       get autoRoads() { return host.autoRoads; },
       pickCitizen: (x, y) => (this.mode === 'surface' && !this.isleCmd ? this.agents.pickAt(x, y, this.cam.camera, canvas.clientWidth, canvas.clientHeight) : null),
@@ -2719,6 +2725,8 @@ class Game implements UIHost {
       this.nightSky.update(dt, gdt, this.time, this.env, this.cam.camera);
       // une aurore, une nuit des étoiles filantes : un mot, et un clic relève la vue vers le ciel (en mode photo, la cloche seule)
       for (const k of this.nightSky.news.splice(0)) {
+        // (la pluie de météorites a son propre message)
+        if (k === 'shower' && this.calam.busy) continue;
         const text = skyNewsText(k, (this.sim.counts.observatory ?? 0) > 0);
         if (document.body.classList.contains('photo')) this.ui.info(text);
         else this.ui.toast(text, () => this.cam.lookUp(k === 'aurora' ? 0 : undefined));

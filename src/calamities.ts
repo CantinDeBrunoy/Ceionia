@@ -3,10 +3,11 @@ import { World, N, VEG_FIELD } from './world/world';
 import type { GameTime } from './core/time';
 import type { Environment } from './render/env';
 import { rulesOf } from './sim/difficulty';
-import { CALAMITIES, CalamityKind, FloodSite, REPAIR_DAYS, QUAKE_R, floodSite, harmOf, nameOf, planAge, quakeCenter, quakeVictims, rockfalls, ruinedFields } from './sim/calamity';
+import { CALAMITIES, CalamityKind, FloodSite, REPAIR_DAYS, QUAKE_R, STAR_ORE, STAR_PERK, floodSite, harmOf, impacts, nameOf, planAge, quakeCenter, quakeVictims, rockfalls, ruinedFields } from './sim/calamity';
 import { FloodView } from './render/flood';
 import { RepairsView } from './render/repairs';
 import { QuakeView } from './render/quake';
+import { MeteorView, FALL } from './render/meteors';
 import { sizeOf, type Building } from './build/catalog';
 import type { AudioEngine } from './audio/audio';
 import { tr, nplural } from './i18n';
@@ -23,6 +24,14 @@ export interface CalamityHost {
   toast(msg: string, act?: () => void, level?: 'info' | 'danger'): void;
   /** mène la vue au point (à la demande du joueur : un clic sur un message) */
   goTo(x: number, z: number, dist: number): void;
+  /** relève la vue vers le ciel (à la demande du joueur) */
+  lookUp(): void;
+  /** une nuit d'étoiles filantes, pour accompagner les bolides */
+  shower(): void;
+  /** met le feu à ce bâtiment (`Game.ignite` : il ne prend pas si les catastrophes sont coupées) */
+  ignite(id: number): void;
+  /** le village a un observatoire : les astronomes annoncent la pluie de météorites au soir */
+  astronomers(): boolean;
 }
 
 /** La crue, d'étape en étape (secondes de jeu) : l'averse qui dure, l'annonce, la montée, l'eau qui reste, le retrait */
@@ -31,8 +40,11 @@ const FLOOD_RAIN = 15, FLOOD_WARN = 20, FLOOD_RISE = 15, FLOOD_HOLD = 60, FLOOD_
 const WAIT_DAYS = 3;
 /** Le séisme : les bêtes s'agitent tant de secondes avant, la terre tremble tant de secondes, les dégâts au bout de tant */
 const QUAKE_WARN = 8, QUAKE_SHAKE = 10, QUAKE_HIT = 2.5;
+/** La pluie de météorites : la nuit noire qu'elle attend, l'annonce, l'écart entre deux bolides, le calme après le dernier */
+const METEOR_NIGHT = 0.85, METEOR_WARN = 6, METEOR_GAP: [number, number] = [5, 11], METEOR_AFTER = 8;
 
 type FloodPhase = 'rain' | 'warn' | 'rise' | 'hold' | 'ebb';
+interface Shower { t: number; plan: { at: number; x: number; z: number; hit: number | null; iron: boolean; done: boolean }[]; fires: number; irons: number; trees: boolean }
 interface Quake { x: number; z: number; t: number; shaking: boolean; hit: boolean; hurt: number; falls: number }
 interface Flood { site: FloodSite; phase: FloodPhase; t: number; told: boolean; drowned: number; ruined: number; hurt: number }
 
@@ -50,21 +62,26 @@ export class Calamities {
   floodView: FloodView;
   repairs: RepairsView;
   quakeView: QuakeView;
+  meteorView: MeteorView;
   /** la catastrophe tirée, qui attend son heure (la pluie pour la crue, la nuit pour les météorites) */
   private pending: CalamityKind | null = null;
   private waited = 0;
   private flood: Flood | null = null;
   private quake: Quake | null = null;
+  private shower: Shower | null = null;
+  /** les astronomes ont annoncé la pluie de cette nuit */
+  private foretold = false;
 
   constructor(private h: CalamityHost) {
     this.floodView = new FloodView(h.world);
     this.repairs = new RepairsView(h.world);
     this.quakeView = new QuakeView(h.world);
-    this.group.add(this.floodView.group, this.repairs.group, this.quakeView.group);
+    this.meteorView = new MeteorView(h.world);
+    this.group.add(this.floodView.group, this.repairs.group, this.quakeView.group, this.meteorView.group);
   }
 
   /** Une catastrophe en cours (annonce comprise) */
-  get busy() { return !!this.flood || !!this.quake; }
+  get busy() { return !!this.flood || !!this.quake || !!this.shower; }
 
   /** `gdt` : temps de jeu (tout se fige en pause) ; `dt` : temps réel (houle, poussière) */
   update(gdt: number, dt: number) {
@@ -73,6 +90,8 @@ export class Calamities {
     this.stepFlood(gdt, dt);
     this.stepQuake(gdt);
     this.quakeView.update(gdt, dt);
+    this.stepShower(gdt);
+    this.meteorView.update(gdt, dt, this.h.world.starIron);
     this.repairs.update(dt);
   }
 
@@ -125,8 +144,7 @@ export class Calamities {
   /** La catastrophe peut-elle avoir lieu sur cette carte (une eau qui déborde pour la crue) */
   private can(k: CalamityKind) {
     if (k === 'flood') return !!floodSite(this.h.world);
-    if (k === 'quake') return true;
-    return false;
+    return k === 'quake' || k === 'meteor';
   }
 
   /** Son heure est venue : la crue après une bonne averse (on la fait venir, sauf l'hiver ou si le joueur impose le temps) */
@@ -136,6 +154,15 @@ export class Calamities {
       if (this.h.time.season === 3) return false;
       if (!env.manualWeather) env.wantKind = 'rain';
       return env.weatherKind === 'rain' && env.rainK > 0.75;
+    }
+    if (k === 'meteor') {
+      // au soir, les astronomes l'annoncent (s'il y a un observatoire) ; elle vient en pleine nuit
+      const hr = this.h.time.hour;
+      if (!this.foretold && hr >= 17.5 && hr < 21 && this.h.astronomers()) {
+        this.foretold = true;
+        this.h.toast(tr('🔭 Les astronomes annoncent une pluie de météorites pour cette nuit.'), undefined, 'info');
+      }
+      return env.night > METEOR_NIGHT;
     }
     return k === 'quake';
   }
@@ -152,6 +179,17 @@ export class Calamities {
       const [x, z] = quakeCenter(this.h.world);
       this.quake = { x, z, t: 0, shaking: false, hit: false, hurt: 0, falls: 0 };
       this.h.toast(tr('🐾 Les bêtes s’agitent, les oiseaux s’envolent : la terre va trembler ! Cliquez ici pour voir.'), () => this.h.goTo(x, z, 34), 'danger');
+    } else if (k === 'meteor') {
+      const w = this.h.world, list = impacts(w, harmOf(w));
+      if (!list.length) return false;
+      let at = METEOR_WARN;
+      const plan = list.map((i) => { const p = { ...i, at, done: false }; at += METEOR_GAP[0] + Math.random() * (METEOR_GAP[1] - METEOR_GAP[0]); return p; });
+      this.shower = { t: 0, plan, fires: 0, irons: 0, trees: false };
+      this.foretold = false;
+      // un ciel dégagé pour le spectacle (sauf temps imposé par le joueur)
+      if (!this.h.env.manualWeather) this.h.env.wantKind = 'clear';
+      this.h.shower();
+      this.h.toast(tr('☄️ Une pluie de météorites traverse le ciel ! Cliquez ici pour lever les yeux.'), () => this.h.lookUp(), 'danger');
     } else return false;
     this.pending = null;
     if (this.h.world.calam) this.h.world.calam.due = -1;
@@ -241,6 +279,52 @@ export class Calamities {
     }
   }
 
+  /** La pluie de météorites : chaque bolide part `FALL` secondes avant son impact ; cratère, feu ou fer céleste */
+  private stepShower(gdt: number) {
+    const m = this.shower, w = this.h.world;
+    if (!m) return;
+    m.t += gdt;
+    for (const p of m.plan) {
+      if (p.done || m.t < p.at - FALL) continue;
+      p.done = true;
+      this.meteorView.fall(p.x, p.z, () => {
+        this.h.audio.sfxBang(1);
+        if (w.clearTrees(p.x, p.z, 1.2)) m.trees = true;
+        // sur un bâtiment : il prend feu (un incendie ordinaire, que les pompiers éteignent)
+        if (p.hit !== null && w.buildings.has(p.hit)) { this.h.ignite(p.hit); m.fires++; }
+        if (p.iron) { const k = Math.floor(p.z) * N + Math.floor(p.x); if (!w.starIron.includes(k)) { w.starIron.push(k); m.irons++; } }
+      });
+    }
+    const last = m.plan[m.plan.length - 1].at;
+    if (m.t >= last + METEOR_AFTER && !this.meteorView.busy) {
+      this.shower = null;
+      const parts = [nplural(m.plan.length, 'impact', 'impacts')];
+      if (m.fires) parts.push(nplural(m.fires, 'incendie', 'incendies'));
+      const iron = m.irons ? ' ' + tr('Un fer céleste luit au fond d’un cratère : cliquez dessus pour le ramasser.') : '';
+      const at = m.plan.find((p) => p.iron) ?? m.plan[0];
+      this.h.toast(tr('☄️ La pluie de météorites est passée : {what}.', { what: parts.join(', ') }) + iron, () => this.h.goTo(at.x, at.z, 22), m.fires ? 'danger' : 'info');
+    }
+  }
+
+  /** Un fer céleste sous le pointeur (case du monde), ou -1 */
+  ironAt(x: number, z: number) {
+    for (const k of this.h.world.starIron) if (Math.hypot((k % N) + 0.5 - x, Math.floor(k / N) + 0.5 - z) < 0.8) return k;
+    return -1;
+  }
+
+  /** Ramasse le fer céleste sous le pointeur : du minerai, et le premier rejoint les trophées de la place ; false s'il n'y en a pas */
+  collect(x: number, z: number) {
+    const w = this.h.world, k = this.ironAt(x, z);
+    if (k < 0) return false;
+    w.starIron = w.starIron.filter((c) => c !== k);
+    w.ore += STAR_ORE;
+    this.h.audio.sfxGoldBurst();
+    const first = !w.exp.perks.includes(STAR_PERK);
+    if (first) w.exp.perks.push(STAR_PERK);
+    this.h.toast(tr('✨ Fer céleste ramassé : +{n} minerai.', { n: STAR_ORE }) + (first ? ' ' + tr('La pierre étoilée rejoint les trophées de la grande place.') : ''), undefined, 'info');
+    return true;
+  }
+
   /** Secousse ressentie au point visé (0 … 1) : monte vite, tient, s'apaise ; s'efface à 70 cases de l'épicentre */
   shakeAt(x: number, z: number) {
     const q = this.quake;
@@ -281,6 +365,13 @@ export class Calamities {
       const st = f.phase === 'warn' ? tr('Les eaux montent') : f.phase === 'rise' ? tr('L’eau gagne les berges') : f.phase === 'hold' ? tr('Les berges sont sous l’eau') : tr('L’eau se retire');
       const progress = f.phase === 'warn' ? f.t / FLOOD_WARN : f.phase === 'ebb' ? f.t / FLOOD_EBB : f.phase === 'hold' ? f.t / FLOOD_HOLD : f.t / FLOOD_RISE;
       out.push({ key: 'calam:flood', icon: '🌊', title: f.site.lake ? tr('Crue : le lac déborde') : f.site.pond ? tr('Crue : l’étang déborde') : tr('Crue : la rivière déborde'), status: st, progress: Math.min(1, progress), x: f.site.x, z: f.site.z });
+    }
+    // les fers célestes à ramasser : une carte, l'œil mène au premier
+    const m = this.shower;
+    if (m) out.push({ key: 'calam:meteor', icon: '☄️', title: tr('Pluie de météorites'), status: m.t < METEOR_WARN ? tr('Des traînées de feu dans le ciel') : tr('Des bolides frappent le sol'), progress: Math.min(1, m.t / (m.plan[m.plan.length - 1].at + METEOR_AFTER)), x: m.plan[0].x, z: m.plan[0].z });
+    if (w.starIron.length) {
+      const k = w.starIron[0];
+      out.push({ key: 'calam:iron', icon: '✨', title: w.starIron.length > 1 ? tr('{n} fers célestes à ramasser', { n: w.starIron.length }) : tr('Un fer céleste à ramasser'), status: tr('Cliquez dessus au fond du cratère'), progress: 0, x: (k % N) + 0.5, z: Math.floor(k / N) + 0.5 });
     }
     // les réparations : une seule carte ; l'œil mène au chantier le moins avancé
     let next: { b: Building; k: number } | null = null, n = 0;
