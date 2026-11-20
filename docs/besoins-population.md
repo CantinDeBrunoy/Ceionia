@@ -47,7 +47,8 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 ### La Sécurité (indicateur, jamais un blocage)
 `computeCoverage` (`coverage.ts`) : part des habitations (bâtiments avec `housing > 0` à leur âge, donc les maisons, manoirs, arcologies **et la place du village**) à portée d'un poste, mesurée du centre du poste au centre de l'habitation.
 - Pompiers : `FIRE_RANGE = 14` cases (poste `fire`).
-- Police : `policeRange(age) = 12 + min(5, age)` cases, avec l'âge du poste (`b.age`) ; la tour de garde (`watchtower`) compte comme un poste de police.
+- Police : `policeRange(age) = 12 + min(5, age)` cases, avec l'âge du poste (`b.age`) ; la tour de garde (`watchtower`) compte comme un poste de police. Avec les chiens de garde (expédition « Le loup des bois »), 4 cases de plus (`guardReach`, paramètre `guard` de `rangeOf`, `reaches` et `computeCoverage` : jauge, surbrillance, secours).
+- Savoir-faire des expéditions dans `Sim.recalc` (`legacy.ts`) : pontons, ports et halles aux poissons ×1,3 de nourriture avec les chalutiers, fermes marines ×1,5 avec les îles de culture (`perkFood`) ; clubs alpins +3 bien-être avec la station météo du sommet, tavernes +2 avec les épices (`perkJoy`, seulement s'ils donnent déjà du bien-être à leur âge).
 - Jauge `share` = moyenne des deux parts. Bonus de bien-être : `COVER_JOY = 0,04` par habitation couverte **par les deux** (`both`), plafonné à `COVER_JOY_MAX = 2`.
 - Un poste compte à tout âge et quelle que soit sa taille ; ce n'est pas le cas des secours animés (voir Pièges).
 

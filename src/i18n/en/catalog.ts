@@ -801,4 +801,10 @@ registerDict('catalog', {
   'Déjà pavé': 'Already paved',
   'Source aménagée': 'Walled spring', 'Fontaine de pierre': 'Stone fountain', 'Fontaine de fonte': 'Cast-iron fountain', 'Fontaine à jets': 'Jet fountain', 'Fontaine en apesanteur': 'Zero-gravity fountain',
   'Une petite fontaine, son bassin et son filet d’eau.': 'A small fountain, its basin and its trickle of water.',
+  // la mare (« Les grands bancs ») et le bassin à coraux (« Le récif »)
+  'Mare aux nénuphars': 'Lily pond', 'Mare aux canards': 'Duck pond', 'Bassin de jardin': 'Garden pond', 'Bassin paysager': 'Landscaped pond', 'Bassin de lumière': 'Pond of light',
+  'Une petite mare creusée de main d’homme : de l’eau, des berges, des roseaux et des nénuphars.': 'A small man-made pond: water, banks, reeds and water lilies.',
+  'Bassin à coraux': 'Coral pool', 'Récif sous verre': 'Reef under glass',
+  'Un bassin d’eau de mer, ses coraux de toutes les couleurs et ses poissons du récif.': 'A seawater pool with corals of every colour and reef fish.',
+  'mares': 'ponds', 'bassins à coraux': 'coral pools',
 });

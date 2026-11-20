@@ -22,6 +22,7 @@ Trois difficultés, choisies au début d'une partie et sauvegardées avec elle :
 | `riskK` (risque des expéditions) | 1 | 1 | 1,25 |
 | `newOnly` (conditions d'âge « bâtiments neufs » seulement) | `false` | `false` | `true` |
 | `gearPrice` (équipement payé aussi en bois et pierre) | `false` | `false` | `true` |
+| `calamity` (catastrophes naturelles : chance qu'un âge en ait une, dégâts) | 1, `none` (spectacle seul) | 0,5, `light` (champs noyés seulement) | 1, `full` |
 
 Le bac à sable et Facile ne diffèrent que par `unlimited`. Le détail des règles est dans les fichiers de chaque système.
 
@@ -35,6 +36,7 @@ Le bac à sable et Facile ne diffèrent que par `unlimited`. Le détail des règ
 - `riskK` : `Expeditions.riskOf` (produit des facteurs de risque).
 - `newOnly` : `reqKindsOf` et `Sim.ageProgress` (voir [ages.md](ages.md)).
 - `gearPrice` : `gearCost` (`gear.ts`).
+- `calamity` : `Calamities` (`calamities.ts`) et `harmOf` (`sim/calamity.ts`) ; voir [catastrophes.md](catastrophes.md).
 - Textes : `DIFF_TEXT` (nom, devise, points forts affichés à l'accueil, messages « Disette », « Le village se remet d'un manque », « (en plus) ») ; les chaînes brutes `RAW` sont traduites par `tr` à chaque lecture (la langue peut changer).
 
 ### Choix et reprise

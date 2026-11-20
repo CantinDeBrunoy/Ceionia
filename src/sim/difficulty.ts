@@ -59,18 +59,25 @@ export interface DifficultyRules {
   gearPrice: boolean;
   /** part du prix d'un bâtiment rendue quand on le démolit (1 : tout, 0,5 : la moitié) */
   refund: number;
+  /**
+   * catastrophes naturelles (crue, séisme, pluie de météorites) : chance qu'un âge en connaisse une (une au plus par âge) et
+   * dégâts : 'none' le spectacle seul, 'light' les champs noyés seulement, 'full' bâtiments abîmés, champs à resemer, impacts
+   * dans le village (voir `sim/calamity.ts`)
+   */
+  calamity: { chance: number; harm: 'none' | 'light' | 'full' };
 }
 
 /** La table des difficultés : c'est ici qu'on les règle */
 export const DIFFICULTY: Record<Difficulty, DifficultyRules> = {
-  sandbox: { unlimited: true, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false, refund: 0 },
-  easy: { unlimited: null, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false, refund: 1 },
+  sandbox: { unlimited: true, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false, refund: 0, calamity: { chance: 1, harm: 'none' } },
+  easy: { unlimited: null, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false, refund: 1, calamity: { chance: 0.5, harm: 'light' } },
   normal: {
     unlimited: false,
     price: { wood: 5, woodAge: 3, stone: 3, stoneAge: 3, penStone: 1, penStoneAge: 1 },
     startWood: 60, startStone: 40,
     foodK: 1.25, famine: 0.004, growK: 0.75, recoverK: 0.5, recoverT: 100, riskK: 1.25,
     newOnly: true, gearPrice: true, refund: 0.5,
+    calamity: { chance: 1, harm: 'full' },
   },
 };
 

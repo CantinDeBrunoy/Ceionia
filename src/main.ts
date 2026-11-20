@@ -42,7 +42,7 @@ import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
 import { Patrols, PATROL_MAX } from './sim/patrols';
 import { Sentinels, SENTINEL_MAX } from './sim/sentinels';
-import { PatrolView } from './render/patrols';
+import { PatrolView, HoundView } from './render/patrols';
 import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
 import { Streams } from './render/streams';
@@ -64,11 +64,14 @@ import { allyIsle, allyView, onAllyIsle, allyPostReady, allyHarborSpot } from '.
 import { SpotBeacon } from './render/spotBeacon';
 import { AGES, BUILD_CATS, KINDS, KIND_ORDER, Building, sizeOf, type KindId } from './build/catalog';
 import { MISSIONS, VICTORY, applyEffects } from './sim/missions';
+import { hasPerk, WAKE_WARN, SAT_WAKE_WARN } from './sim/legacy';
 import { stepGoals, rewardEffects, type GoalCtx } from './sim/goals';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
 import { L_GONE, L_LIFT } from './render/expeditionScenes';
 import { Parade, Spot } from './render/parade';
 import { Fires } from './render/fires';
+import { Calamities } from './calamities';
+import type { CalamityKind } from './sim/calamity';
 import { Traffic } from './render/traffic';
 import { Halos } from './render/halos';
 import { RailBoost } from './render/railBoost';
@@ -208,6 +211,8 @@ class Game implements UIHost {
   /** les patrouilles de soldats des tours de garde et casernes du village, et leur vue */
   patrols: Patrols;
   patrolView: PatrolView;
+  /** les chiens des gardes, au pied des patrouilles (savoir-faire de l'expédition « Le loup des bois ») */
+  houndView: HoundView;
   /** les sentinelles qui font les cent pas sur les remparts et veillent sur les tours de garde, et leur vue */
   sentinels: Sentinels;
   sentinelView: PatrolView;
@@ -233,6 +238,8 @@ class Game implements UIHost {
   /** comment le joueur déplace la vue : retenu pour ce navigateur ; avant le premier choix, le clavier (comme avant) */
   controls: Controls = loadControls() ?? { mode: 'keys', layout: guessLayout(getLang()) };
   fires: Fires;
+  /** crues, séismes, pluies de météorites, réparations des bâtiments abîmés */
+  calam: Calamities;
   traffic: Traffic;
   helis: Helis;
   airships: Airships;
@@ -341,7 +348,7 @@ class Game implements UIHost {
   private followRaw: [number, number] | null = null;
   /** réveil spontané d'un volcan : délai (secondes de jeu) et secousses annonciatrices en cours */
   private quakeTimer = 0;
-  private quake: { cell: number; t: number } | null = null;
+  private quake: { cell: number; t: number; rumble: boolean } | null = null;
   tools: ToolController;
   ui: UI;
   /** tutoriel guidé (bulles d'aide), s'il est activé */
@@ -506,6 +513,8 @@ class Game implements UIHost {
     this.patrols = new Patrols(w);
     this.patrolView = new PatrolView(w, () => this.patrols.all(), PATROL_MAX * 3);
     this.patrolView.camera = this.cam.camera;
+    this.houndView = new HoundView(w, () => this.patrols.hounds(), PATROL_MAX);
+    this.houndView.camera = this.cam.camera;
     this.sentinels = new Sentinels(w);
     this.sentinelView = new PatrolView(w, () => this.sentinels.all(), SENTINEL_MAX, 100);
     this.sentinelView.camera = this.cam.camera;
@@ -519,6 +528,18 @@ class Game implements UIHost {
     this.scene.add(this.nightSky.group);
     this.life = new AmbientLife(w, this.buildings);
     this.fires = new Fires(w);
+    this.calam = new Calamities({
+      world: w, time: this.time, env: this.env, audio,
+      age: () => this.sim.age,
+      toast: (m, act, level) => this.ui.toast(m, act, level),
+      goTo: (x, z, d) => this.ensureSurface(() => { this.follow(null); this.cam.goTo(x, z, d); }),
+      lookUp: () => this.ensureSurface(() => { this.follow(null); this.cam.lookUp(); }),
+      shower: () => this.nightSky.force('shower', this.time),
+      ignite: (id) => { const b = w.buildings.get(id); if (b) ignite(b); },
+      astronomers: () => (this.sim.counts.observatory ?? 0) > 0,
+    });
+    // les catastrophes que le joueur a coupées (absentes des anciens réglages : toutes laissées)
+    this.calam.enabled = { flood: !settings.noFlood, quake: !settings.noQuake, meteor: !settings.noMeteor };
     this.traffic = new Traffic(w);
     this.traffic.avoid = this.roads.islands;
     this.helis = new Helis(w, this.buildings);
@@ -529,6 +550,7 @@ class Game implements UIHost {
     this.emergencies = new Emergencies(w, this.fires, this.roads.islands);
     this.fires.responder = this.emergencies;
     this.fires.top = (b) => this.buildings.topOf(b.id);
+    this.calam.repairs.top = (id) => this.buildings.topOf(id);
     // les pompiers et les voisins au seau : ils restent tant que ça brûle, et leur eau éteint le feu
     this.fires.pails = (b) => this.agents.pails(b);
     this.agents.burning = (id) => this.fires.burning.some((b) => b.id === id);
@@ -581,12 +603,13 @@ class Game implements UIHost {
     this.emergencies.ignite = (b) => ignite(b);
     // (une fois sur deux seulement : les incendies restent des événements)
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
-    this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
+    // (les digues et tranchées de l'expédition « Le village sous le volcan » détournent la lave : plus d'incendie)
+    this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && !hasPerk(w, 'dikes') && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.houndView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.calam.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
     this.applyQuality();
 
     const host = this;
@@ -598,6 +621,8 @@ class Game implements UIHost {
       refuse: (m) => this.ui.refuse(m),
       changed: () => { this.propsDirty = true; this.ui?.refreshTools(); },
       erupt: (cell) => this.erupt(cell),
+      ironAt: (x, z) => this.calam.ironAt(x, z) >= 0,
+      collect: (x, z) => this.calam.collect(x, z),
       openPortal: () => { if (this.war.ensure()) void this.enterHell(); },
       get autoRoads() { return host.autoRoads; },
       pickCitizen: (x, y) => (this.mode === 'surface' && !this.isleCmd ? this.agents.pickAt(x, y, this.cam.camera, canvas.clientWidth, canvas.clientHeight) : null),
@@ -867,7 +892,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog, noFlood: !this.calam.enabled.flood, noQuake: !this.calam.enabled.quake, noMeteor: !this.calam.enabled.meteor };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -1824,6 +1849,8 @@ class Game implements UIHost {
     const w = this.world;
     if (this.quake) {
       this.quake.t -= dt;
+      // (annoncé plus tôt par les satellites : le grondement vient dans les dernières secondes)
+      if (this.quake.rumble && this.quake.t <= WAKE_WARN) { this.quake.rumble = false; audio.sfxRumble(WAKE_WARN); }
       if (this.quake.t <= 0) { this.erupt(this.quake.cell); this.quake = null; }
       return;
     }
@@ -1835,10 +1862,12 @@ class Game implements UIHost {
     for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_VOLCANO) vols.push(k);
     if (!vols.length) return;
     const cell = vols[Math.floor(Math.random() * vols.length)];
-    this.quake = { cell, t: 18 };
-    audio.sfxRumble(18);
+    // les satellites (expédition « Premier vol de fusée ») le voient se réveiller bien avant les premières secousses
+    const sat = hasPerk(w, 'satellites');
+    this.quake = { cell, t: sat ? SAT_WAKE_WARN : WAKE_WARN, rumble: sat };
+    if (!sat) audio.sfxRumble(WAKE_WARN);
     // le message mène au volcan qui se réveille (on ne savait pas lequel)
-    this.ui.toast(tr('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.'), () => this.ensureSurface(() => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); }), 'danger');
+    this.ui.toast(sat ? tr('Les satellites voient un volcan se réveiller : éruption dans une minute. Cliquez ici pour le voir.') : tr('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.'), () => this.ensureSurface(() => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); }), 'danger');
   }
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
@@ -1847,6 +1876,14 @@ class Game implements UIHost {
     return { p: this.gfx, glow: !!this.glow && this.gfx.glow, fine: renderer.getPixelRatio() / (window.devicePixelRatio || 1), level: this.adaptive.level, max: MAX_LEVEL };
   }
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
+  /** Les catastrophes laissées par le joueur, une à une (réglages) */
+  get calamities(): Readonly<Record<CalamityKind, boolean>> { return this.calam.enabled; }
+  setCalamity(k: CalamityKind, on: boolean) { this.calam.enabled[k] = on; this.applySettings(); }
+  /**
+   * Mode développeur : une catastrophe tout de suite, sans attendre son jour (`__game.calamity('flood')`) ; false si elle ne
+   * peut pas avoir lieu (pas d'eau qui déborde, une autre en cours)
+   */
+  calamity(k: CalamityKind) { return this.calam.start(k, true); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
   setHideGoals(on: boolean) { this.hideGoals = on; this.applySettings(); this.ui.update(); }
@@ -1906,7 +1943,7 @@ class Game implements UIHost {
   dispelFog() { this.env.dispelFog(); this.atmosphere.dispel(300); }
 
   /** Incidents en cours (incendies, malaises, cambriolages), pour leurs cartes et la caméra */
-  incidents() { return [...this.fires.incidents(), ...this.emergencies.incidents()]; }
+  incidents() { return [...this.fires.incidents(), ...this.emergencies.incidents(), ...this.calam.incidents()]; }
   /** l'incident que la caméra suit */
   incidentCam: string | null = null;
   followIncident(key: string | null) {
@@ -2269,6 +2306,7 @@ class Game implements UIHost {
     this.fauna.detail = p.faunaDetail;
     this.agents.detail = p.faunaDetail;
     this.patrolView.detail = p.faunaDetail;
+    this.houndView.detail = p.faunaDetail;
     this.sentinelView.detail = p.faunaDetail;
     this.veg.lodDist = p.vegLod;
     this.blightView.density = p.density;
@@ -2642,8 +2680,10 @@ class Game implements UIHost {
     let shake = uv || hv || gdt === 0 ? 0 : this.eruptions.shakeAt(this.cam.target.x, this.cam.target.z);
     if (this.quake && !uv) {
       const v = this.quake.cell, d = Math.hypot((v % N) + 0.5 - this.cam.target.x, Math.floor(v / N) + 0.5 - this.cam.target.z);
-      shake = Math.max(shake, (1 - this.quake.t / 18) * 0.7 * Math.max(0, 1 - d / 70));
+      shake = Math.max(shake, (1 - this.quake.t / WAKE_WARN) * 0.7 * Math.max(0, 1 - d / 70));
     }
+    // un séisme (catastrophe naturelle)
+    if (!uv && !hv && gdt > 0) shake = Math.max(shake, 0.8 * this.calam.shakeAt(this.cam.target.x, this.cam.target.z));
     // les cris du roi des Enfers, l'effondrement de son royaume
     shake = Math.max(shake, this.kingStage.shake());
     if (shake > 0) {
@@ -2701,6 +2741,8 @@ class Game implements UIHost {
       this.nightSky.update(dt, gdt, this.time, this.env, this.cam.camera);
       // une aurore, une nuit des étoiles filantes : un mot, et un clic relève la vue vers le ciel (en mode photo, la cloche seule)
       for (const k of this.nightSky.news.splice(0)) {
+        // (la pluie de météorites a son propre message)
+        if (k === 'shower' && this.calam.busy) continue;
         const text = skyNewsText(k, (this.sim.counts.observatory ?? 0) > 0);
         if (document.body.classList.contains('photo')) this.ui.info(text);
         else this.ui.toast(text, () => this.cam.lookUp(k === 'aurora' ? 0 : undefined));
@@ -2711,11 +2753,12 @@ class Game implements UIHost {
     this.sim.season = this.time.season;
     this.sim.update(gdt, dt);
     this.eruptions.update(gdt);
-    this.fauna.alarm = this.eruptions.alarm();
+    this.fauna.alarm = this.eruptions.alarm() ?? this.calam.alarm();
     this.fires.update(dt, gdt);
     // personne n'accourt vers un feu (tout le monde était à l'intérieur ou loin au moment où il a pris) : on rappelle à l'aide
     if ((this.fireCallT -= dt) <= 0) { this.fireCallT = 4; for (const b of this.fires.burning) if (!this.agents.responders(b)) this.agents.alert(b.z * N + b.x); }
     this.wakeVolcano(gdt, dt);
+    this.calam.update(gdt, dt);
     // nouvelles du village : incendies, feux éteints, bâtiments perdus
     for (const m of this.fires.news.splice(0)) this.ui.toast(m, undefined, m.startsWith('🔥') ? 'danger' : 'info');
     for (const m of this.emergencies.news.splice(0)) this.ui.toast(m, undefined, 'danger');
@@ -2727,6 +2770,7 @@ class Game implements UIHost {
     // les rondes des soldats du village (torche à la main la nuit)
     this.patrols.update(gdt, this.sim.age);
     this.patrolView.update(this.sim.age, this.env.night > 0.5);
+    this.houndView.update(gdt);
     this.sentinels.update(gdt);
     this.sentinelView.update(this.sim.age, this.env.night > 0.5);
     this.cam.pace = this.time.paused ? 1 : this.time.speed;

@@ -23,6 +23,7 @@ import type { RailEditState } from '../build/trackEdit';
 import { isleName, kindOffered, CONFLICT_LABEL, allyPostReadyNow, boonsMatter, talkRisk, TALK_RISK } from '../sim/diplomacy';
 import { peoplesView } from '../sim/peoples';
 import { peoplesHtml } from './peoples';
+import { legacyOf } from '../sim/legacy';
 import { boonText, effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
@@ -34,7 +35,7 @@ import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/cros
 import { waysHtml, type ConflictWay } from './ways';
 import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
 import { flowOf, flowOfBuilding, ledgerOf, LedgerRow, Flow, refundTotal, shortText } from '../sim/ledger';
-import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
+import { gap, railBoost, railStation, railWant, freightBonus, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
@@ -51,6 +52,7 @@ import { menuBg, LOGO_PEAKS } from './loading';
 import { MiniMap } from './minimap';
 import { placeCard } from './xcard';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
+import type { CalamityKind } from '../sim/calamity';
 
 export interface UIHost {
   tools: ToolController;
@@ -100,6 +102,9 @@ export interface UIHost {
   readonly gfxShown: { p: GfxParams; glow: boolean; fine: number; level: number; max: number };
   disasters: boolean;
   setDisasters(on: boolean): void;
+  /** catastrophes laissées une à une (crues, séismes, pluies de météorites) */
+  readonly calamities: Readonly<Record<CalamityKind, boolean>>;
+  setCalamity(k: CalamityKind, on: boolean): void;
   autoRoads: boolean;
   setAutoRoads(on: boolean): void;
   /** flèches d'amélioration au-dessus des bâtiments, masquées ou non */
@@ -176,7 +181,7 @@ function folded(text: string, k: string) {
  * ce qu'il faudrait pour en avoir une), une gare de voyageurs au cosmodrome ; pour une gare, les bâtiments qu'elle sert
  */
 function railStat(h: UIHost, b: Building): [string, string] | null {
-  const w = h.world, r = h.railway, want = railWant(b.kind), t = ic('train', 14, 2), bonus = Math.round(FREIGHT_BONUS * 100);
+  const w = h.world, r = h.railway, want = railWant(b.kind), t = ic('train', 14, 2), bonus = Math.round(freightBonus(w) * 100);
   // [pastille courte, explication complète en info-bulle]
   if (want === 'freight') {
     const st = railStation(w, b);
@@ -395,6 +400,8 @@ const MAIN: (typeof GIVES)[number]['k'][] = ['housing', 'food', 'water', 'health
 
 const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: 'rain', snow: 'snow', fog: 'fog' };
 /** Effets de la météo qu'on peut éteindre dans les réglages : clé, icône, nom */
+/** Les catastrophes qu'on coupe une à une : leur icône et leur nom */
+const CALAM_FX: [CalamityKind, string, () => string][] = [['flood', 'waves', () => tr('Crues')], ['quake', 'crack', () => tr('Séismes')], ['meteor', 'flame', () => tr('Météorites')]];
 const WEATHER_FX: ['rain' | 'snow' | 'fog', string, () => string][] = [['rain', 'rain', () => tr('Pluie')], ['snow', 'snow', () => tr('Neige')], ['fog', 'fog', () => tr('Brouillard')]];
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
@@ -1458,7 +1465,7 @@ export class UI {
       const short = stops.map((s) => (!s ? '?' : s.id === b.id ? `<b>${tr('ici')}</b>` : shortStop(r.stopName(s)))).join(' → ');
       const tip = `${r.lineLabel(l)}\n${tr(l.freight ? 'Marchandises' : 'Voyageurs')}${train ? tr(' · train {where}', { where: trainWhere(r, train) }) : tr(' · pas de train')}`;
       return `<div class="rline" title="${attr(tip)}">${dot(l.color)}<span class="grow">${short}</span>
-        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? tr('Train de marchandises : les ateliers et carrières à côté de ses gares produisent {n} % de plus. Cliquer pour en faire un train de voyageurs', { n: Math.round(FREIGHT_BONUS * 100) }) : tr('Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises')}" aria-label="${tr(l.freight ? 'Train de marchandises' : 'Train de voyageurs')}">${l.freight ? '📦' : '🧳'}</button>
+        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? tr('Train de marchandises : les ateliers et carrières à côté de ses gares produisent {n} % de plus. Cliquer pour en faire un train de voyageurs', { n: Math.round(freightBonus(h.world) * 100) }) : tr('Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises')}" aria-label="${tr(l.freight ? 'Train de marchandises' : 'Train de voyageurs')}">${l.freight ? '📦' : '🧳'}</button>
         <button data-act="follow:${l.id}" title="${tr('Suivre le train')}" aria-label="${tr('Suivre le train')}">${ic('eye', 14, 2)}</button><button data-act="edit:${l.id}" title="${tr('Modifier la ligne : ses arrêts et le tracé de sa voie')}" aria-label="${tr('Modifier la ligne')}">${ic('road', 14, 2)}</button><button data-act="drop:${l.id}" title="${tr('Fermer la ligne')}" aria-label="${tr('Fermer la ligne')}">${ic('close', 14, 2)}</button></div>`;
     }).join('')}</div>` : ''}</div>`
       : '';
@@ -2573,6 +2580,7 @@ export class UI {
           ${this.missionPills(m)}
           ${this.boonHtml(m)}
           ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
+          ${this.legacyHtml(m, done)}
           ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m, true)}</p>` : ''}
           <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${SEND_ICON} ${label}</button>
         </div></div>`;
@@ -3082,6 +3090,16 @@ export class UI {
   /** Le bâtiment qu'une expédition réussie a débloqué se bâtit maintenant, et n'est pas encore bâti : on le met en avant */
   private canBuildNow(k: KindId, done: boolean) { return done && !this.lockOf(k) && !(this.host.sim.counts[k] ?? 0); }
 
+  /**
+   * Le savoir-faire durable d'une expédition qui ne débloque pas de bâtiment (`legacy.ts`) : la même ligne « Débloque : … »,
+   * son effet complet en infobulle
+   */
+  private legacyHtml(m: Mission, done: boolean) {
+    const l = m.unlocks ? null : legacyOf(m.id);
+    if (!l) return '';
+    return `<p class="unlock" title="${attr(effectSummary([{ t: 'perk', id: l.perk }]))}">${pic(l.icon, 15)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${tr(l.label)}</b></p>`;
+  }
+
   /** Récit du retour d'une expédition */
   showReport(r: Report) {
     const build = r.ok && r.m.unlocks && !r.redo && !this.lockOf(r.m.unlocks) ? r.m.unlocks : null;
@@ -3185,6 +3203,8 @@ export class UI {
         <p class="hint">${DIFF_TEXT.settingHint}</p>
         <div class="row"><label>${tr('Catastrophes')}</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${tr(h.disasters ? 'Activées' : 'Désactivées')}</button></div>
         <p class="hint">${tr('Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.')}</p>
+        <div class="row"><label>${tr('Catastrophes naturelles')}</label>${CALAM_FX.map(([k, i, l]) => `<button data-calam="${k}" aria-pressed="${h.calamities[k]}" class="${h.calamities[k] ? 'active' : ''}">${ic(i, 16)} ${l()}</button>`).join('')}</div>
+        <p class="hint">${tr('Une au plus par âge, annoncée juste avant : une crue après une forte averse, un séisme, une pluie de météorites la nuit. Chacune se coupe à part.')}</p>
         <div class="row"><label>${tr('Routes auto')}</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${tr(h.autoRoads ? 'Activées' : 'Désactivées')}</button></div>
         <p class="hint">${tr('Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.')}</p>
         <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
@@ -3279,6 +3299,13 @@ export class UI {
       h.setQuality(b.dataset.q as Quality);
       ov.querySelectorAll('[data-q]').forEach((x) => x.classList.toggle('active', x === b));
       showQ();
+    }));
+    ov.querySelectorAll<HTMLButtonElement>('[data-calam]').forEach((b) => (b.onclick = () => {
+      const k = b.dataset.calam as CalamityKind, on = !h.calamities[k];
+      h.setCalamity(k, on);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+      a.sfxClick();
     }));
     q('#gDisasters').onclick = () => {
       h.setDisasters(!h.disasters);

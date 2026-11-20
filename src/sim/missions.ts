@@ -4,6 +4,7 @@ import type { KindId } from '../build/catalog';
 import { tr, plural } from '../i18n';
 import { applyDiplo, claimVictory, DiploAct, addBoon, BoonKind, IsleWhen } from './diplomacy';
 import { ISLE_MISSIONS } from './isleMissions';
+import { grantLegacies } from './legacy';
 
 /**
  * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant, deux à la
@@ -223,7 +224,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'berries', age: 0, mandatory: false, icon: '🍇', title: 'La grande cueillette',
+    id: 'berries', age: 0, mandatory: false, icon: '🍇', title: 'La grande cueillette', unlocks: 'hedge',
     intro: 'Les baies mûrissent dans les bois et le long de l’eau. De quoi faire des réserves pour quelques jours.',
     choices: [
       {
@@ -243,7 +244,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'flint', age: 0, mandatory: false, icon: '⛏️', title: 'La chasse au silex',
+    id: 'flint', age: 0, mandatory: false, icon: '⛏️', title: 'La chasse au silex', unlocks: 'statue',
     intro: 'Au pied de la montagne, la falaise est pleine de silex, et la rivière en roule des galets. Avec de meilleurs outils, tout le monde travaillerait mieux.',
     choices: [
       {
@@ -360,7 +361,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'fishing', age: 1, mandatory: false, icon: '🐟', title: 'Les grands bancs',
+    id: 'fishing', age: 1, mandatory: false, icon: '🐟', title: 'Les grands bancs', unlocks: 'pond',
     intro: 'Les anciens disent que plus loin sur l’eau, les bancs de poissons sont immenses.',
     choices: [
       {
@@ -543,14 +544,14 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Le chasser avec les chiens', text: 'Il faudra le pister loin dans la forêt.',
         dest: 'forest', scene: 'hunt', doing: 'piste le loup avec les chiens', danger: ['beast'], party: 3, work: 18, risk: 0.3,
-        win: [joy(3)], lose: [hurt(1, 2)],
+        win: [joy(3), { t: 'perk', id: 'hounds' }], lose: [hurt(1, 2)],
         winText: 'Le loup est parti loin dans la montagne : les bergers dorment enfin.',
         loseText: 'Le loup s’est défendu : un chasseur mordu, et le loup toujours là.',
       },
       {
         label: 'Bâtir des enclos de pierre sèche', text: 'Pas de chasse : on protège les bêtes.',
         dest: 'plain', scene: 'build', doing: 'monte des murets de pierre sèche', party: 2, work: 24, risk: 0.05, carry: 'cart',
-        win: [joy(2), food(1)], lose: [],
+        win: [joy(2), food(1), { t: 'perk', id: 'hounds' }], lose: [],
         winText: 'De beaux enclos de pierre : le loup peut toujours rôder.',
         loseText: 'Les pierres manquaient : les enclos attendront.',
       },
@@ -661,7 +662,7 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Charger le poivre aux comptoirs proches', text: 'Traversée courte : laine et fer contre des sacs d’épices.',
         dest: 'river', sea: true, scene: 'voyage', fail: 'fog', doing: 'troque laine et fer contre des sacs d’épices', danger: ['water'], party: 3, work: 22, risk: 0.2, carry: 'sacks',
-        win: [food(3, 8), joy(2, 6), jobs(1)], lose: [hurt(1, 1)],
+        win: [food(3, 8), joy(2, 6), jobs(1), { t: 'perk', id: 'spices' }], lose: [hurt(1, 1)],
         winText: 'Des sacs de poivre et de cannelle plein la cale : les tables du village sentent bon, et les marchands sont ravis.',
         loseText: 'Pris dans la brume, le navire a perdu sa route et il est rentré à vide.',
       },
@@ -747,14 +748,14 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Par la crête, encordés', text: 'Prudent : on suit la crête, encordés deux par deux.',
         dest: 'river', sea: true, scene: 'ascent', fail: 'rocks', doing: 'monte au cratère par la crête, encordée', danger: ['water', 'fall'], party: 3, work: 34, risk: 0.16, carry: 'sacks',
-        win: [{ t: 'ore', n: 6 }, joy(2, 6), joy(1)], lose: [hurt(1, 2)],
+        win: [{ t: 'ore', n: 6 }, joy(2, 6), joy(1), { t: 'perk', id: 'sulfur' }], lose: [hurt(1, 2)],
         winText: 'L’équipe a vu le lac de feu de ses yeux, et rapporte du soufre plein les sacs. Le village ne parle que de ça.',
         loseText: 'Un pan de la crête s’est effondré : un grimpeur blessé, et l’équipe a fait demi-tour sous le sommet.',
       },
       {
         label: 'Descendre au bord du lac de lave', text: 'Audacieux : jusqu’au bord du feu, pour le plus beau soufre.',
         dest: 'river', sea: true, scene: 'ascent', variant: 'lava', fail: 'rocks', doing: 'descend dans le cratère jusqu’au bord du lac de lave', danger: ['water', 'fall', 'weather'], party: 4, work: 26, risk: 0.35, carry: 'sacks',
-        win: [{ t: 'ore', n: 10 }, joy(3, 6), joy(1)], lose: [hurt(2, 3), joy(-1, 3)],
+        win: [{ t: 'ore', n: 10 }, joy(3, 6), joy(1), { t: 'perk', id: 'sulfur' }], lose: [hurt(2, 3), joy(-1, 3)],
         winText: 'Au bord même du lac de lave, l’équipe a gratté le soufre le plus pur. Les alchimistes n’en reviennent pas.',
         loseText: 'Une bouffée brûlante est montée du lac : deux blessés, et l’équipe est redescendue en toussant.',
       },
@@ -770,21 +771,21 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Par la plaine, en contournant tout', text: 'Le plus long, le plus sûr.',
         dest: 'plain', scene: 'rails', doing: 'pose la voie ferrée à travers la plaine', party: 3, work: 26, risk: 0.1,
-        win: [jobs(4), joy(1)], lose: [],
+        win: [jobs(4), joy(1), { t: 'perk', id: 'railfast' }], lose: [],
         winText: 'Le tracé le plus long, mais le plus sûr : les ouvriers arrivent en nombre.',
         loseText: 'Les relevés étaient faux : il faudra recommencer.',
       },
       {
         label: 'Percer un tunnel sous la montagne', text: 'Audacieux, et les déblais pourraient rapporter.',
         dest: 'mountain', scene: 'gallery', fail: 'rocks', doing: 'perce le tunnel et sort les déblais', party: 4, work: 30, risk: 0.35, carry: 'cart',
-        win: [jobs(5), { t: 'ore', n: 8 }], lose: [hurt(2, 3)],
+        win: [jobs(5), { t: 'ore', n: 8 }, { t: 'perk', id: 'railfast' }], lose: [hurt(2, 3)],
         winText: 'Le tunnel est percé ! En prime, les déblais regorgent de charbon et de fer.',
         loseText: 'Un éboulement dans le tunnel : deux ouvriers blessés.',
       },
       {
         label: 'Jeter un pont sur la rivière', text: 'Un ouvrage d’art qu’on viendra voir de loin.',
         dest: 'river', scene: 'bridge', doing: 'jette le pont sur la rivière', danger: ['water', 'fall'], party: 3, work: 22, risk: 0.2,
-        win: [jobs(4), joy(2)], lose: [hurt(1, 2)],
+        win: [jobs(4), joy(2), { t: 'perk', id: 'railfast' }], lose: [hurt(1, 2)],
         winText: 'Le pont de fer enjambe la rivière : on vient l’admirer de toute la région !',
         loseText: 'Une poutre a glissé : un ouvrier blessé.',
       },
@@ -797,14 +798,14 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Sonder la montagne', text: 'Des carottages patients.',
         dest: 'mountain', scene: 'drill', doing: 'carotte la roche à la recherche du charbon', party: 3, work: 22, risk: 0.15, carry: 'cart',
-        win: [{ t: 'ore', n: 8 }], lose: [],
+        win: [{ t: 'ore', n: 8 }, { t: 'perk', id: 'coalfire' }], lose: [],
         winText: 'Une belle veine : les wagonnets rentrent pleins.',
         loseText: 'Rien que de la roche stérile.',
       },
       {
         label: 'Descendre dans la grotte', text: 'Plus riche, plus dangereux.',
         dest: 'cave', scene: 'cave', fail: 'blast', doing: 'descend dans la grotte, lampe au front', party: 3, work: 18, risk: 0.3, carry: 'cart',
-        win: [{ t: 'ore', n: 12 }], lose: [hurt(1, 2)],
+        win: [{ t: 'ore', n: 12 }, { t: 'perk', id: 'coalfire' }], lose: [hurt(1, 2)],
         winText: 'La grotte cachait une veine énorme !',
         loseText: 'Un coup de grisou : un prospecteur blessé.',
       },
@@ -901,14 +902,14 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Évacuer par la plage', text: 'Prudent : on emmène tout le monde vers le bateau.',
         dest: 'river', sea: true, scene: 'eruption', fail: 'rocks', doing: 'conduit les habitants du village jusqu’au bateau', danger: ['water', 'fall'], party: 4, work: 30, risk: 0.15, carry: 'refugees',
-        win: [joy(3, 6), jobs(2), food(2, 6)], lose: [hurt(1, 2)],
+        win: [joy(3, 6), jobs(2), food(2, 6), { t: 'perk', id: 'dikes' }], lose: [hurt(1, 2)],
         winText: 'Tout le village est monté à bord avant que la lave n’arrive. Les pêcheurs s’installent chez nous, et ils ont des bras.',
         loseText: 'La cendre a caché la plage : l’équipe a dû rembarquer sans tout le monde, et un sauveteur s’est blessé.',
       },
       {
         label: 'Détourner la lave par une tranchée', text: 'Audacieux : on creuse pour sauver les maisons.',
         dest: 'river', sea: true, scene: 'eruption', variant: 'trench', fail: 'rocks', doing: 'creuse une tranchée pour détourner la coulée du village', danger: ['water', 'fall', 'weather'], party: 5, work: 36, risk: 0.35, carry: 'refugees',
-        win: [joy(4, 6), joy(1), jobs(2), { t: 'ore', n: 6 }], lose: [hurt(2, 3), joy(-2, 4)],
+        win: [joy(4, 6), joy(1), jobs(2), { t: 'ore', n: 6 }, { t: 'perk', id: 'dikes' }], lose: [hurt(2, 3), joy(-2, 4)],
         winText: 'La coulée a suivi la tranchée et filé vers la mer : les maisons sont sauves ! Le village reconnaissant nous offre son fer.',
         loseText: 'La lave a franchi la tranchée : on a sauvé les gens, pas les maisons. Deux sauveteurs sont brûlés.',
       },
@@ -922,21 +923,21 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Par la crête, en un jour', text: 'Vite fait, si le vent le permet.',
         dest: 'mountain', scene: 'summit', doing: 'plante le drapeau et monte la station météo', party: 3, work: 20, risk: 0.35, carry: 'sacks',
-        win: [joy(4), jobs(2)], lose: [hurt(1, 2)],
+        win: [joy(4), jobs(2), { t: 'perk', id: 'meteo' }], lose: [hurt(1, 2)],
         winText: 'Drapeau au sommet ! La station envoie déjà ses premières mesures.',
         loseText: 'Le vent a forcé la cordée à redescendre. Un porteur s’est tordu la cheville.',
       },
       {
         label: 'Par la vallée, avec un camp de base', text: 'Lentement mais sûrement.',
         dest: 'far', scene: 'basecamp', fail: 'storm', doing: 'monte le camp de base, puis la station au sommet', danger: ['weather', 'fall'], party: 4, work: 30, risk: 0.1, carry: 'sacks',
-        win: [joy(3), jobs(3)], lose: [],
+        win: [joy(3), jobs(3), { t: 'perk', id: 'meteo' }], lose: [],
         winText: 'La station est installée, et le village a sa photo dans le journal.',
         loseText: 'Le mauvais temps a tout reporté.',
       },
     ],
   },
   {
-    id: 'reef', age: 4, mandatory: false, icon: '🐠', title: 'Le récif',
+    id: 'reef', age: 4, mandatory: false, icon: '🐠', title: 'Le récif', unlocks: 'coralpool',
     intro: 'Des plongeurs aimeraient étudier le récif, loin au large. On y va en bateau : baleines, dauphins et raies y nagent, dit-on.',
     choices: [
       {
@@ -999,14 +1000,14 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Chaluter sur le plateau', text: 'Pêche régulière, au large mais pas trop loin.',
         dest: 'river', sea: true, scene: 'trawl', fail: 'storm', doing: 'chalute sur le plateau, les filets pleins', danger: ['water', 'weather'], party: 3, work: 22, risk: 0.2, carry: 'sacks',
-        win: [food(6, 8), jobs(1)], lose: [hurt(1, 1)],
+        win: [food(6, 8), jobs(1), { t: 'perk', id: 'trawlers' }], lose: [hurt(1, 1)],
         winText: 'Les filets sont remontés pleins à craquer : le marché de la mer n’a jamais autant vendu.',
         loseText: 'Le filet s’est pris dans une épave : un marin blessé, la pêche perdue.',
       },
       {
         label: 'Suivre les thons au grand large', text: 'Plus loin, plus long : des bancs de thons géants.',
         dest: 'river', sea: true, scene: 'trawl', fail: 'storm', doing: 'suit les bancs de thons au grand large', danger: ['water', 'weather'], party: 4, work: 32, risk: 0.35, carry: 'sacks',
-        win: [food(10, 8), food(1), joy(2, 6), jobs(2)], lose: [hurt(2, 2), joy(-1, 3)],
+        win: [food(10, 8), food(1), joy(2, 6), jobs(2), { t: 'perk', id: 'trawlers' }], lose: [hurt(2, 2), joy(-1, 3)],
         winText: 'Des thons par centaines ! La criée a vendu jusqu’au dernier, et le village mange du poisson toute la semaine.',
         loseText: 'Une lame a emporté les filets : deux marins blessés, rien à vendre.',
       },
@@ -1022,14 +1023,14 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Ancrer les îles de culture', text: 'On les remorque jusqu’à la ferme marine : lent et sûr.',
         dest: 'river', sea: true, scene: 'isles', fail: 'fog', doing: 'remorque les îles de culture vers la ferme marine', danger: ['water'], party: 3, work: 26, risk: 0.15, carry: 'sacks',
-        win: [food(6, 10), jobs(2), joy(2, 6)], lose: [],
+        win: [food(6, 10), jobs(2), joy(2, 6), { t: 'perk', id: 'cropisles' }], lose: [],
         winText: 'Les îles de culture sont ancrées devant la ferme marine : algues et poissons à foison.',
         loseText: 'Le brouillard a dispersé les îles : il faudra les retrouver.',
       },
       {
         label: 'Explorer l’archipel des récifs vivants', text: 'Un archipel de coraux et de bancs rares, loin de toute route.',
         dest: 'river', sea: true, scene: 'isles', fail: 'storm', doing: 'explore l’archipel des récifs vivants', danger: ['water', 'weather'], party: 4, work: 34, risk: 0.3, carry: 'sacks',
-        win: [food(8, 10), joy(4, 8), jobs(3), { t: 'ore', n: 12 }], lose: [hurt(1, 2), joy(-1, 3)],
+        win: [food(8, 10), joy(4, 8), jobs(3), { t: 'ore', n: 12 }, { t: 'perk', id: 'cropisles' }], lose: [hurt(1, 2), joy(-1, 3)],
         winText: 'Un archipel intact, riche en coraux, en perles et en minerais rares : de quoi nourrir et enrichir le village.',
         loseText: 'Une tempête magnétique a brouillé les instruments : le navire est rentré sans rien, un marin blessé.',
       },
@@ -1043,14 +1044,14 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Un vol d’essai, sans équipage', text: 'Prudent : la fusée emporte un petit satellite et ses instruments.',
         dest: 'spaceport', scene: 'launch', doing: 'compte à rebours, puis suit la fusée qui perce le ciel', danger: ['weather'], party: 3, work: 40, risk: 0.2,
-        win: [joy(6), jobs(6)], lose: [joy(-3, 3)],
+        win: [joy(6), jobs(6), { t: 'perk', id: 'satellites' }], lose: [joy(-3, 3)],
         winText: 'Allumage, décollage… la fusée a disparu dans le bleu du ciel, et le satellite envoie ses premiers bips : tout le village a crié de joie !',
         loseText: 'Un moteur a calé en plein vol : la fusée s’est abîmée en mer. Les ingénieurs ont déjà repris leurs plans.',
       },
       {
         label: 'Pousser les moteurs à fond', text: 'Plus haut, plus vite… et plus risqué.',
         dest: 'spaceport', scene: 'launch', doing: 'pousse les moteurs à fond et suit la fusée jusqu’en orbite', danger: ['weather'], party: 3, work: 32, risk: 0.38,
-        win: [joy(8), jobs(8)], lose: [joy(-4, 4), hurt(1, 3)],
+        win: [joy(8), jobs(8), { t: 'perk', id: 'satellites' }], lose: [joy(-4, 4), hurt(1, 3)],
         winText: 'La fusée a filé droit vers l’orbite, plus haut que personne ne l’espérait : la route des étoiles est ouverte !',
         loseText: 'Trop de poussée : la fusée a explosé au-dessus de la mer, et une pluie de débris a blessé un technicien.',
       },
@@ -1190,6 +1191,8 @@ export function readExpState(d: any): ExpState {
   // qu'ait été la proie ; et le mégalodon s'il en a rapporté les dents. Le trophée, lui, suit le savoir-faire rapporté)
   const old = was.includes('monster') ? ['kraken', ...(s.perks.includes('megalodon') ? ['megalodon'] : [])] : [];
   s.done = [...new Set([...was, ...old])].filter((x: any) => ids.has(x));
+  // (une partie d'avant les savoir-faire des expéditions, qui en a déjà réussi une, le reçoit : voir `legacy.ts`)
+  grantLegacies(s.done, s.perks);
   s.herd = Array.isArray(d.herd) ? d.herd.filter((x: any) => ['sheep', 'cow', 'pig', 'horse'].includes(x)) : [];
   for (const k of Object.keys(s.bonus) as NeedKey[]) s.bonus[k] = +d.bonus?.[k] || 0;
   s.temp = Array.isArray(d.temp) ? d.temp.filter((t: any) => t && t.need in s.bonus && isFinite(t.n) && isFinite(t.until)) : [];
@@ -1241,13 +1244,22 @@ const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'mouto
 const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', dragon: 'le trésor du dragon : sa légende court dans tout le pays', games: 'les Jeux du village : le monde entier connaît son stade', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
 PERK_NAME.caravel = 'la caravelle a tenu la mer : le chantier naval est ouvert';
-PERK_NAME.spices = 'les épices des îles lointaines garnissent les tables du village';
+PERK_NAME.spices = 'les épices des îles lointaines garnissent les tables : chaque taverne +2 bien-être';
 PERK_NAME.galleon = 'le trésor du galion englouti est au village';
 PERK_NAME.portal = 'le portail de l’autre rive est ouvert : tours de garde et caserne sur son île';
 PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place du village';
 PERK_NAME.isleSmiths = 'les outils des forgerons alliés : l’équipement se fabrique 30 % plus vite';
 PERK_NAME.isleSeeds = 'les semences des jardins rivaux : champs +15 %';
 PERK_NAME.stag = 'les bois du cerf blanc : un trophée sur la place du village';
+PERK_NAME.sulfur = 'le soufre du cratère : les mines donnent 30 % de minerai en plus';
+PERK_NAME.hounds = 'des chiens de garde : ils suivent les patrouilles, la garde porte plus loin, les bêtes font moins peur';
+PERK_NAME.coalfire = 'des fourneaux au charbon : équipement 25 % plus vite, briqueteries +30 %';
+PERK_NAME.railfast = 'le grand tracé : trains 25 % plus rapides, et les gares de marchandises font produire le double';
+PERK_NAME.dikes = 'des digues et des tranchées : la lave et les crues épargnent le village';
+PERK_NAME.meteo = 'la station météo du sommet : les expéditions craignent moins les intempéries, les clubs alpins attirent du monde';
+PERK_NAME.trawlers = 'des chalutiers : pontons, ports et halles aux poissons nourrissent 30 % de plus';
+PERK_NAME.cropisles = 'des îles de culture : les fermes marines nourrissent 50 % de plus';
+PERK_NAME.satellites = 'des satellites : volcans et catastrophes annoncés plus tôt, navires mieux guidés';
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** Ce que la diplomatie gagne, en clair et en pastille */

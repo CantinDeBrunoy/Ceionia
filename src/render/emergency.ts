@@ -12,6 +12,7 @@ import { makeSoldier, soldierStep, Soldier, SoldierMode } from './soldiers';
 import { makeFolk, folkStep, Folk, FolkPose } from './folk';
 import { makeDraftHorse, rideStep, Rider } from './riders';
 import { fireEngine, fireLadder, LADDER_AT } from './fireEngine';
+import { guardReach } from '../sim/legacy';
 
 /** Portée des secours (cases) : celle de la caserne pour les incendies, la même pour l'hôpital et la police */
 const RANGE = 14;
@@ -869,7 +870,7 @@ export class Emergencies {
     let best: Building | null = null, bd = Infinity;
     for (const o of this.world.buildings.values()) {
       // (la portée, comme la jauge de couverture et les pompiers de `Fires` : `reaches`, de centre à centre)
-      if (o.kind !== HOME[service] || o.age < 3 || o.small || !reaches(o, target, RANGE)) continue;
+      if (o.kind !== HOME[service] || o.age < 3 || o.small || !reaches(o, target, RANGE, guardReach(this.world))) continue;
       const d = Math.hypot(o.x - target.x, o.z - target.z);
       if (d < bd) { bd = d; best = o; }
     }

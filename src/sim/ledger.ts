@@ -2,6 +2,7 @@ import { KINDS, KindId, Building } from '../build/catalog';
 import { YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, Resource, Cost, costOf, costLabel, refundOf } from './economy';
 import { tr } from '../i18n';
 import { railBoost, allServed } from './freight';
+import { perkYield } from './legacy';
 import type { World } from '../world/world';
 
 /**
@@ -34,7 +35,7 @@ export function flowOf(kind: KindId, age: number, boost = 1, unlimited = false):
 /** Ce que fait par jour ce bâtiment du village (son âge, sa gare de marchandises) */
 export function flowOfBuilding(w: World, b: Building, st = allServed(w)): Flow {
   const boosted = YIELD[b.kind] || b.kind === 'refinery';
-  return flowOf(b.kind, b.age, boosted ? railBoost(w, b, st) : 1, w.unlimited);
+  return flowOf(b.kind, b.age, boosted ? railBoost(w, b, st) * perkYield(w, b.kind) : 1, w.unlimited);
 }
 
 /**

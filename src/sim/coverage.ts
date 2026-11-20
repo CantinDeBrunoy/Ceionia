@@ -10,16 +10,19 @@ import { tr } from '../i18n';
  */
 export const FIRE_RANGE = 14;
 export const policeRange = (age: number) => 12 + Math.max(0, Math.min(5, age));
-/** (la tour de garde du village veille comme un poste de police, à la même portée) */
-export const rangeOf = (b: { kind: string; age: number }) => (b.kind === 'fire' ? FIRE_RANGE : b.kind === 'police' || b.kind === 'watchtower' ? policeRange(b.age) : 0);
+/**
+ * (la tour de garde du village veille comme un poste de police, à la même portée ; `guard` : les cases de plus que les chiens
+ * de garde donnent à la police et aux tours, voir `HOUND_RANGE` de `legacy.ts`)
+ */
+export const rangeOf = (b: { kind: string; age: number }, guard = 0) => (b.kind === 'fire' ? FIRE_RANGE : b.kind === 'police' || b.kind === 'watchtower' ? policeRange(b.age) + guard : 0);
 
 /**
  * Le poste `s` dessert-il le bâtiment `h` ? Distance de centre à centre, à la portée du poste : une seule règle pour la jauge,
  * les pompiers qui éteignent (`Fires`) et les véhicules envoyés (`Emergencies`, portée `fallback` pour un service sans portée)
  */
-export const reaches = (s: Building, h: Building, fallback = 0) => {
+export const reaches = (s: Building, h: Building, fallback = 0, guard = 0) => {
   const ms = sizeOf(s) / 2, mh = sizeOf(h) / 2;
-  return Math.hypot(s.x + ms - h.x - mh, s.z + ms - h.z - mh) <= (rangeOf(s) || fallback);
+  return Math.hypot(s.x + ms - h.x - mh, s.z + ms - h.z - mh) <= (rangeOf(s, guard) || fallback);
 };
 
 /** Bien-être par habitation couverte par les deux services, et plafond (léger : le village ne dépend pas de la sécurité) */
@@ -45,14 +48,14 @@ export interface Coverage {
   joy: number;
 }
 
-export function computeCoverage(buildings: Iterable<Building>): Coverage {
+export function computeCoverage(buildings: Iterable<Building>, guard = 0): Coverage {
   const fireSt: Building[] = [], policeSt: Building[] = [], homes: Building[] = [];
   for (const b of buildings) {
     if (b.kind === 'fire') fireSt.push(b);
     else if (b.kind === 'police' || b.kind === 'watchtower') policeSt.push(b);
     else if ((KINDS[b.kind]?.housing?.[b.age] ?? 0) > 0) homes.push(b);
   }
-  const near = (st: Building[], h: Building) => st.some((s) => reaches(s, h));
+  const near = (st: Building[], h: Building) => st.some((s) => reaches(s, h, 0, guard));
   let fire = 0, police = 0, both = 0;
   const uf: Building[] = [], up: Building[] = [];
   for (const h of homes) {

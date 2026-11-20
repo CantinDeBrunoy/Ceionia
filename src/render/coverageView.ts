@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World } from '../world/world';
 import { computeCoverage, rangeOf } from '../sim/coverage';
+import { guardReach } from '../sim/legacy';
 import { sizeOf } from '../build/catalog';
 
 /**
@@ -49,7 +50,7 @@ export class CoverageView {
     for (const c of [...this.group.children]) { this.group.remove(c); (c as THREE.Mesh).geometry?.dispose(); }
     for (const m of this.mats) m.dispose();
     this.mats = [];
-    const cov = computeCoverage(w.buildings.values());
+    const guard = guardReach(w), cov = computeCoverage(w.buildings.values(), guard);
     const disc = this.mat(0x35e070, 0.1), ring = this.mat(0x7dffa5, 0.8), warn = this.mat(0xff9a2e, 0.7), bad = this.mat(0xff3b30, 0.75);
     const flat = (g: THREE.BufferGeometry, m: THREE.Material, x: number, z: number, y: number, order: number) => {
       const o = new THREE.Mesh(g, m);
@@ -57,7 +58,7 @@ export class CoverageView {
       this.group.add(o);
     };
     for (const s of [...cov.stations.fire, ...cov.stations.police]) {
-      const r = rangeOf(s), c = sizeOf(s) / 2, y = Math.max(w.hAt(s.x + c, s.z + c), 0) + 0.15;
+      const r = rangeOf(s, guard), c = sizeOf(s) / 2, y = Math.max(w.hAt(s.x + c, s.z + c), 0) + 0.15;
       flat(new THREE.CircleGeometry(r, 64), disc, s.x + c, s.z + c, y, 6);
       flat(new THREE.RingGeometry(r - 0.25, r, 64), ring, s.x + c, s.z + c, y + 0.02, 7);
     }

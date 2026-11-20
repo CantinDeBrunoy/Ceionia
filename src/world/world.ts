@@ -312,6 +312,20 @@ export class World {
   disasters = true;
   /** Bâtiments perdus (lave), à annoncer */
   losses: string[] = [];
+  /**
+   * Bâtiments abîmés par une catastrophe (crue, séisme) : secondes de jeu de réparations restantes et en tout. Ils ne donnent
+   * que la moitié pendant ce temps (`DAMAGED_K`, `sim/calamity.ts`). Sauvegardé (absent : rien d'abîmé)
+   */
+  damaged = new Map<number, { t: number; T: number }>();
+  /** Champs sous l'eau d'une crue en cours : ils ne donnent rien (non sauvegardé : la crue s'arrête au chargement) */
+  flooded = new Uint8Array(N * N);
+  /**
+   * Programme des catastrophes : l'âge dont le sort est tiré, et dans combien de secondes de jeu la sienne peut venir (-1 :
+   * pas de catastrophe, ou elle a eu lieu). Sauvegardé ; absent : un âge neuf
+   */
+  calam: { age: number; due: number } | null = null;
+  /** Fers célestes tombés et pas encore ramassés : leurs cases (sauvegardé) */
+  starIron: number[] = [];
   /** Minerai en réserve (la mine en extrait chaque jour) */
   ore = 0;
   /** envies d'habitants comblées depuis le début de la partie (bien-être du village, voir `sim/wishes.ts`) */
@@ -1623,6 +1637,7 @@ export class World {
     const s = sizeOf(b);
     for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) this.occ[this.ci(b.x + i, b.z + j)] = 0;
     this.buildings.delete(id);
+    this.damaged.delete(id);
     this.vegDirty = true;
     this.markTerrain(b.x - 1, b.z - 1, b.x + s, b.z + s);
     this.markVeg(b.x - 1, b.z - 1, b.x + s, b.z + s);
@@ -1881,6 +1896,10 @@ export class World {
       torches: [...this.torches],
       basalt: lavaFields(this.basalt),
       ash: [...this.ash.keys()].filter((k) => this.ash[k]),
+      // bâtiments abîmés : (rang dans la liste des bâtiments, réparations restantes et en tout, en secondes)
+      ...(this.damaged.size ? { damaged: [...this.damaged].filter(([id]) => order.has(id)).flatMap(([id, d]) => [order.get(id)!, Math.round(d.t), Math.round(d.T)]) } : {}),
+      ...(this.calam ? { calam: [this.calam.age, Math.round(this.calam.due)] } : {}),
+      ...(this.starIron.length ? { starIron: this.starIron } : {}),
       ore: this.ore,
       wood: this.wood,
       stone: this.stone,
@@ -2022,6 +2041,15 @@ export class World {
     for (let i = 0; i + 1 < lava.length; i += 2) if (lava[i] >= 0 && lava[i] < N * N) this.basalt[lava[i]] = Math.min(1, Math.max(0, lava[i + 1] / 100));
     this.ash.fill(0);
     for (const k of d.ash ?? []) if (k >= 0 && k < N * N) this.ash[k] = 1;
+    this.damaged.clear();
+    const dm = Array.isArray(d.damaged) ? d.damaged : [];
+    for (let i = 0; i + 2 < dm.length; i += 3) {
+      const id = ids[dm[i]] ?? -1, t = +dm[i + 1], T = +dm[i + 2];
+      if (id > 0 && Number.isFinite(t) && Number.isFinite(T) && t > 0 && T > 0) this.damaged.set(id, { t: Math.min(t, T), T });
+    }
+    this.flooded.fill(0);
+    this.calam = Array.isArray(d.calam) && d.calam.length === 2 && d.calam.every((v: unknown) => Number.isFinite(+(v as number))) ? { age: +d.calam[0], due: +d.calam[1] } : null;
+    this.starIron = (Array.isArray(d.starIron) ? d.starIron : []).filter((k: unknown) => Number.isInteger(k) && (k as number) >= 0 && (k as number) < N * N);
     this.ore = Math.max(0, +d.ore || 0);
     // (une partie d'avant les envies des habitants repart à zéro)
     this.wishesMet = Math.max(0, Math.floor(+d.wishes || 0));

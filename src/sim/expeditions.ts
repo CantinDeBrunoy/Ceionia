@@ -15,6 +15,7 @@ import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } fro
 import { rulesOf } from './difficulty';
 import { securityK } from './security';
 import { FORGE_PERK, FORGE_RISK, FORGE_CRAFT } from './kingdom';
+import { hasPerk, perkYield, COAL_CRAFT, HOUND_BEAST, METEO_WEATHER, SAT_SEA } from './legacy';
 import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
 import { tr, plural } from '../i18n';
@@ -334,7 +335,16 @@ export class Expeditions {
       // la forge infernale, rapportée de la chute du royaume des Enfers, équipe mieux les équipes
       * (this.world.exp.perks.includes(FORGE_PERK) ? FORGE_RISK : 1)
       // en mer : le feu du phare guide les marins, le chantier naval répare et arme les bateaux
-      * (c.sea ? (this.has('lighthouse') ? LIGHTHOUSE_RISK : 1) * (this.has('shipyard') ? SHIPYARD_RISK : 1) : 1);
+      * (c.sea ? (this.has('lighthouse') ? LIGHTHOUSE_RISK : 1) * (this.has('shipyard') ? SHIPYARD_RISK : 1) : 1)
+      // les savoir-faire des expéditions (`legacy.ts`) : les chiens flairent les bêtes, la station météo annonce le mauvais
+      // temps, les satellites guident les navires
+      * this.legacyK(c);
+  }
+
+  /** Ce que les savoir-faire des expéditions retirent au risque d'un choix (chiens de garde, station météo, satellites) */
+  legacyK(c: Choice) {
+    const w = this.world, ds = dangersOf(c);
+    return (ds.includes('beast') && hasPerk(w, 'hounds') ? HOUND_BEAST : 1) * (ds.includes('weather') && hasPerk(w, 'meteo') ? METEO_WEATHER : 1) * (c.sea && hasPerk(w, 'satellites') ? SAT_SEA : 1);
   }
 
   /**
@@ -919,7 +929,7 @@ export class Expeditions {
     for (const b of this.world.buildings.values()) {
       const y = YIELD[b.kind];
       if (!y) continue;
-      const k = railBoost(this.world, b, st);
+      const k = railBoost(this.world, b, st) * perkYield(this.world, b.kind);
       for (const r of Object.keys(y) as Resource[]) rate[r] += (y[r]![b.age] ?? 0) * k;
     }
     return rate;
@@ -993,7 +1003,7 @@ export class Expeditions {
     const s = this.world.exp;
     if (!s.craft.length) return;
     const g = GEAR_BY[s.craft[0]];
-    s.craftT += dt * (this.has('workshop') ? 1.5 : 1) * (s.perks.includes(FORGE_PERK) ? FORGE_CRAFT : 1) * (s.perks.includes(SMITHS_PERK) ? SMITHS_CRAFT : 1);
+    s.craftT += dt * (this.has('workshop') ? 1.5 : 1) * (s.perks.includes(FORGE_PERK) ? FORGE_CRAFT : 1) * (s.perks.includes(SMITHS_PERK) ? SMITHS_CRAFT : 1) * (s.perks.includes('coalfire') ? COAL_CRAFT : 1);
     if (s.craftT < g.time) return;
     s.craftT = 0;
     s.craft.shift();

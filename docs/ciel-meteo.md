@@ -43,6 +43,7 @@ Le temps du jeu (`GameTime`) fait tourner les heures et les saisons. `Environmen
   - Le décor lit ce qui se voit : `env.shownRain`, `shownSnow`, `shownFog`, `shownOvercast` (ciel couvert visible), calculés dans `Environment.update` ; `Atmosphere` (brume, arc-en-ciel, couleur de la brume des montagnes) et `NightSky` (aurores et étoiles filantes sous un ciel dégagé) s'y fient. La simulation, les sons et les habitants gardent `rainK`, `weatherKind`.
 - Pluie : 1 500 traits, neige : 1 300 flocons, dans un volume de 50 × 24 × 50 autour du point visé ; plus dessinés quand la caméra est à plus de 95.
 - Brouillard (`THREE.Fog`) : 85 → 220 par temps clair, 40 → 120 sous la pluie ou la neige, 8 → 70 dans le brouillard ; il recule quand on dézoome.
+- Une crue qui attend son heure fait venir la pluie (`env.wantKind = 'rain'`, sauf l'hiver et sauf temps imposé par le joueur) et la garde tant que l'eau monte ([catastrophes.md](catastrophes.md)).
 - La pluie remplit l'humidité des champs (`Sim.moisture`, rendement, sécheresse) ; elle règle aussi le vent, les sons, la faune.
 
 ### Brume, nuages, arc-en-ciel, orages (`Atmosphere`)
@@ -103,6 +104,7 @@ Le temps du jeu (`GameTime`) fait tourner les heures et les saisons. `Environmen
 - **Plus ou moins d'aurores** : `AURORA_BASE`, `AURORA_COLD`, `COLD_FULL` (`skyNights.ts`), puis les bornes de `tests/cielNocturne.test.ts`.
 - **Couleurs ou forme de l'aurore** : `veil` et `main` du fragment shader dans le constructeur de `NightSky` ; hauteur `AURORA_H`, distance au bord dans le vertex shader. Vérifier en jeu à l'horizon, en vue d'ensemble et de loin.
 - **Étoiles filantes** : chances `SHOWER`, `SOME`, `LONE`, cadences `METEOR_RATE` (`skyNights.ts`) ; allure (longueur, durée, largeur, éclat, teintes) dans `NightSky.spawn` et `METEOR_COLORS`.
+- **La pluie de météorites** (catastrophe, [catastrophes.md](catastrophes.md)) impose une grande nuit d'étoiles filantes par `force('shower')` ; son message à elle remplace celui de `NightSky`.
 - **Un nouveau spectacle de nuit** : un champ de `NightShow` et son tirage dans `nightShow`, son rendu dans `NightSky.update`, une annonce dans `SkyNews` et `skyNewsText`, la traduction dans `src/i18n/en/misc.ts`, un cas dans `force`.
 - **Un nouveau temps** : `WeatherKind` et la table `autoWeather` (`env.ts`), son rendu dans `Environment.update`, son bouton dans les réglages (`ui.ts`), son icône (`WEATHER_ICON`), son effet sonore (`audio.ts`).
 - **Changer la longueur des jours ou des nuits** : `dayLen`, `seasonLen`, `NIGHT_SKIP` (`time.ts`) ; tout ce qui suit l'heure suit seul.
