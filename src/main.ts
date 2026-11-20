@@ -130,7 +130,10 @@ import { weakGpu, probeRenderer } from './render/gpu';
 import { LoadingScreen, painted } from './ui/loading';
 import { whenIdle } from './ui/preload';
 import { VoyageStage } from './voyageStage';
-import { clearFilmMark, readFilmMark } from './ui/voyage';
+import { OpeningStage } from './openingStage';
+import { openingDue } from './openingCine';
+import { OpeningFilm } from './ui/opening';
+import { VoyageFilm, clearFilmMark, readFilmMark } from './ui/voyage';
 import { WarmUp } from './render/warmup';
 import { CompileJob, compilePaced, representatives, firstUseAll } from './render/precompile';
 
@@ -240,6 +243,8 @@ class Game implements UIHost {
   hideUpBadges = false;
   /** les petits objectifs de la barre du haut : masqués si vrai (Paramètres › Partie) */
   hideGoals = false;
+  /** la cinématique d'ouverture coupée (Paramètres › Divers) : une partie neuve commence sans elle */
+  introOff = false;
   /** comment le joueur déplace la vue : retenu pour ce navigateur ; avant le premier choix, le clavier (comme avant) */
   controls: Controls = loadControls() ?? { mode: 'keys', layout: guessLayout(getLang()) };
   fires: Fires;
@@ -296,9 +301,13 @@ class Game implements UIHost {
   portalStage: PortalStage;
   /** la vitesse du jeu d'avant la cinématique du portail (0 : aucune à rendre) */
   private cineSpeed = 0;
+  /** le temps d'avant le plan en direct de l'ouverture (la pause du tutoriel), rendu à sa fin */
+  private openPace: { paused: boolean; speed: number } | null = null;
   /** la petite cinématique d'un trophée qui rejoint la place (retour d'une expédition légendaire) */
   trophyStage: TrophyStage;
   voyageStage!: VoyageStage;
+  /** le plan en direct de la cinématique d'ouverture, au début d'une partie neuve (`openingStage.ts`) */
+  openingStage!: OpeningStage;
   /** les aides du volet militaire */
   warTips!: WarTips;
   /** la carte du choix du portail (affronter les démons ou refermer le portail) */
@@ -505,6 +514,7 @@ class Game implements UIHost {
     this.autoRoads = settings.autoRoads ?? true;
     this.hideUpBadges = settings.hideUpBadges ?? false;
     this.hideGoals = settings.hideGoals ?? false;
+    this.introOff = settings.noIntro ?? false;
     w.disasters = settings.disasters ?? true;
     w.unlimited = settings.unlimited ?? false;
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 4);
@@ -698,6 +708,15 @@ class Game implements UIHost {
       cam: this.cam, world: w, scene: this.scene, root: uiRoot,
       village: () => this.villageCenter(), age: () => this.sim.age, loading: () => !!document.getElementById('loadScreen'),
       ready: () => !!document.querySelector('#loadScreen.ready'), skipped: () => !!readFilmMark()?.skip,
+    });
+    // la cinématique d'ouverture : après le film (l'écran de chargement d'une partie neuve), la vue descend du ciel sur la carte
+    this.openingStage = new OpeningStage({
+      cam: this.cam, root: uiRoot, ground: (x, z) => w.surfaceAt(x, z), loading: () => !!document.getElementById('loadScreen'),
+      wild: (x, z) => this.fauna.wildNear(x, z, 30, ['deer', 'moose', 'ibex', 'rabbit', 'fox']),
+      pace: (cine) => {
+        if (cine) { this.openPace = { paused: this.time.paused, speed: this.time.speed }; this.time.paused = false; this.time.speed = 1; }
+        else if (this.openPace) { this.time.paused = this.openPace.paused; this.time.speed = this.openPace.speed; this.openPace = null; }
+      },
     });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
@@ -913,7 +932,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog, noFlood: !this.calam.enabled.flood, noQuake: !this.calam.enabled.quake, noMeteor: !this.calam.enabled.meteor };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, noIntro: this.introOff, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog, noFlood: !this.calam.enabled.flood, noQuake: !this.calam.enabled.quake, noMeteor: !this.calam.enabled.meteor };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -1705,7 +1724,7 @@ class Game implements UIHost {
    */
   private popupBusy() {
     return !!document.getElementById('loadScreen') || !!uiRoot.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible
-      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.mode !== 'surface'
+      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.openingStage?.playing || this.mode !== 'surface'
       || document.body.classList.contains('photo');
   }
 
@@ -1725,7 +1744,7 @@ class Game implements UIHost {
     this.revealing = true;
     clearFilmMark();
     // (la brume seule avant le rechargement : le film joue une fois, en entier, sur la page d'après ; voir `VoyageFilm`)
-    const film = new LoadingScreen(app, true, true).film!;
+    const film = new LoadingScreen(app, true, true).film as VoyageFilm;
     void new Promise<void>((r) => setTimeout(r, 700)).then(async () => {
       await painted();
       const save = this.buildSave();
@@ -1849,6 +1868,7 @@ class Game implements UIHost {
     if (this.mode !== 'hell') w.hellFx.length = 0;
     this.kingStage.update(dt);
     this.voyageStage.update(dt);
+    this.openingStage.update(dt);
     this.trophyStage.update(dt);
     // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
     if (this.isleCmd && this.command.theater?.sim !== isle?.sim) { const t = this.isleTheater(); if (t) this.command.setTheater(t); else this.leaveIsle(); }
@@ -1946,6 +1966,7 @@ class Game implements UIHost {
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
   setHideGoals(on: boolean) { this.hideGoals = on; this.applySettings(); this.ui.update(); }
+  setIntroOff(on: boolean) { this.introOff = on; this.applySettings(); }
   /** Les petits objectifs n'avancent pas au bac à sable ni pendant le tutoriel guidé (ils viennent après) */
   get goalsOn() { return !this.world.sandbox && !!this.tutorial && !(this.tutorial.on && this.tutorial.guiding); }
   /** Ce que les objectifs lisent du village */
@@ -3031,20 +3052,33 @@ async function boot() {
   const auto = sessionStorage.getItem(AUTOSTART), voyage = auto?.split('|')[2] === 'voyage';
   // (une traversée d'avant, restée notée : rien à reprendre hors d'un rechargement de traversée)
   if (!voyage) clearFilmMark();
-  let screen: LoadingScreen | null = new LoadingScreen(app, voyage);
+  // en développement, `?n=384&seed=11` lance tout de suite une nouvelle partie de cette taille (essais, captures de l'archipel)
+  const dev = import.meta.env.DEV ? new URLSearchParams(location.search) : null, devN = Number(dev?.get('n')) || 0;
+  /**
+   * La cinématique d'ouverture d'une partie neuve (`openingCine.ts`) : son film tient lieu d'écran de chargement. Pas en
+   * reprenant une partie, ni au bac à sable, ni coupée dans les paramètres ; pas non plus pour les essais lancés par `?n=`
+   * (sauf avec `&intro`)
+   */
+  const openingFor = (map: number, mode: 'continue' | 'new', difficulty?: Difficulty, age?: number) => !voyage && (!devN || !!dev?.has('intro'))
+    && openingDue({ fresh: mode === 'new' || !loadSlot(map), sandbox: difficulty === 'sandbox', age: difficulty === 'sandbox' ? age ?? 0 : 0, off: !!loadSettings().noIntro });
+  // (une partie neuve relancée depuis le jeu, « Recommencer » : le film part dès le chargement des modèles)
+  const autoFresh = auto?.split('|');
+  const opensNow = !!autoFresh && autoFresh[1] === 'fresh' && openingFor(+autoFresh[0], 'new', isDifficulty(autoFresh[2]) ? autoFresh[2] : undefined, +autoFresh[3] || 0);
+  let screen: LoadingScreen | null = new LoadingScreen(app, voyage || (opensNow ? 'opening' : false));
   const models = screen;
   await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * 0.2, `${done}/${total}`));
 
-  // en développement, `?n=384&seed=11` lance tout de suite une nouvelle partie de cette taille (essais, captures de l'archipel)
-  const dev = import.meta.env.DEV ? new URLSearchParams(location.search) : null, devN = Number(dev?.get('n')) || 0;
   let started = false;
   const start = async (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty, age?: number) => {
     if (started) return;
     started = true;
     // les anciennes cartes (île, vallée, plateaux) n'existent plus : on joue sur le continent
     if (!mapDef(map)) map = CONTINENT;
-    // l'écran de chargement couvre la vue (celui des modèles, s'il est encore là) ; on le laisse s'afficher avant de bâtir
-    const ld = screen ?? new LoadingScreen(app);
+    // l'écran de chargement couvre la vue (celui des modèles, s'il est encore là) ; on le laisse s'afficher avant de bâtir.
+    // Une partie neuve : le film de la cinématique d'ouverture
+    const opening = openingFor(map, mode, difficulty, age);
+    if (screen && opening !== screen.film instanceof OpeningFilm) { screen.done(true); screen = null; }
+    const ld = screen ?? new LoadingScreen(app, opening ? 'opening' : false);
     screen = null;
     ld.step('Construction du monde…', 0.22);
     await painted();
@@ -3060,9 +3094,14 @@ async function boot() {
     (window as any).__game = game;
     game.voyage = voyage && game.world.reveal;
     await game.prepare(ld);
+    // (l'ouverture : le plan en direct se prépare sous l'écran, et part quand le film est fini et l'écran parti)
+    const film = ld.film;
+    if (film instanceof OpeningFilm) game.openingStage.prepare(() => film.wasSkipped);
     ld.done();
     game.warnLoadError();
-    // premier lancement : le choix des contrôles de la vue, avant tout
+    // la cinématique d'ouverture d'abord (le tutoriel attend sous elle), puis, au premier lancement, le choix des contrôles
+    // de la vue, et le blason
+    await game.openingStage.finished();
     void game.askControls().then(() => game.askBlason());
   };
   let menu: HTMLElement | null = null;

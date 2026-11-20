@@ -21,6 +21,8 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   que si l'état disait « en cours » : un joueur qui l'avait fini ou passé une fois ne le revoyait plus, l'interrupteur étant
   rangé dans les options de l'accueil. La ligne « Tutoriel » de Paramètres › Divers (`settingsHtml`) le reprend en cours de partie.
 - **Nouvelle partie** : la suite principale repart de la première étape et le temps est en pause jusqu'au feu de camp.
+  Avec la cinématique d'ouverture ([ouverture.md](ouverture.md)), la bulle attend cachée sous elle (`body.cinematic`), puis
+  viennent le choix des contrôles et le blason : « Bienvenue ! » se lit une fois la vue posée sur la place à venir.
   Rien n'est en main pendant « Bienvenue » et « Regardez autour de vous » (`Tutorial.looking`) : le feu de camp passe en main
   au début de l'étape `fire`. Avant, il l'était dès le chargement, et le glissé demandé à l'étape 2 le posait (testeurs v6).
 - **La suite principale** (10 étapes, dans `Tutorial` › constructeur ; 14 jusqu'au 17 nov. 2026, l'auteur la trouvait longue) :

@@ -116,6 +116,9 @@ export interface UIHost {
   /** petits objectifs de la barre du haut : masqués ou non ; `goalsOn` : ils avancent (pas au bac à sable ni pendant le tutoriel) */
   hideGoals: boolean;
   setHideGoals(on: boolean): void;
+  /** la cinématique d'ouverture des parties neuves : coupée ou non (Paramètres › Divers) */
+  introOff: boolean;
+  setIntroOff(on: boolean): void;
   goalsOn: boolean;
   goalCtx(): GoalCtx;
   /** comment le joueur déplace la vue (souris ou clavier, et la disposition du clavier) ; voir `core/controls.ts` */
@@ -3230,6 +3233,9 @@ export class UI {
       </section>
       <section data-sec="misc" hidden>${head('misc')}
         ${this.tutorial?.settingsHtml() ?? ''}
+        <h4>${tr('Cinématique d’ouverture')}</h4>
+        <div class="row"><label>${tr('Au début d’une partie')}</label><button id="gIntro" class="${h.introOff ? '' : 'active'}">${tr(h.introOff ? 'Désactivée' : 'Activée')}</button></div>
+        <p class="hint">${tr('Un court film au début de chaque nouvelle partie : la vallée sauvage, un peuple nomade, le premier foyer.')}</p>
         <h4>${tr('Langue')}</h4>
         ${langPicker(lang)}
         <h4>${tr('Crédits')}</h4>
@@ -3344,6 +3350,11 @@ export class UI {
       q('#gUnlimited').textContent = tr(h.world.unlimited ? 'Illimitées' : 'Normales');
       q('#gUnlimited').classList.toggle('active', h.world.unlimited);
       this.update();
+    };
+    q('#gIntro').onclick = () => {
+      h.setIntroOff(!h.introOff);
+      q('#gIntro').textContent = tr(h.introOff ? 'Désactivée' : 'Activée');
+      q('#gIntro').classList.toggle('active', !h.introOff);
     };
     q('#gGoals').onclick = () => {
       h.setHideGoals(!h.hideGoals);

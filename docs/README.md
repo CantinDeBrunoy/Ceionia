@@ -45,6 +45,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [bac-a-sable.md](bac-a-sable.md) : le mode bac à sable.
 - [grand-choix.md](grand-choix.md) : la carte à trois choix de la fin de l'Antiquité (les Enfers, explorer le monde, ni l'un ni l'autre), l'onglet « Grands choix » des expéditions, la cinématique de la traversée.
 - [tutoriel.md](tutoriel.md) : étapes, déclencheurs, verrous, chapitres de l'île et des Enfers.
+- [ouverture.md](ouverture.md) : la cinématique d'ouverture d'une partie neuve (des nomades aux sédentaires) : le film qui tient lieu d'écran de chargement, son fondu de remplacement, le plan en direct, le réglage.
 
 ### Expéditions
 - [expeditions.md](expeditions.md) : départ, déroulé, imprévus, retour, gains, suivi par la caméra, véhicules.
