@@ -3,6 +3,7 @@ import { Parts } from './parts';
 import { hash2 } from '../core/rng';
 import { KindId } from '../build/catalog';
 import { WALL_N, WALL_E, WALL_S, WALL_W } from './hellBase';
+import { pondModel, coralModel } from './pond';
 
 /**
  * Les décorations libres, d'un âge à l'autre (1 case, façade vers +z, origine au centre de la case) : haie, clôture, parterre
@@ -53,6 +54,9 @@ export function decorModel(p: Parts, kind: KindId, age: number, v: number, mask:
     case 'statue': statue(p, a, v, kit); break;
     case 'paving': paving(p, a, v); break;
     case 'fountain': fountain(p, a, v, kit); break;
+    // (la mare et le bassin à coraux, débloqués par des expéditions : leur modèle est dans pond.ts)
+    case 'pond': pondModel(p, a, v); break;
+    case 'coralpool': coralModel(p, a, v); break;
     default: break;
   }
 }

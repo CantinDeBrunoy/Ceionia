@@ -13453,7 +13453,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'well': futureWell(p); return true;
     case 'watertower': futureWatertower(p); return true;
     case 'lamp': futureLamp(p); return true;
-    case 'hedge': case 'fence': case 'flowerbed': case 'bench': case 'statue': case 'paving': case 'fountain': decorModel(p, kind, 5, o.v, o.mask ?? 0, DECOR_KIT); return true;
+    case 'hedge': case 'fence': case 'flowerbed': case 'bench': case 'statue': case 'paving': case 'fountain': case 'pond': case 'coralpool': decorModel(p, kind, 5, o.v, o.mask ?? 0, DECOR_KIT); return true;
     case 'gather': if (size >= 3) gatherPlaza(p, 5, o); else futureGather(p, o); return true;
     case 'temple': futureTemple(p); return true;
     case 'school': if (size < 2) return false; futureSchool(p); return true;
@@ -14368,7 +14368,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'terminal': if (size >= 3) terminalBig(p, Math.max(3, age)); else terminal(p, Math.max(3, age)); break;
     case 'station': station(p, Math.max(3, age)); break;
     case 'lamp': lamp(p, age); break;
-    case 'hedge': case 'fence': case 'flowerbed': case 'bench': case 'statue': case 'paving': case 'fountain': decorModel(p, kind, age, o.v, o.mask ?? 0, DECOR_KIT); break;
+    case 'hedge': case 'fence': case 'flowerbed': case 'bench': case 'statue': case 'paving': case 'fountain': case 'pond': case 'coralpool': decorModel(p, kind, age, o.v, o.mask ?? 0, DECOR_KIT); break;
     case 'pier': pier(p, age, o); break;
     case 'health': health(p, age); break;
     case 'school': school(p, age); break;

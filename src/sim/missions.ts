@@ -223,7 +223,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'berries', age: 0, mandatory: false, icon: '🍇', title: 'La grande cueillette',
+    id: 'berries', age: 0, mandatory: false, icon: '🍇', title: 'La grande cueillette', unlocks: 'hedge',
     intro: 'Les baies mûrissent dans les bois et le long de l’eau. De quoi faire des réserves pour quelques jours.',
     choices: [
       {
@@ -243,7 +243,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'flint', age: 0, mandatory: false, icon: '⛏️', title: 'La chasse au silex',
+    id: 'flint', age: 0, mandatory: false, icon: '⛏️', title: 'La chasse au silex', unlocks: 'statue',
     intro: 'Au pied de la montagne, la falaise est pleine de silex, et la rivière en roule des galets. Avec de meilleurs outils, tout le monde travaillerait mieux.',
     choices: [
       {
@@ -360,7 +360,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'fishing', age: 1, mandatory: false, icon: '🐟', title: 'Les grands bancs',
+    id: 'fishing', age: 1, mandatory: false, icon: '🐟', title: 'Les grands bancs', unlocks: 'pond',
     intro: 'Les anciens disent que plus loin sur l’eau, les bancs de poissons sont immenses.',
     choices: [
       {
@@ -936,7 +936,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'reef', age: 4, mandatory: false, icon: '🐠', title: 'Le récif',
+    id: 'reef', age: 4, mandatory: false, icon: '🐠', title: 'Le récif', unlocks: 'coralpool',
     intro: 'Des plongeurs aimeraient étudier le récif, loin au large. On y va en bateau : baleines, dauphins et raies y nagent, dit-on.',
     choices: [
       {

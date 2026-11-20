@@ -198,6 +198,8 @@ const P: Record<string, string> = {
   statue: '<circle cx="12" cy="4.5" r="2"/><path d="M12 7v7M8.5 9.5l3.5 1 3-4.5M10 18l2-4 2 4"/><path d="M7 18h10v3H7z"/>',
   paving: '<rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M3 15h18M9 3v6M15 9v6M9 15v6"/>',
   fountain: '<path d="M3 15h18l-2 5H5z"/><path d="M12 15V7"/><path d="M12 7c-3 0-5 2-5.5 5M12 7c3 0 5 2 5.5 5"/><path d="M9 7h6"/><path d="M12 7V3"/>',
+  pond: '<ellipse cx="12" cy="17" rx="9" ry="4"/><path d="M8 17c1-.8 2-.8 3 0M13 18c1-.8 2-.8 3 0"/><path d="M5 15V7M7 15V5M18 14V8"/><path d="M5 7l-1 1M7 5l1 1.5M18 8l1-1"/>',
+  coral: '<path d="M3 21h18"/><path d="M12 21v-7M12 14l-3-4V7M12 14l3-5V6M9 10l-3-2M15 9l3-1"/><path d="M5 21v-3l-2-2M19 21v-4l2-2"/>',
 
 };
 
@@ -217,7 +219,7 @@ export const KIND_ICON: Record<KindId, string> = {
   watchtower: 'watchtower', barracks: 'shield', wall: 'wall', gate: 'gate',
   shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
   concord: 'concord', tradepost: 'scales', triumph: 'arch', embassy: 'dome',
-  hedge: 'hedge', fence: 'fence', flowerbed: 'flower', bench: 'bench', statue: 'statue', paving: 'paving', fountain: 'fountain',
+  hedge: 'hedge', fence: 'fence', flowerbed: 'flower', bench: 'bench', statue: 'statue', paving: 'paving', fountain: 'fountain', pond: 'pond', coralpool: 'coral',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', deco: 'flower', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */
