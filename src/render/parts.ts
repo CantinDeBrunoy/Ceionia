@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+import { isTeam, teamColors } from './teamPaint';
+
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
@@ -21,16 +23,19 @@ export class Parts {
     const ng = g.index ? g.toNonIndexed() : g.clone();
     g.dispose();
     ng.deleteAttribute('uv');
+    // une couleur du blason (sentinelle négative, voir teamPaint.ts) se mesure sur la pièce avant sa pose
+    const n0 = ng.attributes.position.count, team = isTeam(color) ? new Float32Array(n0 * 3) : null;
+    if (team) teamColors(color, ng.attributes.position, team);
     _e.set(rx, ry, rz);
     _q.setFromEuler(_e);
     _p.set(x, y, z);
     _m.compose(_p, _q, _s);
     ng.applyMatrix4(_m);
     ng.computeVertexNormals();
-    const c = new THREE.Color(color);
+    const c = new THREE.Color(team ? 0 : color);
     const n = ng.attributes.position.count;
-    const arr = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+    const arr = team ?? new Float32Array(n * 3);
+    if (!team) for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
     ng.setAttribute('color', new THREE.BufferAttribute(arr, 3));
     if (glow) {
       // la graine de cette lumière (voir LIGHTS) : une fenêtre (> 0) a son heure, une flamme ou une lanterne (< 0, teinte

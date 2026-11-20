@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Parts } from './parts';
+import { TEAM_A, TEAM_B, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG } from './teamPaint';
 import { hash2 } from '../core/rng';
 
 /**
@@ -33,16 +34,13 @@ function onFace(p: Parts, a: number, r: number, u: number, y: number, w: number,
 }
 const FACES = [0, PI / 2, PI, -PI / 2];
 
-/** Drapeau de la faction : mât, boule dorée, oriflamme rouge à liseré d'or et losange qui flotte au vent (les remparts le partagent) */
+/** Drapeau du village : mât, boule dorée, toile au blason du joueur qui flotte au vent (les remparts le partagent) */
 export function flag(p: Parts, kit: DefKit, x: number, y: number, z: number, h: number, w = 0.16, ht = 0.09, pole = 0x7a6355) {
   p.cyl(0.008, 0.011, h, 5, x, y, z, pole);
   p.sphere(0.017, x, y + h + 0.008, z, GOLD);
   const f = kit.sway([x, 0, z], [0, 1, 0], 0.35, 0.9), top = y + h - 0.015;
-  f.box(w, ht, 0.006, w / 2 + 0.01, top - ht, 0, RED);
-  f.box(w, 0.013, 0.008, w / 2 + 0.01, top - 0.013, 0, GOLD);
-  f.box(w, 0.013, 0.008, w / 2 + 0.01, top - ht, 0, GOLD);
-  f.box(0.034, 0.034, 0.009, w * 0.55, top - ht * 0.62, 0, GOLD, 0, false, PI / 4);
-  f.box(0.04, ht * 0.9, 0.006, w + 0.03, top - ht * 0.95, 0, RED, 0, false, 0);
+  // la toile un peu plus longue que l'ancienne oriflamme (sa queue) : l'emblème et la forme du blason s'y dessinent
+  f.box(w + 0.03, ht, 0.006, (w + 0.03) / 2 + 0.008, top - ht, 0, TEAM_FLAG);
 }
 
 /** Pan de maçonnerie en assises : le volume, un bandeau fin à chaque assise (teinte qui varie) et le chaînage d'angle en blocs alternés */
@@ -85,7 +83,7 @@ function crate(p: Parts, x: number, y: number, z: number, s: number, ry = 0, c =
   p.box(s + 0.008, 0.012, s + 0.008, x, y + s * 0.05, z, dk(c, 0.78), ry);
 }
 /** Bouclier rond à bordure d'or et à ombilic, posé de face contre le mur `a` */
-function shield(p: Parts, a: number, r: number, u: number, y: number, rad: number, color = RED) {
+function shield(p: Parts, a: number, r: number, u: number, y: number, rad: number, color = TEAM_EMBLEM) {
   const x = fx(a, r, u), z = fz(a, r, u);
   p.add(new THREE.CylinderGeometry(rad, rad, 0.016, 10).rotateX(PI / 2), x, y, z, color, a);
   p.add(new THREE.TorusGeometry(rad, 0.007, 4, 12), x + Math.sin(a) * 0.009, y, z + Math.cos(a) * 0.009, GOLD, a);
@@ -167,7 +165,7 @@ function towerAntique(p: Parts, kit: DefKit) {
   p.cone(0.034, 0.05, 8, -0.22, 1.3, 0.22, 0xc8913c); kit.pipe(p, [-0.22, 1.35, 0.22], [-0.22, 1.47, 0.22], 0.004, wdd);
   // oriflamme au faîte, bannière sur le garde-corps, tonneaux et caisses au pied
   flag(p, kit, 0, 1.92, 0, 0.34, 0.2, 0.11);
-  p.box(0.11, 0.22, 0.01, -0.22, 0.9, 0.345, RED); p.box(0.11, 0.016, 0.014, -0.22, 1.1, 0.347, GOLD); p.box(0.11, 0.016, 0.014, -0.22, 0.9, 0.347, GOLD);
+  p.box(0.11, 0.22, 0.01, -0.22, 0.9, 0.345, TEAM_BANNER); p.box(0.11, 0.016, 0.014, -0.22, 1.1, 0.347, TEAM_B);
   p.box(0.032, 0.032, 0.012, -0.22, 0.99, 0.35, GOLD, 0, false, PI / 4);
   barrel(p, -0.32, 0.33, 1.1); barrel(p, -0.4, 0.26, 0.9);
   crate(p, -0.24, 0, 0.41, 0.09, 0.3); crate(p, -0.24, 0.09, 0.41, 0.07, -0.2);
@@ -262,8 +260,8 @@ function towerMedieval(p: Parts, kit: DefKit) {
   p.cyl(0.02, 0.026, 0.05, 6, 0, 1.73, 0, GOLD);
   flag(p, kit, 0, 1.77, 0, 0.3, 0.22, 0.12);
   // écus accrochés aux hourds, bannières pendues aux angles, brasero de la porte
-  for (const [u, c] of [[-0.1, RED], [0.0, 0xe8dcc0], [0.1, RED]] as [number, number][]) shield(p, 0, hr + 0.018, u, 1.14, 0.04, c);
-  for (const a of [PI / 4, -PI / 4]) { onFace(p, a, hr + 0.026, 0, 0.8, 0.1, 0.24, 0.01, RED); onFace(p, a, hr + 0.03, 0, 0.8, 0.1, 0.016, 0.012, GOLD); onFace(p, a, hr + 0.03, 0, 1.024, 0.1, 0.016, 0.012, GOLD); onFace(p, a, hr + 0.034, 0, 0.9, 0.03, 0.03, 0.012, GOLD); }
+  for (const [u, c] of [[-0.1, TEAM_EMBLEM], [0.0, 0xe8dcc0], [0.1, TEAM_EMBLEM]] as [number, number][]) shield(p, 0, hr + 0.018, u, 1.14, 0.04, c);
+  for (const a of [PI / 4, -PI / 4]) { onFace(p, a, hr + 0.026, 0, 0.8, 0.1, 0.24, 0.01, TEAM_BANNER); onFace(p, a, hr + 0.03, 0, 1.024, 0.1, 0.016, 0.012, TEAM_B); }
   p.cyl(0.05, 0.03, 0.18, 6, -0.31, 0, 0.36, IRON); p.cyl(0.062, 0.05, 0.03, 8, -0.31, 0.17, 0.36, IRON); p.box(0.07, 0.07, 0.07, -0.31, 0.2, 0.36, FLAME, 0, true);
   barrel(p, 0.34, 0.34, 1.0); crate(p, 0.4, 0, 0.26, 0.09, 0.2); p.sphere(0.04, 0.3, 0.03, 0.42, 0xb89a5a, 0, 0.8); p.sphere(0.034, 0.37, 0.025, 0.44, 0xa88a4a, 0, 0.8);
   // un treuil à poulie sous les hourds : potence, corde, seau
@@ -376,7 +374,7 @@ function towerIndustrial(p: Parts, kit: DefKit) {
   p.box(0.1, 0.07, 0.07, -0.46, 0, 0.36, 0x5a4a3a); p.box(0.08, 0.02, 0.05, -0.46, 0.07, 0.36, copper);
   // oriflamme sur la guérite, bannière à la porte, charbon, caisses et tonneaux
   flag(p, kit, 0, 1.69, 0, 0.3, 0.2, 0.11, 0x4a5058);
-  p.box(0.12, 0.22, 0.01, 0.17, 0.5, 0.262, RED); p.box(0.12, 0.014, 0.012, 0.17, 0.708, 0.265, GOLD); p.box(0.12, 0.014, 0.012, 0.17, 0.5, 0.265, GOLD); p.box(0.03, 0.03, 0.012, 0.17, 0.59, 0.268, GOLD, 0, false, PI / 4);
+  p.box(0.12, 0.22, 0.01, 0.17, 0.5, 0.262, TEAM_BANNER); p.box(0.12, 0.014, 0.012, 0.17, 0.708, 0.265, TEAM_B);
   for (let i = 0; i < 9; i++) p.sphere(0.022 + 0.014 * H(i, 4), 0.13 + 0.07 * (i % 3) + 0.03 * H(i, 5), 0.015, 0.45 - 0.05 * Math.floor(i / 3), 0x2a2a2e, 0, 0.7);
   barrel(p, -0.28, 0.36, 1.1, 0x6a5a48); barrel(p, -0.34, 0.28, 0.9, 0x8a6a40); crate(p, 0.0, 0, 0.5, 0.09, 0.2); crate(p, 0.1, 0, 0.5, 0.07, -0.3);
 }
@@ -436,7 +434,7 @@ function towerModern(p: Parts, kit: DefKit) {
   p.box(0.14, 0.1, 0.1, 0.43, 0, -0.18, olive); p.box(0.1, 0.012, 0.08, 0.43, 0.1, -0.18, 0x3c4630); p.cyl(0.008, 0.008, 0.14, 4, 0.47, 0.1, -0.2, steel);
   p.box(0.012, 0.012, 0.012, 0.37, 0.07, -0.13, 0x5ae08a, 0, true);
   p.cyl(0.01, 0.013, 0.42, 5, -0.42, 0, -0.1, steel); p.box(0.07, 0.04, 0.05, -0.42, 0.42, -0.1, 0x2e3238, -0.6); p.box(0.05, 0.026, 0.012, -0.42 + Math.sin(-0.6) * 0.03, 0.428, -0.1 + Math.cos(-0.6) * 0.03, 0xfff1c9, -0.6, true);
-  p.box(0.11, 0.18, 0.01, -0.2, 0.18, 0.276, RED); p.box(0.11, 0.014, 0.012, -0.2, 0.34, 0.279, GOLD); p.box(0.11, 0.014, 0.012, -0.2, 0.18, 0.279, GOLD); p.box(0.03, 0.03, 0.012, -0.2, 0.25, 0.28, GOLD, 0, false, PI / 4);
+  p.box(0.11, 0.18, 0.01, -0.2, 0.18, 0.276, TEAM_BANNER); p.box(0.11, 0.014, 0.012, -0.2, 0.34, 0.279, TEAM_B);
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -493,7 +491,7 @@ function towerFuture(p: Parts, kit: DefKit) {
 /* ================================================================================================================== */
 
 /** Mannequin d'entraînement : poteau, traverse, corps de paille ou de toile, tête casquée, bouclier et épée de bois */
-function dummy(p: Parts, x: number, z: number, ry: number, body = 0xdcc080, post = 0x7a6355, shieldC = RED, metal = 0x9aa3ad) {
+function dummy(p: Parts, x: number, z: number, ry: number, body = 0xdcc080, post = 0x7a6355, shieldC = TEAM_A, metal = 0x9aa3ad) {
   p.cyl(0.014, 0.017, 0.22, 5, x, 0, z, post);
   p.box(0.16, 0.02, 0.02, x, 0.15, z, post, ry);
   p.cyl(0.04, 0.046, 0.1, 6, x, 0.07, z, body);
@@ -550,7 +548,7 @@ function stakes(p: Parts, x0: number, z0: number, x1: number, z1: number, wood: 
 function gateway(p: Parts, kit: DefKit, R: number, wood: number, torchOn = true, h = 0.36) {
   for (const s of [-1, 1]) { p.box(0.06, h, 0.06, s * 0.27, 0, R, wood); p.pyramid(0.07, 0.05, 0.07, s * 0.27, h, R, dk(wood, 1.1)); if (torchOn) torch(p, s * 0.27, 0.2, R + 0.05); }
   p.box(0.6, 0.035, 0.04, 0, h - 0.07, R, wood);
-  p.box(0.13, 0.17, 0.008, 0, h - 0.255, R + 0.026, RED); p.box(0.13, 0.014, 0.01, 0, h - 0.092, R + 0.028, GOLD); p.box(0.13, 0.014, 0.01, 0, h - 0.255, R + 0.028, GOLD); p.box(0.03, 0.03, 0.01, 0, h - 0.19, R + 0.03, GOLD, 0, false, PI / 4);
+  p.box(0.13, 0.17, 0.008, 0, h - 0.255, R + 0.026, TEAM_BANNER); p.box(0.13, 0.014, 0.01, 0, h - 0.092, R + 0.028, TEAM_B);
 }
 
 /** Feu de camp : cercle de pierres, bûches croisées, flamme qui luit */
@@ -587,7 +585,7 @@ function barracksAntique(p: Parts, kit: DefKit) {
   p.box(0.17, 0.27, 0.026, 0, 0.09, zf + 0.012, 0x6e4a32); for (const x of [-0.04, 0.04]) p.box(0.004, 0.27, 0.03, x, 0.09, zf + 0.012, wdd);
   for (const s of [-1, 1]) { p.cyl(0.026, 0.03, 0.31, 8, s * 0.15, 0.09, zf + 0.15, 0xe8dcc0); p.box(0.07, 0.025, 0.07, s * 0.15, 0.4, zf + 0.15, stoneC); p.box(0.06, 0.02, 0.06, s * 0.15, 0.09, zf + 0.15, stoneC); }
   p.box(0.4, 0.045, 0.2, 0, 0.425, zf + 0.1, 0xe8dcc0); p.gable(0.2, 0.1, 0.44, 0, 0.47, zf + 0.1, tile, PI / 2);
-  p.box(0.1, 0.05, 0.02, 0, 0.45, zf + 0.21, RED); p.box(0.1, 0.012, 0.022, 0, 0.45, zf + 0.21, GOLD);
+  p.box(0.1, 0.05, 0.02, 0, 0.45, zf + 0.21, TEAM_A); p.box(0.1, 0.012, 0.022, 0, 0.45, zf + 0.21, TEAM_B);
   for (let k = 0; k < 3; k++) p.box(0.34 + k * 0.04, 0.06 - k * 0.02, 0.06, 0, 0, zf + 0.22 + k * 0.05, dk(stoneC, 1.0 + k * 0.06));
   for (const s of [-1, 1]) torch(p, s * 0.23, 0.18, zf + 0.04);
   // toit de tuiles, faîtage de tuiles rondes, cheminée à fumée
@@ -651,7 +649,7 @@ function barracksMedieval(p: Parts, kit: DefKit) {
   p.cyl(0.14, 0.16, 0.7, 8, tx, 0, tz, stone, false, PI / 8); for (let i = 1; i < 8; i++) band(p, 0.15, 0.15, 0.008, 8, 0.08 * i, dk(stone, 0.86 + 0.1 * H(i, 26)), PI / 8, tx, tz);
   for (const y of [0.18, 0.36, 0.54]) { p.box(0.024, 0.09, 0.03, tx + Math.sin(0.8) * 0.15, y, tz + Math.cos(0.8) * 0.15, 0x24201c, 0.8); p.box(0.024, 0.09, 0.03, tx + Math.sin(-0.8) * 0.15, y, tz + Math.cos(-0.8) * 0.15, 0x24201c, -0.8); }
   p.cyl(0.19, 0.15, 0.04, 8, tx, 0.68, tz, stoneD, false, PI / 8); p.cone(0.2, 0.3, 8, tx, 0.72, tz, slate, false, PI / 8);
-  p.cyl(0.006, 0.006, 0.14, 4, tx, 1.0, tz, GOLD); { const f = kit.sway([tx, 0, tz], [0, 1, 0], 0.3, 0.9); f.box(0.1, 0.06, 0.006, 0.05, 1.06, 0, RED); f.box(0.1, 0.01, 0.008, 0.05, 1.11, 0, GOLD); }
+  p.cyl(0.006, 0.006, 0.14, 4, tx, 1.0, tz, GOLD); { const f = kit.sway([tx, 0, tz], [0, 1, 0], 0.3, 0.9); f.box(0.1, 0.06, 0.006, 0.05, 1.06, 0, TEAM_A); f.box(0.1, 0.01, 0.008, 0.05, 1.11, 0, TEAM_B); }
   // l'enceinte : mur bas à créneaux sur les trois côtés, porterie à deux tourelles et herse
   const wall = (x0: number, z0: number, x1: number, z1: number) => {
     const len = Math.hypot(x1 - x0, z1 - z0), a = Math.atan2(x1 - x0, z1 - z0), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
@@ -669,9 +667,9 @@ function barracksMedieval(p: Parts, kit: DefKit) {
   }
   p.box(0.34, 0.06, 0.1, 0, 0.27, R, stoneD); p.add(new THREE.TorusGeometry(0.12, 0.03, 4, 8, PI), 0, 0.22, R + 0.01, stoneD);
   for (let i = 0; i < 5; i++) p.box(0.012, 0.14, 0.012, -0.08 + i * 0.04, 0.1, R + 0.02, IRON); p.box(0.2, 0.012, 0.014, 0, 0.18, R + 0.024, IRON); p.box(0.2, 0.012, 0.014, 0, 0.12, R + 0.024, IRON);
-  p.box(0.15, 0.2, 0.008, 0, 0.36, R + 0.07, RED); p.box(0.15, 0.014, 0.01, 0, 0.36, R + 0.074, GOLD); p.box(0.15, 0.014, 0.01, 0, 0.546, R + 0.074, GOLD);
+  p.box(0.15, 0.2, 0.008, 0, 0.36, R + 0.07, TEAM_BANNER); p.box(0.15, 0.014, 0.01, 0, 0.546, R + 0.074, TEAM_B);
   // cour : mannequins, quintaine, ratelier de lances, cible, écurie en appentis avec chevaux, foin, auge
-  for (const [x, z, r] of [[-0.5, 0.36, 0.3], [-0.2, 0.55, -0.2], [0.12, 0.3, 0.1]] as V3[]) dummy(p, x, z, r, 0xd8c8a0, 0x6e523c, RED, 0xb8bec6);
+  for (const [x, z, r] of [[-0.5, 0.36, 0.3], [-0.2, 0.55, -0.2], [0.12, 0.3, 0.1]] as V3[]) dummy(p, x, z, r, 0xd8c8a0, 0x6e523c, TEAM_A, 0xb8bec6);
   p.cyl(0.012, 0.014, 0.22, 5, -0.06, 0, 0.06, wdd); p.box(0.2, 0.014, 0.014, -0.06, 0.2, 0.06, wd, 0.5); p.sphere(0.03, -0.14, 0.18, 0.1, 0x7a7e86, 0, 1); dummy(p, 0.0, 0.05, 0, 0xd8c8a0, 0x6e523c, 0x2e5ab8, 0xb8bec6);
   rack(p, -0.45, -0.09, 0, 6); rack(p, 0.45, -0.09, 0, 6);
   for (const z of [0.0, 0.58]) { p.box(0.026, 0.37, 0.026, 0.86, 0, z, wdd); p.box(0.026, 0.3, 0.026, 0.6, 0, z, wdd); }
@@ -704,7 +702,7 @@ function barracksIndustrial(p: Parts, kit: DefKit) {
   p.box(0.3, 0.04, 0.04, 0, 0.4, zf + 0.02, stone); for (const s of [-1, 1]) p.box(0.04, 0.28, 0.04, s * 0.13, 0.12, zf + 0.02, stone);
   tilt(p, 0.42, 0.014, 0.22, 0, 0.5, zf + 0.12, tin, -0.3); for (const s of [-1, 1]) { kit.pipe(p, [s * 0.18, 0.4, zf + 0.02], [s * 0.18, 0.46, zf + 0.18], 0.006, iron); kit.pipe(p, [s * 0.18, 0.55, zf + 0.04], [s * 0.18, 0.4, zf + 0.2], 0.006, iron); }
   for (let k = 0; k < 3; k++) p.box(0.44 + k * 0.04, 0.06 - k * 0.02, 0.06, 0, 0, zf + 0.04 + k * 0.05, dk(stone, 0.95 + k * 0.05));
-  p.box(0.12, 0.2, 0.01, 0.23, 0.3, zf + 0.03, RED); p.box(0.12, 0.014, 0.012, 0.23, 0.486, zf + 0.034, GOLD); p.box(0.12, 0.014, 0.012, 0.23, 0.3, zf + 0.034, GOLD);
+  p.box(0.12, 0.2, 0.01, 0.23, 0.3, zf + 0.03, TEAM_BANNER); p.box(0.12, 0.014, 0.012, 0.23, 0.486, zf + 0.034, TEAM_B);
   // toit de tôle à nervures, cheminées de brique (une qui fume), lucarne de ventilation, cloche sur son campanile
   kit.roof(p, 0, 0.56, bz, { w: W, d: D, h: 0.2, color: tin, wall: brick, len: W + 0.1, ov: 0.07, courses: true });
   for (let i = 0; i < 14; i++) { const x = -0.72 + (i * 1.44) / 13; p.box(0.012, 0.012, 0.31, x, 0.64, bz + 0.13, dk(tin, 0.7), 0, false, 0.3); p.box(0.012, 0.012, 0.31, x, 0.64, bz - 0.13, dk(tin, 0.7), 0, false, -0.3); }
@@ -732,7 +730,7 @@ function barracksIndustrial(p: Parts, kit: DefKit) {
   crate(p, 0.24, 0, 0.5, 0.08, 0.2); crate(p, 0.35, 0, 0.52, 0.07, -0.3); barrel(p, 0.6, 0.45, 0.9, 0x6a5a48);
   horse(p, 0.0, 0.42, 0.4, 0x6a4a30, 0x2a2420); p.box(0.1, 0.012, 0.05, -0.05, 0.1, 0.38, 0x2a2420, 0.4);
   flag(p, kit, -0.7, 0.0, 0.7, 0.62, 0.18, 0.1, 0x4a5058);
-  dummy(p, 0.1, 0.1, 0, 0xd8c8a0, iron, RED, 0xb8bec6); rack(p, 0.5, -0.09, 0, 6, 'rifle', iron);
+  dummy(p, 0.1, 0.1, 0, 0xd8c8a0, iron, TEAM_A, 0xb8bec6); rack(p, 0.5, -0.09, 0, 6, 'rifle', iron);
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -760,7 +758,7 @@ function barracksModern(p: Parts, kit: DefKit) {
   p.box(0.2, 0.24, 0.02, 0, 0.04, zf + 0.01, glassC, 0, true); p.box(0.01, 0.24, 0.026, 0, 0.04, zf + 0.012, steel); p.box(0.22, 0.014, 0.03, 0, 0.28, zf + 0.012, steel);
   tilt(p, 0.38, 0.016, 0.2, 0, 0.35, zf + 0.12, glassC, -0.15, 0, true); p.box(0.38, 0.016, 0.02, 0, 0.3, zf + 0.21, steel); for (const s of [-1, 1]) { p.box(0.016, 0.3, 0.016, s * 0.18, 0.02, zf + 0.2, steel); }
   for (let k = 0; k < 2; k++) p.box(0.34 + k * 0.04, 0.04 - k * 0.02, 0.07, 0, 0, zf + 0.04 + k * 0.06, concD);
-  p.box(0.12, 0.05, 0.01, 0.22, 0.34, zf + 0.012, RED); p.box(0.12, 0.012, 0.012, 0.22, 0.34, zf + 0.014, GOLD); p.box(0.12, 0.012, 0.012, 0.22, 0.388, zf + 0.014, GOLD);
+  p.box(0.12, 0.05, 0.01, 0.22, 0.34, zf + 0.012, TEAM_A); p.box(0.12, 0.012, 0.012, 0.22, 0.34, zf + 0.014, TEAM_B); p.box(0.12, 0.012, 0.012, 0.22, 0.388, zf + 0.014, TEAM_B);
   // toit-terrasse : acrotère, antennes, parabole, groupes de climatisation, escalier de service
   for (const [x0, z0, x1, z1] of [[-W / 2, zf, W / 2, zf], [-W / 2, bz - D / 2, W / 2, bz - D / 2]] as number[][]) p.box(W + 0.1, 0.05, 0.026, 0, 0.57, z0, concL);
   for (const s of [-1, 1]) p.box(0.026, 0.05, D + 0.1, s * (W / 2 + 0.04), 0.57, bz, concL);
@@ -838,7 +836,7 @@ function barracksFuture(p: Parts, kit: DefKit) {
     for (let i = 0; i <= k; i++) { const x = x0 + ((x1 - x0) * i) / k, z = z0 + ((z1 - z0) * i) / k; p.cyl(0.014, 0.02, 0.17, 6, x, 0, z, dkc); p.sphere(0.018, x, 0.18, z, glow, 1); }
   }
   for (const s of [-1, 1]) { p.cyl(0.02, 0.03, 0.38, 8, s * 0.3, 0, R, dkc); p.sphere(0.03, s * 0.3, 0.4, R, glow, 1); p.add(new THREE.TorusGeometry(0.036, 0.006, 3, 10).rotateX(PI / 2), s * 0.3, 0.2, R, glow, 0, 'neon'); }
-  p.add(new THREE.TorusGeometry(0.3, 0.008, 3, 14, PI), 0, 0.36, R, glow, 0, 'neon'); p.box(0.18, 0.15, 0.006, 0, 0.18, R + 0.01, RED); p.box(0.18, 0.012, 0.01, 0, 0.18, R + 0.014, GOLD); p.box(0.18, 0.012, 0.01, 0, 0.318, R + 0.014, GOLD);
+  p.add(new THREE.TorusGeometry(0.3, 0.008, 3, 14, PI), 0, 0.36, R, glow, 0, 'neon'); p.box(0.18, 0.15, 0.006, 0, 0.18, R + 0.01, TEAM_BANNER); p.box(0.18, 0.012, 0.01, 0, 0.318, R + 0.014, TEAM_B);
   // cour : cibles holographiques, drones d'entraînement en orbite, râtelier d'armes à énergie
   for (const [x, z] of [[-0.55, 0.45], [-0.25, 0.65], [0.0, 0.3]]) { p.cyl(0.02, 0.03, 0.05, 6, x, 0, z, dkc); p.box(0.1, 0.18, 0.01, x, 0.07, z, glow, 0, 'neon'); p.add(new THREE.TorusGeometry(0.04, 0.005, 3, 10), x, 0.17, z + 0.01, 0xff6a6a, 0, 'neon'); }
   const dr = kit.turn([-0.3, 0.3, 0.5], [0, 1, 0], 0.4);

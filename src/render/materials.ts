@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 import { addSnow } from './snow';
+import { addTeamPaint } from './teamPaint';
 
 export const mats = {
   body: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 }),
@@ -123,6 +124,8 @@ addWater(mats.lit, true);
 addSnow(mats.body);
 addSnow(mats.glow);
 addSnow(mats.lit);
+// les couleurs du blason du joueur (drapeaux, tabards, boucliers… voir teamPaint.ts)
+for (const m of Object.values(mats)) addTeamPaint(m);
 
 /**
  * Corps et lumières d'un modèle fondus en un seul maillage pour `mats.lit` : le corps prend une graine nulle, les lumières
@@ -181,6 +184,7 @@ vec3 crowdRot(vec3 v, float a) { float c = cos(a), s = sin(a); return v * c + cr
   transformed.y += aAnim.w * abs(sin(uCrowdT * aAnim.y * 6.2832 + aAnim.z));`);
 };
 crowdMat.customProgramCacheKey = () => 'crowd';
+addTeamPaint(crowdMat);
 
 export function setGhostValid(ok: boolean) {
   mats.ghost.emissive.setHex(ok ? 0x30e060 : 0xff3a3a);

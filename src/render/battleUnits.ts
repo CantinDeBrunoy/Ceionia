@@ -7,6 +7,7 @@ import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
 import { peopleRole } from './peopleSoldiers';
 import { makeRider, rideStep, Rider } from './riders';
 import { makeHoverTank, hoverStep, makeEscort, escortStep, escortFire, Escort } from './futureTroops';
+import { isTeam, teamColors } from './teamPaint';
 
 /**
  * Les combattants d'une bataille (dans les Enfers ou sur l'île du portail) : démons en pièces animées (un maillage instancié
@@ -436,8 +437,11 @@ export function paint(g: THREE.BufferGeometry, c: number | THREE.Color, f: (y: n
   const out = g.index ? g.toNonIndexed() : g;
   if (out.attributes.uv) out.deleteAttribute('uv');
   out.computeBoundingBox();
-  const p = out.attributes.position, b = out.boundingBox!, h = Math.max(1e-6, b.max.y - b.min.y), col = new THREE.Color(c), arr = new Float32Array(p.count * 3);
-  for (let i = 0; i < p.count; i++) {
+  const p = out.attributes.position, b = out.boundingBox!, h = Math.max(1e-6, b.max.y - b.min.y), arr = new Float32Array(p.count * 3);
+  // une couleur du blason (sentinelle négative, voir teamPaint.ts) : sur les positions telles quelles, nuancée de même
+  if (typeof c === 'number' && isTeam(c)) teamColors(c, p, arr, (i) => f((p.getY(i) - b.min.y) / h));
+  const col = new THREE.Color(typeof c === 'number' && isTeam(c) ? 0 : c);
+  for (let i = 0; i < (typeof c === 'number' && isTeam(c) ? 0 : p.count); i++) {
     const k = f((p.getY(i) - b.min.y) / h);
     arr[i * 3] = col.r * k; arr[i * 3 + 1] = col.g * k; arr[i * 3 + 2] = col.b * k;
   }
