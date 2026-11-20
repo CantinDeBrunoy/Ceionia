@@ -352,6 +352,8 @@ const SEASON_PIC = ['printemps', 'ete', 'automne', 'hiver'];
 const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', deco: 'printemps', war: 'militaire' };
 /** Le picto de la carte du village, qui suit l'âge : Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste */
 const AGE_PIC = ['age-0', 'age-1', 'age-2', 'age-3', 'age-4', 'age-5'];
+/** l'emblème au trait de chaque âge, si son image peinte n'arrive pas (cartouche du village) */
+const AGE_SVG = ['campfire', 'columns', 'castle', 'anvil', 'tower', 'rocket'];
 const TAB_PIC: Record<string, string> = { build: 'production', land: 'paysage' };
 const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string; one?: string }[] = [
   { k: 'housing', icon: 'house', label: 'logements', one: 'logement' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
@@ -775,6 +777,14 @@ export class UI {
     $('#resNext').onclick = () => step(1);
     view.addEventListener('scroll', () => this.syncResNav(), { passive: true });
     addEventListener('resize', () => { this.fitHud(); this.syncResNav(); this.syncNeedNav(); });
+    // la page elle-même ne défile jamais : un `scrollIntoView` (vignette de la barre du bas, carte d'expédition) faisait glisser
+    // toute l'interface de côté, la carte du village coupée à gauche et les boutons de droite hors de l'écran (auteur, nov. 2026)
+    document.addEventListener('scroll', (e) => {
+      const t = e.target;
+      for (const el of [document.scrollingElement, document.documentElement, document.body, document.getElementById('app'), root]) {
+        if (el && (t === document || t === el) && (el.scrollLeft || el.scrollTop)) { el.scrollLeft = 0; el.scrollTop = 0; }
+      }
+    }, true);
     // la place laissée aux stocks change avec la fenêtre et avec ce qu'il y a à côté (les besoins) : la fenêtre se recale (sur deux
     // lignes ; sur une ligne, c'est `fitHud` qui la taille)
     new ResizeObserver(() => { this.fitResView(); this.syncResNav(); }).observe($('#resPanel'));
@@ -1723,7 +1733,10 @@ export class UI {
     this.fitKey = key;
     // (le défilement est gardé : le joueur qui regardait l'or le voit encore après)
     const keep = [rv.scrollLeft, nv.scrollLeft];
-    for (const v of [rv, nv]) { v.style.width = ''; v.style.maxWidth = ''; v.style.minWidth = ''; }
+    for (const v of [rv, nv]) { v.style.width = ''; v.style.maxWidth = ''; v.style.minWidth = ''; v.style.flexShrink = ''; }
+    // (les flèches d'avant ne comptent pas : restées affichées, elles prenaient 48 px, la fenêtre rétrécissait sous la largeur
+    // calculée, cachait une ressource derrière un vide, et les flèches restaient ; elles reviennent par `syncResNav`)
+    $('#resPanel').classList.remove('scrolls'); $('#needsBox').classList.remove('scrolls');
     box.classList.remove('compact', 'mini');
     if (!one || !nRes || !nNeed) { this.fitResView(); this.syncResNav(); this.syncNeedNav(); return; }
     const hud = $('#hud'), gap = parseFloat(getComputedStyle(hud).columnGap) || 10;
@@ -1765,8 +1778,28 @@ export class UI {
     // et enfin qu'une ressource
     if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth); }
     if (!fit && !box.hidden) { box.classList.add('mini'); fit = fitIn(box.offsetWidth); }
-    const [r, n] = fit ?? [Math.min(2, nRes), 1];
-    for (const [v, w] of [[rv, span(resWs, r) - 2], [nv, span(needWs, n) - 2]] as const) { v.style.maxWidth = 'none'; v.style.minWidth = '0'; v.style.width = `${w}px`; }
+    let [r, n] = fit ?? [Math.min(2, nRes), 1];
+    const apply = () => {
+      for (const [v, w] of [[rv, span(resWs, r) - 2], [nv, span(needWs, n) - 2]] as const) { v.style.maxWidth = 'none'; v.style.minWidth = '0'; v.style.width = `${w}px`; v.style.flexShrink = '0'; }
+      this.syncResNav(); this.syncNeedNav();
+    };
+    apply();
+    // contrôle sur la page réelle : si la ligne dépasse encore (une largeur mesurée trop tôt, une police pas encore chargée), une
+    // case de moins, jusqu'à ce qu'elle tienne. Elle débordait chez l'auteur en 1700 px : la cloche et les réglages sortaient de
+    // l'écran à droite, et la page glissait de côté
+    const over = () => {
+      const edge = Math.max(...['#resPanel', '#needsBox', '#goalBox'].map((q) => $(q).getBoundingClientRect().right)), hr = $('#hudR').getBoundingClientRect();
+      return edge + gap > hr.left + 0.5 || hr.right > hud.getBoundingClientRect().right + 0.5;
+    };
+    for (let i = 0; i < 12 && over(); i++) {
+      if (!box.hidden && !box.classList.contains('mini')) box.classList.add(box.classList.contains('compact') ? 'mini' : 'compact');
+      else if (n > 2) n--;
+      else if (r > 2) r--;
+      else if (n > 1) n--;
+      else if (r > 1) r--;
+      else break;
+      apply();
+    }
     rv.scrollLeft = keep[0]; nv.scrollLeft = keep[1];
     this.syncResNav(); this.syncNeedNav();
   }
@@ -2092,7 +2125,21 @@ export class UI {
     $('#ageName').textContent = AGES[sim.age].name;
     // le logo de la carte du village change avec l'âge (picto et teinte du fond)
     const logo = $('#vLogo');
-    if (logo.dataset.a !== String(sim.age)) { logo.innerHTML = hudPic(AGE_PIC[sim.age] ?? AGE_PIC[0], 34); logo.dataset.a = String(sim.age); logo.className = `vLogo age${sim.age}`; }
+    if (logo.dataset.a !== String(sim.age)) {
+      logo.innerHTML = hudPic(AGE_PIC[sim.age] ?? AGE_PIC[0], 34); logo.dataset.a = String(sim.age); logo.className = `vLogo age${sim.age}`;
+      // l'image ne paraît qu'une fois chargée ; si elle n'arrive pas (réseau, ancien cache après un déploiement), elle est redemandée
+      // une fois, puis l'emblème de l'âge au trait la remplace : jamais l'icône d'image cassée du navigateur (l'auteur l'a vue au
+      // Médiéval, nov. 2026, dans Chrome)
+      const img = logo.querySelector('img');
+      if (img && !(img.complete && img.naturalWidth)) {
+        img.style.visibility = 'hidden';
+        img.onload = () => { img.style.visibility = ''; };
+        img.onerror = () => {
+          if (!img.dataset.retry) { img.dataset.retry = '1'; img.src = `${img.getAttribute('src')}?r=${Date.now()}`; return; }
+          img.replaceWith(Object.assign(document.createElement('span'), { className: 'vLogoAlt', innerHTML: ic(AGE_SVG[sim.age] ?? 'campfire', 26, 2) }));
+        };
+      }
+    }
     $('#ageSub').textContent = AGES[sim.age].tagline;
     const ap = sim.ageProgress(), pct = ap ? Math.floor(ap.ratio * 100) : 100, sb = this.host.world.sandbox;
     $('#agePanel').classList.toggle('sandbox', sb);
