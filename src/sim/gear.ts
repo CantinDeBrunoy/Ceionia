@@ -69,7 +69,7 @@ export const GEAR: Gear[] = [
   { id: 'armor', name: 'Armure', plural: 'Armures', icon: 'shield', age: 2, last: 4, ore: 2, time: 5, needs: 'workshop', guards: 'monster', cut: 0.6, per: (n) => n, desc: 'Cotte de mailles, casque et bouclier : les crocs glissent.' },
   { id: 'energyArmor', name: 'Armure énergétique', plural: 'Armures énergétiques', icon: 'energyArmor', age: 5, ore: 4, fuel: 1, time: 7, needs: 'workshop', guards: 'monster', cut: 0.82, per: (n) => n, desc: 'Une exo-armure à champ de force : griffes et flammes glissent.' },
   { id: 'fieldShield', name: 'Bouclier de champ', plural: 'Boucliers de champ', icon: 'fieldShield', age: 5, ore: 3, fuel: 2, time: 6, needs: 'workshop', guards: 'weather', also: 'fall', cut: 0.5, per: (n) => Math.ceil(n / 2), desc: 'Une bulle d’énergie : vent, pluie et éboulis rebondissent.' },
-  { id: 'kit', name: 'Trousse de soins', plural: 'Trousses de soins', icon: 'kit', age: 2, ore: 1, time: 3, needs: 'health', guards: null, cut: 0.1, per: () => 1, desc: 'Un peu plus sûr partout ; les blessés guérissent deux fois plus vite.' },
+  { id: 'kit', name: 'Trousse de soins', plural: 'Trousses de soins', icon: 'kit', age: 2, ore: 1, time: 3, needs: 'health', guards: null, cut: 0.1, per: () => 1, desc: 'Un peu plus sûr partout. Les blessés guérissent deux fois plus vite.' },
 ];
 export const GEAR_BY = Object.fromEntries(GEAR.map((g) => [g.id, g])) as Record<GearId, Gear>;
 // noms, pluriels et descriptions lus dans la langue courante (dictionnaire src/i18n/en/gear.ts)

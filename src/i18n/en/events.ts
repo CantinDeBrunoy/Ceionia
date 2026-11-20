@@ -215,7 +215,7 @@ registerDict('events', {
   'Une corde au cou, le bélier a suivi… et tout le troupeau derrière lui.': 'With a rope around his neck, the ram followed... and the whole flock behind him.',
   'On a laissé partir le bélier, et le troupeau s’est un peu dispersé.': 'We let the ram go, and the flock scattered a little.',
   'Un agneau dans les ronces': 'A lamb in the brambles',
-  'Un agneau s’est pris dans un buisson de ronces et bêle à fendre l’âme ; sa mère tourne autour, affolée.': 'A lamb is caught in a bramble bush and bleating pitifully; its mother circles around, frantic.',
+  'Un agneau s’est pris dans un buisson de ronces et bêle à fendre l’âme. Sa mère tourne autour, affolée.': 'A lamb is caught in a bramble bush and bleating pitifully. Its mother circles around, frantic.',
   'Le libérer doucement': 'Free it gently',
   'Libéré des ronces, l’agneau ne nous a plus quittés.': 'Freed from the brambles, the lamb never left our side again.',
   'Laisser la mère s’en charger': 'Let the mother handle it',
