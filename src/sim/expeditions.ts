@@ -5,7 +5,7 @@ import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummar
 import { noteGoalEvent } from './goals';
 import { nearestVolcano, volcanoIsle, volcanoGate, crossTo, landCell } from './volcano';
 import { AGES, KINDS, KindId, isDecor, sizeOf, lineOf, reqLine } from '../build/catalog';
-import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
+import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon, gearKnown } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { missionOffered, missionWhy, tributePerDay, isleOf, rivalOf, talkRisk, isleOffered, isleWhy } from './diplomacy';
 import { SMITHS_PERK, SMITHS_CRAFT } from './isleMissions';
@@ -497,7 +497,8 @@ export class Expeditions {
     if (PEACE_TRIPS.has(m.id) || c.visit) a.extra = Math.max(a.extra, this.peaceCrossing(dest, c) / (TRIP_SAIL * TRIP_OUT) - c.work);
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval (tous en selle, ou tous à pied) ; on part en selle
     const kits = party.map((): Kit => ({}));
-    for (const g of ['plasma', 'assault', 'rifle', 'crossbow', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
+    // (l'arme d'obsidienne se tient comme l'épée ou la lance)
+    for (const [g, as] of [['plasma', 'plasma'], ['assault', 'assault'], ['rifle', 'rifle'], ['obsidianSword', 'sword'], ['crossbow', 'crossbow'], ['sword', 'sword'], ['obsidianSpear', 'spear'], ['bow', 'bow'], ['spear', 'spear']] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = as; n--; } }
     kits.forEach((kt, i) => {
       // les chasseurs du mammouth ont toujours leurs lances de chasse au poing (les armes du village, emportées en plus, rendent la chasse plus sûre)
       if (c.scene === 'mammoth' || c.scene === 'megalodon' || c.scene === 'kraken' || c.scene === 'dragon') kt.weapon ??= huntWeapon(age);
@@ -861,6 +862,7 @@ export class Expeditions {
   /** Pourquoi le village ne peut pas fabriquer cette pièce (ou null) */
   whyCraft(g: Gear, age: number): string | null {
     if (age < g.age) return tr('Connu à l’âge {age}', { age: AGES[g.age].name });
+    if (!gearKnown(g, this.world.exp.perks)) return tr('Débloquée par l’expédition « La pierre noire du volcan » : l’obsidienne vient de là.');
     if (g.needs && !this.has(g.needs)) {
       const name = KINDS[g.needs].names[Math.min(age, AGES.length - 1)].toLowerCase();
       // l'atelier porte le nom de l'âge (une forge au Moyen Âge) : on dit les deux
@@ -877,7 +879,7 @@ export class Expeditions {
    */
   whyCraftAll(ids: readonly GearId[], age: number): string | null {
     if (!ids.length) return null;
-    for (const id of ids) { const g = GEAR_BY[id]; if (age < g.age || (g.needs && !this.has(g.needs))) return this.whyCraft(g, age); }
+    for (const id of ids) { const g = GEAR_BY[id]; if (age < g.age || (g.needs && !this.has(g.needs)) || !gearKnown(g, this.world.exp.perks)) return this.whyCraft(g, age); }
     const w = this.world, tot = { wood: 0, stone: 0, ore: 0, fuel: 0 };
     for (const id of ids) { const c = gearCost(GEAR_BY[id], w.difficulty); tot.wood += c.wood; tot.stone += c.stone; tot.ore += c.ore; tot.fuel += c.fuel ?? 0; }
     if (!w.unlimited && (w.wood < tot.wood || w.stone < tot.stone || w.ore < tot.ore || w.fuel < tot.fuel)) {

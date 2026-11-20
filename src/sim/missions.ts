@@ -494,14 +494,14 @@ export const MISSIONS: Mission[] = [
       {
         label: 'Ramasser au pied des coulées', text: 'Prudent : on ramasse les éclats froids, loin du cratère.',
         dest: 'river', sea: true, scene: 'obsidian', fail: 'rocks', doing: 'ramasse les éclats d’obsidienne au pied des coulées', danger: ['water', 'fall'], party: 3, work: 26, risk: 0.12, carry: 'sacks',
-        win: [{ t: 'ore', n: 4 }, jobs(2, 6), joy(1)], lose: [],
+        win: [{ t: 'ore', n: 4 }, jobs(2, 6), joy(1), { t: 'perk', id: 'obsidian' }], lose: [],
         winText: 'Les sacs sont pleins d’éclats noirs et brillants. Les artisans en font des lames et des miroirs.',
         loseText: 'Des pierres ont dévalé la pente : l’équipe a dû repartir les sacs vides.',
       },
       {
         label: 'Tailler la coulée encore tiède', text: 'Audacieux : la plus belle pierre, tout près de la lave.',
         dest: 'river', sea: true, scene: 'obsidian', variant: 'hot', fail: 'rocks', doing: 'taille l’obsidienne dans une coulée encore tiède', danger: ['water', 'fall', 'weather'], party: 4, work: 20, risk: 0.3, carry: 'sacks',
-        win: [{ t: 'ore', n: 8 }, jobs(3, 6), joy(1)], lose: [hurt(1, 3)],
+        win: [{ t: 'ore', n: 8 }, jobs(3, 6), joy(1), { t: 'perk', id: 'obsidian' }], lose: [hurt(1, 3)],
         winText: 'De grands blocs d’obsidienne, taillés au bord de la coulée : on n’en a jamais vu d’aussi purs.',
         loseText: 'La croûte a cédé sous un pied : un tailleur s’est brûlé, et l’équipe est rentrée.',
       },
@@ -1190,6 +1190,8 @@ export function readExpState(d: any): ExpState {
   // qu'ait été la proie ; et le mégalodon s'il en a rapporté les dents. Le trophée, lui, suit le savoir-faire rapporté)
   const old = was.includes('monster') ? ['kraken', ...(s.perks.includes('megalodon') ? ['megalodon'] : [])] : [];
   s.done = [...new Set([...was, ...old])].filter((x: any) => ids.has(x));
+  // (une partie d'avant les armes d'obsidienne, qui a déjà rapporté la pierre noire du volcan, en a le savoir-faire)
+  if (s.done.includes('obsidian') && !s.perks.includes('obsidian')) s.perks.push('obsidian');
   s.herd = Array.isArray(d.herd) ? d.herd.filter((x: any) => ['sheep', 'cow', 'pig', 'horse'].includes(x)) : [];
   for (const k of Object.keys(s.bonus) as NeedKey[]) s.bonus[k] = +d.bonus?.[k] || 0;
   s.temp = Array.isArray(d.temp) ? d.temp.filter((t: any) => t && t.need in s.bonus && isFinite(t.n) && isFinite(t.until)) : [];
@@ -1247,6 +1249,7 @@ PERK_NAME.portal = 'le portail de l’autre rive est ouvert : tours de garde et 
 PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place du village';
 PERK_NAME.isleSmiths = 'les outils des forgerons alliés : l’équipement se fabrique 30 % plus vite';
 PERK_NAME.isleSeeds = 'les semences des jardins rivaux : champs +15 %';
+PERK_NAME.obsidian = 'les tailleurs d’obsidienne : lances et épées d’obsidienne';
 PERK_NAME.stag = 'les bois du cerf blanc : un trophée sur la place du village';
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 

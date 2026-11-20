@@ -17,7 +17,8 @@ export const DANGER_NAME: Record<Danger, string> = { beast: 'bêtes sauvages', f
 /** « Contre les bêtes sauvages », « Sur l'eau vive »… */
 export const DANGER_VS: Record<Danger, string> = { beast: 'Contre les bêtes sauvages', fall: 'Contre les chutes', water: 'Sur l’eau vive', dark: 'Dans le noir', weather: 'Contre les intempéries', monster: 'Contre les créatures des grottes' };
 
-export type GearId = 'spear' | 'bow' | 'sword' | 'crossbow' | 'rifle' | 'assault' | 'grenade' | 'plasma' | 'rope' | 'torch' | 'lamp' | 'boat' | 'kit' | 'armor' | 'energyArmor' | 'fieldShield';
+export type GearId = 'spear' | 'bow' | 'sword' | 'crossbow' | 'rifle' | 'assault' | 'grenade' | 'plasma' | 'rope' | 'torch' | 'lamp' | 'boat' | 'kit' | 'armor' | 'energyArmor' | 'fieldShield'
+  | 'obsidianSpear' | 'obsidianSword';
 
 export interface Gear {
   id: GearId;
@@ -51,12 +52,24 @@ export interface Gear {
   /** pièces qu'il faut pour une équipe de n */
   per: (n: number) => number;
   desc: string;
+  /** savoir-faire qu'il faut pour la fabriquer (`exp.perks` : l'obsidienne, rapportée du volcan) */
+  perk?: string;
+  /**
+   * le tranchant : en plus de sa part du danger, le risque de toute l'expédition est multiplié par ce facteur quand toute
+   * l'équipe en est munie (en proportion sinon). Les armes d'obsidienne : une lame de verre volcanique, plus tranchante que
+   * tout ce que l'on forge avant l'âge industriel
+   */
+  edge?: number;
 }
 
 export const GEAR: Gear[] = [
   { id: 'spear', name: 'Lance', plural: 'Lances', icon: 'spear', age: 0, last: 1, ore: 0, wood: 1, stone: 1, time: 2, guards: 'beast', also: 'monster', cut: 0.25, per: (n) => n, desc: 'Un bâton durci au feu, une pointe de silex.' },
   { id: 'bow', name: 'Arc', plural: 'Arcs', icon: 'bow', age: 1, last: 1, ore: 0, wood: 4, time: 3, guards: 'beast', also: 'monster', cut: 0.38, per: (n) => n, desc: 'Tient les bêtes à distance, et rapporte parfois le dîner.' },
   { id: 'sword', name: 'Épée', plural: 'Épées', icon: 'sword', age: 2, last: 2, ore: 1, time: 4, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.5, per: (n) => n, desc: 'Forgée à l’atelier : loups et sangliers n’ont qu’à bien se tenir.' },
+  // l'obsidienne : rapportée du volcan (« La pierre noire du volcan », savoir-faire `obsidian`) ; ses lames tranchent mieux que le
+  // fer jusqu'au Moyen Âge : leur tranchant (`edge`) rend toute l'expédition plus sûre, pas seulement contre les bêtes
+  { id: 'obsidianSpear', name: 'Lance d’obsidienne', plural: 'Lances d’obsidienne', icon: 'spear', age: 1, last: 2, ore: 1, wood: 1, time: 3, perk: 'obsidian', guards: 'beast', also: 'monster', cut: 0.45, edge: 0.75, per: (n) => n, desc: 'Une pointe de verre volcanique : elle perce le cuir le plus épais.' },
+  { id: 'obsidianSword', name: 'Épée d’obsidienne', plural: 'Épées d’obsidienne', icon: 'sword', age: 2, last: 2, ore: 2, time: 5, needs: 'workshop', perk: 'obsidian', guards: 'beast', also: 'monster', cut: 0.62, edge: 0.7, per: (n) => n, desc: 'Des éclats d’obsidienne sertis dans le bois : mieux que l’acier.' },
   { id: 'crossbow', name: 'Arbalète', plural: 'Arbalètes', icon: 'crossbow', age: 2, last: 2, ore: 1, wood: 3, time: 4, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.56, per: (n) => n, desc: 'Un carreau d’acier tendu d’un cran.' },
   { id: 'rifle', name: 'Fusil', plural: 'Fusils', icon: 'rifle', age: 3, last: 3, ore: 2, time: 4, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.65, per: (n) => n, desc: 'Un coup en l’air suffit souvent à disperser une meute.' },
   { id: 'assault', name: 'Fusil d’assaut', plural: 'Fusils d’assaut', icon: 'assault', age: 4, last: 4, ore: 3, fuel: 1, time: 5, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.76, per: (n) => n, desc: 'Rafales et chargeur long : une meute n’approche pas.' },
@@ -117,6 +130,13 @@ export const dangersOf = (c: Choice): Danger[] => c.danger ?? DEST_DANGER[c.dest
 
 /** Une pièce d'actualité à cet âge : connue, et pas encore remplacée par une plus moderne */
 export const gearCurrent = (g: Gear, age: number) => age >= g.age && (g.last === undefined || age <= g.last);
+/** Une pièce que le village sait faire : son savoir-faire acquis (l'obsidienne), s'il en faut un */
+export const gearKnown = (g: Gear, perks: readonly string[]) => !g.perk || perks.includes(g.perk);
+/**
+ * La force d'une pièce, pour choisir la meilleure : sa part du danger, plus ce que son tranchant retire au risque de toute
+ * l'expédition (la lance d'obsidienne passe devant l'épée de fer, l'épée d'obsidienne devant tout jusqu'au fusil)
+ */
+export const gearPower = (g: Gear) => g.cut + (1 - (g.edge ?? 1));
 /** Une pièce dépassée à cet âge (« anciennes armes ») */
 export const gearObsolete = (g: Gear, age: number) => g.last !== undefined && age > g.last;
 
@@ -133,23 +153,46 @@ export type Pack = Partial<Record<GearId, number>>;
  * lances (le risque du kraken passait de 42 à 51 % pendant la fabrication, testeurs v6)
  */
 export function loadout(c: Choice, stock: Stock): { take: Pack; k: number } {
-  const take: Pack = {}, ds = dangersOf(c);
-  const left = (g: Gear) => (stock[g.id] ?? 0) - (take[g.id] ?? 0);
-  let cut = 0;
+  const ds = dangersOf(c);
+  // les armes d'obsidienne (leur tranchant vaut pour toute l'expédition) : on essaie d'en emporter 0, 1, 2… de chaque sorte, en
+  // premier, le reste rangé par sa part du danger, et l'on garde le meilleur. Une pièce de plus en réserve ne fait donc jamais
+  // monter le risque : elle ne fait qu'ajouter un essai (ranger simplement par le gain s'y trompait parfois)
+  const edged = GEAR.filter((g) => g.edge && (stock[g.id] ?? 0) > 0 && ds.some((d) => g.guards === d || g.also === d));
+  let best = fill(c, stock, ds, new Map());
+  const caps = new Map<GearId, number>(), max = (g: Gear) => Math.min(stock[g.id] ?? 0, g.per(c.party) * ds.length);
+  const walk = (i: number) => {
+    if (i === edged.length) { if (caps.size) { const r = fill(c, stock, ds, caps); if (r.k < best.k - 1e-12) best = r; } return; }
+    for (let n = 0; n <= max(edged[i]); n++) { if (n) caps.set(edged[i].id, n); else caps.delete(edged[i].id); walk(i + 1); }
+    caps.delete(edged[i].id);
+  };
+  walk(0);
+  if (stock.kit > 0) { best.take.kit = 1; best.k *= 1 - GEAR_BY.kit.cut; }
+  return best;
+}
+
+/**
+ * Les pièces prises contre chaque danger : d'abord les armes d'obsidienne permises (`caps` : combien de chacune), puis le reste,
+ * la plus forte part du danger d'abord ; et le risque qui en reste
+ */
+function fill(c: Choice, stock: Stock, ds: Danger[], caps: Map<GearId, number>): { take: Pack; k: number } {
+  const take: Pack = {};
+  const left = (g: Gear) => (g.edge ? caps.get(g.id) ?? 0 : stock[g.id] ?? 0) - (take[g.id] ?? 0);
+  const rank = (g: Gear) => (g.edge ? 10 : 0) + g.cut;
+  let cut = 0, edge = 1;
   for (const d of ds) {
     // la part de l'équipe encore à munir contre ce danger (1 : toute l'équipe)
     let room = 1;
-    for (const g of GEAR.filter((x) => (x.guards === d || x.also === d) && left(x) > 0).sort((a, b) => b.cut - a.cut)) {
+    for (const g of GEAR.filter((x) => (x.guards === d || x.also === d) && left(x) > 0).sort((p, q) => rank(q) - rank(p))) {
       if (room <= 1e-9) break;
       const need = g.per(c.party), n = Math.min(left(g), Math.ceil(room * need - 1e-9)), part = Math.min(room, n / need);
       take[g.id] = (take[g.id] ?? 0) + n;
       cut += g.cut * part;
+      // (le tranchant : toute l'expédition en profite, à proportion de l'équipe munie)
+      if (g.edge) edge *= 1 - (1 - g.edge) * part;
       room -= part;
     }
   }
-  let k = 1 - cut / Math.max(1, ds.length);
-  if (stock.kit > 0) { take.kit = 1; k *= 1 - GEAR_BY.kit.cut; }
-  return { take, k };
+  return { take, k: (1 - cut / Math.max(1, ds.length)) * edge };
 }
 
 /** Une pièce qui manque à une équipe : contre quel danger, combien il en faut, combien en réserve et en fabrication */
@@ -159,12 +202,13 @@ export interface GearGap { dangers: Danger[]; gear: Gear; need: number; have: nu
  * Ce qu'il faudrait fabriquer pour qu'une équipe parte bien munie : pour chaque danger du choix qu'aucune pièce en réserve ne
  * couvre en entier, la pièce la plus protectrice que le village sait faire (`usable` : l'atelier ou le lieu de soins est là)
  */
-export function gearGaps(c: Choice, stock: Stock, queue: GearId[], age: number, usable: (g: Gear) => boolean): GearGap[] {
+export function gearGaps(c: Choice, stock: Stock, queue: GearId[], age: number, usable: (g: Gear) => boolean, perks: readonly string[] = []): GearGap[] {
   const out: GearGap[] = [];
   for (const d of dangersOf(c)) {
-    const cands = GEAR.filter((g) => (g.guards === d || g.also === d) && gearCurrent(g, age));
+    // (une pièce dont le village n'a pas le savoir-faire n'est pas proposée : la lance d'obsidienne avant le volcan)
+    const cands = GEAR.filter((g) => (g.guards === d || g.also === d) && gearCurrent(g, age) && gearKnown(g, perks));
     if (!cands.length || cands.some((g) => stock[g.id] >= g.per(c.party))) continue;
-    const pool = cands.filter(usable), pick = [...(pool.length ? pool : cands)].sort((a, b) => b.cut - a.cut)[0];
+    const pool = cands.filter(usable), pick = [...(pool.length ? pool : cands)].sort((a, b) => gearPower(b) - gearPower(a))[0];
     const dup = out.find((o) => o.gear.id === pick.id);
     if (dup) dup.dangers.push(d);
     else out.push({ dangers: [d], gear: pick, need: pick.per(c.party), have: stock[pick.id], queued: queue.filter((q) => q === pick.id).length });

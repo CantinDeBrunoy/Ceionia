@@ -2850,7 +2850,7 @@ export class UI {
     };
     const cards = `<div class="sCards n${cs.length}" role="radiogroup" aria-label="${tr('Façon de partir')}">${order.map(card).join('')}</div>`;
     // l'équipement : ce que l'équipe emporte de la réserve (prêt), et ce qui manque (à fabriquer d'un clic)
-    const gaps = gearGaps(c, st.gear, st.craft, age, (g) => !g.needs || ex.has(g.needs));
+    const gaps = gearGaps(c, st.gear, st.craft, age, (g) => !g.needs || ex.has(g.needs), st.perks);
     const scaled = (g: Gear, n: number) => { const k = gearCost(g, h.world.difficulty); return { wood: k.wood * n, stone: k.stone * n, ore: k.ore * n, fuel: (k.fuel ?? 0) * n }; };
     const ready = GEAR.filter((g) => (pv.take[g.id] ?? 0) > 0).map((g) => `<div class="gslot ok" title="${attr(`${tr(g.name)} ×${pv.take[g.id]} · ${tr('prêt, en réserve')}`)}">${gearPic(g, 46, 30)}<b>×${pv.take[g.id]}</b><i class="gmark">${ic('check', 12, 3)}</i></div>`).join('');
     const missing = gaps.map((g) => {
