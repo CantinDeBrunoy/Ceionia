@@ -2512,7 +2512,9 @@ export class UI {
     const card = (g: Gear) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), price = gearCostLabel(gearCost(g, h.world.difficulty));
         // l'objet peint, détouré, posé sur un halo doré en tête de carte ; une pièce pas encore illustrée garde son icône au trait
-        const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}.webp" alt="" loading="lazy" decoding="async">` : ic(g.icon, 40, 1.6);
+        // (sans chargement paresseux : la grille se refait à chaque fabrication, et une image paresseuse refaite restait vide
+        // un moment, la torche disparaissait après « Fabriquer », testeuse v6)
+        const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}.webp" alt="" decoding="sync">` : ic(g.icon, 40, 1.6);
         const crafting = st.craft.filter((x) => x === g.id).length;
         // fabricable : « Fabriquer » en bleu, le prix en info-bulle ; sinon une pilule grise avec le prix
         return `<div class="gear" data-gear="${g.id}" title="${g.desc}">
