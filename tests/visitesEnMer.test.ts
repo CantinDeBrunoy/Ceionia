@@ -12,7 +12,7 @@ import { World, N, MOUNTAIN_H, SEA, setMapSize } from '../src/world/world';
 import { newWorld, CONTINENT } from '../src/world/mapgen';
 import { GEN_ARCH } from '../src/world/continent';
 import { mulberry32 } from '../src/core/rng';
-import { Expeditions, openWater, seaRoomMap } from '../src/sim/expeditions';
+import { Expeditions, openWater, seaRoomMap, OPEN_SEA_SHORE } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { ISLE_MISSIONS } from '../src/sim/isleMissions';
 import { ExpeditionView } from '../src/render/expeditionView';
@@ -153,4 +153,78 @@ it('chaque visite chez l’allié arrive sur son île et se termine', { timeout:
     }
   }
   expect(bad.join('\n')).toBe('');
+});
+
+/**
+ * La partie de l'auteur (21 nov. 2026) : le départ d'une expédition en mer était choisi dans les terres, à côté d'une mare,
+ * la mer à quatre cases derrière une bande de terre (`openSea` acceptait la terre avant l'eau) ; le bateau partait de la mare
+ * et y faisait des allers-retours. Le mouillage de chaque expédition en mer est maintenant au bord de la mer ouverte
+ */
+it('chaque expédition qui traverse jusqu’aux îles part d’une côte au bord de la mer ouverte', { timeout: 600000 }, () => {
+  const bad: string[] = [];
+  for (const seed of SEEDS) {
+    const w = archipel(seed), sea = openWater(w);
+    const near = (x: number, z: number, r: number) => { for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { const cx = Math.floor(x) + dx, cz = Math.floor(z) + dz; if (w.inCells(cx, cz) && sea[cz * N + cx]) return true; } return false; };
+    for (const m of [...ISLE_MISSIONS, ...MISSIONS.filter((x) => ['envoys', 'allywar'].includes(x.id))]) {
+      const agents = new Agents(w);
+      for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 40, 0);
+      const ex = new Expeditions(w, agents, () => 100, mulberry32(7));
+      ex.pop = () => 60; ex.missing = () => [];
+      const a = ex.start(m, 0, 2);
+      if (!a) continue;
+      if (a.sea && !near(a.dest[0], a.dest[1], OPEN_SEA_SHORE + 1)) bad.push(`${seed} ${m.id} : départ à ${a.dest.map((v) => v.toFixed(0))}, loin de la mer ouverte`);
+    }
+  }
+  expect(bad.join('\n')).toBe('');
+});
+
+/**
+ * Sans route par la mer vers l'île (ici, toute la mer changée en eau fermée) : l'équipe ne tourne pas en rond, elle rentre
+ * aussitôt, sans rien gagner ni perdre, et le récit le dit
+ */
+it('une visite sans route par la mer rentre aussitôt et le dit', { timeout: 300000 }, () => {
+  stubCanvas();
+  const w = archipel(11);
+  w.diplo.ally = 'orient';
+  for (let k = 0; k < N * N; k++) if (w.cellAvg(k % N, Math.floor(k / N)) < -0.1) { w.lake[k] = 1; w.lakeLevel[k] = SEA; }
+  const agents = new Agents(w);
+  for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 40, 0);
+  const ex = new Expeditions(w, agents, () => 100, mulberry32(7));
+  ex.pop = () => 60; ex.missing = () => [];
+  let text = '';
+  ex.onReport = (r) => { text = r.text; };
+  const view = new ExpeditionView(w, agents, ex);
+  const before = JSON.stringify(w.diplo.boons), gold = w.gold;
+  const a = ex.start(ISLE_MISSIONS.find((x) => x.id === 'isleFair')!, 0, 2)!;
+  expect(a).toBeTruthy();
+  let i = 0;
+  for (; i < 12000 && ex.active.includes(a); i++) { agents.update(0.1, 10, 2, false, 40, 0); ex.update(0.1); view.update(0.1); if (a.wait) ex.decide(a, 0); }
+  expect(a.noRoute).toBe(true);
+  expect(ex.active.includes(a)).toBe(false);
+  expect(text).toMatch(/Aucune route par la mer/);
+  expect(JSON.stringify(w.diplo.boons)).toBe(before);
+  expect(w.gold).toBe(gold);
+  expect(w.exp.done).not.toContain('isleFair');
+});
+
+it('une côte ouverte : la mer commence dans les deux cases, pas derrière une bande de terre', { timeout: 300000 }, () => {
+  const w = archipel(11), agents = new Agents(w), ex = new Expeditions(w, agents, () => 100, mulberry32(7));
+  const openSea = (x: number, z: number) => (ex as unknown as { openSea(x: number, z: number, len?: number, shore?: boolean): boolean }).openSea(x, z, 8, true);
+  const land = (x: number, z: number) => w.inCells(x, z) && w.cellAvg(x, z) >= -0.1;
+  // une case de terre dont la mer, vers le nord, ne commence qu'à trois cases (les deux premières sont de la terre)
+  let inland: [number, number] | null = null, shore: [number, number] | null = null;
+  for (let z = 20; z < N - 20 && !(inland && shore); z++) for (let x = 20; x < N - 20 && !(inland && shore); x++) {
+    if (!land(x, z) || w.lake[w.ci(x, z)]) continue;
+    const ray = Array.from({ length: 14 }, (_, s) => w.cellAvg(x, z - 1 - s));
+    const sea = (s: number) => ray[s] < -0.1 && !w.lake[w.ci(x, z - 1 - s)];
+    // (et aucune mer à deux cases dans les autres directions)
+    let dry = true;
+    for (let dz = -2; dz <= 2 && dry; dz++) for (let dx = -2; dx <= 2 && dry; dx++) if (w.inCells(x + dx, z + dz) && w.cellAvg(x + dx, z + dz) < -0.1) dry = false;
+    if (!inland && dry && [3, 4, 5, 6, 7, 8, 9, 10].every(sea) && ray.some((h) => h < -0.5)) inland = [x, z];
+    if (!shore && sea(0) && [1, 2, 3, 4, 5, 6, 7, 8].every(sea) && ray.some((h) => h < -0.5)) shore = [x, z];
+  }
+  expect(inland).not.toBeNull();
+  expect(shore).not.toBeNull();
+  expect(openSea(...inland!)).toBe(false);
+  expect(openSea(...shore!)).toBe(true);
 });

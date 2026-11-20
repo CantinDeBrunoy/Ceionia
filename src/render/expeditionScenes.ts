@@ -4464,6 +4464,9 @@ export class ExpeditionScene {
     else if (this.story === 'scout' && this.scoutTrip(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
     // les pourparlers de la paix : une route sur l'eau jusqu'aux îles, et retour (voir `tripSetup`)
     else if ((PEACE_TRIPS.has(a.m.id) || a.c.visit) && this.tripSetup(a, wx, wz)) out = this.scout!.route[this.scout!.route.length - 1];
+    // (une visite sur les îles ou un pourparler sans route par la mer : l'expédition le sait, l'équipe rentre et le joueur est
+    // prévenu ; avant, le bateau faisait des allers-retours au large de la côte, sans jamais arriver)
+    else if ((PEACE_TRIPS.has(a.m.id) || a.c.visit) && this.world.diplo.ally && townPlans(this.world).length > 0) a.noRoute = true;
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
     else if (this.offshore) {
       let best = 0;
@@ -5314,7 +5317,9 @@ export class ExpeditionScene {
   private waterRoute(wx: number, wz: number, tx: number, tz: number, reach: number, sea?: Uint8Array): [number, number][] | null {
     const w = this.world, wet = (x: number, z: number) => w.inCells(x, z) && (!sea || sea[z * N + x] === 1) && this.depth(x + 0.5, z + 0.5) !== null;
     let start = -1, sd = Infinity;
-    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+    // (la mer ouverte peut commencer à trois cases du mouillage, en diagonale)
+    const r0 = sea ? 3 : 2;
+    for (let dz = -r0; dz <= r0; dz++) for (let dx = -r0; dx <= r0; dx++) {
       const x = Math.floor(wx) + dx, z = Math.floor(wz) + dz, d = Math.hypot(x + 0.5 - wx, z + 0.5 - wz);
       if (d < sd && wet(x, z)) { sd = d; start = z * N + x; }
     }

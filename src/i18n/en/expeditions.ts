@@ -224,4 +224,7 @@ registerDict('expeditions', {
   'Aucune expédition ne répond à « {q} ».': 'No expedition matches “{q}”.',
   'Il n’y a pas de volcan sur cette carte.': 'There is no volcano on this map.',
   'Aucun chemin vers le volcan : ni rive en face de son île, ni sentier jusqu’à lui.': 'No way to the volcano: no shore facing its island, no path to it.',
+  // une visite sur les îles sans route par la mer (21 nov. 2026)
+  "{icon} « {title} » : aucune route par la mer vers l’île, l’équipe rentre.": "{icon} “{title}”: no sea route to the island, the team is coming home.",
+  "Aucune route par la mer ne mène à l’île depuis la côte d’où l’équipe est partie : elle est rentrée sans rien tenter. Un port bâti sur une côte qui donne sur le large, ou une autre façon de partir, aidera peut-être.": "No sea route leads to the island from the coast the team set out from: it came home without trying anything. A harbour on a coast facing the open sea, or another way of setting out, may help.",
 });
