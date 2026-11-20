@@ -772,6 +772,14 @@ export class UI {
     $('#resNext').onclick = () => step(1);
     view.addEventListener('scroll', () => this.syncResNav(), { passive: true });
     addEventListener('resize', () => { this.fitHud(); this.syncResNav(); this.syncNeedNav(); });
+    // la page elle-même ne défile jamais : un `scrollIntoView` (vignette de la barre du bas, carte d'expédition) faisait glisser
+    // toute l'interface de côté, la carte du village coupée à gauche et les boutons de droite hors de l'écran (auteur, nov. 2026)
+    document.addEventListener('scroll', (e) => {
+      const t = e.target;
+      for (const el of [document.scrollingElement, document.documentElement, document.body, document.getElementById('app'), root]) {
+        if (el && (t === document || t === el) && (el.scrollLeft || el.scrollTop)) { el.scrollLeft = 0; el.scrollTop = 0; }
+      }
+    }, true);
     // la place laissée aux stocks change avec la fenêtre et avec ce qu'il y a à côté (les besoins) : la fenêtre se recale (sur deux
     // lignes ; sur une ligne, c'est `fitHud` qui la taille)
     new ResizeObserver(() => { this.fitResView(); this.syncResNav(); }).observe($('#resPanel'));
@@ -1750,8 +1758,28 @@ export class UI {
     // et enfin qu'une ressource
     if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth); }
     if (!fit && !box.hidden) { box.classList.add('mini'); fit = fitIn(box.offsetWidth); }
-    const [r, n] = fit ?? [Math.min(2, nRes), 1];
-    for (const [v, w] of [[rv, span(resWs, r) - 2], [nv, span(needWs, n) - 2]] as const) { v.style.maxWidth = 'none'; v.style.minWidth = '0'; v.style.width = `${w}px`; v.style.flexShrink = '0'; }
+    let [r, n] = fit ?? [Math.min(2, nRes), 1];
+    const apply = () => {
+      for (const [v, w] of [[rv, span(resWs, r) - 2], [nv, span(needWs, n) - 2]] as const) { v.style.maxWidth = 'none'; v.style.minWidth = '0'; v.style.width = `${w}px`; v.style.flexShrink = '0'; }
+      this.syncResNav(); this.syncNeedNav();
+    };
+    apply();
+    // contrôle sur la page réelle : si la ligne dépasse encore (une largeur mesurée trop tôt, une police pas encore chargée), une
+    // case de moins, jusqu'à ce qu'elle tienne. Elle débordait chez l'auteur en 1700 px : la cloche et les réglages sortaient de
+    // l'écran à droite, et la page glissait de côté
+    const over = () => {
+      const edge = Math.max(...['#resPanel', '#needsBox', '#goalBox'].map((q) => $(q).getBoundingClientRect().right)), hr = $('#hudR').getBoundingClientRect();
+      return edge + gap > hr.left + 0.5 || hr.right > hud.getBoundingClientRect().right + 0.5;
+    };
+    for (let i = 0; i < 12 && over(); i++) {
+      if (!box.hidden && !box.classList.contains('mini')) box.classList.add(box.classList.contains('compact') ? 'mini' : 'compact');
+      else if (n > 2) n--;
+      else if (r > 2) r--;
+      else if (n > 1) n--;
+      else if (r > 1) r--;
+      else break;
+      apply();
+    }
     rv.scrollLeft = keep[0]; nv.scrollLeft = keep[1];
     this.syncResNav(); this.syncNeedNav();
   }
