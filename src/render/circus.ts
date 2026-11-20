@@ -145,9 +145,8 @@ const STYLE: Record<number, Style> = {
   5: { age: 5, red: 0x7a4ae0, cream: 0xe8ecf8, wood: 0x6a7280, grass: 0xc4d0d8, sand: 0xaab4c0, N: 24, r: 0.8, hw: 0.36, h1: 0.3, rt: 0.26, h2: 0.4, cz: -0.3, neon: true },
 };
 
-/** Sol : herbe ou dalle, piste de sciure sous le chapiteau, allée du parvis, confettis */
+/** Sol : le terrain du jeu (plus de dalle d'herbe), piste de sciure sous le chapiteau, allée du parvis, touffes, confettis */
 function ground(f: Fr, st: Style) {
-  f.p.box(2.92, 0.012, 2.92, 0, 0, 0, st.grass);
   const old = st.age <= 3;
   f.cyl(1.0, 1.02, 0.006, 32, 0, 0, st.cz, st.sand);
   f.box(0.52, 0.006, 1.0, 0, 0, st.cz + st.r + 0.5, dk(st.sand, 1.04));

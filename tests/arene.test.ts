@@ -40,8 +40,8 @@ describe('arène', () => {
         expect(Number.isFinite(g.boundingBox!.max.x + g.boundingBox!.max.y + g.boundingBox!.max.z), `âge ${age}`).toBe(true);
       }
       for (const v of [bb.max.x, -bb.min.x, bb.max.z, -bb.min.z]) expect(v, `âge ${age}`).toBeLessThanOrEqual(1.465);
-      // elle remplit sa parcelle
-      expect(Math.min(bb.max.x, -bb.min.x, bb.max.z, -bb.min.z), `âge ${age}`).toBeGreaterThan(1.3);
+      // elle remplit sa parcelle (sans dalle d'herbe : le Colisée, ovale, s'arrête un peu avant les coins)
+      expect(Math.min(bb.max.x, -bb.min.x, bb.max.z, -bb.min.z), `âge ${age}`).toBeGreaterThan(1.15);
       expect(bb.max.y, `âge ${age}`).toBeLessThan(1.6);
     }
   });

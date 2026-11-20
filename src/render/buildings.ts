@@ -1,3 +1,4 @@
+import { beamGeometry, beamMaterial } from './beacon';
 import * as THREE from 'three';
 import { World, WorldListener } from '../world/world';
 import { Building, KINDS, sizeOf, isRampart, isLinear, isDecor } from '../build/catalog';
@@ -42,6 +43,8 @@ interface Entry {
   /** ailes du moulin, pales de l'éolienne, qui tournent autour de leur moyeu */
   rotor: THREE.Mesh | null;
   spin: { axis: THREE.Vector3; speed: number; phase: number } | null;
+  /** faisceau tournant d'un phare (voir `beacon.ts`), sa vitesse et son angle */
+  beam?: { mesh: THREE.Mesh; speed: number; phase: number } | null;
   /** drapeaux, enseignes, linge, cloches qui se balancent (dans le lot des pièces mobiles quand elles y entrent) */
   sways: ({ mesh: THREE.Mesh; axis: THREE.Vector3; amp: number; freq: number; phase: number; spin?: number; steady?: boolean } & Slot)[];
   /** personnages animés du bâtiment (dans le lot des personnages : `crowdSlot`) */
@@ -308,6 +311,14 @@ export class BuildingView implements WorldListener {
         e.rotor.visible = true;
         e.spin = { axis: new THREE.Vector3(...m.rotor.axis), speed: m.rotor.speed * (0.85 + hash2(b.x, b.z, 11) * 0.3), phase: hash2(b.x, b.z, 12) * 6.28 };
       } else if (e.rotor) { e.rotor.visible = false; e.spin = null; }
+      // le faisceau du phare : pas d'ombre, pas de lot (matériau additif à part), il tourne dans `update`
+      if (m.beam) {
+        if (!e.beam) { const mesh = new THREE.Mesh(beamGeometry(), beamMaterial(m.beam.color)); mesh.castShadow = mesh.receiveShadow = false; mesh.renderOrder = 2; e.group.add(mesh); e.beam = { mesh, speed: 0, phase: hash2(b.x, b.z, 15) * 6.28 }; }
+        e.beam.mesh.material = beamMaterial(m.beam.color);
+        e.beam.mesh.position.set(...m.beam.pivot);
+        e.beam.mesh.visible = true;
+        e.beam.speed = m.beam.speed * Math.PI * 2;
+      } else if (e.beam) { e.beam.mesh.visible = false; e.beam.speed = 0; }
       // les pièces qui se balancent, chacune à son rythme
       for (const sw of e.sways) { e.group.remove(sw.mesh); slot(this.swayBatch, sw, null); }
       e.sways = (m.sways ?? []).map((sw, i) => {
@@ -521,6 +532,7 @@ export class BuildingView implements WorldListener {
         e.turn.rotation.y += e.aimed ? Math.sign(d) * Math.min(Math.abs(d), dt * 0.35) : d;
         e.aimed = true;
       }
+      if (e.beam?.mesh.visible) { e.beam.phase += dt * e.beam.speed; e.beam.mesh.rotation.y = e.beam.phase; }
       if (!e.rotor || !e.spin) continue;
       e.spin.phase += dt * e.spin.speed * (e.turn ? 0.4 + wind.speed * 1.2 : 1);
       e.rotor.quaternion.copy(this.q.setFromAxisAngle(e.spin.axis, e.spin.phase));
