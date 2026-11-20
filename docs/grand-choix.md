@@ -88,7 +88,7 @@ Les images ont été jouées une à une, temps de calcul et de rendu de chaque i
 
 ## Liens avec les autres systèmes
 - [portail-ile.md](portail-ile.md) : le portail ouvert par le grand choix ; la carte du portail ne s'ouvre plus d'elle-même, elle sert à rouvrir un portail refermé et à confirmer « Refermer » (permis à tout moment).
-- [monde-carte.md](monde-carte.md) : `expandWorld`, `canExpand`, `archipelagoOn`.
+- [monde-carte.md](monde-carte.md) : `expandWorld`, `canExpand`, `archipelagoOn` ; l'île du joueur gardée telle quelle à l'agrandissement, et la réparation des parties abîmées avant le 21 nov. 2026 (`repairCoast`).
 - [expeditions.md](expeditions.md) : l'expédition `portal` n'est plus proposée ; l'onglet « Grands choix ».
 - [ages.md](ages.md) : plus rien du portail pour sortir de l'Antiquité.
 

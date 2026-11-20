@@ -408,6 +408,8 @@ export class World {
   mainGen = GEN_VAR;
   /** âge du village quand le joueur a accepté d'explorer le monde (sauvegardé) ; null sans archipel, ou sur une carte créée en archipel */
   exploredAt: number | null = null;
+  /** la côte de l'île principale est sûre (agrandie après le 21 nov. 2026, ou réparée par `repairCoast`, voir `expand.ts`) */
+  coast = 0;
   /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
   reveal = false;
   /** la diplomatie de l'archipel : peuples rencontrés, allié, conflit des deux îles (sauvegardée, voir `sim/diplomacy.ts`) */
@@ -1877,6 +1879,7 @@ export class World {
       blason: this.blason,
       ...(this.blasonSeen ? { blasonSeen: 1 } : {}),
       ...(this.exploredAt !== null ? { exploredAt: this.exploredAt } : {}),
+      ...(this.coast ? { coast: 1 } : {}),
       ...(this.isles && this.mainGen !== GEN_VAR ? { mainGen: this.mainGen } : {}),
       ...(this.reveal ? { reveal: 1 } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
@@ -2025,6 +2028,7 @@ export class World {
     // une ancienne partie (sans blason) ne voit pas la fenêtre s'ouvrir d'elle-même : le blason se change dans les paramètres
     this.blasonSeen = d.blasonSeen === 1 || d.blason === undefined;
     this.exploredAt = Number.isInteger(d.exploredAt) && this.isles ? d.exploredAt : null;
+    this.coast = d.coast === 1 ? 1 : 0;
     this.mainGen = this.isles && [GEN_FIXED, 2, 5].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);
