@@ -214,6 +214,7 @@ registerDict('tutorial', {
   '{harbor} sur l’île alliée': '{harbor} on the allied island',
   'Le comptoir': 'The trading post',
   'Pour finir, {post} sur {isle}, près du port : c’est là qu’on échangera avec vos alliés.': 'To finish, {post} on {isle}, near the harbor: that is where you will trade with your allies.',
+  'Le comptoir s’ouvre au Médiéval : passez d’abord à l’âge suivant, il sera là.': 'The trading post opens in the Middle Ages: move on to the next age first, it will be there.',
   '{post} sur l’île alliée': '{post} on the allied island',
   'L’or': 'Gold',
   'L’or fait passer les âges : {a} pour l’Industriel, {b} pour le Moderne, {c} pour le Futuriste.': 'Gold moves you through the ages: {a} for the Industrial, {b} for the Modern, {c} for the Futuristic.',

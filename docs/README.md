@@ -53,7 +53,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 
 ### La guerre
 - [portail-ile.md](portail-ile.md) : ouverture du portail, choix du PvE, île, garnison, invasion.
-- [enfers.md](enfers.md) : carte des Enfers, zones, bastions, objectif, base avancée.
+- [enfers.md](enfers.md) : la cinématique du portail (premier passage), carte des Enfers, zones, bastions, objectif, base avancée.
 - [armee-combat.md](armee-combat.md) : unités par âge, recrutement, commandement, simulation des combats.
 - [fin-du-royaume.md](fin-du-royaume.md) : le roi démon, la chute du royaume, la mise en scène.
 

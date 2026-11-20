@@ -130,11 +130,11 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Très grand bâtiment de 3 × 3 cases, qui demande des briques : bâtissez d’abord une briqueterie. C’est la première gare du village, avant les petites gares. Ses trois voies partent par l’arrière de la halle : tracez-en plusieurs lignes vers les autres gares (« Nouvelle ligne », sur sa fiche) pour former un réseau. Trains de marchandises : ateliers et carrières à 8 cases d’une gare produisent 75 % de plus. Trains de voyageurs : ils amènent les équipes au cosmodrome.',
   },
   harbor: {
-    id: 'harbor', size: 3, minAge: 2, icon: '⚓', cat: 'prod',
-    names: ['', '', 'Port', 'Port de commerce', 'Port à conteneurs', 'Port automatisé'],
+    id: 'harbor', size: 3, minAge: 1, icon: '⚓', cat: 'prod',
+    names: ['', 'Port', 'Port', 'Port de commerce', 'Port à conteneurs', 'Port automatisé'],
     desc: 'Quais, entrepôts et grues : les navires marchands y accostent, déchargent et repartent.',
-    jobs: [0, 0, 6, 10, 14, 16], food: [0, 0, 4, 6, 8, 10],
-    perk: 'Grande zone portuaire de 3 × 3 à poser au bord de la mer ou d’un lac : il suffit qu’un côté touche l’eau, le quai s’y tourne de lui-même et le bassin devant est creusé pour les grands navires (cogue, vapeur, porte-conteneurs) qui entrent, s’amarrent au quai et repartent au large.',
+    jobs: [0, 5, 6, 10, 14, 16], food: [0, 3, 4, 6, 8, 10],
+    perk: 'Grande zone portuaire de 3 × 3 à poser au bord de la mer ou d’un lac : il suffit qu’un côté touche l’eau, le quai s’y tourne de lui-même et le bassin devant est creusé pour les grands navires (birème, cogue, vapeur, porte-conteneurs) qui entrent, s’amarrent au quai et repartent au large.',
   },
   shipyard: {
     id: 'shipyard', size: 3, minAge: 2, icon: '🚢', cat: 'prod',

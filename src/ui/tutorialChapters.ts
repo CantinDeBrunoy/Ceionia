@@ -56,6 +56,7 @@ export const CHAPTER_TEXT = {
       title: 'Le comptoir',
       text: 'Pour finir, {post} sur {isle}, près du port : c’est là qu’on échangera avec vos alliés.',
       tasks: ['{post} sur l’île alliée'],
+      age: 'Le comptoir s’ouvre au Médiéval : passez d’abord à l’âge suivant, il sera là.',
     },
     gold: {
       title: 'L’or',
@@ -214,8 +215,9 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
     step('archPost', A.post, {
       text: () => arch(A.post.text), tasks: () => A.post.tasks.map(arch),
       check: () => [h.posts() > 0],
-      anchor: () => (h.atAlly() && !h.posts() ? tile('tradepost') : null),
-      note: () => (h.atAlly() && !h.posts() ? arrow('tradepost') : ''),
+      anchor: () => (h.age() >= KINDS.tradepost.minAge && h.atAlly() && !h.posts() ? tile('tradepost') : null),
+      // (le port se pose dès l'Antiquité, le comptoir seulement au Médiéval : choix de l'auteur, 20 nov. 2026)
+      note: () => (h.age() < KINDS.tradepost.minAge ? A.post.age : h.atAlly() && !h.posts() ? arrow('tradepost') : ''),
       act: goAlly,
     }),
     step('archGold', A.gold, {

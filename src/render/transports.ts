@@ -182,7 +182,7 @@ export class Transports {
     for (const b of w.buildings.values()) {
       const g = this.buildings.entries.get(b.id)?.group;
       if (!g) continue;
-      if (b.kind === 'harbor' && b.age >= 2) { liveS.add(b.id); this.stepShip(b, g, dt); }
+      if (b.kind === 'harbor' && b.age >= 1) { liveS.add(b.id); this.stepShip(b, g, dt); }
       else if (b.kind === 'airport' && age >= 4) { liveP.add(b.id); this.stepPlane(b, g, dt); }
     }
     for (const [id, s] of this.ships) if (!liveS.has(id)) { this.group.remove(s.root); this.ships.delete(id); }

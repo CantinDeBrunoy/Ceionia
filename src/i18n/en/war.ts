@@ -353,4 +353,10 @@ registerDict('war', {
   'Blessés, ils sont ramenés à la caserne de l’île et s’y soignent ({s} s).': 'Wounded, they are carried back to the island barracks to heal ({s} s).',
   'Repli forcé': 'Forced retreat',
   'Vos troupes sont tombées dans les Enfers': 'Your troops have fallen in Hell',
+  // ---- la cinématique du portail (portalCine.ts) ----
+  'Le portail s’éveille': 'The portal awakens',
+  'Un premier soldat franchit l’arche': 'A first soldier steps through the arch',
+  'Le Seuil du portail': 'The Portal Threshold',
+  'Les Grottes de braise': 'The Ember Caves',
+  'Leur forteresse garde le passage': 'Their fortress guards the way',
 });

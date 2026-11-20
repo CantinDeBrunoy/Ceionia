@@ -7639,6 +7639,40 @@ export function freighter(p: Parts, age: number): [number, number, number] | nul
     if (band !== null) p.box(w * 1.01, 0.03, L, 0, -0.035, 0, band);
     p.box(w * 0.94, 0.012, L + w * 0.3, 0, top, 0, deck);
   };
+  if (age <= 1) {
+    // birème (Antiquité) : coque longue et basse, éperon de bronze, œil peint, deux rangs de rames, mât à voile carrée crème
+    // rayée d'ocre, poupe relevée en volute (aphlaste), deux rames-gouvernails, bordage de boucliers ronds
+    hull(0.18, 0.08, 0.5, 0.06, 0x6e4a32, 0x2e2a28, 0xa8845c);
+    for (let k = 0; k < 3; k++) p.box(0.185, 0.007, 0.52, 0, -0.04 + k * 0.03, 0, dark(0x6e4a32, 0.84 - k * 0.05));
+    // l'éperon de bronze à la proue, à fleur d'eau ; l'œil peint de chaque côté
+    p.add(new THREE.ConeGeometry(0.03, 0.14, 5).rotateX(Math.PI / 2), 0, -0.02, 0.4, 0xb08a3a);
+    for (const s of [-1, 1]) { p.sphere(0.018, s * 0.093, 0.03, 0.3, C.white, 0, 0.5); p.sphere(0.009, s * 0.097, 0.03, 0.305, 0x1e1e22, 0, 0.6); }
+    // la proue qui se relève, la poupe en volute (aphlaste) et sa petite cabine
+    p.add(new THREE.BoxGeometry(0.05, 0.12, 0.04), 0, 0.09, 0.34, 0x6e4a32, 0, false, 0, 0.5);
+    for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.03, 0.05, 0.03), 0, 0.12 + k * 0.035, -0.29 - k * 0.012 + (k > 2 ? 0.04 : 0), dark(0x6e4a32, 1 - k * 0.04), 0, false, 0, -0.3 + k * 0.45);
+    p.box(0.12, 0.05, 0.09, 0, 0.065, -0.2, 0x8a6040); p.box(0.13, 0.01, 0.1, 0, 0.115, -0.2, 0xb04a32);
+    // deux rangs de rames, de chaque bord, qui plongent dans l'eau
+    for (const s of [-1, 1]) for (let k = 0; k < 7; k++) {
+      const z = -0.12 + k * 0.055;
+      for (const [y, r] of [[0.045, 0.62], [0.015, 0.5]] as number[][]) {
+        const len = 0.17;
+        p.add(new THREE.BoxGeometry(0.006, 0.006, len).rotateY(Math.PI / 2).rotateZ(-s * r).translate(s * (0.09 + (len / 2) * Math.cos(r)), y - (len / 2) * Math.sin(r), z), 0, 0, 0, 0x8a6a4a);
+      }
+    }
+    // les boucliers ronds le long du bordage
+    for (const s of [-1, 1]) for (let k = 0; k < 6; k++) p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.005, 8).rotateZ(Math.PI / 2), s * 0.094, 0.075, -0.1 + k * 0.06, k % 2 ? 0xb8322c : 0xd8b860);
+    // le mât, la vergue, la voile carrée crème rayée d'ocre, la hune ; les deux rames-gouvernails à la poupe
+    p.cyl(0.009, 0.011, 0.5, 6, 0, 0.06, 0.03, 0x5a3e2e);
+    p.box(0.36, 0.01, 0.01, 0, 0.5, 0.035, 0x5a3e2e);
+    const sail = [0xf2e6d0, 0xc8823a];
+    for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.32, 0.055, 0.008), 0, 0.235 + k * 0.055, 0.045, sail[k % 2], 0, false, 0, -0.05);
+    p.box(0.3, 0.008, 0.008, 0, 0.22, 0.05, 0x5a3e2e);
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.008, 0.2, 0.012), s * 0.09, 0.02, -0.3, 0x7a5a3e, 0, false, s * 0.3, -0.5);
+    // l'étai avant et l'étai arrière
+    p.add(new THREE.BoxGeometry(0.003, 0.003, 0.5), 0, 0.33, 0.2, 0x3a3030, 0, false, 0, 0.95);
+    p.add(new THREE.BoxGeometry(0.003, 0.003, 0.42), 0, 0.36, -0.13, 0x3a3030, 0, false, 0, -1.0);
+    return null;
+  }
   if (age <= 2) {
     // cogue : coque de bois ventrue, châteaux avant et arrière crénelés, mât, voile carrée rayée, hune, pavillon
     hull(0.26, 0.1, 0.42, 0.07, 0x7a5236, null, 0xa07850);
@@ -11725,6 +11759,113 @@ function manor(p: Parts, age: number) {
 }
 
 /**
+ * Port antique (3 × 3, Antiquité), le quai tourné vers l'eau (+z) : terre-plein dallé de travertin, haut mur de quai en
+ * pierre de taille ocre qui descend dans le bassin (bittes de pierre et leurs cordages, anneaux de bronze, escalier d'eau),
+ * môle qui s'avance jusqu'à sa tour de feu (socle carré, tour ronde, brasier de bronze) ; entrepôt (horreum) à colonnade
+ * et toit de tuiles, grue de bois à treuil qui hisse un filet d'amphores, piles d'amphores, ballots cordés, sacs, ancre de
+ * pierre, dockers. La birème amarrée est le navire du port (`freighter`, âge 1, posé par `transports.ts`)
+ */
+function harborAntique(p: Parts) {
+  const y0 = 0.02, ground = 0xd6c6a2, joint = dark(ground, 0.86), wall = 0xc4a87e, rope = 0x9a7a52, bronze = 0x9a7a3a;
+  // le terre-plein, dalles en quinconce
+  p.box(2.96, 0.02, 2.96, 0, 0, 0, ground);
+  for (let k = 1; k < 10; k++) p.box(2.96, 0.004, 0.01, 0, 0.02, -1.48 + k * 0.296, joint);
+  for (let r = 0; r < 10; r++) for (let k = 1; k < 7; k++) p.box(0.01, 0.004, 0.296, -1.48 + k * 0.423 + (r % 2 ? 0.21 : 0), 0.02, -1.33 + r * 0.296, joint);
+  // le mur de quai en pierre de taille, les murs de soutènement autour, la margelle de travertin
+  p.box(2.96, 1.3, 0.1, 0, -1.28, 1.45, wall);
+  stones(p, 0, 1.502, 2.96, -0.68, 0.02, 0, dark(wall, 0.9), 0.75, 251);
+  for (const s of [-1, 1]) { p.box(0.08, 1.3, 2.96, s * 1.44, -1.28, 0, wall); stones(p, s * 1.482, 0, 2.96, -0.5, 0.02, s * Math.PI / 2, dark(wall, 0.9), 0.6, 252 + s); }
+  p.box(2.96, 1.3, 0.08, 0, -1.28, -1.44, wall); stones(p, 0, -1.482, 2.96, -0.5, 0.02, Math.PI, dark(wall, 0.9), 0.6, 255);
+  p.box(2.98, 0.045, 0.16, 0, y0, 1.42, TRAVERTINE);
+  for (let x = -1.4; x <= 1.41; x += 0.2) p.box(0.006, 0.046, 0.162, x, y0, 1.42, dark(TRAVERTINE, 0.85));
+  // les bittes de pierre, cordage enroulé ; les anneaux de bronze au mur ; l'escalier d'eau qui descend au bassin
+  for (let x = -1.2; x <= 1.0; x += 0.55) {
+    p.cyl(0.035, 0.042, 0.07, 8, x, y0 + 0.045, 1.38, TRAVERTINE); p.cyl(0.045, 0.045, 0.016, 8, x, y0 + 0.115, 1.38, TRAVERTINE);
+    p.add(new THREE.TorusGeometry(0.04, 0.01, 4, 10).rotateX(Math.PI / 2), x, y0 + 0.075, 1.38, rope);
+  }
+  for (let x = -0.95; x <= 0.9; x += 0.55) p.add(new THREE.TorusGeometry(0.035, 0.008, 4, 10), x, -0.1, 1.508, bronze);
+  for (let k = 0; k < 6; k++) p.box(0.3, 0.06, 0.07, -0.55, -0.04 - k * 0.07, 1.39 + k * 0.025, dark(TRAVERTINE, 0.95 - k * 0.03));
+  // le môle qui s'avance dans l'eau, et sa tour de feu
+  const jx = 1.28, jz0 = 1.5, jz1 = 2.85;
+  p.box(0.32, 1.32, jz1 - jz0, jx, -1.3, (jz0 + jz1) / 2, wall);
+  stones(p, jx - 0.161, (jz0 + jz1) / 2, jz1 - jz0, -0.68, 0.02, -Math.PI / 2, dark(wall, 0.9), 0.7, 256);
+  p.box(0.34, 0.035, jz1 - jz0, jx, y0, (jz0 + jz1) / 2, TRAVERTINE);
+  for (let z = jz0 + 0.25; z < jz1 - 0.35; z += 0.4) { p.cyl(0.026, 0.032, 0.06, 7, jx - 0.13, y0 + 0.035, z, TRAVERTINE); p.add(new THREE.TorusGeometry(0.03, 0.008, 4, 8).rotateX(Math.PI / 2), jx - 0.13, y0 + 0.07, z, rope); }
+  const fz = jz1 - 0.16;
+  p.box(0.3, 0.26, 0.3, jx, y0, fz, TRAVERTINE); stones(p, jx, fz + 0.151, 0.3, y0 + 0.02, y0 + 0.24, 0, dark(TRAVERTINE, 0.88), 0.6, 257);
+  p.box(0.32, 0.03, 0.32, jx, y0 + 0.26, fz, wall);
+  p.cyl(0.1, 0.12, 0.34, 10, jx, y0 + 0.29, fz, 0xe4d6b8);
+  for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) p.box(0.03, 0.06, 0.006, jx + Math.sin(a) * 0.105, y0 + 0.42, fz + Math.cos(a) * 0.105, 0x3a2e28, a);
+  p.cyl(0.115, 0.115, 0.025, 10, jx, y0 + 0.63, fz, wall);
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.012, 0.09, 0.012, jx + Math.cos(a) * 0.09, y0 + 0.655, fz + Math.sin(a) * 0.09, bronze); }
+  p.cyl(0.09, 0.05, 0.04, 8, jx, y0 + 0.66, fz, bronze);
+  p.cone(0.065, 0.14, 6, jx, y0 + 0.69, fz, C.flame, true); p.cone(0.035, 0.09, 5, jx + 0.02, y0 + 0.72, fz - 0.01, 0xffe08a, true);
+  smoke(jx, y0 + 0.86, fz, 1);
+  // l'entrepôt (horreum) : murs d'enduit ocre, portique de colonnes, toit de tuiles, portes de bois, inscription
+  const hx = -0.45, hz = -0.92, stucco = 0xead6b0;
+  p.box(1.7, 0.48, 0.7, hx, y0, hz, stucco);
+  p.box(1.72, 0.04, 0.72, hx, y0, hz, wall);
+  roof(p, hx, y0 + 0.48, hz, { w: 1.7, d: 0.9, h: 0.24, color: C.terracotta, wall: stucco, tiles: true });
+  p.box(1.8, 0.03, 0.3, hx, y0, hz + 0.5, TRAVERTINE);
+  for (let k = 0; k < 7; k++) column(p, hx - 0.78 + k * 0.26, hz + 0.6, 0.46, y0 + 0.03, 0.026);
+  p.box(1.76, 0.05, 0.08, hx, y0 + 0.49, hz + 0.6, TRAVERTINE);
+  p.add(new THREE.BoxGeometry(1.76, 0.024, 0.26).translate(0, 0, -0.13), hx, y0 + 0.53, hz + 0.64, C.terracotta, 0, false, 0, -0.35);
+  for (const x of [hx - 0.52, hx, hx + 0.52]) { p.box(0.22, 0.3, 0.014, x, y0, hz + 0.352, 0x6a4a34); p.box(0.004, 0.3, 0.016, x, y0, hz + 0.353, 0x4a3426); p.box(0.26, 0.03, 0.02, x, y0 + 0.3, hz + 0.352, TRAVERTINE); }
+  p.box(0.5, 0.05, 0.006, hx, y0 + 0.4, hz + 0.356, 0xc8b48c);
+  for (let k = 0; k < 7; k++) p.box(0.04, 0.012, 0.004, hx - 0.18 + k * 0.06, y0 + 0.418, hz + 0.36, 0x7a5a3a);
+  // la grue de bois à treuil (en A, haubanée) qui hisse un filet d'amphores au-dessus du quai
+  const gx = 0.62, gz = 0.95;
+  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.035, 0.95, 0.035), gx + s * 0.13, y0 + 0.46, gz - 0.12, C.wood, 0, false, -s * 0.14, 0.32);
+  p.box(0.3, 0.035, 0.035, gx, y0 + 0.86, gz + 0.03, C.darkwood);
+  for (const ry of [0.25, -0.25]) p.box(0.5, 0.035, 0.05, gx, y0, gz - 0.14, C.darkwood, ry);
+  for (const s of [-1, 1]) p.box(0.06, 0.05, 0.06, gx + s * 0.13, y0, gz - 0.12, TRAVERTINE);
+  rod(p, [gx, y0 + 0.88, gz + 0.03], [gx, y0 + 0.3, gz - 0.42], 0.003, 0x5a4636);
+  rod(p, [gx, y0 + 0.86, gz + 0.04], [gx, y0 + 0.5, gz + 0.04], 0.003, 0x5a4636);
+  p.sphere(0.075, gx, y0 + 0.44, gz + 0.04, 0x8a7a5a, 0, 0.9);
+  for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2; p.add(new THREE.CylinderGeometry(0.014, 0.006, 0.06, 6), gx + Math.cos(a) * 0.035, y0 + 0.43, gz + 0.04 + Math.sin(a) * 0.035, k % 2 ? C.terracotta : 0xc8865a); }
+  // le treuil : tambour qui tourne sur ses deux montants, ses quatre bras
+  for (const s of [-1, 1]) p.box(0.03, 0.18, 0.05, gx + s * 0.12, y0 + 0.06, gz - 0.42, C.darkwood);
+  const wn = spinner([gx, y0 + 0.2, gz - 0.42], [1, 0, 0], 0.9);
+  wn.add(new THREE.CylinderGeometry(0.035, 0.035, 0.22, 8).rotateZ(Math.PI / 2), 0, 0, 0, C.wood);
+  for (let k = 0; k < 4; k++) wn.add(new THREE.BoxGeometry(0.012, 0.2, 0.012), 0.13, 0, 0, C.darkwood, 0, false, 0, (k * Math.PI) / 4);
+  // amphores en piles et en rangs sur le quai, ballots cordés, sacs, caisses, l'ancre de pierre, un rouleau de cordage
+  for (const [x, z, k] of [[-0.95, 0.9, 0], [-0.8, 1.05, 1], [-0.62, 0.86, 2], [0.15, 0.25, 3], [0.3, 0.32, 4], [-1.25, 0.62, 5], [1.15, -0.2, 6]] as number[][]) amphorae(p, x, y0, z, k);
+  for (let r = 0; r < 3; r++) for (let k = 0; k < 5 - r; k++) p.add(new THREE.CylinderGeometry(0.024, 0.01, 0.1, 8).rotateX(Math.PI / 2), -0.15 + k * 0.05 + r * 0.025, y0 + 0.025 + r * 0.042, 0.62, r % 2 ? 0xc8865a : C.terracotta);
+  for (const [x, z, ry, up] of [[0.95, 0.35, 0.2, 0], [1.05, 0.5, -0.3, 0], [0.98, 0.42, 0.1, 0.09]] as number[][]) {
+    p.box(0.14, 0.09, 0.1, x, y0 + up, z, 0xd8c49a, ry);
+    p.box(0.145, 0.008, 0.105, x, y0 + up + 0.045, z, rope, ry); p.box(0.008, 0.095, 0.105, x, y0 + up, z, rope, ry);
+  }
+  for (const [x, z] of [[0.4, -0.25], [0.5, -0.2], [0.45, -0.32]]) p.sphere(0.055, x, y0 + 0.05, z, 0xc8b08a, 0, 0.8);
+  for (const [x, z] of [[1.0, -0.6], [1.12, -0.48]]) { p.box(0.12, 0.1, 0.12, x, y0, z, C.wood); p.box(0.125, 0.01, 0.125, x, y0 + 0.05, z, C.darkwood); }
+  p.box(0.12, 0.05, 0.18, -1.2, y0, 1.18, 0x8a8478); p.box(0.04, 0.05, 0.04, -1.2, y0 + 0.05, 1.18, 0x6a6458);
+  p.add(new THREE.TorusGeometry(0.05, 0.016, 5, 12).rotateX(Math.PI / 2), -1.0, y0 + 0.016, 1.2, rope);
+  p.add(new THREE.TorusGeometry(0.035, 0.014, 5, 10).rotateX(Math.PI / 2), -1.0, y0 + 0.042, 1.2, rope);
+  // un étal sous son velum rayé : tréteaux, paniers de poissons et de fruits, jarres
+  const sx = -0.95, sz = 0.2;
+  for (const [dx, dz] of [[-0.2, -0.13], [0.2, -0.13], [-0.2, 0.13], [0.2, 0.13]]) p.box(0.014, 0.32, 0.014, sx + dx, y0, sz + dz, C.darkwood);
+  for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.09, 0.008, 0.32), sx - 0.18 + k * 0.09, y0 + 0.33 + (k % 2 ? 0.004 : 0), sz, k % 2 ? 0xf2e6d0 : 0xb8322c, 0, false, 0.12);
+  p.box(0.38, 0.02, 0.18, sx, y0 + 0.13, sz - 0.02, C.wood);
+  for (const [dx, c] of [[-0.12, 0x6a8aa8], [0, 0xe0902a], [0.12, 0x8a4a8a]] as number[][]) { p.cyl(0.04, 0.03, 0.03, 8, sx + dx, y0 + 0.15, sz - 0.02, 0x9a7a52); p.sphere(0.03, sx + dx, y0 + 0.18, sz - 0.02, c, 0, 0.6); }
+  amphorae(p, sx + 0.12, y0, sz + 0.2, 7);
+  figure(p, sx, sz - 0.24, 0x8a6a9a, 0);
+  // la statue de Neptune sur son piédestal, trident levé, à la racine du môle
+  const nx = 1.0, nz = 1.12;
+  p.box(0.16, 0.16, 0.16, nx, y0, nz, TRAVERTINE); p.box(0.19, 0.025, 0.19, nx, y0 + 0.16, nz, MARBLE);
+  p.cyl(0.03, 0.04, 0.12, 8, nx, y0 + 0.185, nz, MARBLE); p.sphere(0.04, nx, y0 + 0.33, nz, MARBLE, 0, 1.1); p.sphere(0.026, nx, y0 + 0.39, nz, MARBLE);
+  p.box(0.008, 0.26, 0.008, nx + 0.05, y0 + 0.2, nz, bronze);
+  for (const dx of [-0.018, 0, 0.018]) p.box(0.005, 0.03, 0.005, nx + 0.05 + dx, y0 + 0.46, nz, bronze);
+  p.box(0.042, 0.005, 0.005, nx + 0.05, y0 + 0.46, nz, bronze);
+  // les filets qui sèchent sur leurs perches, la barque tirée sur le quai, ses deux rames
+  for (const x of [-1.25, -0.85]) { for (const s of [-1, 1]) p.box(0.012, 0.26, 0.012, x + s * 0.17, y0, -0.25, C.darkwood); p.box(0.36, 0.012, 0.012, x, y0 + 0.26, -0.25, C.darkwood); p.box(0.32, 0.2, 0.006, x, y0 + 0.06, -0.25, 0x7a8a6a); }
+  p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.36, 8, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI), 0.15, y0 + 0.07, -0.05, 0x8a6040, 0.5);
+  for (const s of [-1, 1]) p.box(0.4, 0.008, 0.016, 0.15 + s * 0.05, y0 + 0.002, 0.12, C.wood, 0.4);
+  // les dockers : l'un au treuil, l'autre près des amphores, un marchand devant l'entrepôt
+  figure(p, gx + 0.16, gz - 0.42, 0xd8c8a8, Math.PI / 2);
+  figure(p, -0.38, 0.95, 0xb8704e, 0.4);
+  figure(p, 0.0, -0.35, 0x5a7a9a, Math.PI);
+}
+
+/**
  * Grand port (3 × 3), le quai tourné vers l'eau (+z) : terre-plein dallé, haut mur de quai en pierre de taille qui descend
  * dans le bassin (bittes, défenses, échelles), jetée qui s'avance dans l'eau jusqu'à son phare ; au Moyen Âge, quai de
  * planches, grand entrepôt à colombages, grue à roue de marche, tonneaux, ballots et filets qui sèchent ; port de commerce
@@ -14387,7 +14528,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'barber': barber(p, Math.max(1, age)); break;
     case 'alpine': alpine(p, Math.max(3, age)); break;
     case 'police': police(p, Math.max(1, age)); break;
-    case 'harbor': if (size === 3) harborBig(p, Math.max(2, age)); else harbor(p, Math.max(2, age)); break;
+    case 'harbor': if (size === 3) { if (age <= 1) harborAntique(p); else harborBig(p, age); } else harbor(p, Math.max(2, age)); break;
     case 'airport': if (size >= 4) airportBig(p); else airport(p); break;
     case 'heliport': heliport(p); break;
     case 'shipyard': shipyard(p, Math.max(2, age)); break;

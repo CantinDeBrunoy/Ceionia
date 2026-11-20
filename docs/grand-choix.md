@@ -65,7 +65,7 @@ Elle fait office de chargement. Décision de l'auteur (15 nov. 2026), après une
   - Pendant le survol : tout de suite au village.
 - **Une seule fois** : `world.reveal` (sauvegardé) demande le survol. Il passe à faux quand le survol commence, et la sauvegarde qui suit la fin ne le porte plus : une partie rechargée ensuite ne rejoue rien. Une partie rechargée autrement pendant le survol (onglet fermé) le rejoue une fois, au calme, ouvert par un fondu au noir. La note du film est effacée à la fin du survol, et à tout démarrage qui n'est pas une traversée.
 - **Pendant la cinématique, pas de visiteurs de la faune** (`Fauna.quiet`) : leur recensement près de la vue coûtait 200 à 300 ms toutes les 3 s au-dessus de la mer.
-- **Les Enfers, ni l'un ni l'autre** : pas de plan de transition. « Les Enfers » mène déjà la vue sur l'île du portail (`commandIsle`) ; « Ni l'un ni l'autre » ne change rien à l'écran.
+- **Les Enfers, ni l'un ni l'autre** : pas de plan de transition. « Les Enfers » mène déjà la vue sur l'île du portail (`commandIsle`), et la cinématique du portail vient au premier passage d'une recrue (voir [enfers.md](enfers.md)) ; « Ni l'un ni l'autre » ne change rien à l'écran.
 
 #### Mesure (15 nov. 2026, build de production, partie neuve puis agrandie)
 Les images ont été jouées une à une, temps de calcul et de rendu de chaque image.

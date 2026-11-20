@@ -75,6 +75,8 @@ export interface WarSave {
   /** l'invasion du portail (absent d'une ancienne sauvegarde : déduit de l'historique de la partie) et les Enfers déjà visités */
   invasion?: Invasion;
   visited?: boolean;
+  /** la cinématique du portail (premier passage d'une recrue) : à jouer (`due`) ou déjà jouée (`seen`) ; absent : pas encore */
+  intro?: 'due' | 'seen';
   /** le choix du joueur sur le PvE (absent d'une ancienne sauvegarde : déduit, voir `readLegacyPve`) ; la carte du choix s'est ouverte */
   pve?: Pve;
   sealed?: boolean;
@@ -101,6 +103,11 @@ export class War {
   private legacyInv = false;
   /** le joueur est déjà allé dans les Enfers (ou y a envoyé une troupe) : le guidage vers eux s'efface */
   visited = false;
+  /**
+   * La cinématique du portail (`portalCine.ts`) : `none` tant qu'aucune recrue n'a passé l'arche, `due` au premier passage
+   * (elle attend le calme pour se jouer), `seen` une fois jouée ou passée. Une ancienne partie déjà allée aux Enfers : `seen`
+   */
+  intro: 'none' | 'due' | 'seen' = 'none';
   /**
    * Le PvE (l'invasion, les Enfers, le royaume) est une option : `ask` : le joueur n'a pas encore choisi (le portail vient de
    * s'ouvrir) ; `on` : il affronte les démons ; `off` : il a refermé le portail (ni vague ni passage, le jeu continue sans PvE)
@@ -333,7 +340,7 @@ export class War {
     if (u && from) from.events.push({ type: 'portal', x: u.x, z: u.z });
     this.undeploy(t);
     t.where = t.where === 'isle' ? 'hell' : 'isle';
-    if (t.where === 'hell') this.visited = true;
+    if (t.where === 'hell') { this.visited = true; if (this.intro === 'none') this.intro = 'due'; }
     t.hp = hp; t.x = undefined; t.z = undefined;
     this.deploy(t, age);
     const nu = this.unitOf.get(t.id), to = nu ? this.simOf(nu) : null;
@@ -740,6 +747,7 @@ export class War {
       endSeen: this.endSeen || undefined,
       invasion: this.legacyInv ? undefined : this.inv,
       visited: this.visited || undefined,
+      intro: this.intro === 'none' ? undefined : this.intro,
       pve: this.legacyPve ? undefined : this.pve,
       choiceSeen: this.choiceSeen || undefined,
       raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })), t: Math.round(isle.raidT) } : null,
@@ -761,6 +769,8 @@ export class War {
     const iv = INVASIONS.find((x) => x === o.invasion);
     // (un compte à rebours en cours au chargement : remplacé par le choix, pas de vague surprise)
     this.inv = iv === 'coming' ? 'ready' : iv ?? 'wait'; this.legacyInv = !iv; this.visited = o.visited === true;
+    // (une ancienne partie déjà allée aux Enfers ne rejoue pas leur découverte)
+    this.intro = o.intro === 'due' || o.intro === 'seen' ? o.intro : this.visited ? 'seen' : 'none';
     this.choiceSeen = o.choiceSeen === true;
     const pv = (['ask', 'on', 'off'] as Pve[]).find((x) => x === o.pve);
     this.pve = pv ?? 'ask'; this.legacyPve = !pv; this.wasSealed = o.sealed === true;
