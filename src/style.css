@@ -1887,12 +1887,12 @@ body.cinematic #bannerWrap { display: none !important; }
 .opPuff.p1 { left: 52vw; top: 34vh; width: 38vw; animation-duration: 24s; animation-direction: alternate-reverse; }
 .opPuff.p2 { left: 14vw; top: 60vh; width: 56vw; opacity: 0.7; animation-duration: 36s; }
 @keyframes opDrift { from { transform: translateX(-8vw); } to { transform: translateX(8vw); } }
-/* le fondu de remplacement : l'image de l'accueil, cadrée sur la vallée (le village de droite hors champ), qui s'approche */
+/* le fondu de remplacement : l'image de l'accueil retouchée sans village (public/ouverture/vallee.webp), qui s'approche */
 .opStill { display: none; position: absolute; inset: 0; z-index: 1; overflow: hidden; background: #9fb6d6; }
-.opStill img { width: 100%; height: 100%; object-fit: cover; transform-origin: 20% 62%; transform: scale(1.32); }
+.opStill img { width: 100%; height: 100%; object-fit: cover; transform-origin: 40% 62%; transform: scale(1.04); }
 #loadScreen.opening.plate .opStill { display: block; }
 #loadScreen.opening.plate .opStill img { animation: opZoom 8s ease-out forwards; }
-@keyframes opZoom { from { transform: scale(1.32); } to { transform: scale(1.55); } }
+@keyframes opZoom { from { transform: scale(1.04); } to { transform: scale(1.22); } }
 .opFilm { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; object-fit: cover; background: transparent; transition: opacity 0.8s ease; }
 .opFilm.gone { opacity: 0; }
 :is(#loadScreen.opening, #openCine) .kc-bar { position: absolute; left: 0; right: 0; height: 7vh; background: #000; z-index: 4; }

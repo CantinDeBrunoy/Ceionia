@@ -13,8 +13,8 @@ import { KINGDOM_TEXT } from './kingdom';
 
 /** La nuée sous le film : ce qui reste quand il est fini (styles « La cinématique d'ouverture » de `style.css`) */
 const CLOUDS = '<div class="opSky" aria-hidden="true"><i class="opPuff p0"></i><i class="opPuff p1"></i><i class="opPuff p2"></i></div>';
-/** Le fondu de remplacement : l'image de l'accueil (sans le village au loin, coupé par le cadrage), qui s'approche */
-const STILL = '<div class="opStill" aria-hidden="true"><img src="./menu/fond.webp" alt="" decoding="async"></div>';
+/** Le fondu de remplacement : l'image de l'accueil retouchée sans village ni maison (une vallée sauvage), qui s'approche */
+const STILL = '<div class="opStill" aria-hidden="true"><img src="./ouverture/vallee.webp" alt="" decoding="async"></div>';
 
 /** Une vidéo qui n'a pas démarré au bout de ce temps (ms) laisse la place au fondu de remplacement */
 const START_MS = 4000;
