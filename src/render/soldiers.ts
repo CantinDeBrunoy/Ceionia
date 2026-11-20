@@ -41,6 +41,10 @@ export interface Kit {
   leftHold?: 'shield' | 'bow';
   dress(p: Parts): void;
   head(p: Parts): void;
+  /** ce que porte chaque jambe (genouillères, guêtres, jambières), repère de la jambe : hanche en 0, semelle à −0,1 */
+  shin?(p: Parts): void;
+  /** ce que porte chaque bras (parements, brassards, écussons), repère du bras : épaule en 0, poignet vers −0,07 */
+  sleeve?(p: Parts): void;
   right(p: Parts): void;
   left(p: Parts): void;
 }
@@ -54,13 +58,25 @@ const roman: Kit = {
     for (const y of [0.158, 0.172, 0.186, 0.2]) p.box(0.086, 0.004, 0.06, 0, y, 0, dark(STEEL, 0.75));
     for (const s of [-1, 1]) p.box(0.03, 0.022, 0.05, s * 0.05, 0.19, 0, STEEL);
     p.box(0.086, 0.01, 0.06, 0, 0.138, 0, LEATHER);
-    for (let k = 0; k < 4; k++) p.box(0.008, 0.035, 0.006, -0.018 + k * 0.012, 0.105, 0.03, LEATHER);
+    for (let k = 0; k < 4; k++) { p.box(0.008, 0.035, 0.006, -0.018 + k * 0.012, 0.105, 0.03, LEATHER); p.box(0.008, 0.005, 0.007, -0.018 + k * 0.012, 0.105, 0.03, GOLD); }
+    // foulard, boucles de la cuirasse, glaive au fourreau sur la hanche droite, bourse dans le dos
+    p.box(0.05, 0.012, 0.044, 0, 0.198, 0.004, WHITE);
+    for (const x of [-0.016, 0.016]) p.box(0.008, 0.008, 0.004, x, 0.18, 0.03, GOLD);
+    p.add(new THREE.BoxGeometry(0.012, 0.06, 0.016), -0.047, 0.11, 0.004, 0x6a3a26, 0, false, 0, 0.25);
+    p.box(0.014, 0.008, 0.018, -0.047, 0.142, 0.012, GOLD);
+    p.box(0.03, 0.026, 0.016, 0.01, 0.12, -0.034, LEATHER);
+  },
+  shin(p) {
+    // lanières des caliges sur le bas de la jambe
+    for (const y of [-0.064, -0.05]) p.box(0.031, 0.004, 0.035, 0, y, 0, LEATHER);
   },
   head(p) {
     // casque à crête rouge, couvre-joues et couvre-nuque
     p.sphere(0.03, 0, 0.255, 0, STEEL, 1, 0.8);
     for (const s of [-1, 1]) p.box(0.006, 0.03, 0.022, s * 0.027, 0.232, 0.008, STEEL);
     p.box(0.05, 0.008, 0.02, 0, 0.24, -0.026, STEEL);
+    p.box(0.056, 0.006, 0.01, 0, 0.252, 0.024, STEEL);
+    p.box(0.008, 0.008, 0.03, 0, 0.276, 0, dark(STEEL, 0.8));
     p.box(0.012, 0.03, 0.06, 0, 0.275, 0, 0xd8443a);
   },
   right(p) {
@@ -74,6 +90,8 @@ const roman: Kit = {
     p.box(0.013, 0.11, 0.006, 0.008, -0.045, 0.046, GOLD); p.box(0.013, 0.11, 0.006, 0.008, -0.045, -0.026, GOLD);
     p.sphere(0.012, 0.016, 0.01, 0.01, GOLD, 0, 0.6);
     p.box(0.014, 0.004, 0.05, 0.008, 0.03, 0.01, GOLD); p.box(0.014, 0.004, 0.05, 0.008, -0.02, 0.01, GOLD);
+    p.box(0.013, 0.006, 0.07, 0.008, 0.062, 0.01, GOLD); p.box(0.013, 0.006, 0.07, 0.008, -0.048, 0.01, GOLD);
+    for (const [y, z] of [[0.045, 0.034], [0.045, -0.014], [-0.03, 0.034], [-0.03, -0.014]]) p.add(new THREE.BoxGeometry(0.014, 0.004, 0.018), 0.008, y, z, GOLD, 0, false, 0, (z > 0.01 ? 1 : -1) * (y > 0 ? 0.8 : -0.8));
   },
 };
 
@@ -86,11 +104,28 @@ const knight: Kit = {
     p.box(0.022, 0.09, 0.061, 0, 0.1, 0, GOLD);
     p.box(0.088, 0.01, 0.062, 0, 0.14, 0, LEATHER);
     for (const s of [-1, 1]) p.sphere(0.022, s * 0.048, 0.195, 0, STEEL, 0, 0.8);
+    // jupe de mailles sous le tabard, gorgerin, fourreau sur la hanche gauche
+    p.box(0.084, 0.022, 0.058, 0, 0.088, 0, 0x9aa0a8);
+    p.box(0.05, 0.012, 0.046, 0, 0.198, 0, dark(STEEL, 0.9));
+    p.add(new THREE.BoxGeometry(0.012, 0.08, 0.016), 0.047, 0.1, -0.006, 0x2a2a3a, 0, false, 0, -0.3);
+    p.box(0.03, 0.006, 0.012, 0.047, 0.145, 0.006, GOLD);
+  },
+  shin(p) {
+    // genouillère et soleret
+    p.box(0.034, 0.016, 0.012, 0, -0.05, 0.014, dark(STEEL, 0.88));
+    p.box(0.034, 0.008, 0.02, 0, -0.084, 0.022, dark(STEEL, 0.88));
+  },
+  sleeve(p) {
+    // cubitière et manchette du gantelet
+    p.box(0.028, 0.014, 0.014, 0, -0.03, -0.012, dark(STEEL, 0.88));
+    p.box(0.028, 0.012, 0.03, 0, -0.064, 0.002, dark(STEEL, 0.85));
   },
   head(p) {
     // heaume à fente et plumet doré
     p.cyl(0.028, 0.03, 0.055, 7, 0, 0.222, 0, STEEL);
     p.box(0.04, 0.006, 0.01, 0, 0.255, 0.027, 0x3c4a54);
+    for (const x of [-0.012, 0, 0.012]) p.box(0.004, 0.004, 0.006, x, 0.236, 0.028, 0x3c4a54);
+    p.cyl(0.02, 0.028, 0.01, 7, 0, 0.277, 0, STEEL);
     p.sphere(0.02, 0, 0.29, -0.006, GOLD, 0, 1.4);
   },
   right(p) {
@@ -106,6 +141,39 @@ const knight: Kit = {
   },
 };
 
+/**
+ * Barda du fantassin de l'âge industriel (napoléonien, tirailleur) : collet de couleur, boutons, havresac de peau et sa
+ * couverture roulée, bidon, fourreau de baïonnette
+ */
+function napoleonicKit(p: Parts, collar: number, button: number, sack: number) {
+  p.box(0.05, 0.012, 0.046, 0, 0.198, 0, collar);
+  for (const x of [-0.022, 0.022]) for (let k = 0; k < 3; k++) p.box(0.005, 0.005, 0.004, x, 0.145 + k * 0.016, 0.03, button);
+  p.box(0.062, 0.058, 0.024, 0, 0.13, -0.044, sack);
+  p.box(0.064, 0.006, 0.026, 0, 0.16, -0.044, dark(sack, 0.7));
+  p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.072, 6).rotateZ(Math.PI / 2), 0, 0.2, -0.044, 0x8a4a3e);
+  for (const x of [-0.024, 0.024]) p.add(new THREE.CylinderGeometry(0.0125, 0.0125, 0.005, 6).rotateZ(Math.PI / 2), x, 0.2, -0.044, WHITE);
+  p.add(new THREE.CylinderGeometry(0.011, 0.011, 0.02, 6).rotateZ(Math.PI / 2).scale(1, 1, 0.6), 0.044, 0.1, -0.006, 0x4a5a4a);
+  p.add(new THREE.BoxGeometry(0.008, 0.05, 0.012), -0.046, 0.09, -0.012, BLACK, 0, false, 0, 0.3);
+}
+/** Guêtres noires boutonnées jusqu'au mollet */
+function gaiters(p: Parts) {
+  p.box(0.032, 0.036, 0.036, 0, -0.08, 0, BLACK);
+  for (const y of [-0.068, -0.056]) p.box(0.004, 0.004, 0.004, 0.016, y, 0.012, 0x8a8f96);
+}
+/** Parement du poignet et patte de l'épaule */
+function cuff(p: Parts, c: number) {
+  p.box(0.026, 0.012, 0.03, 0, -0.058, 0, c);
+  p.box(0.026, 0.004, 0.03, 0, 0.0, 0, dark(c, 0.8));
+}
+/** Cordon et raquettes du shako, jugulaire d'écailles, cocarde */
+function shakoCords(p: Parts, c: number) {
+  p.add(new THREE.BoxGeometry(0.064, 0.004, 0.004), 0, 0.262, 0.03, c, 0, false, 0.18);
+  p.box(0.006, 0.014, 0.006, 0.026, 0.25, 0.028, c);
+  for (const x of [-0.029, 0.029]) p.box(0.004, 0.026, 0.008, x, 0.214, 0.012, GOLD);
+  p.add(new THREE.CylinderGeometry(0.008, 0.008, 0.004, 8).rotateX(Math.PI / 2), 0, 0.296, 0.03, 0x2c4a9a);
+  p.add(new THREE.CylinderGeometry(0.005, 0.005, 0.005, 8).rotateX(Math.PI / 2), 0, 0.296, 0.031, WHITE);
+}
+
 const napoleonic: Kit = {
   leg: WHITE, boot: BLACK, hip: 0x2c3e6a, torso: 0x2c3e6a, arm: 0x2c3e6a, hand: WHITE,
   dress(p) {
@@ -118,7 +186,10 @@ const napoleonic: Kit = {
     p.add(new THREE.BoxGeometry(0.012, 0.11, 0.004), 0, 0.165, 0.03, WHITE, 0, false, -0.62);
     for (const s of [-1, 1]) p.box(0.028, 0.012, 0.04, s * 0.048, 0.205, 0, 0xd8443a);
     p.box(0.05, 0.03, 0.016, 0.0, 0.11, -0.034, BLACK);
+    napoleonicKit(p, 0xd8443a, GOLD, 0x7a5a3e);
   },
+  shin: gaiters,
+  sleeve: (p) => cuff(p, 0xd8443a),
   head(p) {
     // shako noir, plaque de cuivre, plumet rouge, jugulaire
     p.cyl(0.03, 0.027, 0.06, 8, 0, 0.245, 0, BLACK);
@@ -126,16 +197,30 @@ const napoleonic: Kit = {
     p.box(0.02, 0.022, 0.004, 0, 0.27, 0.029, GOLD);
     p.cyl(0.008, 0.01, 0.035, 5, 0, 0.305, 0.006, 0xd8443a);
     p.sphere(0.012, 0, 0.345, 0.006, 0xd8443a, 0, 1.4);
+    shakoCords(p, WHITE);
   },
   right(p) {
-    // fusil à baïonnette, porté droit : crosse, canon, baïonnette
+    // fusil à baïonnette, porté droit : crosse, canon, capucines de laiton, platine, bretelle blanche, baïonnette
     p.box(0.014, 0.05, 0.02, 0, -0.04, 0, 0x7a5236);
     p.box(0.01, 0.13, 0.012, 0, 0.0, 0.004, 0x7a5236);
     p.box(0.005, 0.14, 0.005, 0, 0.02, 0.012, 0x5a5f66);
+    for (const y of [0.05, 0.1]) p.box(0.012, 0.006, 0.016, 0, y, 0.006, GOLD);
+    p.box(0.012, 0.014, 0.008, 0, 0.0, 0.012, 0x3c3c40);
+    p.box(0.003, 0.11, 0.004, 0, -0.01, -0.006, WHITE);
     p.box(0.003, 0.05, 0.006, 0, 0.17, 0.012, STEEL);
   },
   left() {},
 };
+
+/** Barda du militaire moderne : porte-chargeurs sur le gilet, bidon et étui sur le ceinturon, radio et antenne, sac de couchage roulé */
+function modernGear(p: Parts) {
+  for (const x of [-0.03, 0.03]) p.box(0.016, 0.022, 0.012, x, 0.104, 0.032, 0x3e4430);
+  p.add(new THREE.CylinderGeometry(0.011, 0.011, 0.024, 6), 0.046, 0.1, -0.012, 0x3e4430);
+  p.box(0.014, 0.024, 0.018, -0.046, 0.098, 0.004, 0x2e2a24);
+  p.box(0.022, 0.03, 0.014, 0.02, 0.16, -0.065, 0x2e3430);
+  p.box(0.003, 0.08, 0.003, 0.026, 0.19, -0.066, BLACK);
+  p.add(new THREE.CylinderGeometry(0.013, 0.013, 0.066, 6).rotateZ(Math.PI / 2), 0, 0.216, -0.046, 0x3e4a32);
+}
 
 const modern: Kit = {
   leg: 0x5a6a46, boot: 0x2e2a24, hip: 0x5a6a46, torso: 0x5a6a46, arm: 0x5a6a46, hand: 0x2e2a24,
@@ -147,20 +232,37 @@ const modern: Kit = {
     for (const x of [-0.024, 0, 0.024]) p.box(0.018, 0.022, 0.008, x, 0.15, 0.034, 0x3e4430);
     p.box(0.088, 0.012, 0.064, 0, 0.118, 0, 0x2e2a24);
     p.box(0.06, 0.07, 0.03, 0, 0.14, -0.045, 0x4a5236);
+    modernGear(p);
+  },
+  shin(p) {
+    // genouillère, haut des rangers lacé
+    p.box(0.032, 0.014, 0.01, 0, -0.06, 0.018, 0x2e2a24);
+    p.box(0.033, 0.01, 0.037, 0, -0.078, 0.002, 0x2e2a24);
+  },
+  sleeve(p) {
+    // écusson du village sur le haut des manches, manche retroussée
+    for (const x of [-0.0125, 0.0125]) { p.box(0.002, 0.014, 0.016, x, -0.012, 0, BLUE); p.box(0.0025, 0.004, 0.016, x, -0.006, 0, GOLD); }
+    p.box(0.026, 0.008, 0.03, 0, -0.056, 0, 0x6a7a54);
   },
   head(p) {
-    // casque à couvre-casque, lunettes sur le front, micro
+    // casque à couvre-casque, bande élastique, lunettes sur le front, support de jumelles, jugulaire, micro
     p.sphere(0.032, 0, 0.252, 0, 0x4a5236, 1, 0.75);
     p.box(0.07, 0.006, 0.07, 0, 0.247, 0, 0x4a5236);
+    p.box(0.064, 0.006, 0.064, 0, 0.256, 0, 0x2e2a24);
     p.box(0.04, 0.01, 0.006, 0, 0.262, 0.03, 0x2e3c48);
+    p.box(0.012, 0.012, 0.006, 0, 0.272, 0.028, BLACK);
+    for (const x of [-0.022, 0.022]) p.box(0.003, 0.03, 0.004, x, 0.214, 0.008, 0x2e2a24);
     p.box(0.004, 0.004, 0.02, 0.022, 0.222, 0.02, BLACK);
   },
   right(p) {
-    // fusil d'assaut : crosse, boîtier, chargeur, canon, lunette
+    // fusil d'assaut : crosse, boîtier, chargeur, garde-main, poignée avant, canon, guidon, lunette
     p.box(0.012, 0.03, 0.03, 0, -0.03, -0.01, BLACK);
     p.box(0.014, 0.025, 0.07, 0, -0.005, 0.02, 0x2a2a2e);
     p.box(0.01, 0.025, 0.012, 0, -0.025, 0.03, 0x2a2a2e);
+    p.box(0.016, 0.018, 0.03, 0, -0.002, 0.06, 0x3c3c40);
+    p.box(0.008, 0.018, 0.008, 0, -0.018, 0.064, 0x2a2a2e);
     p.box(0.005, 0.005, 0.05, 0, 0.0, 0.075, 0x2a2a2e);
+    p.box(0.004, 0.01, 0.004, 0, 0.004, 0.09, 0x2a2a2e);
     p.box(0.01, 0.008, 0.024, 0, 0.012, 0.018, 0x3c3c40);
   },
   left() {},
@@ -178,12 +280,29 @@ const future: Kit = {
     p.box(0.09, 0.012, 0.066, 0, 0.118, 0, 0x3a4250);
     p.box(0.056, 0.08, 0.03, 0, 0.13, -0.046, 0xd0d8e0);
     for (const s of [-1, 1]) p.cyl(0.011, 0.013, 0.02, 6, s * 0.016, 0.11, -0.058, 0x3a4250);
+    // plaques du ventre, cellules d'énergie aux hanches, insigne du village
+    for (const y of [0.124, 0.136]) p.box(0.05, 0.004, 0.004, 0, y, 0.03, 0xc0c8d2);
+    for (const s of [-1, 1]) { p.box(0.014, 0.024, 0.02, s * 0.047, 0.098, 0, 0x3a4250); p.box(0.004, 0.012, 0.004, s * 0.055, 0.104, 0.006, 0x5af0ff, 0, 'neon'); }
+    p.box(0.014, 0.014, 0.004, -0.024, 0.18, 0.033, BLUE); p.box(0.006, 0.006, 0.005, -0.024, 0.184, 0.034, GOLD);
+  },
+  shin(p) {
+    // genouillère blindée, jambière à liseré lumineux, plaque de cheville
+    p.box(0.034, 0.018, 0.01, 0, -0.054, 0.016, 0xf6f8fa);
+    p.box(0.004, 0.026, 0.004, 0, -0.076, 0.019, 0x5af0ff, 0, 'neon');
+    p.box(0.034, 0.01, 0.04, 0, -0.084, 0.006, 0xd0d8e0);
+  },
+  sleeve(p) {
+    // avant-bras blindé et son bracelet lumineux
+    p.box(0.028, 0.028, 0.032, 0, -0.062, 0, 0xd0d8e0);
+    p.box(0.029, 0.004, 0.033, 0, -0.044, 0, 0x5af0ff, 0, 'neon');
   },
   head(p) {
-    // casque intégral à visière fumée et sa ligne lumineuse
+    // casque intégral à visière fumée et sa ligne lumineuse, crête, modules d'oreille
     p.sphere(0.038, 0, 0.231, 0, 0xf6f8fa, 1);
     p.box(0.052, 0.022, 0.012, 0, 0.22, 0.034, 0x2a3442);
     p.box(0.046, 0.004, 0.004, 0, 0.226, 0.041, 0x5af0ff, 0, 'neon');
+    p.box(0.008, 0.008, 0.06, 0, 0.264, -0.004, 0xd0d8e0);
+    for (const s of [-1, 1]) { p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.01, 8).rotateZ(Math.PI / 2), s * 0.038, 0.232, -0.004, 0x3a4250); p.box(0.004, 0.004, 0.004, s * 0.044, 0.23, -0.004, 0x5af0ff, 0, 'neon'); }
   },
   right(p) {
     // fusil à impulsions : crosse, corps blanc, cellule d'énergie, canon
@@ -191,6 +310,8 @@ const future: Kit = {
     p.box(0.016, 0.028, 0.08, 0, -0.005, 0.025, 0xf0f2f4);
     p.box(0.018, 0.012, 0.03, 0, -0.008, 0.01, 0x5af0ff);
     p.box(0.007, 0.007, 0.05, 0, 0.002, 0.085, 0x3a4250);
+    p.box(0.012, 0.012, 0.02, 0, 0.018, 0.03, 0x3a4250); p.box(0.008, 0.004, 0.003, 0, 0.022, 0.041, 0xff3a4a, 0, 'neon');
+    for (const z of [0.07, 0.09]) p.box(0.011, 0.011, 0.004, 0, -0.003, z, 0x5af0ff, 0, 'neon');
   },
   left() {},
 };
@@ -220,10 +341,26 @@ const manAtArms: Kit = {
     p.box(0.07, 0.1, 0.06, 0, 0.1, 0, 0xc23a32);
     p.box(0.02, 0.1, 0.061, 0, 0.1, 0, WHITE);
     p.box(0.088, 0.01, 0.062, 0, 0.13, 0, LEATHER);
+    // camail de mailles autour du cou, escarcelle et dague à la ceinture, épée au côté
+    p.box(0.07, 0.016, 0.06, 0, 0.196, 0, 0x9aa0a8);
+    p.box(0.018, 0.022, 0.01, -0.024, 0.11, 0.032, LEATHER); p.box(0.008, 0.006, 0.011, -0.024, 0.128, 0.032, GOLD);
+    p.add(new THREE.BoxGeometry(0.008, 0.04, 0.008), 0.03, 0.105, 0.03, 0x3c3c40, 0, false, -0.3);
+    p.add(new THREE.BoxGeometry(0.012, 0.08, 0.014), 0.047, 0.095, -0.006, LEATHER, 0, false, 0, -0.3);
+  },
+  shin(p) {
+    // bottes de cuir à revers
+    p.box(0.032, 0.03, 0.036, 0, -0.08, 0, LEATHER);
+    p.box(0.035, 0.008, 0.039, 0, -0.055, 0, dark(LEATHER, 1.25));
+  },
+  sleeve(p) {
+    // le gambison piqué, poignet de cuir
+    for (const y of [-0.02, -0.04]) p.box(0.026, 0.003, 0.03, 0, y, 0, 0xb8ae94);
+    p.box(0.026, 0.01, 0.03, 0, -0.06, 0, LEATHER);
   },
   head(p) {
     p.sphere(0.03, 0, 0.25, 0, STEEL, 1, 0.75);
     p.cyl(0.048, 0.042, 0.01, 10, 0, 0.238, 0, STEEL);
+    p.box(0.006, 0.008, 0.06, 0, 0.27, 0, dark(STEEL, 0.85));
   },
   right: (p) => spear(p),
   left(p) {
@@ -254,12 +391,27 @@ export function archerKit(o: ArcherLook): Kit {
       // carquois de cuir en travers du dos, garni de flèches empennées de blanc et de rouge
       p.add(new THREE.CylinderGeometry(0.014, 0.012, 0.1, 6), 0.02, 0.17, -0.04, 0x6a4026, 0, false, -0.35);
       for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.004, 0.026, 0.008), 0.034 + (k % 2) * 0.008 - 0.004, 0.232 + (k >> 1) * 0.004, -0.044 + (k % 2 ? 0.006 : -0.004), k % 2 ? 0xd84a3e : 0xf4f0e6, 0, false, -0.35);
+      // courroie du carquois en écharpe, bourse et couteau à la ceinture
+      p.add(new THREE.BoxGeometry(0.008, 0.11, 0.004), 0, 0.165, 0.03, LEATHER, 0, false, -0.62);
+      p.box(0.016, 0.02, 0.012, 0.028, 0.11, 0.03, LEATHER); p.box(0.006, 0.006, 0.013, 0.028, 0.124, 0.03, GOLD);
+      p.add(new THREE.BoxGeometry(0.008, 0.034, 0.01), -0.044, 0.1, 0.006, 0x3c2a1e, 0, false, 0.25);
+    },
+    shin(p) {
+      // bandes molletières croisées
+      for (const y of [-0.064, -0.05, -0.036]) p.box(0.032, 0.005, 0.036, 0, y, 0, dark(o.boot, 1.3));
+    },
+    sleeve(p) {
+      // brassard de cuir sur l'avant-bras
+      p.box(0.027, 0.024, 0.031, 0, -0.064, 0, LEATHER);
+      p.box(0.028, 0.004, 0.032, 0, -0.05, 0, dark(LEATHER, 0.7));
     },
     head(p) {
       // le capuchon : il couvre le crâne, la nuque et les joues (le visage reste dégagé), pointe tombant dans le dos
       p.add(new THREE.IcosahedronGeometry(0.031, 1).scale(1.05, 1, 0.82), 0, 0.243, -0.009, o.hood);
       p.add(new THREE.ConeGeometry(0.012, 0.05, 5).rotateX(-2.2), 0, 0.255, -0.04, o.hood);
       p.box(0.05, 0.012, 0.004, 0, 0.262, 0.016, dark(o.hood, 0.8));
+      // la plume au capuchon
+      p.add(new THREE.BoxGeometry(0.004, 0.04, 0.01), 0.026, 0.27, -0.01, 0xd84a3e, 0, false, -0.5, -0.4);
     },
     // (la main droite est vide : elle tire la corde ; une flèche encochée au combat)
     right(p) { p.box(0.003, 0.08, 0.003, 0, -0.01, 0, 0x8a6a44); p.add(new THREE.ConeGeometry(0.005, 0.014, 4), 0, 0.077, 0, STEEL); p.box(0.008, 0.016, 0.002, 0, -0.01, 0, WHITE); },
@@ -363,12 +515,16 @@ const heavyFuture: Kit = {
 };
 
 /** Long fusil porté droit (le long de +y depuis la main) : crosse, platine, canon de `len` ; lunette ou rail lumineux au besoin */
-export function longRifle(p: Parts, o: { wood: number; metal: number; len: number; scope?: boolean; neon?: boolean }) {
+export function longRifle(p: Parts, o: { wood: number; metal: number; len: number; scope?: boolean; neon?: boolean; band?: number; sling?: number }) {
   p.box(0.014, 0.05, 0.02, 0, -0.04, 0, o.wood);
   p.box(0.01, 0.12, 0.012, 0, 0.0, 0.004, o.wood);
   p.box(0.005, o.len, 0.005, 0, -0.04 + o.len / 2 + 0.05, 0.012, o.metal);
-  if (o.scope) p.box(0.008, 0.045, 0.008, 0, 0.04, 0.024, 0x2a2a2e);
+  if (o.scope) { p.box(0.008, 0.045, 0.008, 0, 0.04, 0.024, 0x2a2a2e); for (const y of [0.038, 0.085]) p.box(0.01, 0.006, 0.01, 0, y, 0.024, 0x3c3c40); }
   if (o.neon) p.box(0.003, o.len * 0.8, 0.003, 0, o.len / 2, 0.017, 0x5af0ff, 0, 'neon');
+  // capucines, platine, bretelle de cuir
+  for (const y of [0.05, 0.1]) p.box(0.012, 0.006, 0.016, 0, y, 0.006, o.band ?? dark(o.metal, 1.2));
+  p.box(0.012, 0.014, 0.008, 0, -0.002, 0.012, 0x3c3c40);
+  p.box(0.003, 0.11, 0.004, 0, -0.01, -0.006, o.sling ?? LEATHER);
 }
 
 /** Tirailleur de l'âge industriel (l'archer devenu tireur) : habit vert à passepoils, buffleteries noires, giberne, shako vert à pompon, long fusil sans baïonnette */
@@ -385,14 +541,19 @@ const tirailleur: Kit = {
     p.box(0.05, 0.03, 0.016, 0, 0.11, -0.034, BLACK);
     // cornet à poudre et sac de balles au côté
     p.box(0.02, 0.03, 0.016, 0.046, 0.1, 0.012, LEATHER);
+    p.add(new THREE.ConeGeometry(0.008, 0.04, 5).rotateZ(1.2), 0.034, 0.142, 0.03, 0xe8dcc0);
+    napoleonicKit(p, 0xe8c66a, 0xd8dce2, 0x5a4a32);
   },
+  shin: gaiters,
+  sleeve: (p) => cuff(p, 0x22402a),
   head(p) {
     p.cyl(0.03, 0.027, 0.055, 8, 0, 0.245, 0, 0x2f5a34);
     p.box(0.064, 0.006, 0.03, 0, 0.243, 0.02, BLACK);
     p.box(0.02, 0.02, 0.004, 0, 0.265, 0.029, GOLD);
     p.sphere(0.011, 0, 0.292, 0.004, 0xe8c66a, 0, 1.2);
+    shakoCords(p, 0xe8c66a);
   },
-  right: (p) => longRifle(p, { wood: 0x7a5236, metal: 0x5a5f66, len: 0.16 }),
+  right: (p) => longRifle(p, { wood: 0x7a5236, metal: 0x5a5f66, len: 0.16, band: GOLD }),
   left() {},
 };
 
@@ -403,8 +564,23 @@ const sniper: Kit = {
     p.sphere(0.032, 0, 0.252, 0, 0x6a7448, 1, 0.75);
     p.cyl(0.048, 0.04, 0.008, 9, 0, 0.243, 0, 0x5a6438);
     p.box(0.07, 0.01, 0.07, 0, 0.268, 0, 0x4a5236);
+    // lanières de toile du filet sur le chapeau
+    for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.008, 0.024, 0.004), Math.cos(k * 1.3) * 0.036, 0.258, Math.sin(k * 1.3) * 0.036, k % 2 ? 0x6a7448 : 0x7a6a44, k * 1.3, false, 0, 0.5);
   },
-  right: (p) => longRifle(p, { wood: 0x3c3c40, metal: 0x2a2a2e, len: 0.19, scope: true }),
+  dress(p) {
+    modern.dress(p);
+    // le filet de camouflage : lanières vertes et brunes sur les épaules et le dos
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * Math.PI * 1.6 - 0.3, x = Math.cos(a) * 0.04, z = -0.02 - Math.abs(Math.sin(a)) * 0.03;
+      p.add(new THREE.BoxGeometry(0.012, 0.04, 0.004), x, 0.18 - (k % 3) * 0.012, z - 0.012, [0x6a7448, 0x7a6a44, 0x4a5a36][k % 3], a, false, 0, 0.25);
+    }
+  },
+  right(p) {
+    longRifle(p, { wood: 0x3c3c40, metal: 0x2a2a2e, len: 0.19, scope: true });
+    // bipied replié sous le canon, frein de bouche
+    for (const x of [-0.004, 0.004]) p.box(0.003, 0.05, 0.003, x, 0.09, 0.016, 0x2a2a2e);
+    p.box(0.009, 0.014, 0.009, 0, 0.198, 0.012, 0x2a2a2e);
+  },
 };
 
 /**
@@ -458,6 +634,22 @@ const halberdier: Kit = {
     p.box(0.088, 0.01, 0.062, 0, 0.105, 0, LEATHER);
     for (const s of [-1, 1]) p.sphere(0.024, s * 0.05, 0.195, 0, STEEL, 0, 0.7);
     p.box(0.09, 0.15, 0.008, 0, 0.07, -0.034, 0x6a1e1c);
+    // rivets de la cuirasse, gorgerin, épée à la hanche
+    for (const x of [-0.03, 0.03]) p.box(0.005, 0.005, 0.004, x, 0.2, 0.031, GOLD);
+    p.box(0.05, 0.014, 0.046, 0, 0.198, 0, dark(STEEL, 0.9));
+    p.add(new THREE.BoxGeometry(0.012, 0.08, 0.014), 0.047, 0.09, -0.008, LEATHER, 0, false, 0, -0.3);
+    p.box(0.03, 0.006, 0.012, 0.047, 0.134, 0.004, GOLD);
+  },
+  shin(p) {
+    // chausses rayées de jaune, jarretière
+    for (const y of [-0.07, -0.05, -0.03]) p.box(0.031, 0.008, 0.035, 0, y, 0, 0xe8c66a);
+    p.box(0.032, 0.006, 0.036, 0, -0.04, 0, 0x9a2e2a);
+  },
+  sleeve(p) {
+    // manche bouffante à crevés jaunes, gant de cuir
+    p.box(0.03, 0.03, 0.032, 0, -0.02, 0, 0x9a2e2a);
+    for (const z of [-0.008, 0.008]) p.box(0.031, 0.026, 0.004, 0, -0.018, z, 0xe8c66a);
+    p.box(0.027, 0.014, 0.03, 0, -0.064, 0.002, LEATHER);
   },
   head(p) {
     // morion : calotte, crête, bord relevé
@@ -489,12 +681,25 @@ function bazookaTube(p: Parts, tube: number, band: number, neon = false) {
 /** Bazooka moderne : treillis, gilet, casque, lance-roquettes vert sur l'épaule */
 const bazooka: Kit = {
   ...modern, hold: 'rifle',
+  dress(p) {
+    modern.dress(p);
+    // porte-roquettes dans le dos : deux roquettes, ogives rouges
+    for (const x of [-0.016, 0.016]) { p.cyl(0.011, 0.011, 0.07, 6, x, 0.12, -0.066, 0x4a5a3a); p.cone(0.011, 0.024, 6, x, 0.19, -0.066, 0xb8322c); }
+    p.box(0.05, 0.01, 0.026, 0, 0.14, -0.066, 0x2e2a24);
+  },
   right: (p) => bazookaTube(p, 0x4a5a3a, 0xe8c66a),
 };
 
 /** Exo-lanceur futuriste : exo-armure, lanceur de missiles à bandes lumineuses */
 const exoLauncher: Kit = {
   ...future, hold: 'rifle',
+  dress(p) {
+    future.dress(p);
+    // nacelle à missiles sur le dos : quatre tubes, ogives lumineuses
+    p.box(0.06, 0.06, 0.03, 0, 0.15, -0.075, 0xd0d8e0);
+    for (const [x, y] of [[-0.014, 0.164], [0.014, 0.164], [-0.014, 0.19], [0.014, 0.19]]) p.box(0.016, 0.016, 0.006, x, y, -0.06, 0x5af0ff, 0, 'neon');
+    p.box(0.062, 0.006, 0.032, 0, 0.21, -0.075, 0x3a4250);
+  },
   right: (p) => bazookaTube(p, 0xe8ecf0, 0x5af0ff, true),
 };
 
@@ -818,8 +1023,12 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
   const hullG = shared(ck && ck + 'body', () => {
     const p = new Parts();
     kit.dress(p);
+    // la tête : cou, visage (deux yeux, le nez), oreilles
+    p.box(0.024, 0.012, 0.024, 0, 0.204, 0, dark(skin, 0.94));
     p.box(0.042, 0.042, 0.042, 0, 0.212, 0, skin);
-    p.box(0.03, 0.006, 0.004, 0, 0.226, 0.021, dark(skin, 0.6));
+    for (const x of [-0.009, 0.009]) p.box(0.007, 0.006, 0.003, x, 0.229, 0.021, 0x2a1e18);
+    p.box(0.007, 0.01, 0.006, 0, 0.218, 0.022, dark(skin, 0.86));
+    for (const x of [-0.022, 0.022]) p.box(0.004, 0.012, 0.01, x, 0.222, 0, dark(skin, 0.9));
     kit.head(p);
     const built = p.build(false);
     if (built.glow) glowG = built.glow;
@@ -836,14 +1045,28 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
   if (glowG) body.add(new THREE.Mesh(glowG, mats.glow));
   // jambes (pivot à la hanche) et bras (pivot à l'épaule), ce que tient chaque main au bout du bras
   const legs: THREE.Object3D[] = [], arms: THREE.Object3D[] = [];
-  for (const s of [-1, 1]) {
-    const leg = new THREE.Mesh(shared(ck && ck + 'leg', () => {
+  /** un membre (jambe, bras) : sa géométrie partagée et, s'il en a, ses parties lumineuses en enfant */
+  const limb = (name: string, draw: (p: Parts) => void) => {
+    const k = ck && ck + name;
+    let g = k ? troopGeo.get(k) : undefined, gl = k ? troopGeo.get(k + 'glow') : undefined;
+    if (!g) {
       const lp = new Parts();
+      draw(lp);
+      const built = lp.build(false);
+      g = built.body; gl = built.glow ?? undefined;
+      if (k) { troopGeo.set(k, g); if (gl) troopGeo.set(k + 'glow', gl); }
+    }
+    const m = new THREE.Mesh(g, mats.body);
+    if (gl) m.add(new THREE.Mesh(gl, mats.glow));
+    return m;
+  };
+  for (const s of [-1, 1]) {
+    const leg = limb('leg', (lp) => {
       lp.box(0.03, 0.07, 0.034, 0, -0.075, 0, tint(kit.leg));
       lp.box(0.032, 0.03, 0.044, 0, -0.1, 0.006, kit.boot);
-      if (kit === modern || kit === heavyNow) lp.box(0.032, 0.014, 0.01, 0, -0.06, 0.018, 0x2e2a24);
-      return lp.build(false).body;
-    }), mats.body);
+      lp.box(0.034, 0.006, 0.046, 0, -0.1, 0.007, dark(kit.boot, 0.6));
+      kit.shin?.(lp);
+    });
     leg.position.set(s * 0.02, 0.1, 0);
     leg.castShadow = true;
     root.add(leg);
@@ -851,11 +1074,11 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
   }
   let flame: THREE.Object3D | null = null;
   for (const s of [-1, 1]) {
-    const armG = shared(ck && ck + 'arm', () => {
-      const ap = new Parts();
-      ap.box(0.024, 0.075, 0.028, 0, -0.035, 0, tint(kit.arm));
+    const armM = limb('arm', (ap) => {
+      // le bras descend de l'épaule (un peu au-dessus du pivot, arrondie) jusqu'au poignet, la main au bout
+      ap.box(0.024, 0.07, 0.028, 0, -0.058, 0, tint(kit.arm));
       ap.box(0.024, 0.022, 0.024, 0, -0.078, 0.004, tint(kit.hand));
-      return ap.build(false).body;
+      kit.sleeve?.(ap);
     });
     // ce que tient la main (et ses parties lumineuses : lame d'énergie, corde lumineuse)
     const side = s < 0 ? 'R' : 'L', hk = ck && ck + 'held' + side;
@@ -873,7 +1096,7 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
       } else if (hk) troopGeo.set(hk + 'none', new THREE.BufferGeometry());
     }
     const arm = new THREE.Group();
-    arm.add(new THREE.Mesh(armG, mats.body));
+    arm.add(armM);
     if (heldG) {
       const hm = new THREE.Mesh(heldG, mats.body);
       if (heldGlow) hm.add(new THREE.Mesh(heldGlow, mats.glow));
