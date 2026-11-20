@@ -2660,6 +2660,8 @@ class Game implements UIHost {
       const v = this.quake.cell, d = Math.hypot((v % N) + 0.5 - this.cam.target.x, Math.floor(v / N) + 0.5 - this.cam.target.z);
       shake = Math.max(shake, (1 - this.quake.t / 18) * 0.7 * Math.max(0, 1 - d / 70));
     }
+    // un séisme (catastrophe naturelle)
+    if (!uv && !hv && gdt > 0) shake = Math.max(shake, 0.8 * this.calam.shakeAt(this.cam.target.x, this.cam.target.z));
     // les cris du roi des Enfers, l'effondrement de son royaume
     shake = Math.max(shake, this.kingStage.shake());
     if (shake > 0) {
@@ -2727,7 +2729,7 @@ class Game implements UIHost {
     this.sim.season = this.time.season;
     this.sim.update(gdt, dt);
     this.eruptions.update(gdt);
-    this.fauna.alarm = this.eruptions.alarm();
+    this.fauna.alarm = this.eruptions.alarm() ?? this.calam.alarm();
     this.fires.update(dt, gdt);
     // personne n'accourt vers un feu (tout le monde était à l'intérieur ou loin au moment où il a pris) : on rappelle à l'aide
     if ((this.fireCallT -= dt) <= 0) { this.fireCallT = 4; for (const b of this.fires.burning) if (!this.agents.responders(b)) this.agents.alert(b.z * N + b.x); }

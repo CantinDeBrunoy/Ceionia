@@ -5,7 +5,7 @@ import { mulberry32 } from '../src/core/rng';
 import { Building, KindId } from '../src/build/catalog';
 import { Sim } from '../src/sim/sim';
 import { rulesOf, DIFFICULTIES } from '../src/sim/difficulty';
-import { CALAM_DAYS, FLOOD_RISE, floodSite, growFlood, planAge, riverish, ruinedFields } from '../src/sim/calamity';
+import { CALAM_DAYS, FLOOD_RISE, QUAKE_R, floodSite, growFlood, planAge, quakeVictims, riverish, ruinedFields } from '../src/sim/calamity';
 
 /**
  * Un monde plat (hauteur 1) traversé du nord au sud par une rivière (colonnes 40 à 42, sous l'eau), aux berges basses
@@ -99,6 +99,28 @@ describe('catastrophes : la crue', () => {
     newWorld(w, 3, 2026);
     w.updateVis();
     expect(floodSite(w, mulberry32(4))).toBeTruthy();
+  });
+});
+
+describe('catastrophes : le séisme', () => {
+  beforeAll(() => setMapSize(96));
+
+  it('1 à 3 bâtiments abîmés près de l’épicentre ; ni décoration, ni rempart, ni bâtiment moderne ou futuriste', () => {
+    const w = riverWorld();
+    const old = [0, 1, 2, 3, 4].map((i) => put(w, 'house', 20 + i * 2, 20, 1));
+    const modern = put(w, 'house', 20, 22, 4), wall = put(w, 'wall', 22, 22, 1), bench = put(w, 'bench', 24, 22, 1);
+    const far = put(w, 'house', 20 + QUAKE_R + 10, 20, 1);
+    const rnd = mulberry32(5);
+    for (let i = 0; i < 30; i++) {
+      const v = quakeVictims(w, 24, 21, rnd);
+      expect(v.length).toBeGreaterThanOrEqual(1);
+      expect(v.length).toBeLessThanOrEqual(3);
+      for (const id of v) expect(old.map((b) => b.id)).toContain(id);
+      for (const b of [modern, wall, bench, far]) expect(v).not.toContain(b.id);
+    }
+    // déjà abîmé : pas deux fois
+    w.damaged.set(old[2].id, { t: 10, T: 10 });
+    for (let i = 0; i < 20; i++) expect(quakeVictims(w, 24, 21, rnd)).not.toContain(old[2].id);
   });
 });
 

@@ -24,6 +24,9 @@ export const FLOOD_RISE = 0.6, FLOOD_REACH = 4, FLOOD_SPAN = 9, FLOOD_MIN = 5;
 export const FLOOD_RUIN = 1 / 3;
 /** Bâtiments abîmés par une crue au plus (les plus près de l'eau) */
 export const FLOOD_HURT = 3;
+/** Le séisme : rayon des dégâts autour de l'épicentre, âge à partir duquel on bâtit parasismique */
+export const QUAKE_R = 16, QUAKE_SAFE_AGE = 4;
+
 /** Bâtiments les pieds dans l'eau, que la crue ne touche pas */
 export const WATERPROOF: KindId[] = ['pier', 'harbor', ...SEASIDE];
 
@@ -197,6 +200,48 @@ function waterSize(w: World, c: number, max: number) {
 /** Les champs noyés à resemer (dégâts complets) : un sur trois, tirés au hasard */
 export function ruinedFields(w: World, cells: number[], rnd = Math.random): number[] {
   return cells.filter((k) => w.veg[k] === VEG_FIELD && rnd() < FLOOD_RUIN);
+}
+
+/**
+ * L'épicentre d'un séisme : près du village (à 12 cases au plus d'un bâtiment tiré au hasard), sur la terre ferme ; le milieu
+ * de la carte sans village
+ */
+export function quakeCenter(w: World, rnd = Math.random): [number, number] {
+  const list = [...w.buildings.values()];
+  for (let i = 0; i < 30; i++) {
+    const b = list.length ? list[Math.floor(rnd() * list.length)] : null;
+    const a = rnd() * Math.PI * 2, r = rnd() * 12;
+    const x = (b ? b.x : N / 2) + Math.cos(a) * r, z = (b ? b.z : N / 2) + Math.sin(a) * r;
+    if (w.inCells(Math.floor(x), Math.floor(z)) && w.cellAvg(Math.floor(x), Math.floor(z)) > 0.1) return [x, z];
+  }
+  return villageMid(w);
+}
+
+/**
+ * Les bâtiments qu'abîme un séisme (dégâts complets) : 1 à 3, à `QUAKE_R` cases au plus de l'épicentre, les plus proches
+ * d'abord en général ; jamais une décoration, un rempart, ni un bâtiment des âges moderne et futuriste (parasismique)
+ */
+export function quakeVictims(w: World, x: number, z: number, rnd = Math.random): number[] {
+  const near: { id: number; d: number }[] = [];
+  for (const b of w.buildings.values()) {
+    if (isDecor(b.kind) || isRampart(b.kind) || b.age >= QUAKE_SAFE_AGE || w.damaged.has(b.id)) continue;
+    const s = sizeOf(b), d = Math.hypot(b.x + s / 2 - x, b.z + s / 2 - z);
+    if (d <= QUAKE_R) near.push({ id: b.id, d: d + rnd() * 6 });
+  }
+  near.sort((a, b) => a.d - b.d);
+  return near.slice(0, 1 + Math.floor(rnd() * 3)).map((v) => v.id);
+}
+
+/** Les sources d'éboulement : cases raides et hautes à 30 cases au plus de l'épicentre (8 au plus, espacées) */
+export function rockfalls(w: World, x: number, z: number, rnd = Math.random): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i < 400 && out.length < 8; i++) {
+    const a = rnd() * Math.PI * 2, r = rnd() * 30, cx = Math.floor(x + Math.cos(a) * r), cz = Math.floor(z + Math.sin(a) * r);
+    if (!w.inCells(cx, cz) || w.cellAvg(cx, cz) < 3 || w.cellSlope(cx, cz) < 1.1 || w.occ[cz * N + cx]) continue;
+    if (out.some(([px, pz]) => Math.hypot(px - cx, pz - cz) < 4)) continue;
+    out.push([cx + 0.5, cz + 0.5]);
+  }
+  return out;
 }
 
 /** Nom d'un bâtiment, pour les messages */

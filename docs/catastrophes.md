@@ -1,11 +1,11 @@
 # Catastrophes naturelles
 
-> Fichiers : `src/sim/calamity.ts` (logique pure : programme, où déborde une crue, constantes), `src/calamities.ts` (classe `Calamities` : programme en jeu, annonces, étapes, dégâts, comptes rendus, cartes d'incident, réparations), `src/render/flood.ts` (`FloodView` : la nappe de la crue), `src/render/repairs.ts` (`RepairsView` : échafaudages et poussière des bâtiments abîmés), `src/world/world.ts` (`damaged`, `flooded`, `calam`, `starIron`, sauvegarde), `src/sim/sim.ts` (bâtiments abîmés et champs noyés dans les capacités), `src/sim/difficulty.ts` (champ `calamity`), `src/main.ts` (câblage, réglages, `__game.calamity`), `src/ui/ui.ts` (interrupteurs des réglages).
+> Fichiers : `src/sim/calamity.ts` (logique pure : programme, où déborde une crue, constantes), `src/calamities.ts` (classe `Calamities` : programme en jeu, annonces, étapes, dégâts, comptes rendus, cartes d'incident, réparations), `src/render/flood.ts` (`FloodView` : la nappe de la crue), `src/render/repairs.ts` (`RepairsView` : échafaudages et poussière des bâtiments abîmés), `src/render/quake.ts` (`QuakeView` : rochers qui dévalent, fissures, poussière du séisme), `src/world/world.ts` (`damaged`, `flooded`, `calam`, `starIron`, sauvegarde), `src/sim/sim.ts` (bâtiments abîmés et champs noyés dans les capacités), `src/sim/difficulty.ts` (champ `calamity`), `src/main.ts` (câblage, réglages, `__game.calamity`), `src/ui/ui.ts` (interrupteurs des réglages).
 > Tests : `tests/catastrophes.test.ts`.
 > Voir aussi : [incidents.md](incidents.md) (incendies, cartes d'incident, volcan qui se réveille), [ciel-meteo.md](ciel-meteo.md) (la pluie), [eau-rivieres.md](eau-rivieres.md), [difficulte.md](difficulte.md), [sauvegarde.md](sauvegarde.md).
 
 ## En bref
-Des catastrophes naturelles rares : la **crue** (une rivière, un étang ou un lac déborde après une forte averse). Une **au plus par âge** (choix de l'auteur), annoncée juste avant par un message cliquable ; la vue n'est jamais arrachée au joueur (leçon de la vague de tests : la caméra qui partait vers le volcan pendant qu'on bâtissait). Chacune a son interrupteur dans les réglages ; le réglage général « Catastrophes » les coupe toutes, avec les éruptions spontanées et les incendies.
+Des catastrophes naturelles rares : la **crue** (une rivière, un étang ou un lac déborde après une forte averse) et le **séisme** (la terre tremble près du village, des rochers dévalent les pentes). Une **au plus par âge** (choix de l'auteur), annoncée juste avant par un message cliquable ; la vue n'est jamais arrachée au joueur (leçon de la vague de tests : la caméra qui partait vers le volcan pendant qu'on bâtissait). Chacune a son interrupteur dans les réglages ; le réglage général « Catastrophes » les coupe toutes, avec les éruptions spontanées et les incendies.
 
 ## Règles du jeu
 
@@ -21,7 +21,7 @@ Des catastrophes naturelles rares : la **crue** (une rivière, un étang ou un l
 | Chance qu'un âge en ait une | 1 | 0,5 | 1 |
 | Champs sous l'eau sans récolte | non | oui | oui |
 | Champs à resemer après la crue | non | non | un sur trois (`FLOOD_RUIN`) |
-| Bâtiments abîmés | non | non | oui |
+| Bâtiments abîmés (crue, séisme) | non | non | oui |
 
 ### Bâtiment abîmé
 - `World.damaged` : id → secondes de jeu de réparations restantes et en tout (`REPAIR_DAYS` = 1 journée). Pendant ce temps, le bâtiment ne donne que `DAMAGED_K` = la moitié de tout ce qu'il donne (logements, nourriture, eau, emplois, bien-être, santé : `Sim.recalc`).
@@ -37,13 +37,22 @@ Des catastrophes naturelles rares : la **crue** (une rivière, un étang ou un l
 - **Compte rendu** : « 🌊 La crue s'est retirée : n champs noyés, n à resemer, n bâtiments abîmés. » et, s'il y a des dégâts, le conseil de la digue ; sinon « sans dégâts ».
 - **Son** : un grand plouf à la montée (`sfxSplash`) ; la pluie et l'orage font le reste.
 
+### Le séisme
+- **Quand** : il n'attend rien ; le jour venu, il vient tout de suite.
+- **Où** (`quakeCenter`) : à 12 cases au plus d'un bâtiment tiré au hasard, sur la terre ferme (le milieu de la carte sans village).
+- **Déroulé** (secondes de jeu) : annonce « 🐾 Les bêtes s'agitent, les oiseaux s'envolent : la terre va trembler ! » (cliquable, carte d'incident) ; les bêtes fuient l'épicentre dans un rayon de 30 cases (`fauna.alarm`, comme pour une éruption) ; 8 s plus tard la terre tremble 10 s : l'image tremble (la secousse de la caméra, pas un déplacement : jusqu'à 70 cases de l'épicentre), grondement (`sfxRumble`), fissures en zigzag autour de l'épicentre (elles se referment en 90 s), poussière qui monte des bâtiments secoués. Au bout de 2,5 s, les dégâts et les éboulements.
+- **Dégâts** (`quakeVictims`, complets seulement) : 1 à 3 bâtiments à `QUAKE_R` = 16 cases au plus, les plus proches en général (un peu de hasard), abîmés ; jamais une décoration, un rempart, un bâtiment déjà abîmé, ni un bâtiment des âges moderne et futuriste (`QUAKE_SAFE_AGE` = 4 : bâtis pour résister, c'est la protection).
+- **Éboulements** (`rockfalls`) : jusqu'à 8 points de pente raide (`cellSlope` ≥ 1,1, plus de 3 de haut, sans bâtiment, espacés de 4 cases) à 30 cases au plus ; de chacun, 4 à 6 rochers dévalent la plus grande pente en rebondissant, dans la poussière, puis restent au pied 50 s et s'enfoncent. Du décor seulement : ils ne bloquent rien.
+- **Compte rendu** : « 🌍 Le séisme est passé : n bâtiments abîmés, n éboulements. » (et, s'il y a des dégâts, le rappel des bâtiments parasismiques) ; sinon « sans dégâts ».
+
 ### Réglages
 - Réglages › Partie › Règles : sous « Catastrophes », la rangée « Catastrophes naturelles » : Crues, Séismes, Météorites, chacun allumé ou éteint (`Calamities.enabled`). Retenus dans les réglages : `noFlood`, `noQuake`, `noMeteor` (absents : allumés).
 - Le réglage général « Catastrophes » (`world.disasters`) coupe tout ; coupé pendant une crue, l'eau se retire tout de suite (avant la montée, la crue s'annule).
 
 ## Fonctionnement dans le code
-- `Game` crée `Calamities` (hôte : monde, temps, météo, sons, âge, messages, `goTo` qui ramène à la surface puis déplace la vue) ; `frame` appelle `calam.update(gdt, dt)` après `wakeVolcano` ; `incidents()` ajoute `calam.incidents()` (clés `calam:flood`, `calam:repair`).
-- `Calamities.update` : réparations (temps de jeu), programme, étape de la crue, décor des réparations (temps réel).
+- `Game` crée `Calamities` (hôte : monde, temps, météo, sons, âge, messages, `goTo` qui ramène à la surface puis déplace la vue) ; `frame` appelle `calam.update(gdt, dt)` après `wakeVolcano` ; `incidents()` ajoute `calam.incidents()` (clés `calam:flood`, `calam:quake`, `calam:repair`).
+- `Calamities.update` : réparations (temps de jeu), programme, étapes de la crue et du séisme, décor des réparations et du séisme.
+- Séisme : `Calamities.shakeAt` s'ajoute aux secousses de `Game.frame` (× 0,8, pas sous terre ni aux Enfers, pas en pause) ; `Calamities.alarm` sert de `fauna.alarm` quand aucun volcan n'est en éruption. Ce n'est pas le tremblement qui annonce le réveil d'un volcan (`Game.quake`, voir [incidents.md](incidents.md)).
 - `FloodView` : un maillage de quads (2 × 2 par case) sur les cases noyées et l'eau du tronçon ; chaque sommet garde la hauteur du sol ; au bord (un sommet qui touche une case hors de la nappe), il plonge sous le sol ou sous la rivière, sinon il suit le niveau `level + 0,6 × k` plus une petite houle. Couleur boueuse par sommet, écume claire au bord et bouffées d'écume au front. Le maillage existe dès le départ (rien à dessiner) : son programme se compile au chargement.
 - Une capacité qui change sans toucher au plan (abîmé, réparé, champs noyés) incrémente `World.ageVersion` : `Sim` se recalcule.
 
@@ -52,10 +61,11 @@ Des catastrophes naturelles rares : la **crue** (une rivière, un étang ou un l
 - La pluie de la crue passe par `env.wantKind`, comme les réglages de la météo ; un temps imposé par le joueur (`manualWeather`) n'est jamais changé.
 - Les cases de la crue sont dans l'ordre où l'eau les gagne : `buildings` garde ainsi les plus proches de l'eau.
 - `damaged` est sauvegardé par rang dans la liste des bâtiments (les ids changent au chargement), comme les arrêts des lignes de train.
-- Essayer : `__game.calamity('flood')` lance tout de suite l'annonce (false si aucune eau ne peut déborder). Pour un village au bord d'une vraie rivière, la carte `?n=192&seed=2026` en a une au nord-est.
+- Essayer : `__game.calamity('flood')` ou `'quake'` lance tout de suite l'annonce (false si aucune eau ne peut déborder). Pour un village au bord d'une vraie rivière, la carte `?n=192&seed=2026` en a une au nord-est.
 
 ## Pour modifier
 - **Plus ou moins souvent** : `CALAM_DAYS` et la chance par difficulté (`calamity.chance`, `difficulty.ts`).
 - **Plus ou moins de dégâts** : `DAMAGED_K`, `REPAIR_DAYS`, `FLOOD_RUIN`, `FLOOD_HURT`, `calamity.harm`.
+- **Le séisme** : `QUAKE_R`, `QUAKE_SAFE_AGE`, durées `QUAKE_WARN`, `QUAKE_SHAKE`, `QUAKE_HIT` (`calamities.ts`), rochers et fissures en tête de `quake.ts`.
 - **La crue** : hauteur et portée (`FLOOD_RISE`, `FLOOD_REACH`, `FLOOD_SPAN`), durées des étapes en tête de `calamities.ts`, couleurs dans `flood.ts`.
 - **Une nouvelle catastrophe** : son nom dans `CalamityKind` et `CALAMITIES`, sa condition dans `Calamities.can`, son heure dans `time`, son lancement dans `start`, son étape dans `update`, sa carte dans `incidents`, son interrupteur (`CALAM_FX`, `ui.ts`) et son réglage (`no…`, `Settings`, `Game.settings`).

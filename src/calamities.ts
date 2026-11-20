@@ -3,9 +3,10 @@ import { World, N, VEG_FIELD } from './world/world';
 import type { GameTime } from './core/time';
 import type { Environment } from './render/env';
 import { rulesOf } from './sim/difficulty';
-import { CALAMITIES, CalamityKind, FloodSite, REPAIR_DAYS, floodSite, harmOf, nameOf, planAge, ruinedFields } from './sim/calamity';
+import { CALAMITIES, CalamityKind, FloodSite, REPAIR_DAYS, QUAKE_R, floodSite, harmOf, nameOf, planAge, quakeCenter, quakeVictims, rockfalls, ruinedFields } from './sim/calamity';
 import { FloodView } from './render/flood';
 import { RepairsView } from './render/repairs';
+import { QuakeView } from './render/quake';
 import { sizeOf, type Building } from './build/catalog';
 import type { AudioEngine } from './audio/audio';
 import { tr, nplural } from './i18n';
@@ -28,8 +29,11 @@ export interface CalamityHost {
 const FLOOD_RAIN = 15, FLOOD_WARN = 20, FLOOD_RISE = 15, FLOOD_HOLD = 60, FLOOD_EBB = 30;
 /** Une crue qui attend sa pluie depuis tant de jours (joueur qui impose le beau temps) cède la place à une autre catastrophe */
 const WAIT_DAYS = 3;
+/** Le séisme : les bêtes s'agitent tant de secondes avant, la terre tremble tant de secondes, les dégâts au bout de tant */
+const QUAKE_WARN = 8, QUAKE_SHAKE = 10, QUAKE_HIT = 2.5;
 
 type FloodPhase = 'rain' | 'warn' | 'rise' | 'hold' | 'ebb';
+interface Quake { x: number; z: number; t: number; shaking: boolean; hit: boolean; hurt: number; falls: number }
 interface Flood { site: FloodSite; phase: FloodPhase; t: number; told: boolean; drowned: number; ruined: number; hurt: number }
 
 export interface Incident { key: string; icon: string; title: string; status: string; progress: number; x: number; z: number }
@@ -45,25 +49,30 @@ export class Calamities {
   enabled: Record<CalamityKind, boolean> = { flood: true, quake: true, meteor: true };
   floodView: FloodView;
   repairs: RepairsView;
+  quakeView: QuakeView;
   /** la catastrophe tirée, qui attend son heure (la pluie pour la crue, la nuit pour les météorites) */
   private pending: CalamityKind | null = null;
   private waited = 0;
   private flood: Flood | null = null;
+  private quake: Quake | null = null;
 
   constructor(private h: CalamityHost) {
     this.floodView = new FloodView(h.world);
     this.repairs = new RepairsView(h.world);
-    this.group.add(this.floodView.group, this.repairs.group);
+    this.quakeView = new QuakeView(h.world);
+    this.group.add(this.floodView.group, this.repairs.group, this.quakeView.group);
   }
 
   /** Une catastrophe en cours (annonce comprise) */
-  get busy() { return !!this.flood; }
+  get busy() { return !!this.flood || !!this.quake; }
 
   /** `gdt` : temps de jeu (tout se fige en pause) ; `dt` : temps réel (houle, poussière) */
   update(gdt: number, dt: number) {
     this.repair(gdt);
     this.schedule(gdt);
     this.stepFlood(gdt, dt);
+    this.stepQuake(gdt);
+    this.quakeView.update(gdt, dt);
     this.repairs.update(dt);
   }
 
@@ -110,12 +119,13 @@ export class Calamities {
     if (!this.enabled[this.pending]) { this.pending = null; return; }
     this.waited += gdt;
     if (this.waited > this.h.time.dayLen * WAIT_DAYS) { this.pending = null; return; }
-    if (this.pending === 'flood' && this.time('flood')) this.start('flood');
+    if (this.time(this.pending)) this.start(this.pending);
   }
 
   /** La catastrophe peut-elle avoir lieu sur cette carte (une eau qui déborde pour la crue) */
   private can(k: CalamityKind) {
     if (k === 'flood') return !!floodSite(this.h.world);
+    if (k === 'quake') return true;
     return false;
   }
 
@@ -127,7 +137,7 @@ export class Calamities {
       if (!env.manualWeather) env.wantKind = 'rain';
       return env.weatherKind === 'rain' && env.rainK > 0.75;
     }
-    return false;
+    return k === 'quake';
   }
 
   /** Lance la catastrophe (`now` : en mode développeur, sans attendre la pluie) ; false si elle ne peut pas avoir lieu */
@@ -138,6 +148,10 @@ export class Calamities {
       if (!site) return false;
       this.flood = { site, phase: now ? 'warn' : 'rain', t: 0, told: false, drowned: 0, ruined: 0, hurt: 0 };
       if (now && !this.h.env.manualWeather) this.h.env.wantKind = 'rain';
+    } else if (k === 'quake') {
+      const [x, z] = quakeCenter(this.h.world);
+      this.quake = { x, z, t: 0, shaking: false, hit: false, hurt: 0, falls: 0 };
+      this.h.toast(tr('🐾 Les bêtes s’agitent, les oiseaux s’envolent : la terre va trembler ! Cliquez ici pour voir.'), () => this.h.goTo(x, z, 34), 'danger');
     } else return false;
     this.pending = null;
     if (this.h.world.calam) this.h.world.calam.due = -1;
@@ -193,6 +207,53 @@ export class Calamities {
     else this.floodView.update(dt, 0);
   }
 
+  /** Le séisme : les bêtes fuient, la terre tremble, la poussière monte, des rochers dévalent ; des bâtiments sont abîmés */
+  private stepQuake(gdt: number) {
+    const q = this.quake, w = this.h.world;
+    if (!q) return;
+    q.t += gdt;
+    if (!q.shaking && q.t >= QUAKE_WARN) {
+      q.shaking = true;
+      this.h.audio.sfxRumble(QUAKE_SHAKE);
+      this.quakeView.crack(q.x, q.z);
+    }
+    if (!q.shaking) return;
+    const s = q.t - QUAKE_WARN;
+    // de la poussière monte des bâtiments secoués
+    for (const b of w.buildings.values()) {
+      const sz = sizeOf(b), cx = b.x + sz / 2, cz = b.z + sz / 2;
+      if (Math.hypot(cx - q.x, cz - q.z) < QUAKE_R * 1.4 && Math.random() < gdt * 2) this.quakeView.puff(cx, cz, sz);
+    }
+    if (!q.hit && s >= QUAKE_HIT) {
+      q.hit = true;
+      // les dégâts (complets seulement, et catastrophes toujours permises)
+      if (harmOf(w) === 'full' && w.disasters) for (const id of quakeVictims(w, q.x, q.z)) if (this.damage(id)) q.hurt++;
+      if (q.hurt) this.h.audio.sfxDestroy();
+      for (const [x, z] of rockfalls(w, q.x, q.z)) { this.quakeView.rockfall(x, z); q.falls++; }
+    }
+    if (s >= QUAKE_SHAKE) {
+      this.quake = null;
+      const parts: string[] = [];
+      if (q.hurt) parts.push(nplural(q.hurt, 'bâtiment abîmé', 'bâtiments abîmés'));
+      if (q.falls) parts.push(nplural(q.falls, 'éboulement', 'éboulements'));
+      const tip = q.hurt ? ' ' + tr('Les bâtiments des âges moderne et futuriste sont bâtis pour résister aux séismes.') : '';
+      this.h.toast((parts.length ? tr('🌍 Le séisme est passé : {what}.', { what: parts.join(', ') }) : tr('🌍 Le séisme est passé sans dégâts.')) + tip, () => this.h.goTo(q.x, q.z, 34), q.hurt ? 'danger' : 'info');
+    }
+  }
+
+  /** Secousse ressentie au point visé (0 … 1) : monte vite, tient, s'apaise ; s'efface à 70 cases de l'épicentre */
+  shakeAt(x: number, z: number) {
+    const q = this.quake;
+    if (!q || !q.shaking) return 0;
+    const s = q.t - QUAKE_WARN, env = Math.min(1, s) * (s > QUAKE_SHAKE - 3 ? Math.max(0, (QUAKE_SHAKE - s) / 3) : 1);
+    return env * Math.max(0, 1 - Math.hypot(x - q.x, z - q.z) / 70);
+  }
+
+  /** Les bêtes fuient l'épicentre dès l'annonce (centre et rayon), null sans séisme */
+  alarm(): { x: number; z: number; r: number } | null {
+    return this.quake ? { x: this.quake.x, z: this.quake.z, r: 30 } : null;
+  }
+
   /** Hauteur de l'eau de la crue (0 … 1) */
   private floodK(f: Flood) {
     const ease = (x: number) => x * x * (3 - 2 * x);
@@ -214,7 +275,8 @@ export class Calamities {
 
   /** Les catastrophes et réparations en cours, pour leurs cartes à gauche (l'œil y mène la vue) */
   incidents(): Incident[] {
-    const out: Incident[] = [], w = this.h.world, f = this.flood;
+    const out: Incident[] = [], w = this.h.world, f = this.flood, q = this.quake;
+    if (q) out.push({ key: 'calam:quake', icon: '🌍', title: tr('Séisme'), status: q.shaking ? tr('La terre tremble') : tr('Les bêtes s’agitent'), progress: Math.min(1, q.t / (QUAKE_WARN + QUAKE_SHAKE)), x: q.x, z: q.z });
     if (f && f.phase !== 'rain') {
       const st = f.phase === 'warn' ? tr('Les eaux montent') : f.phase === 'rise' ? tr('L’eau gagne les berges') : f.phase === 'hold' ? tr('Les berges sont sous l’eau') : tr('L’eau se retire');
       const progress = f.phase === 'warn' ? f.t / FLOOD_WARN : f.phase === 'ebb' ? f.t / FLOOD_EBB : f.phase === 'hold' ? f.t / FLOOD_HOLD : f.t / FLOOD_RISE;

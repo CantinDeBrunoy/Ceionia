@@ -111,4 +111,14 @@ registerDict('misc', {
   'Réparations : {b}': 'Repairs: {b}',
   'Réparations : {n} bâtiments': 'Repairs: {n} buildings',
   'Un bâtiment abîmé ne donne que la moitié en attendant': 'A damaged building only gives half until then',
+  // séismes (calamities.ts)
+  '🐾 Les bêtes s’agitent, les oiseaux s’envolent : la terre va trembler ! Cliquez ici pour voir.': '🐾 The animals are restless, the birds take flight: the ground is about to shake! Click here to see.',
+  'éboulement': 'rockfall',
+  'éboulements': 'rockfalls',
+  'Les bâtiments des âges moderne et futuriste sont bâtis pour résister aux séismes.': 'Buildings of the modern and futuristic ages are built to withstand earthquakes.',
+  '🌍 Le séisme est passé : {what}.': '🌍 The earthquake is over: {what}.',
+  '🌍 Le séisme est passé sans dégâts.': '🌍 The earthquake is over, without damage.',
+  'Séisme': 'Earthquake',
+  'La terre tremble': 'The ground is shaking',
+  'Les bêtes s’agitent': 'The animals are restless',
 });
