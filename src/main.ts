@@ -62,7 +62,8 @@ import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
 import { allyIsle, allyView, onAllyIsle, allyPostReady } from './sim/allyLand';
 import { AGES, KINDS, KIND_ORDER, Building, sizeOf, type KindId } from './build/catalog';
-import { MISSIONS, VICTORY } from './sim/missions';
+import { MISSIONS, VICTORY, applyEffects } from './sim/missions';
+import { stepGoals, rewardEffects, type GoalCtx } from './sim/goals';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
 import { L_GONE, L_LIFT } from './render/expeditionScenes';
 import { Parade, Spot } from './render/parade';
@@ -202,6 +203,8 @@ class Game implements UIHost {
   /** routes automatiques jusqu'aux nouveaux bâtiments */
   autoRoads = true;
   hideUpBadges = false;
+  /** les petits objectifs de la barre du haut : masqués si vrai (Paramètres › Partie) */
+  hideGoals = false;
   /** comment le joueur déplace la vue : retenu pour ce navigateur ; avant le premier choix, le clavier (comme avant) */
   controls: Controls = loadControls() ?? { mode: 'keys', layout: guessLayout(getLang()) };
   fires: Fires;
@@ -453,6 +456,7 @@ class Game implements UIHost {
     this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? (weak ? 2 : 0))));
     this.autoRoads = settings.autoRoads ?? true;
     this.hideUpBadges = settings.hideUpBadges ?? false;
+    this.hideGoals = settings.hideGoals ?? false;
     w.disasters = settings.disasters ?? true;
     w.unlimited = settings.unlimited ?? false;
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 4);
@@ -822,7 +826,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -1748,6 +1752,30 @@ class Game implements UIHost {
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
+  setHideGoals(on: boolean) { this.hideGoals = on; this.applySettings(); this.ui.update(); }
+  /** Les petits objectifs n'avancent pas au bac à sable ni pendant le tutoriel guidé (ils viennent après) */
+  get goalsOn() { return !this.world.sandbox && !!this.tutorial && !(this.tutorial.on && this.tutorial.guiding); }
+  /** Ce que les objectifs lisent du village */
+  goalCtx(): GoalCtx {
+    const s = this.sim, w = this.world;
+    return {
+      age: s.age, pop: s.pop, day: this.time.days, season: this.time.season, counts: s.counts, brick: w.brick, missions: w.exp.done, security: s.coverage.share,
+      ok: { food: s.food.ok, water: s.water.ok, jobs: s.jobs.ok, joy: s.joy.ok, health: s.health.ok, housing: s.housing.ok },
+    };
+  }
+  /** Fait avancer les objectifs ; un objectif atteint : sa récompense, un son et un mot de félicitation */
+  private stepGoals() {
+    // (masqués : ils attendent, rien ne se gagne ni ne se dit)
+    if (!this.goalsOn || this.hideGoals) return;
+    for (const g of stepGoals(this.world.goals, this.goalCtx())) {
+      const r = g.reward, w = this.world;
+      w.wood += r.wood ?? 0; w.stone += r.stone ?? 0;
+      const fx = rewardEffects(r);
+      if (fx.length) applyEffects(w, fx, this.time.dayLen); else w.version++;
+      audio.sfxFeast();
+      this.ui.goalWon(g);
+    }
+  }
   /** Contrôles de la vue : retenus pour ce navigateur et appliqués à la caméra */
   setControls(c: Controls) { this.controls = c; saveControls(c); this.applyControls(); }
   private applyControls() {
@@ -2723,7 +2751,7 @@ class Game implements UIHost {
     if ((this.spotT -= dt) <= 0) { this.spotT = 0.25; this.syncSpots(!uv && !hv); }
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.stepGoals(); this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) {
       // (le bouton reste là tant que la vue glisse vers le village : il disparaissait sous la souris, et un second clic
       // tombait sur un bâtiment)

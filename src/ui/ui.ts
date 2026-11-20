@@ -39,6 +39,7 @@ import { eyeClick } from './homeButton';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
 import { pic, hudPic, leadPic, withPic } from './pics';
+import { activeGoals, progressOf, type GoalCtx, type GoalDef, type GoalReward } from '../sim/goals';
 import { POPUP_PICS, preloadPics } from './preload';
 import { menuBg, LOGO_PEAKS } from './loading';
 import { MiniMap } from './minimap';
@@ -98,6 +99,11 @@ export interface UIHost {
   /** flèches d'amélioration au-dessus des bâtiments, masquées ou non */
   hideUpBadges: boolean;
   setHideUpBadges(on: boolean): void;
+  /** petits objectifs de la barre du haut : masqués ou non ; `goalsOn` : ils avancent (pas au bac à sable ni pendant le tutoriel) */
+  hideGoals: boolean;
+  setHideGoals(on: boolean): void;
+  goalsOn: boolean;
+  goalCtx(): GoalCtx;
   /** comment le joueur déplace la vue (souris ou clavier, et la disposition du clavier) ; voir `core/controls.ts` */
   controls: Controls;
   setControls(c: Controls): void;
@@ -290,6 +296,28 @@ const SECURITY_NEED = { k: 'security' as const, icon: 'shield', label: 'Sécurit
 const NEED_PIC: Record<NeedId | 'security', string> = { food: 'nourriture', water: 'eau', housing: 'logement', jobs: 'travail', joy: 'bienetre', health: 'sante', security: 'securite' };
 const RES_PIC: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', brick: 'briques', crude: 'carburant', fuel: '⛽', gold: '💰' };
 const resPic = (r: Resource, size: number) => RES_PIC[r].length > 2 ? hudPic(RES_PIC[r], size) : pic(RES_PIC[r], size);
+/** La barre du haut tient sur une ligne dès cette largeur d'écran (voir `UI.fitHud` et `style.css`) */
+const ONE_LINE_MIN = 1100;
+/** marge de sécurité de la barre du haut sur une ligne (arrondis, bordures des pilules) */
+const FIT_SLACK = 8;
+/** durée de la pastille dorée d'un objectif atteint */
+const GOAL_WIN_MS = 5000;
+/** La récompense d'un objectif en petites pastilles : « +25 [pierre] », « [bien-être] +2 · 4 j » */
+function rewardChips(r: GoalReward) {
+  const out: string[] = [];
+  for (const k of ['wood', 'stone', 'ore'] as const) if (r[k]) out.push(`<span class="gc">+${r[k]} ${resPic(k, 15)}</span>`);
+  if (r.joy) out.push(`<span class="gc">${hudPic('bienetre', 15)} +${r.joy.n} · ${tr('{n} j', { n: r.joy.days })}</span>`);
+  return out.length ? `<span class="gr">${out.join('')}</span>` : '';
+}
+/** La même, en mots : « +25 pierre, bien-être +2 pendant 4 jours » */
+function rewardWords(r: GoalReward) {
+  const out: string[] = [];
+  if (r.wood) out.push(tr('+{n} bois', { n: r.wood }));
+  if (r.stone) out.push(tr('+{n} pierre', { n: r.stone }));
+  if (r.ore) out.push(tr('+{n} minerai', { n: r.ore }));
+  if (r.joy) out.push(tr('bien-être +{n} pendant {d} jours', { n: r.joy.n, d: r.joy.days }));
+  return out.length ? tr('Récompense : {r}', { r: out.join(', ') }) : '';
+}
 const SEASON_PIC = ['printemps', 'ete', 'automne', 'hiver'];
 const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', war: 'militaire' };
 /** Le picto de la carte du village, qui suit l'âge : Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste */
@@ -574,7 +602,8 @@ export class UI {
         </div>
         <div id="needsPanel">
           <div id="resPanel" class="panel hudPill"><button class="resNav" id="resPrev" title="${tr('Ressources précédentes')}" aria-label="${tr('Ressources précédentes')}">${ic('chevLeft', 16, 2.4)}</button><div id="resView"><div id="res"></div></div><button class="resNav" id="resNext" title="${tr('Ressources suivantes')}" aria-label="${tr('Ressources suivantes')}">${ic('chevRight', 16, 2.4)}</button><span class="hsep"></span><button class="pop" id="pop" title="${tr('État des habitants')}" aria-label="${tr('État des habitants')}" aria-expanded="false"></button></div>
-          <div id="needsBox" class="panel hudPill"><div id="needs"></div></div>
+          <div id="needsBox" class="panel hudPill"><button class="resNav" id="needPrev" title="${tr('Besoins précédents')}" aria-label="${tr('Besoins précédents')}">${ic('chevLeft', 16, 2.4)}</button><div id="needView"><div id="needs"></div></div><button class="resNav" id="needNext" title="${tr('Besoins suivants')}" aria-label="${tr('Besoins suivants')}">${ic('chevRight', 16, 2.4)}</button></div>
+          <div id="goalBox" class="panel hudPill" hidden></div>
         </div>
         <div id="hudR">
           <div id="timePanel">
@@ -689,7 +718,28 @@ export class UI {
     $('#resPrev').onclick = () => step(-1);
     $('#resNext').onclick = () => step(1);
     view.addEventListener('scroll', () => this.syncResNav(), { passive: true });
-    addEventListener('resize', () => this.syncResNav());
+    addEventListener('resize', () => { this.fitHud(); this.syncResNav(); this.syncNeedNav(); });
+    // les besoins aussi, quand la barre du haut tient sur une ligne : deux à la fois au moins (nourriture et eau d'abord)
+    const nview = $('#needView'), nstep = (d: number) => {
+      const item = nview.querySelector<HTMLElement>('.need');
+      nview.scrollBy({ left: d * (item ? item.offsetWidth + 2 : 50), behavior: 'smooth' });
+      this.host.audio.sfxClick();
+    };
+    $('#needPrev').onclick = () => nstep(-1);
+    $('#needNext').onclick = () => nstep(1);
+    nview.addEventListener('scroll', () => this.syncNeedNav(), { passive: true });
+    // l'objectif du moment : un point en choisit un autre ; un clic ailleurs mène au bâtiment, aux expéditions ou au besoin
+    $('#goalBox').onclick = (e) => {
+      const dot = (e.target as HTMLElement).closest<HTMLElement>('[data-gi]');
+      if (dot) { this.goalIdx = +dot.dataset.gi!; this.goalKey = ''; this.renderGoals(); this.host.audio.sfxClick(); return; }
+      const g = this.goalShown;
+      if (!g || this.goalWin) return;
+      this.host.audio.sfxClick();
+      if (g.exp) { this.openExpeditions(); return; }
+      const k = g.kinds?.find((x) => !this.lockOf(x)) ?? g.kinds?.[0];
+      if (k) { this.pick(k); return; }
+      if (g.pic === 'content' || g.pic === 'nourriture') this.openNeed(this.host.sim.food.ok ? 'water' : 'food');
+    };
     // fiche d'une ressource : un clic sur son stock (d'où elle vient, à quoi elle sert, quoi bâtir pour en avoir plus)
     $('#res').onclick = (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
@@ -1442,6 +1492,132 @@ export class UI {
   private popDay = -1;
   private popPrev = 0;
   private popDelta: number | null = null;
+  // ---------------- Petits objectifs et barre du haut sur une ligne ----------------
+  /** l'objectif montré dans la pastille (parmi les trois en cours), celui qui vient d'être atteint et jusqu'à quand */
+  private goalIdx = 0;
+  private goalShown: GoalDef | null = null;
+  private goalWin: { g: GoalDef; until: number } | null = null;
+  private goalKey = '';
+  /** Un objectif atteint : la pastille le montre en doré quelques secondes, avec un mot de félicitation */
+  goalWon(g: GoalDef) {
+    this.goalWin = { g, until: performance.now() + GOAL_WIN_MS };
+    this.goalKey = '';
+    this.toast(`${tr('Objectif atteint : {goal}.', { goal: tr(g.text) })} ${tr(g.praise)} ${rewardWords(g.reward)}`.trim(), undefined, 'notice');
+    this.renderGoals();
+  }
+
+  /** La pastille de l'objectif : son picto, son texte, sa jauge, sa récompense et un point par objectif en cours */
+  private renderGoals() {
+    const h = this.host, box = $('#goalBox');
+    const win = this.goalWin && performance.now() < this.goalWin.until ? this.goalWin : null;
+    if (!win) this.goalWin = null;
+    const ctx = h.goalsOn && !h.hideGoals ? h.goalCtx() : null, act = ctx ? activeGoals(h.world.goals, ctx) : [];
+    const hide = !ctx || (!act.length && !win);
+    if (box.hidden !== hide) { box.hidden = hide; this.fitKey = ''; }
+    if (hide) { this.goalShown = null; return; }
+    if (this.goalIdx >= act.length) this.goalIdx = 0;
+    const g = win ? win.g : act[this.goalIdx];
+    this.goalShown = g;
+    const [have, need] = win ? [1, 1] : progressOf(g, h.world.goals, ctx!);
+    const dots = act.length > 1 && !win ? `<span class="gd">${act.map((x, i) => `<i data-gi="${i}" class="${i === this.goalIdx ? 'on' : ''}" title="${attr(tr(x.text))}"></i>`).join('')}</span>` : '';
+    const ico = win ? hudPic('etoile', 30) : g.pic ? hudPic(g.pic, 30) : pic(KINDS[g.kinds![0]].icon, 30);
+    // (le texte sur deux lignes au plus, puis une ligne : la jauge et le compte, ou le mot de félicitation, et la récompense)
+    const html = `<span class="gi">${ico}</span><span class="gt"><b class="g1">${win ? tr('Bravo !') : tr(g.text)}</b><span class="g2">`
+      + (win ? `<span class="gp">${tr(g.praise)}</span>` : `<span class="gb"><i style="width:${Math.round(Math.min(1, have / Math.max(1, need)) * 100)}%"></i></span><em>${Math.min(have, need)}/${need}</em>`)
+      + `${rewardChips(g.reward)}</span></span>${dots}`;
+    const key = `${html}|${getLang()}`;
+    if (key === this.goalKey) return;
+    this.goalKey = key;
+    box.innerHTML = html;
+    box.classList.toggle('won', !!win);
+    const rw = rewardWords(g.reward);
+    box.title = win ? '' : `${tr('Objectif : {goal}', { goal: tr(g.text) })} (${Math.min(have, need)}/${need})${rw ? ` — ${rw}` : ''}`;
+  }
+
+  /**
+   * Sur un écran d'ordinateur (dès 1100 px de large), la barre du haut tient sur une ligne : l'âge, les stocks, les besoins,
+   * l'objectif, l'heure et les boutons. Les stocks et les besoins défilent alors dans une fenêtre taillée à la place qui reste
+   * (deux de chaque au moins) ; plus étroit, ils passent à la ligne comme avant (demande de l'auteur, 20 nov. 2026)
+   */
+  private fitKey = '';
+  private fitHud() {
+    const one = innerWidth >= ONE_LINE_MIN, rv = $('#resView'), nv = $('#needView'), box = $('#goalBox');
+    const nRes = rv.querySelectorAll('.res').length, nNeed = nv.querySelectorAll('.need').length;
+    // (la largeur des stocks change avec leurs chiffres : 9 → 10 → 100)
+    const key = `${innerWidth}|${nRes}|${nNeed}|${box.hidden}|${document.body.className}|${[...rv.children[0]?.children ?? []].map((e) => (e as HTMLElement).offsetWidth).join()}|${$('#pop').offsetWidth}`;
+    if (key === this.fitKey) return;
+    this.fitKey = key;
+    // (le défilement est gardé : le joueur qui regardait l'or le voit encore après)
+    const keep = [rv.scrollLeft, nv.scrollLeft];
+    for (const v of [rv, nv]) { v.style.width = ''; v.style.maxWidth = ''; v.style.minWidth = ''; }
+    box.classList.remove('compact', 'mini');
+    if (!one || !nRes || !nNeed) { this.syncResNav(); this.syncNeedNav(); return; }
+    const hud = $('#hud'), gap = parseFloat(getComputedStyle(hud).columnGap) || 10;
+    const rp = $('#resPanel'), nb = $('#needsBox');
+    // (les cases n'ont pas toutes la même largeur : une fenêtre de n cases prend la largeur des n plus larges, pour n'en couper aucune)
+    const top = (q: NodeListOf<HTMLElement>) => [...q].map((e) => e.offsetWidth + 2).sort((a, b) => b - a);
+    const resWs = top(rv.querySelectorAll<HTMLElement>('.res')), needWs = top(nv.querySelectorAll<HTMLElement>('.need'));
+    const span = (ws: number[], n: number) => ws.slice(0, n).reduce((a, b) => a + b, 0);
+    // ce que chaque pilule prend en dehors de sa fenêtre (marges, séparateur, habitants), les flèches à part : mesuré pièce par
+    // pièce (la pilule elle-même peut être rétrécie par la place qui manque)
+    const navW = 2 * (parseFloat(getComputedStyle($('#resPrev')).width) || 24);
+    const chrome = (p: HTMLElement, v: HTMLElement) => {
+      const cs = getComputedStyle(p);
+      let w = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+      for (const c of p.children as HTMLCollectionOf<HTMLElement>) {
+        if (c === v || c.classList.contains('resNav')) continue;
+        const cc = getComputedStyle(c);
+        if (cc.display !== 'none') w += c.offsetWidth + parseFloat(cc.marginLeft) + parseFloat(cc.marginRight);
+      }
+      return w;
+    };
+    const chromeR = chrome(rp, rv), chromeN = chrome(nb, nv);
+    const fitIn = (goalW: number) => {
+      const free = hud.clientWidth - $('#hudL').offsetWidth - $('#hudR').offsetWidth - 3 * gap - (goalW ? goalW + gap : 0) - chromeR - chromeN - FIT_SLACK;
+      const cost = (r: number, n: number) => span(resWs, r) + span(needWs, n) + (r < nRes ? navW : 0) + (n < nNeed ? navW : 0);
+      let r = Math.min(2, nRes), n = Math.min(2, nNeed);
+      if (cost(r, n) > free) return null;
+      // une ressource, puis un besoin, tant qu'il reste de la place
+      for (let grew = true; grew;) {
+        grew = false;
+        if (r < nRes && cost(r + 1, n) <= free) { r++; grew = true; }
+        if (n < nNeed && cost(r, n + 1) <= free) { n++; grew = true; }
+      }
+      return [r, n];
+    };
+    let fit = fitIn(box.hidden ? 0 : box.offsetWidth);
+    // pas la place : l'objectif se resserre (sans sa jauge, puis sans sa récompense), puis les fenêtres ne gardent qu'un besoin,
+    // et enfin qu'une ressource
+    if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth); }
+    if (!fit && !box.hidden) { box.classList.add('mini'); fit = fitIn(box.offsetWidth); }
+    const [r, n] = fit ?? [Math.min(2, nRes), 1];
+    for (const [v, w] of [[rv, span(resWs, r) - 2], [nv, span(needWs, n) - 2]] as const) { v.style.maxWidth = 'none'; v.style.minWidth = '0'; v.style.width = `${w}px`; }
+    rv.scrollLeft = keep[0]; nv.scrollLeft = keep[1];
+    this.syncResNav(); this.syncNeedNav();
+  }
+
+  /** Les flèches des besoins, comme celles des stocks */
+  private syncNeedNav() {
+    const v = $('#needView'), hidden = v.scrollWidth > v.clientWidth + 2;
+    $('#needsBox').classList.toggle('scrolls', hidden);
+    ($('#needPrev') as HTMLButtonElement).disabled = !hidden || v.scrollLeft <= 1;
+    ($('#needNext') as HTMLButtonElement).disabled = !hidden || v.scrollLeft + v.clientWidth >= v.scrollWidth - 2;
+  }
+
+  /** Un besoin qui manque, caché derrière les flèches, vient de lui-même dans la fenêtre (une fois, quand il se met à manquer) */
+  private needWarnKey = '';
+  private showNeedWarn() {
+    const v = $('#needView'), warn = [...v.querySelectorAll<HTMLElement>('.need.warn, .need.full')];
+    const key = warn.map((e) => e.id).join();
+    if (key === this.needWarnKey) return;
+    this.needWarnKey = key;
+    const el = warn[0];
+    if (!el || v.scrollWidth <= v.clientWidth + 2) return;
+    const left = el.offsetLeft - ($('#needs').offsetLeft);
+    if (left >= v.scrollLeft && left + el.offsetWidth <= v.scrollLeft + v.clientWidth) return;
+    v.scrollTo({ left, behavior: 'smooth' });
+  }
+
   /** Les flèches des stocks : montrées s'il y a des ressources cachées, éteintes au bout */
   private syncResNav() {
     const v = $('#resView'), hidden = v.scrollWidth > v.clientWidth + 2;
@@ -1716,6 +1892,9 @@ export class UI {
       el.classList.toggle('full', !need.ok && housing);
       el.title = housing ? tr('{need} : {pop} habitants pour {cap} places', { need: tr(n.label), pop: Math.floor(sim.pop), cap: need.cap }) : tr('{need} : {cap} pour un besoin de {demand}', { need: tr(n.label), cap: num(need.cap), demand: num(need.demand) });
     }
+    this.renderGoals();
+    this.fitHud();
+    this.showNeedWarn();
     { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('.pv', $('#n-security')).textContent = pctText(Math.round(s * 100)); $('#n-security').title = tr('Sécurité : {pct} % des habitations couvertes (pompiers {fire} %, police {police} %)', { pct: Math.round(s * 100), fire: Math.round(sim.coverage.fireShare * 100), police: Math.round(sim.coverage.policeShare * 100) }); }
     // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
     const cs = this.census(), alert = cs.untreated ? tr('{n} sans soins', { n: cs.untreated }) : cs.hungry ? tr(cs.hungry > 1 ? '{n} ont faim' : '{n} a faim', { n: cs.hungry }) : cs.thirsty ? tr(cs.thirsty > 1 ? '{n} ont soif' : '{n} a soif', { n: cs.thirsty })
@@ -2012,7 +2191,7 @@ export class UI {
     const h = this.host, ex = h.expeditions, list = $('#expList');
     // juste sous la barre du haut, quelle que soit sa hauteur (elle passe sur plusieurs lignes sur un téléphone)
     // (le bas des panneaux du haut, sans la colonne de gauche qui descend avec le conseil et les messages)
-    const hudB = Math.round(Math.max(...['#agePanel', '#resPanel', '#needsBox', '#hudR'].map((q) => $(q).getBoundingClientRect().bottom)));
+    const hudB = Math.round(Math.max(...['#agePanel', '#resPanel', '#needsBox', '#goalBox', '#hudR'].map((q) => $(q).getBoundingClientRect().bottom)));
     // les cartes des équipes : à gauche, sous la barre du haut ; la liste des conditions d'âge
     // dépliée : elles passent dessous au lieu d'être cachées
     const req = $('#agePanel').classList.contains('open') ? $('#ageReq').getBoundingClientRect().bottom : 0;
@@ -2701,6 +2880,8 @@ export class UI {
         <p class="hint">${tr('Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.')}</p>
         <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
         <p class="hint">${tr('Une flèche dorée flotte au-dessus des bâtiments qu’on peut améliorer et dont on a de quoi payer l’amélioration.')}</p>
+        <div class="row"><label>${tr('Objectifs')}</label><button id="gGoals" class="${h.hideGoals ? '' : 'active'}">${tr(h.hideGoals ? 'Masqués' : 'Affichés')}</button></div>
+        <p class="hint">${tr('Trois petits objectifs à la fois dans la barre du haut, chacun avec une récompense.')}</p>
         <div class="row"><label>${tr('Ressources')}</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? tr(h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
         <p class="hint">${tr('Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.')}</p>
         <h4>${tr('Sauvegarde')}</h4>
@@ -2810,6 +2991,11 @@ export class UI {
       q('#gUnlimited').textContent = tr(h.world.unlimited ? 'Illimitées' : 'Normales');
       q('#gUnlimited').classList.toggle('active', h.world.unlimited);
       this.update();
+    };
+    q('#gGoals').onclick = () => {
+      h.setHideGoals(!h.hideGoals);
+      q('#gGoals').textContent = tr(h.hideGoals ? 'Masqués' : 'Affichés');
+      q('#gGoals').classList.toggle('active', !h.hideGoals);
     };
     q('#gBadges').onclick = () => {
       h.setHideUpBadges(!h.hideUpBadges);

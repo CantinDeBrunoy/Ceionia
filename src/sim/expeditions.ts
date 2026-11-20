@@ -1,7 +1,8 @@
 import { Underground, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from '../world/world';
 import { Agents, Kit } from './agents';
-import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, RECENT_EVENTS } from './missions';
+import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, RECENT_EVENTS, isLegendary } from './missions';
+import { noteGoalEvent } from './goals';
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
@@ -214,7 +215,7 @@ export function nextEventAt(a: Pick<ActiveExpedition, 'seen' | 'arriveMiss'>): n
   return i <= 0 ? 0.3 : i === 1 ? 0.55 : 0.75;
 }
 
-export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
+export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean; /** blessés au retour */ injured?: number }
 
 const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'les terres au-delà des collines', spaceport: 'le cosmodrome' };
 /** Où va l'équipe, en deux mots (la mer pour une expédition qui prend le large) */
@@ -762,6 +763,8 @@ export class Expeditions {
     }
     // les blessés guérissent deux fois plus vite avec un lieu de soins, et encore deux fois plus vite avec une trousse
     const injured = Math.min(a.party.length, res.injured + a.hurt), days = Math.max(res.days, a.hurt ? 1 : 0);
+    // les petits objectifs comptent les expéditions réussies sans blessé (pas les pourparlers) et les légendaires
+    if (a.ok) { if (!injured && !a.m.talks) noteGoalEvent(this.world.goals, 'safeExp'); if (isLegendary(a.m)) noteGoalEvent(this.world.goals, 'legend'); }
     // un aller simple (les éclaireurs, restés sur l'île rivale) : l'équipe est rentrée avec les troupes, elle repart du cœur du
     // village (renvoyée chez elle depuis l'île rivale, elle traversait la mer à pied, et l'un d'eux en revenait pour la mission suivante)
     if (a.c.oneWay) this.agents.partyPlace(a.party, a.base[0], a.base[1]);
@@ -769,7 +772,7 @@ export class Expeditions {
     this.active.splice(this.active.indexOf(a), 1);
     this.world.version++;
     const summary = [effectSummary(eff), lost].filter((x) => x && x !== tr('rien')).join(' · ') || tr('rien');
-    this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text, summary, notes: a.notes, redo: a.redo });
+    this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text, summary, notes: a.notes, redo: a.redo, injured });
   }
 
   // ---------------- Fabrication de l'équipement ----------------

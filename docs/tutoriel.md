@@ -109,7 +109,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   à `data-a` (`goal` pour l'objectif de la frise) ; `Tutorial.clicked(a)`. La liste se vide à chaque étape.
 - **Les drapeaux** : `on` (la bulle est active), `guiding` (la suite principale est en cours, même interrompue),
   `active` (la bulle guide vraiment : un chapitre qui attend ailleurs ne compte pas), `chapterOn`.
-  `active` fait taire le conseil du moment (`UI.renderMessage`) et les aides militaires (`WarTips`, `busy`) ;
+  `active` fait taire le conseil du moment (`UI.renderMessage`) et les aides militaires (`WarTips`, `busy`) ; pendant la suite principale (`on && guiding`), pas de petits objectifs (`Game.goalsOn`, voir [objectifs.md](objectifs.md)) ;
   `guiding` rend les expéditions indulgentes (`expeditions.lenient`).
 - **Chapitres** : `Tutorial.chapter(id)` lance un chapitre si `chapterDue` l'accepte ; un autre chapitre en cours compte
   pour vu. `next` au bout, ou « Passer ce chapitre » : `endChapter` (vu, `onChapterEnd`, la suite principale reprend ou la

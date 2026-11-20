@@ -399,3 +399,51 @@ registerDict('ui', {
   "Paix : un comptoir, une fête, un monument": "Peace: a trading post, a feast, a monument",
   "Guerre : une bataille, butin et tribut d’or": "War: a battle, gold spoils and tribute",
 });
+
+/** Les petits objectifs de la barre du haut (`sim/goals.ts`, pastille `#goalBox`) */
+registerDict('goals', {
+  'Besoins précédents': 'Previous needs', 'Besoins suivants': 'Next needs',
+  'Objectif atteint : {goal}.': 'Goal reached: {goal}.', 'Bravo !': 'Well done!',
+  '{n} j': '{n} d', '+{n} bois': '+{n} wood', '+{n} pierre': '+{n} stone', '+{n} minerai': '+{n} ore',
+  'bien-être +{n} pendant {d} jours': 'well-being +{n} for {d} days', 'Récompense : {r}': 'Reward: {r}',
+  'Objectifs': 'Goals', 'Masqués': 'Hidden', 'Affichés': 'Shown',
+  'Trois petits objectifs à la fois dans la barre du haut, chacun avec une récompense.': 'Three small goals at a time in the top bar, each with a reward.',
+  // Préhistoire
+  'Loger 12 habitants': 'House 12 villagers', 'Le camp s’agrandit !': 'The camp is growing!',
+  'Nourrir et abreuver tout le village 3 jours de suite': 'Feed and water the whole village 3 days in a row', 'Personne n’a eu faim ni soif.': 'Nobody went hungry or thirsty.',
+  'Réussir une première expédition': 'Succeed in a first expedition', 'L’équipe rentre en héros.': 'The team comes home as heroes.',
+  'Passer votre premier hiver': 'Get through your first winter', 'Le printemps revient : le village a tenu bon.': 'Spring is back: the village held on.',
+  'Éclairer le village : 3 torches': 'Light up the village: 3 torches', 'Le village brille dans la nuit.': 'The village shines in the night.',
+  'Un enclos pour les bêtes': 'A pen for the animals', 'Les bêtes ont leur enclos.': 'The animals have their pen.',
+  // Antiquité
+  'Loger 24 habitants': 'House 24 villagers', 'Le village devient une petite ville.': 'The village is becoming a small town.',
+  'Réussir une expédition sans blessé': 'Succeed in an expedition with no one hurt', 'Tout le monde est rentré sain et sauf.': 'Everyone came home safe and sound.',
+  'Un lieu de détente : thermes, théâtre ou arène': 'A place to unwind: baths, theatre or arena', 'Le village a de quoi se détendre.': 'The village has somewhere to unwind.',
+  'Embellir les rues : 6 braseros': 'Brighten the streets: 6 braziers', 'Les rues sont plus belles.': 'The streets look lovelier.',
+  'Tous les besoins comblés 2 jours de suite': 'Every need met 2 days in a row', 'Un village heureux !': 'A happy village!',
+  // Médiéval
+  'Loger 45 habitants': 'House 45 villagers', 'La ville grandit encore.': 'The town keeps growing.',
+  'Ouvrir une mine': 'Open a mine', 'Le minerai sort de la montagne.': 'Ore is coming out of the mountain.',
+  'Une taverne au village': 'A tavern in the village', 'On trinque à la taverne !': 'Cheers at the tavern!',
+  'Protéger la moitié des maisons': 'Protect half of the homes', 'Les maisons sont mieux gardées.': 'Homes are better guarded.',
+  'Un port sur la côte': 'A harbour on the coast', 'Les bateaux ont leur port.': 'The boats have their harbour.',
+  'Réussir une expédition légendaire': 'Succeed in a legendary expedition', 'Une légende de plus pour le village !': 'One more legend for the village!',
+  // Industriel
+  'Loger 80 habitants': 'House 80 villagers', 'Une vraie ville industrielle.': 'A true industrial town.',
+  'Une première gare': 'A first station', 'Le train arrive en gare !': 'The train pulls into the station!',
+  '20 briques en réserve': '20 bricks in store', 'La briqueterie tourne à plein.': 'The brickworks is running at full steam.',
+  'Un stade, un terrain de football ou une fête foraine': 'A stadium, a football pitch or a funfair', 'La ville s’amuse !': 'The town is having fun!',
+  'Protéger 80 % des maisons': 'Protect 80% of the homes', 'La ville est bien gardée.': 'The town is well guarded.',
+  // Moderne
+  'Loger 130 habitants': 'House 130 residents', 'Une grande ville moderne.': 'A big modern city.',
+  'Un aéroport ou un héliport': 'An airport or a heliport', 'La ville prend son envol.': 'The city takes flight.',
+  'Un zoo ou un parc aquatique': 'A zoo or a water park', 'Une sortie pour toute la famille !': 'A day out for the whole family!',
+  'Protéger toutes les maisons': 'Protect every home', 'Pas une maison sans secours.': 'Not one home without help nearby.',
+  'Tous les besoins comblés 3 jours de suite': 'Every need met 3 days in a row', 'Une ville où il fait bon vivre.': 'A city where life is good.',
+  // Futuriste
+  'Loger 200 habitants': 'House 200 residents', 'Une métropole du futur.': 'A metropolis of the future.',
+  'Une arcologie': 'An arcology', 'Une ville dans la ville.': 'A city within the city.',
+  'Deux fermes verticales': 'Two vertical farms', 'Les champs montent vers le ciel.': 'The fields rise toward the sky.',
+  'Une centrale à fusion': 'A fusion plant', 'Une énergie sans fin.': 'Endless energy.',
+  'Le cosmodrome': 'The spaceport', 'Les étoiles vous attendent.': 'The stars are waiting for you.',
+});

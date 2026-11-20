@@ -36,6 +36,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [besoins-population.md](besoins-population.md) : besoins, croissance, logement, santé, bien-être, conseil du moment.
 - [economie-ressources.md](economie-ressources.md) : ressources, production, stocks, coûts, briques, pétrole et carburant.
 - [ages.md](ages.md) : les âges, conditions de passage, ce qui change à chaque âge.
+- [objectifs.md](objectifs.md) : les petits objectifs avec récompense entre les conditions d'âge (pastille de la barre du haut).
 - [difficulte.md](difficulte.md) : la table des réglages par difficulté.
 - [habitants.md](habitants.md) : habitants instanciés, trajets, recherche de chemin, patrouilles et sentinelles.
 - [incidents.md](incidents.md) : incendies, cambriolages, interventions des secours, événements.
