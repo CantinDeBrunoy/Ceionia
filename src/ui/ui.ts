@@ -448,6 +448,8 @@ export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty
 /** Les cartes de choix qui arrêtent le jeu tant qu'elles sont montrées (voir `UI.menuOpen`) */
 const CHOICE_CARDS = ['worldChoice', 'portalChoice', 'diploChoice'];
 
+/** les pixels que la fenêtre des stocks peut prendre en plus de sa place pour montrer une ressource entière (voir `fitResView`) */
+const RES_SLACK = 16;
 /** Fenêtre du jeu : titre, contenu, bouton de fermeture ; se ferme aussi d'un clic à côté */
 /** `sticky` : une fenêtre qu'on ne peut pas écarter (ni croix, ni clic à côté, ni Échap) : seule sa propre réponse la ferme */
 function modal(root: HTMLElement, cls: string, title: string, body: string, onClose?: () => void, sticky = false): { ov: HTMLElement; close: () => void } {
@@ -690,6 +692,8 @@ export class UI {
     $('#resNext').onclick = () => step(1);
     view.addEventListener('scroll', () => this.syncResNav(), { passive: true });
     addEventListener('resize', () => this.syncResNav());
+    // la place laissée aux stocks change avec la fenêtre et avec ce qu'il y a à côté (les besoins) : la fenêtre se recale
+    new ResizeObserver(() => { this.fitResView(); this.syncResNav(); }).observe($('#resPanel'));
     // fiche d'une ressource : un clic sur son stock (d'où elle vient, à quoi elle sert, quoi bâtir pour en avoir plus)
     $('#res').onclick = (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
@@ -1453,6 +1457,29 @@ export class UI {
   private popPrev = 0;
   private popDelta: number | null = null;
   /** Les flèches des stocks : montrées s'il y a des ressources cachées, éteintes au bout */
+  /**
+   * La fenêtre des stocks montre un nombre entier de ressources : à la largeur que lui laisse la barre, la dernière était
+   * coupée de quelques pixels, et ses chiffres avec (« 31 » pour 318, « 27( », testeuse v6 en 1440 × 900)
+   */
+  private fitResView() {
+    const v = $('#resView'), items = [...v.querySelectorAll<HTMLElement>('.res')];
+    v.style.width = ''; v.style.flexShrink = '';
+    // (au sous-pixel près : les largeurs arrondies laissaient encore 2 px de la dernière sous le bord)
+    const avail = v.getBoundingClientRect().width, rs = items.map((e) => e.getBoundingClientRect()), n = rs.length;
+    if (!avail || !n || rs[n - 1].right - rs[0].left <= avail + 0.5) return;
+    // le plus de ressources qui tiennent, d'où que parte le défilement (il s'arrête au début d'une ressource) ; il peut manquer
+    // quelques pixels (SLACK) : la fenêtre ne rétrécit plus et les besoins voisins les cèdent
+    for (let k = n - 1; k >= 1; k--) {
+      let worst = 0;
+      for (let i = 0; i + k <= n; i++) worst = Math.max(worst, rs[i + k - 1].right - rs[i].left);
+      if (worst > avail + RES_SLACK && k > 1) continue;
+      v.style.width = `${Math.ceil(worst)}px`;
+      v.style.flexShrink = '0';
+      return;
+    }
+  }
+
+
   private syncResNav() {
     const v = $('#resView'), hidden = v.scrollWidth > v.clientWidth + 2;
     $('#resPanel').classList.toggle('scrolls', hidden);
@@ -1483,6 +1510,7 @@ export class UI {
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
       ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${resPic(r, 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
       : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b>${r === 'gold' ? `<em class="rate">${tr('échange')}</em>` : `<em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em>`}</span></div>`).join('');
+    this.fitResView();
     this.syncResNav();
   }
 
