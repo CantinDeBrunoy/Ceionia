@@ -2419,7 +2419,8 @@ export class UI {
     const ok = (i: number) => !ex.why(m, cs[i]);
     // la façon de partir choisie la dernière fois pour cette mission (fenêtre refermée, mission ratée qu'on relance)
     const last = this.lastChoice.get(m.id);
-    if (last !== undefined && last < cs.length && ok(last)) return last;
+    // (sauf si elle est devenue impossible alors qu'une autre ne l'est pas)
+    if (last !== undefined && last < cs.length && (ok(last) || !cs.some((_, i) => ok(i)))) return last;
     const bal = st.findIndex((x, i) => x.style === 'balanced' && ok(i));
     if (bal >= 0) return bal;
     // sans équilibrée : la prudente, la première carte affichée (le premier choix des données, souvent l'audacieux, était
