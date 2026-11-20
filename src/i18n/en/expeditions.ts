@@ -100,7 +100,7 @@ registerDict('expeditions', {
   'Chemin de fer': 'Railway',
   'Équipes en route : {n} / {max}': 'Teams out: {n} / {max}',
   'Envoyez de petites équipes chercher ce qui manque au village.': 'Send small teams to find what the village is missing.',
-  'Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.': 'You will watch them leave, do their work on site and come back. On site, a surprise will ask you to choose. Every age has at least one mandatory expedition (★) to move on to the next; if it fails, you can try again. Equipment, a school and a place of care make expeditions safer.',
+  'Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant. En cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.': 'You will watch them leave, do their work on site and come back. On site, a surprise will ask you to choose. Every age has at least one mandatory expedition (★) to move on to the next. If it fails, you can try again. Equipment, a school and a place of care make expeditions safer.',
   'Toutes': 'All',
   'Militaires': 'Military',
   'Légendaires': 'Legendary',
@@ -180,11 +180,11 @@ registerDict('expeditions', {
   'Les bêtes ramenées y vivront.': 'The animals you bring back will live there.',
   'Les chevaux ramenés y vivront.': 'The horses you bring back will live there.',
   'Elle rapportera du minerai chaque jour.': 'It will bring in ore every day.',
-  'Les automobiles remplacent désormais les charrettes sur les routes ; les écuries gardent leurs chevaux pour la cavalerie.': 'Automobiles now replace carts on the roads; stables keep their horses for the cavalry.',
+  'Les automobiles remplacent désormais les charrettes sur les routes. Les écuries gardent leurs chevaux pour la cavalerie.': 'Automobiles now replace carts on the roads. Stables keep their horses for the cavalry.',
   'Montgolfières et dirigeable prendront l’air depuis son terrain.': 'Hot-air balloons and the airship will take off from its field.',
 
   // ---- chemin de fer : fenêtre, tracé d'une ligne, trains
-  'Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares ; un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.': 'Pick a station with one click, then “New line”, and click the stations to connect, in order (Enter to confirm). The track lays itself from stop to stop and a train shuttles along it: it picks up and drops off passengers at the stations; a freight train makes the workshops and quarries next to its stations produce more.',
+  'Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares. Un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.': 'Pick a station with one click, then “New line”, and click the stations to connect, in order (Enter to confirm). The track lays itself from stop to stop and a train shuttles along it: it picks up and drops off passengers at the stations. A freight train makes the workshops and quarries next to its stations produce more.',
   'Le chemin de fer viendra avec les gares, à l’âge industriel.': 'The railway will arrive with the stations, in the industrial age.',
   'Aucune ligne pour l’instant : bâtissez deux gares (petite gare, ou la gare centrale).': 'No line yet: build two stations (a small station, or the central station).',
   'Train :': 'Train:',
