@@ -60,6 +60,7 @@ La population (`Sim.pop`, un nombre) n'est pas simulée une à une. `Agents` mon
 - Expéditions, train, hélicoptère : réquisition de passants ([expeditions.md](expeditions.md), [chemin-de-fer.md](chemin-de-fer.md), [trafic.md](trafic.md)).
 
 ## Pièges et invariants
+- Une case de champ sous une décoration n'est ni une case de parcelle (`findPlots`) ni un but de passant (`fields`) : personne ne moissonne sous un banc.
 - Fiche d'un habitant : `Agents.citizen(id)` rend `undefined` dès que le passant n'est plus montré (retiré quand la population visible baisse) : la fiche se ferme (`renderCitizen`), la caméra le lâche. Le clic sur un habitant passe avant le bâtiment derrière lui (`ToolController.up`) ; `select` (bâtiment, ou rien) efface l'habitant choisi et prévient `onCitizen`.
 - Les passants ne sont **pas** des habitants : retirer un `Agent` ne change pas `Sim.pop`. `recruit` en crée au besoin (`addAgent`) ; un membre d'équipe n'est jamais retiré (`mission`).
 - Sans maison, `addAgent` loge l'habitant sur la place du village : avec les fondateurs (`pop = 4`), `available()` compte 2 et `recruit(2)` les fait partir (`tests/bugsManuel.test.ts`). Avec `pop = 4`, aucun passant n'est montré (`floor(4 × SHOWN) = 0`).

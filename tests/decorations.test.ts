@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { World, setMapSize } from '../src/world/world';
+import { World, setMapSize, VEG_FIELD } from '../src/world/world';
+import { findPlots } from '../src/sim/fields';
 import { Sim } from '../src/sim/sim';
 import { KINDS, KindId, DECOR, DECOR_JOY_MAX, isDecor, hasDoor } from '../src/build/catalog';
 import { linearMask } from '../src/build/decor';
@@ -114,5 +115,35 @@ describe('pavés : un habillage du sol', () => {
     expect([...back.buildings.values()].map((b) => b.kind)).toEqual(['statue']);
     expect(back.paving[back.ci(41, 40)] + back.paving[back.ci(42, 40)]).toBe(2);
     expect(back.toJSON().paving).toEqual([back.ci(41, 40), back.ci(42, 40)]);
+  });
+});
+
+describe('décorations dans un champ', () => {
+  beforeAll(() => setMapSize(96));
+
+  it('une décoration posée dans le blé laisse le champ (et sa récolte), sa démolition le rend intact ; un bâtiment le retire', () => {
+    const w = flat();
+    for (let x = 10; x < 16; x++) for (let z = 10; z < 14; z++) w.veg[w.ci(x, z)] = VEG_FIELD;
+    const sim = new Sim(w);
+    sim.recalc();
+    const food = sim.food.cap;
+    const fence = w.place('fence', 11, 11, 0, false, 2, false), bench = w.place('bench', 13, 12, 0, false, 2, false);
+    expect(w.veg[w.ci(11, 11)]).toBe(VEG_FIELD);
+    expect(w.veg[w.ci(13, 12)]).toBe(VEG_FIELD);
+    sim.recalc();
+    expect(sim.food.cap).toBe(food);
+    w.removeBuilding(fence.id); w.removeBuilding(bench.id);
+    expect(w.veg[w.ci(11, 11)]).toBe(VEG_FIELD);
+    w.place('house', 14, 10, 0, false, 2, false);
+    expect(w.veg[w.ci(14, 10)]).toBe(0);
+  });
+
+  it('les bras des champs ne travaillent pas la case d’une décoration (les parcelles la contournent)', () => {
+    const w = flat();
+    for (let x = 10; x < 16; x++) w.veg[w.ci(x, 10)] = VEG_FIELD;
+    w.place('statue', 12, 10, 0, false, 2, false);
+    const cells = findPlots(w).flatMap((p) => p.cells);
+    expect(cells).not.toContain(w.ci(12, 10));
+    expect(cells).toContain(w.ci(11, 10));
   });
 });

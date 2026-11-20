@@ -585,7 +585,7 @@ export class Agents {
       else if (['well', 'gather', 'temple'].includes(b.kind)) this.socials.push(b);
     }
     this.fields = []; this.roads = []; this.woods = [];
-    for (let i = 0; i < w.veg.length; i++) { if (w.veg[i] === 2) this.fields.push(i); if (w.road[i]) this.roads.push(i); }
+    for (let i = 0; i < w.veg.length; i++) { if (w.veg[i] === 2 && !w.occ[i]) this.fields.push(i); if (w.road[i]) this.roads.push(i); }
     this.fieldCount = this.fields.length;
     // les parcelles, et la grange ou le séchoir où chacune porte sa récolte
     this.plots.clear(); this.plotAt.clear();

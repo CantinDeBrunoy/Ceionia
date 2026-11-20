@@ -11,6 +11,8 @@ import { Parts } from './parts';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
 import { bakeStatic, splitTrees, meshVariants, MeshPart, ModelName } from './assets';
+import { linearMask } from '../build/decor';
+import { WALL_N, WALL_E, WALL_S, WALL_W } from './hellBase';
 import { birchShape, roundTreeShape, bareBirchShape, fernShape, pineShape, bushShape, rockShapes } from './treeShapes';
 import { addSnow } from './snow';
 import { SHADOW_LAYER } from './materials';
@@ -1129,13 +1131,39 @@ export class VegView {
 
   private field(cx: number, cz: number, s: SeasonState) {
     if (s.growth < 0.12) return;
-    const w = this.world, t = w.veg[w.ci(cx, cz)];
+    const w = this.world, t = w.veg[w.ci(cx, cz)], free = this.wheatRoom(cx, cz);
     this.furrows(cx, cz, 1 / WHEAT_DIV, 1 / WHEAT_DIV, (px, pz, gx, gz) => {
       const cov = this.cover(t, px, pz);
-      if (cov < 0.5) return;
+      if (cov < 0.5 || (free && !free(px, pz))) return;
       const sc = s.growth * (0.82 + hash2(gx, gz, 103) * 0.3) * (0.65 + 0.35 * smoothstep(0.5, 0.8, cov));
       this.wheat.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(gx, gz, 104) * 6.28, 0.9 + hash2(gx, gz, 105) * 0.3, sc, 0.9 + hash2(gx, gz, 106) * 0.3), this.col.setScalar(0.88 + hash2(gx, gz, 107) * 0.2));
     });
+  }
+
+  /**
+   * Une décoration posée dans le champ : le blé pousse autour d'elle, sauf sur la petite place qu'elle occupe vraiment (le
+   * banc, le socle de la statue, le bassin de la fontaine, le parterre, le pied du lampadaire dans son coin, la bande de la haie) ;
+   * rien n'est retiré pour une clôture. Rend le test « un épi peut pousser ici » (null : rien à retirer)
+   */
+  private wheatRoom(cx: number, cz: number): ((x: number, z: number) => boolean) | null {
+    const w = this.world, id = w.occ[w.ci(cx, cz)], b = id ? w.buildings.get(id) : undefined;
+    if (!b || b.kind === 'fence') return null;
+    const ox = cx + 0.5, oz = cz + 0.5;
+    if (b.kind === 'hedge') {
+      // la bande de la haie, le long de chacun de ses bras (et le nœud au milieu)
+      const m = linearMask(w, b), arms = [[0, -1, WALL_N], [1, 0, WALL_E], [0, 1, WALL_S], [-1, 0, WALL_W]].filter((a) => m & a[2]);
+      return (x, z) => {
+        const dx = x - ox, dz = z - oz;
+        if (Math.hypot(dx, dz) < 0.12) return false;
+        return !arms.some(([ax, az]) => { const u = dx * ax + dz * az, v = Math.abs(dx * az - dz * ax); return u > 0 && v < 0.11; });
+      };
+    }
+    if (b.kind === 'lamp') {
+      const t = (b.rot * Math.PI) / 2, lx = ox + 0.32 * (Math.cos(t) + Math.sin(t)), lz = oz + 0.32 * (Math.cos(t) - Math.sin(t));
+      return (x, z) => Math.hypot(x - lx, z - lz) > 0.1;
+    }
+    const r = ({ bench: 0.27, statue: 0.24, fountain: 0.42, flowerbed: 0.4 } as Record<string, number>)[b.kind] ?? 0.6;
+    return (x, z) => Math.hypot(x - ox, z - oz) > r;
   }
 
   /** Rocaille : deux à quatre blocs, dont au moins un gros, et des cailloux */

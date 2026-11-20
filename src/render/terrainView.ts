@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isDecor } from '../build/catalog';
 import { World, N, SEA, MIN_H, MAX_H, VR, VS, seaMargin, SEA_FLOOR, SEA_SLOPE, marginFloor, marginDeep, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, BIOME_SNOW, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { computeFlow } from '../world/flow';
@@ -744,7 +745,8 @@ ${BLIGHT_GLSL}
             const k = w.ci(cx, cz), t = w.decor[k] === VEG_FISSURE || w.veg[k] === VEG_CAVE ? 4 : w.veg[k];
             n++;
             if (t >= 1 && t <= 4) f[t - 1]++;
-            if (w.occ[k]) y++;
+            // (une décoration ne tasse pas la terre autour d'elle : posée dans un champ ou un pré, elle laisse le sol tel quel)
+            if (w.occ[k] && !isDecor(w.buildings.get(w.occ[k])?.kind ?? 'house')) y++;
             if (quayNear.has(k)) quay++;
             else if (!w.road[k] && w.veg[k] !== VEG_FIELD && !w.lake[k] && w.waterDist[k] >= 2 && !this.wetCell?.(k)) open++;
             lava += w.basalt[k];
