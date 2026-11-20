@@ -20,7 +20,9 @@ import { Expeditions, Report, ActiveExpedition, nextTeamAt } from '../sim/expedi
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { isleName, kindOffered, CONFLICT_LABEL } from '../sim/diplomacy';
+import { isleName, kindOffered, CONFLICT_LABEL, allyPostReadyNow } from '../sim/diplomacy';
+import { peoplesView } from '../sim/peoples';
+import { peoplesHtml } from './peoples';
 import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
@@ -592,6 +594,7 @@ export class UI {
           </div>
           <nav id="menuBtns">
             <button id="bExp" class="round" title="${tr('Expéditions')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span id="expBadge"></span></button>
+            <button id="bPeoples" class="round" title="${tr('Peuples')}" aria-label="${tr('Peuples')}" style="display:none">${ic('flag', 21)}</button>
             <button id="bBell" class="round" title="${tr('Notifications')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
             <button id="bSettings" class="round" title="${tr('Paramètres')}" aria-label="${tr('Paramètres')}">${ic('gear', 21)}</button>
           </nav>
@@ -771,6 +774,7 @@ export class UI {
     };
     $('#bSettings').onclick = () => this.openSettings();
     $('#bExp').onclick = () => this.openExpeditions();
+    $('#bPeoples').onclick = () => { this.host.audio.sfxClick(); this.openPeoples(); };
     $('#bPhoto').onclick = () => host.setPhoto(true);
     $('#pExit').onclick = () => host.setPhoto(false);
     $('#pCap').onclick = () => host.capture();
@@ -1163,6 +1167,30 @@ export class UI {
     const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(c.win)).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
     return `<div class="mpills"><span title="${tr('Habitants dans l’équipe')}">${ic('team', 15, 2)} ${range(cs.map((c) => c.party), String)}</span><span title="${tr('Durée')}">${ic('clock', 15, 2)} ${['courte', 'moyenne', 'longue'].filter((l) => cs.some((c) => workLabel(c.work) === l)).map((l) => tr(l)).join('–')}</span><span class="crisk ${lvl}" title="${tr('Risque d’échec')}">${ic('alert', 14, 2.2)} ${range(risks, (r) => `${Math.round(r * 100)}`)} %</span></div>
       ${gains.length ? `<div class="mgains">${gains.map((c) => `<span class="chip" title="${attr(c.title)}">${pic(c.icon, 26)}</span>`).join('')}</div>` : ''}`;
+  }
+
+  /**
+   * Le panneau « Peuples » (bouton rond `#bPeoples`, voir `docs/diplomatie.md`) : une fiche par peuple de l'archipel, son humeur,
+   * son état, et les gestes possibles ; ceux pas encore possibles sont grisés avec la raison. Il ne fait que mener aux gestes
+   * qui existent : la carte de l'allié, la carte de la paix ou de la guerre (`openDiploChoice`), une expédition, le comptoir
+   */
+  openPeoples() {
+    this.root.querySelector('.peoplesModal')?.closest<HTMLElement & { close?: () => void }>('.overlay')?.close?.();
+    const h = this.host, w = h.world;
+    const ways = h.ways?.(), canExplore = ways?.world !== 'none';
+    const view = peoplesView(w, { age: h.sim.age, tradeOpen: h.sim.tradeOpen, postReady: allyPostReadyNow(w), canExplore, waysTab: !!ways && waysTabShown(w, ways.hell, ways.world) });
+    const { ov, close } = modal(this.root, 'peoplesModal', `${ic('flag', 22)} ${tr('Les peuples de l’archipel')}`, peoplesHtml(view));
+    ov.querySelectorAll<HTMLButtonElement>('[data-g]').forEach((b) => (b.onclick = () => {
+      const [i, k] = b.dataset.g!.split(':').map(Number), g = view.cards[i]?.gestures[k];
+      if (!g?.on) return;
+      h.audio.sfxClick();
+      close();
+      if (g.go === 'ally' || g.go === 'path') h.openDiploChoice?.();
+      else if (g.go === 'mission' && g.mission) this.gotoMission(g.mission);
+      else if (g.go === 'trade') this.openRes('gold');
+      else if (g.go === 'post') { h.goAlly?.(); this.pick('tradepost'); }
+      else if (g.go === 'visit') h.goAlly?.();
+    }));
   }
 
   /** Ouvre les expéditions sur une mission : l'onglet des missions, sa carte amenée sous les yeux et mise en avant */
@@ -2190,6 +2218,11 @@ export class UI {
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
     $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
+    // le panneau des peuples : avec l'archipel ; avant, grisé dès l'Antiquité si le monde peut encore s'agrandir (il dit comment)
+    const arch = archipelagoOn(h.world), canMeet = h.ways?.().world !== 'none';
+    const pb = $('#bPeoples');
+    pb.style.display = arch || (canMeet && h.sim.age >= 1 && !h.world.sandbox) ? '' : 'none';
+    pb.classList.toggle('off', !arch);
     this.offerPending();
   }
 

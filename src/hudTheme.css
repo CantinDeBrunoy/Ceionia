@@ -1478,3 +1478,65 @@ body.dockMin #dock > #homeBack { margin-bottom: 26px; }
 @media (min-width: 861px) and (max-width: 1180px) {
   #dock #subcats button:not(.on) .cl { display: none; }
 }
+/* ---------- le panneau « Peuples » (`UI.openPeoples`, `ui/peoples.ts`) : une fiche par peuple, côte à côte ----------
+   Tient en 1 280 × 720 ; empilé au téléphone. Les gestes possibles en or, les autres grisés avec leur raison et un cadenas */
+button.round.off { opacity: 0.62; filter: grayscale(0.5); }
+button.round.off:hover { opacity: 0.85; }
+#ui .overlay > .modal.peoplesModal { max-width: 900px; padding-bottom: 18px; }
+.peoplesModal .mtitle { margin-bottom: 4px; }
+.peoplesModal .mtitle h3 svg { color: #B07A22; }
+.peoplesModal .ppLead { margin: 6px 2px 12px; font-size: 14.5px; font-weight: 600; color: var(--hInk2); }
+.peoplesModal .ppCards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.peoplesModal .ppCard { display: flex; flex-direction: column; gap: 9px; min-width: 0; padding: 14px 14px 12px; border-radius: 18px; border: 2px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4 0%, #FBF0DA 100%); box-shadow: var(--hTile); }
+.peoplesModal .ppCard.ally { border-color: #C99A3A; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 0 0 3px rgba(240, 205, 120, 0.4), 0 4px 12px rgba(120, 80, 25, 0.16); }
+.peoplesModal .ppCard header { display: flex; align-items: center; gap: 12px; }
+.peoplesModal .ppCard header > div { flex: 1; min-width: 0; }
+.peoplesModal .ppCrest { position: relative; flex: none; display: grid; place-items: center; }
+.peoplesModal .ppCrest svg { display: block; filter: drop-shadow(0 2px 3px rgba(90, 55, 20, 0.3)); }
+.peoplesModal .ppCard h4 { margin: 0; font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 48; font-size: 23px; font-weight: 800; letter-spacing: 0; text-transform: none; color: #3A2213; }
+.peoplesModal .ppCard header small { display: block; margin-top: 2px; font-size: 12.5px; font-style: italic; color: var(--hInk2); }
+.peoplesModal .ppRole { flex: none; align-self: flex-start; padding: 3px 10px; border-radius: 999px; border: 1.5px solid var(--hEdge); background: #FFF8E9; font-size: 11.5px; font-weight: 800; color: var(--hInk2); white-space: nowrap; }
+.peoplesModal .ppCard.ally .ppRole { border-color: var(--hGold); background: var(--hGoldFill); color: #4A2E10; }
+.peoplesModal .ppCard.rival .ppRole { border-color: #D9A08A; background: #FBE9E2; color: #8A3A22; }
+.peoplesModal .ppMood { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.55); box-shadow: inset 0 0 0 1px rgba(225, 195, 140, 0.55); }
+.peoplesModal .ppMood > div { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; }
+.peoplesModal .ppMood b { font-family: var(--hSerif); font-size: 16px; font-weight: 800; color: #3A2213; }
+.peoplesModal .ppMood small { grid-column: 1 / -1; font-size: 12.5px; color: var(--hInk2); }
+.peoplesModal .ppGauge { display: inline-flex; gap: 3px; }
+.peoplesModal .ppGauge i { width: 13px; height: 7px; border-radius: 4px; background: #E9DCC2; box-shadow: inset 0 1px 1px rgba(120, 80, 25, 0.2); }
+.peoplesModal .m0 .ppGauge i.on { background: #C8463A; }
+.peoplesModal .m1 .ppGauge i.on { background: #D98A3A; }
+.peoplesModal .m2 .ppGauge i.on { background: #C9A548; }
+.peoplesModal .m3 .ppGauge i.on, .peoplesModal .m4 .ppGauge i.on { background: #4F9E48; }
+.peoplesModal .ppStatus { align-self: flex-start; padding: 3px 11px 3px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+.peoplesModal .ppStatus::before { margin-right: 6px; }
+.peoplesModal .ppStatus.war { background: #FBE4DE; color: #8A3A22; }
+.peoplesModal .ppStatus.war::before { content: '⚔'; }
+.peoplesModal .ppStatus.peace { background: #E4F2DC; color: #2F6A2A; }
+.peoplesModal .ppStatus.peace::before { content: '🕊'; }
+.peoplesModal .ppStatus.ally { background: #FCEFC8; color: #6A4710; }
+.peoplesModal .ppStatus.ally::before { content: '🤝'; }
+.peoplesModal .ppStatus.calm { background: #EFE7D8; color: #5A4330; }
+.peoplesModal .ppStatus.calm::before { content: '⚖'; }
+.peoplesModal .ppActs { display: flex; flex-direction: column; gap: 6px; }
+#ui .overlay > .modal.peoplesModal button.ppAct { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 6px 12px 6px 8px; border-radius: 12px; text-align: left; font: inherit; color: var(--hInk); }
+#ui .overlay > .modal.peoplesModal button.ppAct.on { border: 1.5px solid var(--hGold); background: var(--hGoldFill); box-shadow: var(--hGoldShadow); cursor: pointer; }
+#ui .overlay > .modal.peoplesModal button.ppAct.on:hover { background: linear-gradient(180deg, #FFF3CC, #F9D886); }
+#ui .overlay > .modal.peoplesModal button.ppAct.off, #ui .overlay > .modal.peoplesModal button.ppAct.done { border: 1.5px dashed #DCC9A2; background: rgba(255, 252, 244, 0.6); box-shadow: none; cursor: default; opacity: 1; }
+#ui .overlay > .modal.peoplesModal button.ppAct.done { border-style: solid; border-color: #B9D6A8; background: #F1F8EA; }
+.peoplesModal .ppAct.off > img { filter: grayscale(1); opacity: 0.5; }
+.peoplesModal .ppAct > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.peoplesModal .ppAct b { font-size: 14.5px; font-weight: 800; }
+.peoplesModal .ppAct small { font-size: 12px; font-weight: 600; color: var(--hInk2); }
+.peoplesModal .ppAct.off b { color: #8C7A66; }
+.peoplesModal .ppAct.off small { color: #9A6A3A; }
+.peoplesModal .ppAct .ppLock { flex: none; opacity: 0.7; }
+.peoplesModal .ppAct .ppTick { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #4F9E48; color: #fff; font-size: 13px; font-weight: 900; }
+/* sans archipel : deux blasons voilés, un point d'interrogation dessus */
+.peoplesModal .ppCard.veil { align-items: center; padding: 22px 14px; border-style: dashed; background: rgba(255, 252, 244, 0.5); box-shadow: none; }
+.peoplesModal .ppCard.veil svg { filter: grayscale(1) brightness(1.25) opacity(0.45); }
+.peoplesModal .ppCard.veil .ppCrest i { position: absolute; font-family: var(--hSerif); font-style: normal; font-size: 30px; font-weight: 800; color: #6E5843; }
+.peoplesModal .ppCard.veil h4 { color: #8C7A66; }
+@media (max-width: 700px) {
+  .peoplesModal .ppCards { grid-template-columns: 1fr; }
+}
