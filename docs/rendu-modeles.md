@@ -59,6 +59,7 @@ Inventaire de tous les modèles (pièces, triangles, vignettes) le 20 nov. 2026,
 ### Matériaux et lumières (`materials.ts`)
 - `mats.body`, `mats.glow`, `mats.ghost` (aperçu de pose, vert ou rouge : `setGhostValid`), **`mats.lit`** : corps et lumières dans un seul maillage (les sommets sans graine `aLight` sont le corps, les autres sont des lumières). `mergeLit(body, glow)` fond les deux (graine nulle → `LIT_FIXED` pour une lumière fixe).
 - Shaders greffés (`onBeforeCompile`) : `addLights` (fenêtres qui s'allument à leur heure, `LIGHTS = { hour, time, night }` mis à jour dans `env.ts`, flammes qui vacillent, néons), `addWater` (faces horizontales bleues : vaguelettes, reflets, caustiques), `addSnow` (`snow.ts` : neige sur les faces tournées vers le ciel, selon le biome). `crowdMat` : personnages animés des bâtiments.
+- Couleurs du blason du village : une pièce peut recevoir une couleur **sentinelle** (`TEAM_A`, `TEAM_FLAG`… de `teamPaint.ts`, nombres négatifs) au lieu d'une couleur ; `Parts.add` l'écrit avec un canal bleu négatif et les matériaux greffés par `addTeamPaint` (tous ceux de `mats`, `crowdMat`) la remplacent par les couleurs du blason, emblème et forme compris. Voir [blason.md](blason.md).
 - Textures (`textures.ts`) : `groundDetailTexture` (herbe, sable, roche, un motif par canal) et `waterNormalTexture`, pour le terrain seulement.
 
 ### Instanciation (`batch.ts`, `buildings.ts`)
