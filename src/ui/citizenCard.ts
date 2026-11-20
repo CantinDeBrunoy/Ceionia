@@ -59,13 +59,13 @@ function wellDist(h: UIHost, home: Building | undefined): number {
   return best;
 }
 
-/** Des fleurs, une fontaine ou une statue à deux cases de la maison */
+/** Des fleurs, une fontaine, une statue, une mare ou un bassin à coraux à deux cases de la maison */
 function pretty(h: UIHost, home: Building | undefined): boolean {
   if (!home) return false;
   const s = sizeOf(home);
   for (let z = home.z - 2; z < home.z + s + 2; z++) for (let x = home.x - 2; x < home.x + s + 2; x++) {
     const b = h.world.buildingAt(x, z);
-    if (b && (b.kind === 'flowerbed' || b.kind === 'fountain' || b.kind === 'statue')) return true;
+    if (b && (b.kind === 'flowerbed' || b.kind === 'fountain' || b.kind === 'statue' || b.kind === 'pond' || b.kind === 'coralpool')) return true;
   }
   return false;
 }
