@@ -1,7 +1,8 @@
 import { World, N } from '../world/world';
 import { Building, isRampart } from '../build/catalog';
 import { mulberry32 } from '../core/rng';
-import { WALK, rampartAge } from '../render/ramparts';
+import { WALK, rampartAge, NODE_FLIP_X, NODE_FLIP_Z } from '../render/ramparts';
+import { rampartInside } from '../build/rampart';
 import type { PatrolMember, PatrolMode } from './patrols';
 
 /**
@@ -83,9 +84,10 @@ export class Sentinels {
     const wk = WALK[rampartAge(b.age)];
     if (b.kind === 'watchtower') { const [tx, ty, tz] = wk.tower, c0 = Math.cos((b.rot * Math.PI) / 2), s0 = Math.sin((b.rot * Math.PI) / 2); return [x + 0.5 + tx * c0 + tz * s0, base + ty, z + 0.5 - tx * s0 + tz * c0]; }
     if (b.kind === 'gate') return [x + 0.5, base + wk.gate, z + 0.5];
-    // le chemin de ronde est du côté −z d'un mur est-ouest, du côté −x d'un mur nord-sud (voir `orient`)
+    // le chemin de ronde est du côté du dedans : −z d'un mur est-ouest, −x d'un mur nord-sud, sauf retournement (`rampartInside`)
     const near = this.around(c), ns = near.some((n) => Math.abs(n - c) === N), ew = near.some((n) => Math.abs(n - c) === 1);
-    return [x + 0.5 + (ns ? wk.z : 0), base + wk.y, z + 0.5 + (ew || !ns ? wk.z : 0)];
+    const side = rampartInside(w, x, z), dx = side & NODE_FLIP_X ? -wk.z : wk.z, dz = side & NODE_FLIP_Z ? -wk.z : wk.z;
+    return [x + 0.5 + (ns ? dx : 0), base + wk.y, z + 0.5 + (ew || !ns ? dz : 0)];
   }
 
   /** Les sentinelles suivent les remparts : autant que les chaînes en demandent, une par tour, SENTINEL_MAX au plus */

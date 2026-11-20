@@ -4,8 +4,8 @@ import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { getModel } from '../src/render/models';
 import { KINDS, DEFENSES, hasDoor, type KindId } from '../src/build/catalog';
-import { traceRampart, layRampart, rampartCost, rampartMask, RAMPART_MAX, rampartTower, toggledTower } from '../src/build/rampart';
-import { nodeKind, rampartNode, NODE_TOWER, TOWER_SHIFT, TOWER_R } from '../src/render/ramparts';
+import { traceRampart, layRampart, rampartCost, rampartMask, RAMPART_MAX, rampartTower, toggledTower, rampartInside } from '../src/build/rampart';
+import { nodeKind, rampartNode, NODE_TOWER, TOWER_SHIFT, TOWER_R, NODE_FLIP_X, NODE_FLIP_Z } from '../src/render/ramparts';
 import { WALL_N, WALL_E, WALL_S, WALL_W, gateAlongX } from '../src/render/hellBase';
 import { isleOrigins } from '../src/build/zones';
 import { costOf } from '../src/sim/economy';
@@ -218,6 +218,81 @@ describe('remparts : le tracé libre', () => {
     expect(at(sx + 1, sz).tower).toBe(false);
     expect(at(c.x, c.z).tower).toBeUndefined();
     expect(at(sx + 1, sz + 1).tower).toBeUndefined();
+  });
+});
+
+describe('remparts : le côté intérieur', () => {
+  beforeAll(() => setMapSize(192));
+  /** Le dedans d'un pan : 'S' ou 'N' pour un mur est-ouest, 'E' ou 'O' pour un mur nord-sud */
+  const ns = (w: World, x: number, z: number) => (rampartInside(w, x, z) & NODE_FLIP_Z ? 'S' : 'N');
+  const eo = (w: World, x: number, z: number) => (rampartInside(w, x, z) & NODE_FLIP_X ? 'E' : 'O');
+  /** Pose un pan (ou une porte) sur chaque case de la liste */
+  const ring = (w: World, cells: [number, number][], gate?: [number, number]) => {
+    for (const [x, z] of cells) w.place(gate && gate[0] === x && gate[1] === z ? 'gate' : 'wall', x, z, 0, false, 1, false);
+  };
+  /** Le tour d'une région (cases voisines, diagonales comprises, qui n'en sont pas) */
+  const outline = (inside: (x: number, z: number) => boolean, x0: number, z0: number, x1: number, z1: number) => {
+    const out: [number, number][] = [];
+    for (let z = z0 - 1; z <= z1 + 1; z++) for (let x = x0 - 1; x <= x1 + 1; x++) {
+      if (inside(x, z)) continue;
+      let near = false;
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (inside(x + dx, z + dz)) near = true;
+      if (near) out.push([x, z]);
+    }
+    return out;
+  };
+
+  it('une enceinte carrée : chaque côté, les angles et la porte ont leur chemin de ronde vers le dedans', () => {
+    const { w, sx, sz } = setup();
+    const x0 = sx - 1, z0 = sz - 1, x1 = sx + 2, z1 = sz + 2;
+    ring(w, outline((x, z) => x >= x0 && x <= x1 && z >= z0 && z <= z1, x0, z0, x1, z1), [x0 - 1, sz + 1]);
+    for (let x = x0; x <= x1; x++) { expect(ns(w, x, z0 - 1), `haut ${x}`).toBe('S'); expect(ns(w, x, z1 + 1), `bas ${x}`).toBe('N'); }
+    for (let z = z0; z <= z1; z++) { expect(eo(w, x0 - 1, z), `gauche ${z}`).toBe('E'); expect(eo(w, x1 + 1, z), `droite ${z}`).toBe('O'); }
+    // les quatre angles : le dedans en diagonale
+    expect([ns(w, x0 - 1, z0 - 1), eo(w, x0 - 1, z0 - 1)]).toEqual(['S', 'E']);
+    expect([ns(w, x1 + 1, z1 + 1), eo(w, x1 + 1, z1 + 1)]).toEqual(['N', 'O']);
+    // la porte du côté gauche, dans un mur nord-sud, ouvre ses battants vers l'est ; le modèle retourné diffère
+    const g = w.buildingAt(x0 - 1, sz + 1)!;
+    expect(g.kind).toBe('gate');
+    const m = rampartMask(w, g);
+    expect(gateAlongX(m)).toBe(false);
+    expect(m & NODE_FLIP_X).toBe(NODE_FLIP_X);
+    const pos = (mask: number) => getModel('gate', 2, { v: 0, L: false, R: false, F: false, mask }).body.getAttribute('position');
+    const cx = (mask: number) => { const p = pos(mask); let s = 0; for (let i = 0; i < p.count; i++) s += p.getX(i); return s / p.count; };
+    expect(Math.sign(cx(m) - cx(m & ~NODE_FLIP_X))).toBe(1);
+    // démolir un pan ouvre l'enceinte : sans village, le repli est le nord et l'ouest
+    w.removeBuilding(w.buildingAt(x0, z0 - 1)!.id);
+    expect(ns(w, x0 + 1, z0 - 1)).toBe('N');
+    // la refermer le rend au dedans
+    w.place('wall', x0, z0 - 1, 0, false, 1, false);
+    expect(ns(w, x0 + 1, z0 - 1)).toBe('S');
+  });
+
+  it('une enceinte en L : le dedans suit le coin rentrant', () => {
+    const { w, sx, sz } = setup();
+    // l'intérieur : un rectangle de 4 × 2, et sous sa moitié gauche un rectangle de 2 × 2
+    const inL = (x: number, z: number) => (x >= sx - 1 && x <= sx + 2 && z >= sz - 1 && z <= sz) || (x >= sx - 1 && x <= sx && z >= sz + 1 && z <= sz + 2);
+    ring(w, outline(inL, sx - 1, sz - 1, sx + 2, sz + 2));
+    expect(ns(w, sx, sz - 2)).toBe('S');
+    expect(eo(w, sx - 2, sz + 1)).toBe('E');
+    // le bas du bras droit, puis le côté du bras bas : de part et d'autre du coin rentrant
+    expect(ns(w, sx + 2, sz + 1)).toBe('N');
+    expect(eo(w, sx + 1, sz + 2)).toBe('O');
+    expect(ns(w, sx, sz + 3)).toBe('N');
+    expect(eo(w, sx + 3, sz)).toBe('O');
+  });
+
+  it('un mur ouvert : le chemin de ronde est du côté du village, et suit le village s’il change de côté', () => {
+    const { w, sx, sz } = setup();
+    w.place('house', sx, sz + 3, 0, false, 1, false);
+    for (let x = sx - 2; x <= sx + 3; x++) w.place('wall', x, sz - 1, 0, false, 1, false);
+    for (let z = sz; z <= sz + 4; z++) w.place('wall', sx + 4, z, 0, false, 1, false);
+    expect(ns(w, sx, sz - 1)).toBe('S');
+    expect(eo(w, sx + 4, sz + 2)).toBe('O');
+    // une ancienne partie n'a rien de sauvé : le côté se recalcule à la relecture
+    const w2 = new World(); w2.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(ns(w2, sx, sz - 1)).toBe('S');
+    expect(eo(w2, sx + 4, sz + 2)).toBe('O');
   });
 });
 
