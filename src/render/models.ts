@@ -859,7 +859,7 @@ function modernOffice(p: Parts, v: number) {
  */
 function villageChurch(p: Parts) {
   const st = 0xd8d0c2, dk = 0xb8ae9e, sl = 0x6f7c96;
-  p.box(0.86, 0.012, 0.92, 0, 0, 0, 0xa8c890);
+  sink(0.012);
   // la nef et ses contreforts, ses vitraux
   p.box(0.44, 0.34, 0.62, -0.06, 0.012, -0.1, st);
   for (const s of [-1, 1]) {
@@ -2185,7 +2185,7 @@ function fence(p: Parts, x0: number, z0: number, x1: number, z1: number) {
 /** Enclos (2 × 2) : un pré clôturé, porte devant, abri au fond à gauche, auge et foin ; les bêtes vivent à part (PenView) */
 function pen(p: Parts, age: number) {
   const R = 0.88, grass = age === 0 ? 0x9cb86a : 0x8cbf6c, mud = dark(C.dirt, 0.78);
-  p.box(1.84, 0.012, 1.84, 0, 0, 0, grass);
+  sink(0.012);
   // pré : touffes plus vertes ou jaunies, sentier piétiné de la porte à l'abri, boue et flaque autour de l'auge
   for (const [x, z, r, k] of [[0.3, -0.12, 0.24, 1.1], [-0.38, 0.32, 0.2, 0.9], [0.6, 0.2, 0.16, 1.06], [-0.1, -0.3, 0.14, 0.94], [0.1, 0.5, 0.12, 1.12], [-0.6, -0.05, 0.13, 0.88], [0.66, -0.2, 0.1, 0.92], [-0.3, 0.7, 0.1, 1.08]] as number[][])
     p.cyl(r, r * 0.92, 0.004, 9, x, 0.012, z, dark(grass, k));
@@ -3232,7 +3232,7 @@ function gather(p: Parts, age: number, o: ModelOpts) {
     // long des bords ; bancs de fonte, réverbères à gaz, deux statues dans l'axe ; promeneurs, nourrice et landau, enfant au
     // cerceau, pigeons
     const gravel = 0xe8dcc0, edge = 0xd2c8b0;
-    p.box(0.94, 0.008, 0.94, 0, 0, 0, 0x8fc47e);
+    sink(0.008);
     p.box(0.94, 0.004, 0.13, 0, 0.008, 0, gravel); p.box(0.13, 0.004, 0.94, 0, 0.008, 0, gravel);
     p.cyl(0.235, 0.235, 0.004, 16, 0, 0.008, 0, gravel);
     for (const s of [-1, 1]) for (const e of [-1, 1]) { p.box(0.006, 0.008, 0.24, s * 0.068, 0.008, e * 0.35, edge); p.box(0.24, 0.008, 0.006, e * 0.35, 0.008, s * 0.068, edge); }
@@ -3427,7 +3427,7 @@ function gatherPlaza(p: Parts, age: number, o: ModelOpts) {
     // le parc à la française : la pelouse et le grand parterre du milieu, l'allée de ceinture et les quatre allées qui y
     // mènent depuis chaque bord (on entre de partout)
     const gravel = 0xe8dcc0, edge = 0xd2c8b0, leaf = 0x5f9a56;
-    p.box(2.94, 0.008, 2.94, 0, 0, 0, 0x8fc47e);
+    sink(0.008);
     placed(p, 0, 0, 0, 1.5, () => gather(p, 3, o));
     for (const s of [-1, 1]) {
       p.box(2.06, 0.004, 0.18, 0, 0.009, s * 0.94, gravel); p.box(0.18, 0.004, 2.06, s * 0.94, 0.009, 0, gravel);
@@ -3497,7 +3497,7 @@ function gatherPlaza(p: Parts, age: number, o: ModelOpts) {
   }
   // l'agora holographique, un jardin plus qu'une place (la place moderne est toute dallée) : pelouse menthe, le parvis rond
   // de nacre et ses quatre allées lumineuses vers les bords, le globe au milieu
-  p.box(2.94, 0.01, 2.94, 0, 0, 0, 0x7ae8b4);
+  sink(0.01);
   p.cyl(1.0, 1.0, 0.014, 32, 0, 0, 0, 0xf2f6f8);
   for (const r of [0, Math.PI / 2]) {
     p.box(0.36, 0.013, 2.94, 0, 0, 0, 0xf2f6f8, r);
@@ -3987,7 +3987,7 @@ function tradepost(p: Parts, age: number) {
  */
 function triumph(p: Parts, age: number) {
   const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.8), FOE = 0xc0392e, OURS = 0x3a6ab8, ALLY = 0x2aa8a0, LAUREL = 0x5f8f4a;
-  p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
+  sink(0.012);
   // l'esplanade pavée, sa bordure, et l'avenue d'avant en arrière
   p.box(1.42, 0.012, 1.42, 0, 0.002, 0, dark(STONE, 0.86));
   cobbles(p, -0.68, -0.68, 0.68, 0.68, 0xe2d6bc, 0.012, 7);
@@ -4124,7 +4124,7 @@ function triumph(p: Parts, age: number) {
 function embassy(p: Parts, age: number) {
   const STONE = 0xeee6d4, PALE = 0xf7f1e4, SHADE = dark(0xeee6d4, 0.8), OURS = 0x3a6ab8, ALLY = 0x2aa8a0, OTHER = 0xc0392e;
   const FLAGS = [OURS, ALLY, OTHER, 0xe8c04a, 0x6aa84f, 0x8e5bb4, 0xe0803a, 0xf2f2f2, 0x2a2a30];
-  p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
+  sink(0.012);
   // une rangée de mâts, un drapeau par peuple ; `arc` : en demi-cercle autour d'un point
   const mast = (x: number, z: number, h: number, col: number, k: number) => {
     p.cyl(0.006, 0.008, h, 5, x, 0.012, z, C.metal);
@@ -4246,7 +4246,7 @@ function embassy(p: Parts, age: number) {
  */
 function concord(p: Parts, age: number) {
   const STONE = 0xe8e0cf, PALE = 0xf4efe4, TURQ = 0x2aa8a0, LACQ = 0xc0392e, JADE = 0x2f7a5a;
-  p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
+  sink(0.012);
   // la place ronde, sa bordure et l'allée vers l'avant
   p.cyl(0.78, 0.8, 0.03, 24, 0, 0, 0, STONE);
   p.add(new THREE.TorusGeometry(0.79, 0.014, 3, 24).rotateX(Math.PI / 2), 0, 0.03, 0, dark(STONE, 0.85));
@@ -4330,7 +4330,7 @@ function concord(p: Parts, age: number) {
  */
 function landmark(p: Parts, age: number, v = 0) {
   if (age >= 3) {
-    p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
+    sink(0.012);
     landmark(p, 2);
     // allée de gravier jusqu'à la porte, parterres bordés de buis, bannières aux couleurs du village
     p.box(0.34, 0.014, 0.46, 0, 0.012, 0.72, 0xe2d6bc);
@@ -5711,7 +5711,7 @@ function rails(p: Parts, x0: number, z0: number, x1: number, z1: number, color: 
  */
 function stable(p: Parts, age: number) {
   const R = 0.88, grass = 0x8cbf6c, sand = age >= 4 ? 0xe8d6ad : dark(C.dirt, 0.96);
-  p.box(1.84, 0.012, 1.84, 0, 0, 0, grass);
+  sink(0.012);
   p.box(1.7, 0.006, 1.1, 0, 0.012, 0.32, sand);
   for (let i = 0; i < 10; i++) {
     const r = 0.04 + hash2(i, 1, 71) * 0.06;
@@ -5823,7 +5823,7 @@ function boxHive(p: Parts, x: number, z: number, body: number, ry = 0) {
 function apiary(p: Parts, age: number) {
   const grass = age === 0 ? 0x9cb86a : 0x8cbf6c, FL = [0xf2e27a, 0xffffff, 0xd88ab8, 0xb9a6e6, 0xf29a6a];
   // aux premiers âges, pas de disque d'herbe : les fleurs poussent dans le pré, entre fougères et taches de terre
-  if (age >= 2) p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, grass);
+  if (age >= 2) sink(0.012);
   else workGround(p, 647 + age, [[-0.2, -0.12, 0.12], [0.05, -0.22, 0.12], [0.25, -0.06, 0.12], [0, -0.2, age ? 0.36 : 0], [0.36, 0.17, 0.08], [0.24, 0.22, 0.08], [-0.32, 0.28, 0.1]], { patches: 4, ferns: 3, stumps: age ? 0 : 1, pebbles: 3 });
   for (let i = 0; i < 30; i++) {
     const a = i * 2.4, r = 0.2 + (i % 7) * 0.035, x = Math.cos(a) * r, z = Math.sin(a) * r;
@@ -6567,7 +6567,7 @@ function logPile(p: Parts, x: number, z: number, n: number, len: number, ry = 0)
  */
 function lumber(p: Parts, age: number) {
   // aux premiers âges, pas de disque d'herbe : les copeaux tombent dans le pré, entre souches, fougères et terre battue
-  if (age >= 2) p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, 0x9cae6c);
+  if (age >= 2) sink(0.012);
   else workGround(p, 650 + age, [[-0.08, -0.22, 0.28], [0.3, 0.3, 0.07], [-0.34, 0.28, 0.07], [0.36, -0.06, 0.07], [0.12, 0.28, 0.08], [-0.3, 0.06, 0.1]], { patches: 6, ferns: 4, stumps: 2, chips: 10, pebbles: 3 });
   for (let i = 0; i < 14; i++) p.cyl(0.012, 0.016, 0.004, 5, -0.4 + hash2(i, 2, 78) * 0.8, 0.012, -0.4 + hash2(i, 3, 78) * 0.8, 0xc8a878);
   // souches et billot à la hache
@@ -7893,8 +7893,7 @@ function harbor(p: Parts, age: number) {
  */
 function airportBig(p: Parts) {
   const asphalt = 0x4f535a, taxi = 0x5d6169, apron = 0xb8b4ac, yel = 0xf2c23a, rz = 1.12;
-  p.box(3.86, 0.012, 3.86, 0, 0, 0, 0x9ccf92);
-  for (let k = 0; k < 8; k++) p.box(3.86, 0.003, 0.24, 0, 0.012, -1.8 + k * 0.48, k % 2 ? 0x94c88a : 0xa4d69a);
+  sink(0.012);
   // la piste et ses marques
   p.box(3.84, 0.014, 0.8, 0, 0.012, rz, asphalt);
   for (let x = -1.2; x <= 1.21; x += 0.24) p.box(0.14, 0.004, 0.018, x, 0.027, rz, C.white);
@@ -8009,7 +8008,7 @@ export const HELIPADS: [number, number, number][] = [[-0.45, 0.06, 0.35], [0.45,
  */
 function heliport(p: Parts) {
   const conc = 0xc4c0b8, pad = 0x4f535a, yel = 0xf2c23a;
-  p.box(1.92, 0.012, 1.92, 0, 0, 0, 0x9ccf92);
+  sink(0.012);
   p.box(1.84, 0.014, 1.0, 0, 0.012, 0.38, conc);
   for (let x = -0.9; x < 0.92; x += 0.3) p.box(0.004, 0.003, 1.0, x, 0.027, 0.38, dark(conc, 0.9));
   // les aires : plots, plateau, anneau jaune, H, feux, filet
@@ -8069,7 +8068,7 @@ function lighthouse(p: Parts, age: number) {
   const r0 = fut ? 0.18 : 0.21, r1 = fut ? 0.08 : 0.1;
   const rad = (y: number) => r0 + (r1 - r0) * Math.min(1, Math.max(0, (y - base) / (h - base)));
   // le sol, la grève de galets sur le bord gauche (sèche : l'eau est celle du jeu), les galets du rivage
-  p.box(1.9, 0.012, 1.9, 0, 0, 0, old ? C.green : 0x7cb560);
+  sink(0.012);
   p.box(0.5, 0.02, 1.9, -0.7, 0, 0, fut ? 0xdfe6ec : old ? 0xb8ab8a : 0xc9bd9c);
   for (let i = 0; i < 9; i++) p.sphere(0.04 + (i % 3) * 0.012, -0.44 + ((i * 37) % 7) * 0.012, 0.0, -0.9 + i * 0.22, i % 2 ? 0xd6c9a4 : 0xc2b48e, 0, 0.5);
   // le rocher : amas de blocs sous la tour, des rochers épars
@@ -8654,7 +8653,7 @@ function fishmarket(p: Parts, age: number) {
   };
 
   // ---- le sol : herbe, dallage de pavés, taches de glace (pas de flaques : aucune eau dessinée)
-  p.box(1.9, 0.012, 1.9, 0, 0, 0, 0x9ccf92);
+  sink(0.012);
   p.box(1.84, 0.02, 1.76, 0, 0.012, 0.02, dark(baseC, 0.82));
   if (fut) {
     p.box(1.8, 0.008, 1.72, 0, g, 0.02, baseC);
@@ -8927,7 +8926,7 @@ function offshore(p: Parts, age: number) {
   const worker = (x: number, z: number, ry: number) => figure(p, x, z, fut ? 0xffa31a : 0xff7a1a, ry, false, 0xffd23a, 'idle', D - 0.012);
 
   // ── le terre-plein : dalle de béton sur le pré (pas d'eau dessinée), joints de dilatation, ombre de la plateforme
-  p.box(2.9, 0.012, 2.9, 0, 0, 0, C.green);
+  sink(0.012);
   p.cyl(1.4, 1.4, 0.03, 18, 0, 0, 0, 0x8a8f96);
   p.cyl(1.34, 1.34, 0.01, 18, 0, 0.03, 0, 0xb4b8bc);
   p.box(PW + 0.14, 0.0015, PD + 0.14, cx + 0.1, wy + 0.003, cz + 0.08, 0x9a9fa6);
@@ -9273,7 +9272,7 @@ function offshore(p: Parts, age: number) {
  * l'âge futuriste, voir futureWatertower
  */
 function watertower(p: Parts, age: number) {
-  p.box(0.84, 0.012, 0.84, 0, 0, 0, 0x9ccf92);
+  sink(0.012);
   if (age <= 3) { brickWatertower(p); return; }
   const X = -0.08, Z = -0.08, steel = 0x8a8f96;
   // le local des pompes : porte, ouïes d'aération, plaque bleue, applique, armoire électrique et regard ; la clôture
@@ -9630,7 +9629,8 @@ function stadiumFoot(p: Parts, age: number) {
   const face = (t: number) => Math.atan2(-Math.cos(t), -OV * Math.sin(t));
   const concrete = old ? 0xa8714f : 0xd8d6d0;
   // le sol : gazon (âge industriel) ou parvis dallé ; carrés de verdure aux angles
-  p.box(2.92, 0.012, 2.92, 0, 0, 0, old ? 0x8fc47e : fut ? 0xdde4ec : 0xcfcac2);
+  // (au premier âge, pas de dalle d'herbe : le terrain du jeu ; ensuite, le parvis dallé)
+  if (old) sink(0.012); else p.box(2.92, 0.012, 2.92, 0, 0, 0, fut ? 0xdde4ec : 0xcfcac2);
   if (!old) for (const s of [-1, 1]) for (const t of [-1, 1]) p.box(0.3, 0.03, 0.3, s * 1.3, y0, t * 1.3, 0x7fb87f);
   // la pelouse rayée, ses lignes, ses surfaces, ses buts, ses drapeaux de coin
   const hx = old ? 0.55 : 0.62, hz = old ? 0.36 : 0.4, r0 = old ? 0.86 : 0.9;
@@ -9795,7 +9795,7 @@ function basket(p: Parts) {
  */
 function tennis(p: Parts, age: number) {
   const modern = age >= 4;
-  p.box(0.98, 0.012, 0.98, 0, 0, 0, modern ? 0x4fa860 : 0x8fc47e);
+  sink(0.012);
   p.box(0.92, 0.006, 0.62, 0, 0.012, 0, modern ? 0x4f9a5a : 0xc8784a);
   p.box(0.86, 0.006, 0.44, 0, 0.014, 0, modern ? 0x3a6ab8 : 0xd8845a);
   const L = (w: number, d: number, x: number, z: number) => p.box(w, 0.004, d, x, 0.02, z, C.white);
@@ -11172,7 +11172,7 @@ function crowd(p: Parts, x0: number, x1: number, y: number, z: number, seed: num
 function stadiumBig(p: Parts, age: number) {
   sink(0.012);
   const modern = age >= 4, y0 = 0.012, cz = -0.08;
-  p.box(2.92, 0.012, 2.92, 0, 0, 0, 0x8fc47e);
+  sink(0.012);
   p.box(2.92, 0.008, 0.42, 0, y0, 1.25, modern ? 0xc8c4bc : 0xd8c8a8);
   // la piste et ses couloirs, la pelouse rayée et ses lignes
   p.add(new THREE.CylinderGeometry(1, 1, 0.01, 56).scale(1.24, 1, 0.84), 0, 0.017, cz, modern ? 0xc85a44 : 0xb88a6a);
@@ -11262,7 +11262,7 @@ const BULBS = [0xffe2a0, 0xff9a6a, 0x9ae8ff, 0xfff4d0, 0xff8ad8];
 function funfairBig(p: Parts, age: number) {
   sink(0.012);
   const modern = age >= 4, y0 = 0.012;
-  p.box(2.92, 0.012, 2.92, 0, 0, 0, 0x8fc47e);
+  sink(0.012);
   const alley = modern ? 0xb8b4ac : 0xd8c49a;
   p.box(0.42, 0.006, 2.9, 0, y0, 0.05, alley); p.box(2.9, 0.006, 0.3, 0, y0, -0.2, alley);
   for (let k = 0; k < 40; k++) p.box(0.03, 0.004, 0.02, -1.4 + hash2(k, 3, 81) * 2.8, y0 + 0.006, -1.4 + hash2(k, 4, 81) * 2.8, [0xd84a3e, 0xf2c23a, 0x3c7fd8, 0xf4f2ee][k % 4]);
@@ -11567,7 +11567,7 @@ function lab(p: Parts, age: number) {
 function aerodrome(p: Parts, age: number) {
   sink(0.012);
   const modern = age >= 4, y0 = 0.012;
-  p.box(2.92, 0.012, 2.92, 0, 0, 0, 0x8fc47e);
+  sink(0.012);
   // piste d'herbe tondue (bitume à l'époque moderne) et ses balises
   p.box(2.7, 0.006, 0.5, 0, y0, 0.75, modern ? 0x5d6169 : 0x7fbc6a);
   if (modern) for (let x = -1.2; x <= 1.21; x += 0.24) p.box(0.12, 0.004, 0.02, x, y0 + 0.006, 0.75, C.white);
@@ -12712,7 +12712,7 @@ function truck(p: Parts, x: number, z: number, ry: number, cab: number, len: num
 function spaceport(p: Parts) {
   const APRON = 0xc4c8cc, ROAD = 0x5a5e64, TOWER = 0xc8443a, CONC = 0xd8dadc;
   // le sol : herbe rase (le vrai sol) entre les dalles, la voie des chenilles, les routes
-  p.box(3.9, 0.006, 3.9, 0, 0, 0, 0x9ab87e);
+  sink(0.006);
   const [px, , pz] = SPACEPAD;
   p.box(2.1, 0.008, 0.5, -0.05, 0.006, pz, 0x9a8a72);
   for (const d of [-0.15, 0.15]) p.box(2.1, 0.01, 0.13, -0.05, 0.006, pz + d, 0xb4a88e);
@@ -14230,7 +14230,7 @@ function zooBig(p: Parts, age: number) {
   const y0 = 0.012, F = 0.016, future = age >= 5;
   const steel = 0x56636f, sand = 0xdcc89a, savanna = 0xd2c07e, path = 0xe9dfc2, rockA = 0x9a968e, rockB = 0xbab6ac, lawn = 0x86bd6a, hedge = 0x5e9a58;
   const bodies = [0xd84a3e, 0x3a6ab8, 0xf2c23a, 0x4fa860, 0xb45ad8, 0xf28a3c, 0x3aa8d8];
-  p.box(2.92, 0.012, 2.92, 0, 0, 0, lawn);
+  sink(0.012);
   const floor = (x0: number, z0: number, x1: number, z1: number, c: number) => p.box(x1 - x0, 0.004, z1 - z0, (x0 + x1) / 2, y0, (z0 + z1) / 2, c);
   /** Clôture entre deux points : piquets et lisses (`rails`), ou barreaux serrés (`bars`) sous une lisse haute */
   const rail = (x0: number, z0: number, x1: number, z1: number, h = 0.12, col = steel, rails = 2, bars = false) => {

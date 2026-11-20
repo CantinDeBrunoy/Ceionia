@@ -237,7 +237,6 @@ function colosseum(f: Fr, kit: ArenaKit) {
   const N = 32, A = 1.4, o = new Oval(f, -0.06, 0.8, N), cz = o.cz, dt = (2 * PI) / N;
   const TRAV = 0xe2d5b4, CORN = 0xd0c19c, COL = 0xeee5ca, DARK = 0x3a2e24, DARK2 = 0x56473a, MARB = 0xf2eee2, SAND = 0xdcc08a;
   const PURP = 0x6e2a72, RED = 0xb8402e, OCHRE = 0xe0b45a, BRONZE = 0xc8a050;
-  f.p.box(2.92, 0.012, 2.92, 0, 0, 0, 0xb4c084);
   const fz = o.z(A, 0);
   f.box(1.36, 0.004, 0.38, 0, 0, fz + 0.19, 0xd8ccae);
 
@@ -389,7 +388,6 @@ function pavilion(f: Fr, kit: ArenaKit, x: number, z: number, r: number, h: numb
 
 function lists(f: Fr, kit: ArenaKit) {
   const WOOD = 0x8a6040, DWOOD = 0x6a4a30, STONE = 0xb8b0a0, SAND = 0xd2b886, BLUE = 0x2a4a9a, RED = 0xb8302a, CREAM = 0xf2ead2, GREEN = 0x3a7a4a, YEL = 0xf2c23a;
-  f.p.box(2.92, 0.012, 2.92, 0, 0, 0, 0x8fc47e);
   f.box(2.12, 0.004, 1.02, 0, 0, -0.08, SAND);
   for (const s of [-1, 1]) f.box(1.7, 0.003, 0.05, 0, 0.003, -0.08 + s * 0.13, dk(SAND, 0.9));
 
@@ -601,7 +599,6 @@ function fightHall(f: Fr, kit: ArenaKit) {
 function boxingPalace(f: Fr, kit: ArenaKit) {
   const N = 32, A = 1.36, o = new Oval(f, -0.12, 0.8, N), cz = o.cz, dt = (2 * PI) / N;
   const WHITE = 0xf2f2ee, GREY = 0xb8bcc0, GLASS = 0x8ab8d0, RED = 0xd8352e, BLUE = 0x2a5ab8, YEL = 0xf2c23a;
-  f.p.box(2.92, 0.012, 2.92, 0, 0, 0, 0x9ccf8a);
   const fz = o.z(A, 0);
   f.box(2.2, 0.004, 0.5, 0, 0, fz + 0.24, 0xd8d4cc);
   for (const s of [-1, 1]) f.box(0.012, 0.005, 0.5, s * 0.36, 0, fz + 0.24, RED);
