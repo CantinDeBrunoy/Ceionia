@@ -61,6 +61,12 @@ registerDict('gear', {
   'Il faut {cost}': 'You need {cost}',
   'Il faut {cost} en tout pour {items}': 'You need {cost} in total for {items}',
   'Connu à l’âge {age}': 'Known in the age: {age}',
+  // l'obsidienne
+  'Lance d’obsidienne': 'Obsidian Spear', 'Lances d’obsidienne': 'Obsidian Spears',
+  'Épée d’obsidienne': 'Obsidian Sword', 'Épées d’obsidienne': 'Obsidian Swords',
+  'Une pointe de verre volcanique : elle perce le cuir le plus épais.': 'A tip of volcanic glass: it pierces the thickest hide.',
+  'Des éclats d’obsidienne sertis dans le bois : mieux que l’acier.': 'Obsidian shards set in wood: sharper than steel.',
+  'Débloquée par l’expédition « La pierre noire du volcan » : l’obsidienne vient de là.': 'Unlocked by the expedition “The Volcano’s Black Stone”: that is where obsidian comes from.',
   'Il faut un atelier pour fabriquer {items} : bâtissez-en un (à votre âge : {name})': 'You need a workshop to make {items}: build one (in your age: {name})',
   'Il faut : {name}': 'You need: {name}',
   'La file de fabrication est pleine ({n} pièces) : attendez qu’une pièce sorte': 'The crafting queue is full ({n} items): wait for one to come out',

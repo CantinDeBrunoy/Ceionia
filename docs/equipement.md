@@ -1,7 +1,7 @@
 # Équipement des expéditions
 
 > Fichiers : `src/sim/gear.ts` (les pièces `GEAR`, prix, `loadout`, `gearGaps`), `src/sim/expeditions.ts` (`whyCraft`, `whyCraftAll`, `craft`, `cancelCraft`, `craftStep`, `preview`), `src/sim/missions.ts` (`ExpState.gear`, `craft`, `craftT`), `src/sim/events.ts` (options qui exigent une pièce, `needs`), `src/sim/kingdom.ts` (récompense en pièces, forge infernale), `src/sim/army.ts` (la garnison consomme les mêmes pièces), `src/ui/ui.ts` (`renderArsenal`, `gearNeedHtml`, `gearNeedDetail`, `kitHtml`).
-> Tests : `tests/armesEpoque.test.ts`, `tests/equipementMele.test.ts`, `i18nEquipement.test.ts`, `securite.test.ts`, `expeditions.test.ts`.
+> Tests : `tests/obsidienne.test.ts`, `tests/armesEpoque.test.ts`, `tests/equipementMele.test.ts`, `i18nEquipement.test.ts`, `securite.test.ts`, `expeditions.test.ts`.
 > Voir aussi : [expeditions.md](expeditions.md), [armee-combat.md](armee-combat.md), [economie-ressources.md](economie-ressources.md), [difficulte.md](difficulte.md), [batiments-catalogue.md](batiments-catalogue.md), [traduction.md](traduction.md), [sauvegarde.md](sauvegarde.md).
 
 ## En bref
@@ -19,6 +19,8 @@ La garnison de l'île (caserne) puise dans la même réserve : voir « Liens ».
 | Arc (`bow`) | 1 | 1 | 4 bois* | non | bêtes, créatures | 0,38 | n |
 | Épée (`sword`) | 2 | 2 | 1 minerai | oui | bêtes, créatures | 0,50 | n |
 | Arbalète (`crossbow`) | 2 | 2 | 1 minerai, 3 bois* | oui | bêtes, créatures | 0,56 | n |
+| Lance d'obsidienne (`obsidianSpear`) | 1 | 2 | 1 minerai, 1 bois* ; savoir-faire `obsidian` | non | bêtes, créatures ; tranchant 0,75 | 0,45 | n |
+| Épée d'obsidienne (`obsidianSword`) | 2 | 2 | 2 minerai ; savoir-faire `obsidian` | oui | bêtes, créatures ; tranchant 0,7 | 0,62 | n |
 | Fusil (`rifle`) | 3 | 3 | 2 minerai | oui | bêtes, créatures | 0,65 | n |
 | Fusil d'assaut (`assault`) | 4 | 4 | 3 minerai, 1 carburant | oui | bêtes, créatures | 0,76 | n |
 | Grenades (`grenade`) | 4 | 4 | 2 minerai, 1 carburant | oui | créatures, bêtes | 0,70 | n/2 (arrondi haut) |
@@ -34,6 +36,27 @@ La garnison de l'île (caserne) puise dans la même réserve : voir « Liens ».
 
 \* bois et pierre ne se paient qu'en difficulté Normal (`rulesOf(...).gearPrice`, voir `gearCost`) ; en Facile et en Bac à sable ces pièces sont gratuites. En ressources illimitées (`world.unlimited`) rien n'est jamais prélevé (`payGear`, `gearShort`).
 Dangers (`Danger`) : `beast`, `fall`, `water`, `dark`, `weather`, `monster`. Un choix a ses dangers (`Choice.danger`), sinon ceux de sa destination (`DEST_DANGER` : plaine bêtes+intempéries, forêt bêtes, rivière eau, montagne chutes+intempéries, grotte noir+chutes, au loin bêtes+intempéries, cosmodrome intempéries).
+
+### Les armes d'obsidienne (20 nov. 2026)
+Demande de l'auteur : que l'obsidienne rapportée du volcan ait un vrai sens, et que la baisse du risque se voie sur la carte de l'expédition. Réussir « La pierre noire du volcan » (l'un ou l'autre choix) donne le savoir-faire `obsidian` (`exp.perks`, « les tailleurs d'obsidienne »). Sans lui, les deux pièces sont dans l'onglet Équipement, grisées au cadenas (`whyCraft` : « Débloquée par l'expédition « La pierre noire du volcan » ») ; la fenêtre de départ ne les propose pas (`gearGaps(…, perks)`, `gearKnown`). Pas de ressource nouvelle : elles se paient en minerai, celui que la mission rapporte. Rien après le Moyen Âge (décision de l'auteur).
+- **Le tranchant** (`Gear.edge`) : en plus de sa part du danger (`cut`), une arme d'obsidienne multiplie le risque de **toute** l'expédition par `edge` quand toute l'équipe en est munie (`1 − (1 − edge) × part` sinon). Une part du danger seule restait invisible (le mammouth prudent passait de 22 à 20 %).
+- **Effet** (Normal, ×1,25, équipe entière munie, sans bâtiment qui baisse le risque) :
+
+  | Expédition | Avant | Avec l'obsidienne |
+  |---|---|---|
+  | Mammouth, pièges et fosses (lances) | 21,9 % | 14,5 % (lances d'obsidienne) |
+  | Mammouth, le ravin (lances, cordes) | 32,5 % | 20,6 % |
+  | Kraken, harponner (arcs, barques) | 38,5 % | 27,1 % |
+  | Kraken, l'appât (arcs, barques) | 31,5 % | 22,1 % |
+  | Cerf blanc, la meute (arbalètes) | 20,9 % | 19,6 % (lances) ; 12,6 % (épées d'obsidienne) |
+  | Cerf blanc, l'affût (arbalètes) | 21,6 % | 14,5 % (épées d'obsidienne) |
+
+  La lance d'obsidienne reste sous l'épée d'obsidienne (`gearPower` : part + tranchant ; l'ordre de la fenêtre de départ).
+- **Ce qu'emporte l'équipe** (`loadout`) : on essaie d'emporter 0, 1, 2… armes d'obsidienne de chaque sorte, posées d'abord, le reste rangé par sa part du danger (`fill`), et l'on garde le meilleur risque. Ranger simplement par « gain » faisait parfois monter le risque quand une pièce s'ajoutait (mélange avec les armes modernes) ; ainsi une pièce de plus n'ajoute qu'un essai (`equipementMele.test.ts`).
+- **Le chevalier** (et le hallebardier, qui demande aussi l'épée) prend l'épée d'obsidienne à la place de l'épée si la réserve en a (`BETTER`, `kitFrom`, `kitMissing` dans `army.ts`) : elle suffit à le recruter, il la rend s'il est annulé ou renvoyé, et il frappe `OBSIDIAN_DMG` = 1,25 fois plus fort (`troopStatsOf`, lu par `War.deploy`, `ageUp`, la puissance de l'armée ; les Enfers en mode rapide lisent `troopStats`, sans le bonus).
+- Équipe à l'écran : l'épée d'obsidienne se tient comme l'épée, la lance comme la lance (`Kit.weapon`). Imprévus : elles comptent comme armes (`WEAPONS`).
+- Images : pas encore d'illustration peinte (`GEAR_ART`) ; la carte garde l'icône au trait de la lance et de l'épée. Prompt dans `.claude/prompts-images-expeditions.md` (« Équipement d'obsidienne »).
+- Anciennes sauvegardes : `readExpState` donne le savoir-faire à une partie qui a déjà réussi la mission ; les pièces nouvelles valent 0 en réserve.
 
 ### Fabrication
 - Condition (`Expeditions.whyCraft`) : âge de la pièce atteint, bâtiment `needs` présent (atelier, lieu de soins pour la trousse), de quoi payer, file non pleine (`MAX_CRAFT = 10` : le plus gros lot d'une expédition, le kraken, fait 8 pièces ; à 6, « Tout fabriquer » laissait ses barques dehors). Le prix est prélevé tout de suite ; annuler une pièce de la file le rend (`cancelCraft`).

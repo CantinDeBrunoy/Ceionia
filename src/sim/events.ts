@@ -56,7 +56,7 @@ export interface ExpEvent {
 }
 
 /** Les armes de toutes les époques (la lance au plasma) : une équipe armée, quelle que soit son arme, peut tenir tête */
-const WEAPONS: GearId[] = ['spear', 'bow', 'sword', 'crossbow', 'rifle', 'assault', 'grenade', 'plasma'];
+const WEAPONS: GearId[] = ['spear', 'obsidianSpear', 'bow', 'sword', 'obsidianSword', 'crossbow', 'rifle', 'assault', 'grenade', 'plasma'];
 const ARMORS: GearId[] = ['armor', 'energyArmor'];
 const LIGHTS: GearId[] = ['torch', 'lamp'];
 const food = (n: number, days?: number): Effect => ({ t: 'need', need: 'food', n, days });

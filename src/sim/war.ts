@@ -5,7 +5,7 @@ import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demon
 import { IsleBattle, defenseK } from './isleBattle';
 import { balanceOf, powerOf } from './hellBalance';
 import { tr, plural, nplural } from '../i18n';
-import { gearName, Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName, andJoin } from './army';
+import { gearName, Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, troopStatsOf, kitMissing, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName, andJoin } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES, zoneOf, zoneOfZ, zoneThe, zoneAgeText } from '../world/hell';
 import type { BaseKind } from './hell';
@@ -209,7 +209,7 @@ export class War {
     if (this.portalOut) return tr('Le portail est éteint : la guerre est finie.');
     if (this.pve === 'off') return tr('Le portail est refermé : rouvrez-le quand vous voulez.');
     if (!b || !b.posts()) return tr('Il faut une caserne avancée dans la base.');
-    const ctx = this.recruitCtx(age, pop), miss = troopKit(kind, age).gear.filter((g) => (ctx.stock[g] ?? 0) < 1);
+    const ctx = this.recruitCtx(age, pop), miss = kitMissing(troopKit(kind, age).gear, ctx.stock);
     if (miss.length && !w.unlimited && b.countOf('smithy') && w.ore >= miss.length * SMITHY_ORE) {
       // la forge forge ce qui manque, pour cette recrue (on le rend si elle est refusée)
       w.ore -= miss.length * SMITHY_ORE;
@@ -243,7 +243,7 @@ export class War {
 
   /** L'unité au combat d'une troupe valide, posée sur l'île ou dans les Enfers */
   private deploy(t: Troop, age: number) {
-    const st = troopStats(t.kind, age);
+    const st = troopStatsOf(t, age);
     let u: HellUnit | null = null;
     if (t.where === 'hell' && this.faction && this.hellMap) {
       // au camp de base le plus avancé (sinon devant le portail)
@@ -464,7 +464,7 @@ export class War {
    */
   power(age: number) {
     let p = 0;
-    for (const t of this.army.troops) p += powerOf(troopStats(t.kind, age)) * (t.heal > 0 ? 0.5 : 1);
+    for (const t of this.army.troops) p += powerOf(troopStatsOf(t, age)) * (t.heal > 0 ? 0.5 : 1);
     for (const r of this.army.queue) p += powerOf(troopStats(r.kind, age)) * 0.5;
     const tw = SITES.watchtower;
     return p + isleDefenses(this.world).towers * powerOf({ hp: tw.hp, dmg: tw.dmg, cooldown: tw.cooldown }) * defenseK(age);
@@ -590,7 +590,7 @@ export class War {
     for (const u of this.unitOf.values()) {
       const t = this.troopOf.get(u.id);
       if (!t) continue;
-      u.stats = { ...troopStats(t.kind, age) };
+      u.stats = { ...troopStatsOf(t, age) };
       u.maxHp = t.maxHp; u.hp = Math.min(u.maxHp, Math.max(1, t.hp));
     }
   }

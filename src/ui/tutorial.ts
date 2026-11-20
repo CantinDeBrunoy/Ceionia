@@ -287,7 +287,7 @@ export function tutoGear(age: number, has: (k: string) => boolean): GearId | nul
   const c = MISSIONS.find((m) => m.id === 'berries')?.choices[0];
   if (!c) return null;
   for (const d of dangersOf(c)) {
-    const g = GEAR.filter((x) => (x.guards === d || x.also === d) && gearCurrent(x, age) && (!x.needs || has(x.needs))).sort((a, b) => b.cut - a.cut)[0];
+    const g = GEAR.filter((x) => (x.guards === d || x.also === d) && gearCurrent(x, age) && !x.perk && (!x.needs || has(x.needs))).sort((a, b) => b.cut - a.cut)[0];
     if (g) return g.id;
   }
   return null;

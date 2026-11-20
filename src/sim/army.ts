@@ -120,6 +120,25 @@ export function troopKit(kind: TroopKind, age: number): { gear: GearId[]; mount:
   return { gear: f.gear, mount: !!f.mount };
 }
 
+/**
+ * Une pièce meilleure qui tient lieu de celle qu'on demande : l'épée d'obsidienne pour l'épée (le chevalier, le hallebardier).
+ * La recrue la prend en priorité si la réserve en a
+ */
+export const BETTER: Partial<Record<GearId, GearId>> = { sword: 'obsidianSword' };
+/** Ce que la recrue emporte vraiment de cette réserve : la pièce meilleure quand il y en a une */
+export function kitFrom(gear: readonly GearId[], stock: Stock): GearId[] {
+  return gear.map((g) => { const b = BETTER[g]; return b && (stock[b] ?? 0) >= 1 ? b : g; });
+}
+/** Les pièces qui manquent en réserve pour cet équipement (une pièce meilleure en tient lieu) */
+export const kitMissing = (gear: readonly GearId[], stock: Stock) => gear.filter((g) => (stock[g] ?? 0) < 1 && !((BETTER[g] && (stock[BETTER[g]!] ?? 0) >= 1)));
+/** Dégâts en plus d'une troupe armée d'obsidienne (l'épée d'obsidienne du chevalier : +25 %) */
+export const OBSIDIAN_DMG = 1.25;
+/** Les forces d'une troupe recrutée, son équipement compris (l'épée d'obsidienne frappe plus fort) */
+export function troopStatsOf(t: { kind: TroopKind; gear?: GearId[] }, age: number): UnitStats {
+  const st = troopStats(t.kind, age);
+  return t.gear?.includes('obsidianSword') ? { ...st, dmg: Math.round(st.dmg * OBSIDIAN_DMG * 10) / 10 } : st;
+}
+
 /** Les pièces dont une troupe recrutable à cet âge a besoin (même « dépassées » pour les expéditions : la lance du cavalier) */
 export function troopGearNeeded(age: number): Set<GearId> {
   const out = new Set<GearId>();
@@ -211,7 +230,7 @@ export function recruitWhy(a: Army, kind: TroopKind, c: RecruitCtx): string | nu
   // (le cheval ne s'achète pas : même en ressources illimitées, il en faut un à l'écurie)
   if (f.mount && (c.horses ?? 0) < 1) return tr('Pas de cheval disponible à l’écurie (en élever, ou attendre le retour d’une expédition montée)');
   if (!c.unlimited) {
-    const miss = f.gear.filter((g) => (c.stock[g] ?? 0) < 1);
+    const miss = kitMissing(f.gear, c.stock);
     if (miss.length) return tr('{name} : il faut {items} en réserve (à fabriquer, menu Expéditions › Équipement)', { name: f.name, items: andJoin(miss.map((g) => `1 ${gearName(g)}`)) });
   }
   return null;
@@ -229,8 +248,10 @@ export function onlyGearMissing(a: Army, kind: TroopKind, c: RecruitCtx) {
 export function gearToCraft(kind: TroopKind, stock: Stock, crafting: readonly GearId[], waiting: readonly TroopKind[] = [], age = 2): GearId[] {
   const out: GearId[] = [];
   for (const g of troopKit(kind, age).gear) {
-    const need = 1 + waiting.filter((k) => troopKit(k, age).gear.includes(g)).length;
-    if ((stock[g] ?? 0) + crafting.filter((x) => x === g).length < need) out.push(g);
+    const need = 1 + waiting.filter((k) => troopKit(k, age).gear.includes(g)).length, b = BETTER[g];
+    // (une pièce meilleure en réserve ou en fabrication en tient lieu)
+    const have = (stock[g] ?? 0) + crafting.filter((x) => x === g).length + (b ? (stock[b] ?? 0) + crafting.filter((x) => x === b).length : 0);
+    if (have < need) out.push(g);
   }
   return out;
 }
@@ -239,7 +260,7 @@ export function gearToCraft(kind: TroopKind, stock: Stock, crafting: readonly Ge
 export function recruit(a: Army, kind: TroopKind, c: RecruitCtx, at?: TroopWhere): string | null {
   const why = recruitWhy(a, kind, c);
   if (why) return why;
-  const kit = troopKit(kind, c.age);
+  const base = troopKit(kind, c.age), kit = { ...base, gear: c.unlimited ? base.gear : kitFrom(base.gear, c.stock) };
   if (!c.unlimited) { for (const g of kit.gear) c.stock[g]--; if (kit.mount) { c.ride?.(1); if (c.horses) c.horses--; } }
   // à la caserne avancée, pas de traversée : un peu plus vite (l'équipement pris est noté : on le rend tel quel)
   a.queue.push({ kind, left: at === 'hell' ? Math.round(TROOPS[kind].time * 0.75) : TROOPS[kind].time, ...(at === 'hell' ? { at } : {}), gear: [...kit.gear], ...(kit.mount ? { mount: true } : {}) });
@@ -274,7 +295,7 @@ export function stepArmy(a: Army, dt: number, barracks: number, age: number, hea
   if (dt <= 0) return { joined, healed };
   for (let i = 0; i < Math.min(barracks * TRAIN_SLOTS, a.queue.length); i++) a.queue[i].left -= dt;
   while (a.queue.length && a.queue[0].left <= 0) {
-    const r = a.queue.shift()!, st = troopStats(r.kind, age);
+    const r = a.queue.shift()!, st = troopStatsOf(r, age);
     const t: Troop = { id: a.nextId++, kind: r.kind, hp: st.hp, maxHp: st.hp, where: r.at ?? 'isle', heal: 0, ...(r.gear ? { gear: r.gear } : {}), ...(r.mount ? { mount: true } : {}) };
     a.troops.push(t);
     joined.push(t);
@@ -282,7 +303,7 @@ export function stepArmy(a: Army, dt: number, barracks: number, age: number, hea
   // une recrue plus loin dans la file a pu finir avant la première (plusieurs casernes)
   for (let i = a.queue.length - 1; i >= 0; i--) {
     if (a.queue[i].left > 0) continue;
-    const r = a.queue.splice(i, 1)[0], st = troopStats(r.kind, age);
+    const r = a.queue.splice(i, 1)[0], st = troopStatsOf(r, age);
     const t: Troop = { id: a.nextId++, kind: r.kind, hp: st.hp, maxHp: st.hp, where: r.at ?? 'isle', heal: 0, ...(r.gear ? { gear: r.gear } : {}), ...(r.mount ? { mount: true } : {}) };
     a.troops.push(t);
     joined.push(t);

@@ -664,6 +664,7 @@ registerDict('missions', {
   'creuse une tranchée pour détourner la coulée du village': 'digs a trench to turn the flow away from the village',
   'La coulée a suivi la tranchée et filé vers la mer : les maisons sont sauves ! Le village reconnaissant nous offre son fer.': 'The flow followed the trench and ran into the sea: the houses are saved! The grateful village gives us its iron.',
   'La lave a franchi la tranchée : on a sauvé les gens, pas les maisons. Deux sauveteurs sont brûlés.': 'The lava crossed the trench: we saved the people, not the houses. Two rescuers are burned.',
+  'les tailleurs d’obsidienne : lances et épées d’obsidienne': 'obsidian knappers: obsidian spears and swords',
   // la chasse au cerf blanc
   'les bois du cerf blanc : un trophée sur la place du village': 'the white stag’s antlers: a trophy in the village square',
   'La chasse au cerf blanc': 'The White Stag Hunt',
