@@ -314,6 +314,8 @@ export class World {
   losses: string[] = [];
   /** Minerai en réserve (la mine en extrait chaque jour) */
   ore = 0;
+  /** envies d'habitants comblées depuis le début de la partie (bien-être du village, voir `sim/wishes.ts`) */
+  wishesMet = 0;
   /** bois et pierre, pour bâtir les grands bâtiments */
   wood = START_WOOD;
   stone = START_STONE;
@@ -1874,6 +1876,7 @@ export class World {
         return r;
       }),
       nextId: this.nextId,
+      ...(this.wishesMet ? { wishes: this.wishesMet } : {}),
       plaza3: PLAZA3,
       torches: [...this.torches],
       basalt: lavaFields(this.basalt),
@@ -2020,6 +2023,8 @@ export class World {
     this.ash.fill(0);
     for (const k of d.ash ?? []) if (k >= 0 && k < N * N) this.ash[k] = 1;
     this.ore = Math.max(0, +d.ore || 0);
+    // (une partie d'avant les envies des habitants repart à zéro)
+    this.wishesMet = Math.max(0, Math.floor(+d.wishes || 0));
     this.wood = d.wood === undefined ? START_WOOD : Math.max(0, +d.wood || 0);
     this.stone = d.stone === undefined ? START_STONE : Math.max(0, +d.stone || 0);
     this.crude = Math.max(0, +d.crude || 0);

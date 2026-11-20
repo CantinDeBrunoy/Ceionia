@@ -1,6 +1,7 @@
 import { tr } from '../i18n';
 import { Coverage, computeCoverage } from './coverage';
 import { World, N } from '../world/world';
+import { WISH_JOY, WISH_JOY_MAX } from './wishes';
 import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine, DECOR, DECOR_JOY_MAX } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
@@ -193,7 +194,8 @@ export class Sim {
     this.food.cap = down(this.baseFood + this.fieldsFood + needBonus(e, 'food'));
     this.water.cap = down(this.baseWater + needBonus(e, 'water'));
     this.jobs.cap = down(this.baseJobs + needBonus(e, 'jobs'));
-    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy'));
+    // (et les envies d'habitants comblées : un petit plus, plafonné)
+    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY));
     this.housing.demand = p;
     this.food.demand = up((n + 1) * rulesOf(this.world.difficulty).foodK);
     this.water.demand = n + 1;
@@ -216,6 +218,7 @@ export class Sim {
     if (k === 'food' && L.fields) rows.push({ label: tr(L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)'), n: L.fields, v: this.fieldsFood });
     if (k === 'jobs' && L.fields >= 2) rows.push({ label: tr('Champs'), n: L.fields, v: Math.floor(L.fields / 2) });
     if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: tr('Sécurité (pompiers et police)'), n: this.coverage.both, v: this.coverage.joy });
+    if (k === 'joy' && this.world.wishesMet) rows.push({ label: tr('Envies d’habitants comblées'), n: this.world.wishesMet, v: Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) });
     if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts où l’on se promène'), n: L.forests, v: L.forests * 0.08 });
     if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: tr(b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)'), n: 0, v: b }); }
     rows.sort((a, b) => b.v - a.v);

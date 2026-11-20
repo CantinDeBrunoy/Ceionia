@@ -3,7 +3,8 @@ import { World, N, VEG_FIELD } from '../world/world';
 import { Building, KINDS, KindId, hasDoor, sizeOf, walkableDecor } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
-import { makeFolk, folkStep, holdFolk, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
+import { makeFolk, folkStep, holdFolk, folkTraits, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
+import { Wish, Sites, sitesOf, wishFor, wishMet } from './wishes';
 import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { Parts } from '../render/parts';
 import { mats } from '../render/materials';
@@ -335,6 +336,10 @@ interface Agent {
   parked: [number, number, number] | null;
   /** en armure et à pied, le soldat de l'époque (légionnaire, chevalier, fantassin, militaire) prend sa place */
   soldier: Soldier | null;
+  /** son envie (voir `sim/wishes.ts`), l'âge du village où elle lui est venue ; son merci d'une envie comblée, jusqu'à quand */
+  wish?: Wish | null;
+  wishAge?: number;
+  thanks?: { wish: Wish; until: number } | null;
   /** son métier et son lieu de travail (null : sans emploi, ou enfant) ; l'outil qu'il tient en ce moment */
   job?: { kind: JobKind; b: number } | null;
   tool?: keyof typeof PROPS | null;
@@ -361,6 +366,8 @@ export interface Citizen {
   id: number; home: number; x: number; z: number; hidden: boolean; child: boolean;
   /** son lieu de travail (null : sans métier) ; bras des champs ; en expédition ; blessé au repos */
   job: number | null; jobKind: string | null; hand: boolean; mission: boolean; resting: boolean;
+  /** son envie du moment, et le merci d'une envie comblée (null : aucun) */
+  wish: Wish | null; thanks: Wish | null;
   /** en chemin, sur place, chez lui ; il rentre ; il court au feu ; ce qu'il fait sur place */
   state: 'inside' | 'walking' | 'doing'; goingHome: boolean; urgent: boolean; act: Act | null; field: boolean;
 }
@@ -403,6 +410,9 @@ export class Heap {
     return top;
   }
 }
+
+/** Combien de cœurs au plus en même temps, combien de temps dure un merci (secondes de jeu), tous les combien on revoit les envies */
+const HEARTS = 8, THANKS_T = 90, WISH_STEP = 1.5;
 
 /** Habitants : agents instanciés qui marchent sur les routes et rentrent la nuit */
 export class Agents {
@@ -460,6 +470,13 @@ export class Agents {
   /** l'habitant choisi d'un clic (sa fiche est ouverte) : un anneau doré sous ses pieds */
   selected: number | null = null;
   private ring: THREE.Mesh;
+  /** temps écoulé (secondes de jeu) : les mercis durent `THANKS_T` ; les envies se revoient toutes les `WISH_STEP` secondes */
+  private clock = 0;
+  private wishT = 0;
+  private sites: Sites | null = null;
+  private sitesV = -1;
+  /** les petits cœurs au-dessus de ceux qui viennent de voir une envie comblée */
+  private hearts: THREE.Mesh[] = [];
 
   constructor(private world: World) {
     this.body = new THREE.InstancedMesh(new THREE.ConeGeometry(0.075, 0.2, 6).translate(0, 0.1, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
@@ -469,6 +486,42 @@ export class Agents {
     this.ring = new THREE.Mesh(new THREE.RingGeometry(0.11, 0.15, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd25a, transparent: true, opacity: 0.9, depthWrite: false }));
     this.ring.visible = false; this.ring.renderOrder = 2;
     this.group.add(this.ring);
+    // le cœur : deux lobes et une pointe, rouge vif, tourné vers la caméra au rendu
+    const heart = new THREE.Shape();
+    heart.moveTo(0, -0.05); heart.bezierCurveTo(-0.06, -0.01, -0.05, 0.035, -0.025, 0.035); heart.bezierCurveTo(-0.01, 0.035, 0, 0.02, 0, 0.012);
+    heart.bezierCurveTo(0, 0.02, 0.01, 0.035, 0.025, 0.035); heart.bezierCurveTo(0.05, 0.035, 0.06, -0.01, 0, -0.05);
+    const hg = new THREE.ShapeGeometry(heart, 4), hm = new THREE.MeshBasicMaterial({ color: 0xe8384a, side: THREE.DoubleSide, depthTest: false, transparent: true });
+    for (let i = 0; i < HEARTS; i++) { const m = new THREE.Mesh(hg, hm); m.visible = false; m.renderOrder = 3; this.hearts.push(m); this.group.add(m); }
+  }
+
+  /**
+   * Les envies : chaque habitant qu'on voit (hors expédition) en reçoit une, revue quand l'âge change ; une envie comblée fait
+   * dire merci (`THANKS_T` secondes, un cœur au-dessus de lui) et compte pour le village (`World.wishesMet`, sauvegardé) ; après
+   * le merci, une nouvelle envie lui vient
+   */
+  private stepWishes(dt: number, age: number) {
+    this.clock += dt;
+    if ((this.wishT -= dt) > 0) return;
+    this.wishT = WISH_STEP;
+    const w = this.world;
+    if (!this.sites || this.sitesV !== w.version) { this.sites = sitesOf(w); this.sitesV = w.version; }
+    for (const a of this.agents) {
+      if (a.mission) continue;
+      if (a.thanks && a.thanks.until > this.clock) continue;
+      const home = w.buildings.get(a.home);
+      if (a.wish && a.wishAge === age && wishMet(w, this.sites, home, a.wish)) {
+        a.thanks = { wish: a.wish, until: this.clock + THANKS_T };
+        a.wish = null;
+        w.wishesMet++;
+        continue;
+      }
+      if (!a.wish || a.wishAge !== age) {
+        const t = folkTraits(a.id, a.child), profile = [a.child ? 'child' : a.hand ? 'farmer' : a.job?.kind ?? '', t.old ? 'old' : ''];
+        // (un numéro de tirage qui change à chaque envie comblée : la suivante n'est pas la même)
+        a.wish = wishFor(w, this.sites, home, a.id + w.wishesMet * 7919, age, profile);
+        a.wishAge = age;
+      }
+    }
   }
 
   // ---------- Fiche d'un habitant ----------
@@ -497,6 +550,7 @@ export class Agents {
     return {
       id: a.id, home: a.home, x: a.x, z: a.z, hidden: a.hidden, child: a.child, job: a.job?.b ?? null, jobKind: a.job?.kind ?? null, hand: !!a.hand,
       mission: a.mission, resting: a.rest > 0, state: a.state, goingHome: a.goingHome, urgent: !!a.urgent, act: a.act, field: !!a.task,
+      wish: a.wish ?? null, thanks: a.thanks && a.thanks.until > this.clock ? a.thanks.wish : null,
     };
   }
 
@@ -1506,6 +1560,7 @@ export class Agents {
       }
     }
     this.stepRigs(this.rigAge(age), dt, hour);
+    this.stepWishes(dt, age);
     this.render(age, dt);
   }
 
@@ -1709,6 +1764,17 @@ export class Agents {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
+    // les cœurs de ceux qui viennent de voir une envie comblée, tournés vers la caméra, qui flottent un peu
+    let nh = 0;
+    for (const a of this.agents) {
+      if (nh >= HEARTS || !a.thanks || a.thanks.until <= this.clock || a.hidden) continue;
+      const m = this.hearts[nh++], bob = Math.sin(this.clock * 3 + a.id) * 0.02;
+      m.position.set(a.x, this.groundY(a) + HUMAN * (a.child ? 0.9 : 1.35) + bob, a.z);
+      if (this.camera) m.quaternion.copy(this.camera.quaternion);
+      m.scale.setScalar(a.child ? 0.8 : 1);
+      m.visible = true;
+    }
+    for (let i = nh; i < HEARTS; i++) this.hearts[i].visible = false;
     // l'anneau sous l'habitant choisi, qui bat doucement
     const sel = this.selected === null ? undefined : this.byId(this.selected);
     this.ring.visible = !!sel && !sel.hidden;

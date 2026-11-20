@@ -1545,6 +1545,7 @@ export class UI {
       const act = el.dataset.act;
       if (act === 'close') tl.select(null);
       else if (act === 'follow') { h.audio.sfxClick(); h.followCitizen(h.citizenCam === id ? null : id); this.selKey = ''; this.renderSelection(); }
+      else if (act === 'exp' && el.dataset.m) { h.audio.sfxClick(); this.gotoMission(el.dataset.m); }
       else if (act === 'home') { const c = h.agents.citizen(id); if (c && h.world.buildings.has(c.home)) { h.audio.sfxClick(); h.followCitizen(null); tl.select(c.home); } }
     }));
   }

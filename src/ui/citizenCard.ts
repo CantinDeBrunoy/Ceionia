@@ -2,6 +2,7 @@ import { tr } from '../i18n';
 import { KINDS, Building, sizeOf } from '../build/catalog';
 import type { NeedId } from '../sim/sim';
 import { citizenName, citizenWish, familyName, jobText, WishCtx } from '../sim/citizens';
+import { wishText, thanksText } from '../sim/wishes';
 import { folkTraits } from '../render/folk';
 import { hash2 } from '../core/rng';
 import { ic } from './icons';
@@ -87,22 +88,29 @@ export function citizenCard(h: UIHost, id: number): { key: string; html: string 
   const job = c.child ? tr('Enfant') : c.hand ? tr('Cultive la terre · aux champs') : c.jobKind && work ? `${jobText(c.jobKind)} · ${KINDS[work.kind].names[Math.max(work.age, KINDS[work.kind].minAge)]}` : tr('Sans métier');
   const cov = sim.coverage, posts = cov.stations.fire.length + cov.stations.police.length > 0;
   const guarded = !!home && !cov.uncoveredFire.includes(home) && !cov.uncoveredPolice.includes(home);
+  const pop = Math.max(1, Math.floor(sim.pop)), short = (n: { cap: number; demand: number }, per: number) => Math.min(1, Math.max(0, Math.ceil((n.demand - n.cap) / per - 1e-6)) / pop);
   const ctx: WishCtx = {
     id: c.id, age, child: c.child, working: c.job !== null || c.hand, resting: c.resting, away: c.mission,
     food: sim.food.ok, water: sim.water.ok, jobs: sim.jobs.ok, joy: sim.joy.ok, health: sim.health.ok, room: sim.housing.ok,
     guarded, posts, wellDist: wellDist(h, home), school: sim.built('school') > 0, pretty: pretty(h, home),
     season: h.time.season, rain: h.env.rainK > 0.6, night: h.time.hour >= 20.5 || h.time.hour < 5.5,
+    // son envie à lui (un lieu déjà au village mais loin, ou absent), son merci, sa famille qui attend une maison
+    own: c.wish ? wishText(c.wish, age, c.wish.type === 'place' && sim.built(c.wish.kind) > 0) : null,
+    thanks: c.thanks ? thanksText(c.thanks, age) : null,
+    cousins: hash2(c.id, 0, 421) < 0.25, job: c.hand ? 'farmer' : c.jobKind,
+    // (comme la fiche des habitants : un affamé par part de nourriture qui manque, un mécontent par 0,3 de bien-être…)
+    share: { food: short(sim.food, 1), water: short(sim.water, 1), health: short(sim.health, 1), joy: short(sim.joy, 0.3) },
   };
   const wish = citizenWish(ctx), now = doing(h, c), followed = h.citizenCam === c.id;
   const g = sim.growth();
   // un manque qui freine le village : on dit aussi qu'il retient les nouveaux venus
-  const block = wish.tone === 'need' && g.missing.length ? `<p class="cnote">${tr('Tant qu’il manque au village {list}, personne de nouveau n’y arrive.', { list: missingText(g.missing) })}</p>`
-    : wish.tone === 'need' && g.full ? `<p class="cnote">${tr('Le village est plein : il faut des maisons pour accueillir du monde.')}</p>` : '';
+  const block = wish.topic === 'village' && g.missing.length ? `<p class="cnote">${tr('Tant qu’il manque au village {list}, personne de nouveau n’y arrive.', { list: missingText(g.missing) })}</p>`
+    : wish.topic === 'housing' && g.full ? `<p class="cnote">${tr('Le village est plein : il faut des maisons pour accueillir du monde.')}</p>` : '';
   const key = `cit|${c.id}|${age}|${name}|${homeName}|${job}|${now}|${wish.text}|${block}|${followed}`;
   const html = `<div class="ihead"><div class="xth">${portrait(c.id, age, c.child)}</div><div class="grow"><h4>${name}</h4><small class="xsub">${job}</small></div><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
     <blockquote class="cwish t-${wish.tone}">« ${wish.text} »</blockquote>${block}
     <p class="stat">${ic('house', 14, 2)} ${home && home.kind !== 'gather' ? tr('{home}, famille {family}', { home: homeName, family: familyName(c.home, age) }) : homeName}</p>
     <p class="stat">${ic('eye', 14, 2)} ${now}</p>
-    <div class="acts xacts"><button data-act="follow" class="${followed ? '' : 'primary'}">${ic('eye', 16, 2)} ${tr(followed ? 'Ne plus suivre' : 'Suivre')}</button>${home ? `<button data-act="home">${ic('house', 16, 2)} ${tr('Sa maison')}</button>` : ''}</div>`;
+    <div class="acts xacts">${c.wish?.type === 'expedition' && !c.thanks && wish.text === ctx.own ? `<button data-act="exp" data-m="${c.wish.mission}" class="primary">${ic('compass', 16, 2)} ${tr('Voir l’expédition')}</button>` : ''}<button data-act="follow" class="${followed ? '' : 'primary'}">${ic('eye', 16, 2)} ${tr(followed ? 'Ne plus suivre' : 'Suivre')}</button>${home ? `<button data-act="home">${ic('house', 16, 2)} ${tr('Sa maison')}</button>` : ''}</div>`;
   return { key, html };
 }

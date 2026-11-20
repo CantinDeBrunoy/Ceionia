@@ -78,10 +78,27 @@ export interface WishCtx {
   pretty: boolean;
   /** saison (0 printemps … 3 hiver), il pleut fort, il fait nuit */
   season: number; rain: boolean; night: boolean;
+  /** son envie à lui (`sim/wishes.ts`, déjà en phrase), son merci d'une envie comblée, de la famille qui attend une maison */
+  own?: string | null; thanks?: string | null; cousins?: boolean;
+  /** son métier (`JobKind` d'`Agents`), pour une phrase contente qui lui ressemble */
+  job?: string | null;
+  /**
+   * la part des habitants que touche chaque manque du village (0 … 1 : affamés, assoiffés, malades sans soins, mécontents) ;
+   * seuls ceux-là s'en plaignent, tirés de leur numéro (sans elle, un manque touche tout le monde)
+   */
+  share?: { food: number; water: number; health: number; joy: number };
 }
 
+/** Une phrase contente selon le métier */
+const HAPPY_JOB: Record<string, string> = {
+  farmer: 'La récolte s’annonce belle cette année.', woodcutter: 'Le bois sent bon ce matin.', quarry: 'Belle pierre, aujourd’hui.',
+  fisher: 'Le poisson mord bien en ce moment.', smith: 'Mon enclume chante toute la journée.', merchant: 'Les affaires marchent bien.',
+  priest: 'Le village a l’air en paix.', healer: 'Personne de malade aujourd’hui, tant mieux.', teacher: 'Mes élèves apprennent vite.',
+  guard: 'Tout est calme dans les rues.', herder: 'Mes bêtes sont en bonne santé.', keeper: 'Les abeilles ont bien travaillé.',
+};
+
 /** La phrase et son ton : `need` (un manque qui freine le village), `wish` (un souhait, sans effet), `happy` */
-export interface Wish { text: string; tone: 'need' | 'wish' | 'happy' }
+export interface Wish { text: string; tone: 'need' | 'wish' | 'happy'; /** le manque dont il parle (logement : le village est plein) */ topic?: 'village' | 'housing' }
 
 /** Un puits plus loin que ceci, de sa maison, se remarque (n'a aucun effet : les besoins n'ont pas de portée) */
 export const WELL_FAR = 14;
@@ -91,16 +108,20 @@ export const WELL_FAR = 14;
  * bien-être, place), puis ses souhaits à lui (puits loin, rue sans garde, froid, pluie), sinon une phrase contente
  */
 export function citizenWish(c: WishCtx): Wish {
-  const need = (text: string): Wish => ({ text, tone: 'need' }), wish = (text: string): Wish => ({ text, tone: 'wish' });
+  const need = (text: string): Wish => ({ text, tone: 'need', topic: 'village' }), wish = (text: string): Wish => ({ text, tone: 'wish' });
   if (c.away) return wish(tr('Je suis en expédition, loin du village.'));
   if (c.resting) return wish(tr('Je me remets de mes blessures, encore quelques jours.'));
-  if (!c.food) return need(tr('J’ai faim : les greniers sont presque vides.'));
-  if (!c.water) return need(tr('J’ai soif : il manque de l’eau au village.'));
+  const hits = (k: 'food' | 'water' | 'health' | 'joy', salt: number) => !c.share || hash2(c.id, salt, 433) < c.share[k];
+  if (!c.food && hits('food', 1)) return need(tr('J’ai faim : les greniers sont presque vides.'));
+  if (!c.water && hits('water', 2)) return need(tr('J’ai soif : il manque de l’eau au village.'));
   if (!c.jobs && !c.working && !c.child) return need(tr('Je n’ai pas de travail : il manque des lieux où travailler.'));
-  if (!c.health) return need(tr('Je tousse depuis des jours, et personne pour me soigner.'));
-  if (!c.joy) return need(tr('On s’ennuie, ici : pas de lieu où se retrouver le soir.'));
+  if (!c.health && hits('health', 3)) return need(tr('Je tousse depuis des jours, et personne pour me soigner.'));
+  if (!c.joy && hits('joy', 4)) return need(tr('On s’ennuie, ici : pas de lieu où se retrouver le soir.'));
+  if (c.thanks) return { text: c.thanks, tone: 'happy' };
+  // plus de logements : seulement ceux dont la famille attend vraiment (le village est plein, un habitant sur quatre)
+  if (!c.room && c.cousins) return { text: tr('Ma cousine voudrait venir vivre ici, mais il n’y a plus de maison libre.'), tone: 'need', topic: 'housing' };
+  if (c.own) return wish(c.own);
   if (c.child && !c.school && c.age >= 1) return wish(tr('J’aimerais aller à l’école, mais il n’y en a pas.'));
-  if (!c.room) return need(tr('Ma cousine voudrait venir vivre ici, mais il n’y a plus de maison libre.'));
   if (c.wellDist > WELL_FAR && Number.isFinite(c.wellDist)) return wish(tr('Le puits est loin de chez moi.'));
   if (c.posts && !c.guarded && c.age >= 1) return wish(tr('Ma rue est loin des pompiers et des gardes, ça m’inquiète.'));
   if (c.season === 3 && !c.night) return wish(tr(c.age >= 3 ? 'Brr, qu’il fait froid. Vivement le printemps.' : 'J’ai froid. Vivement le printemps.'));
@@ -108,7 +129,7 @@ export function citizenWish(c: WishCtx): Wish {
   if (c.pretty) return { text: tr('J’aime les fleurs devant chez moi.'), tone: 'happy' };
   const happy = c.child
     ? [tr('J’ai joué toute la journée !'), tr('Plus tard, je partirai en expédition.')]
-    : [tr('Le village me plaît, on y vit bien.'), tr('Belle journée pour travailler.'), tr('On mange bien, on dort au sec : que demander de plus ?'), tr('J’aimerais un banc pour regarder passer les gens.')];
+    : [tr('Le village me plaît, on y vit bien.'), tr('Belle journée pour travailler.'), tr('On mange bien, on dort au sec : que demander de plus ?'), ...(c.job && HAPPY_JOB[c.job] ? [tr(HAPPY_JOB[c.job]), tr(HAPPY_JOB[c.job])] : [])];
   return { text: happy[Math.floor(hash2(c.id, c.season, 41) * happy.length)], tone: 'happy' };
 }
 

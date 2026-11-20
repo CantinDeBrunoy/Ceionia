@@ -1574,3 +1574,6 @@ button.round.off:hover { opacity: 0.85; }
 @media (max-width: 700px) {
   .peoplesModal .ppCards { grid-template-columns: 1fr; }
 }
+/* fiche d'un habitant : trois boutons au plus (« Voir l'expédition », « Suivre », « Sa maison ») ; ils passent à la ligne s'il le faut */
+#selCard.citizen .xacts { flex-wrap: wrap; }
+#selCard.citizen .xacts button { flex: 1 1 auto; }
