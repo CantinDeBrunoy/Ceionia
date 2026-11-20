@@ -54,7 +54,7 @@ Fenêtre modale `.victoryCard` : planète bleue animée (`drawPlanet`), titre, t
 Elle ne tient pas qu'à la fin de partie : `main.ts` déclenche `festAt` pour toute expédition qui rentre avec succès (`phase === 'home' && ok`, une seule fois par `a.id` via `feted`), et la chute du roi des Enfers l'appelle aussi (`kingStage`). Voir [expeditions.md](expeditions.md) pour le retour. Résumé :
 - Lieu : la grande place la plus proche (`plazaNear`, bâtiment `gather` de taille ≥ 3 ; `fire: true` à la Préhistoire, le feu du clan flambe), sinon une case dégagée près du cœur (`spot`).
 - Durée `dur` : 28 s avant l'âge 3, 34 s ensuite. Une autre fête à moins de 4 cases **prolonge** la même (`dur ≥ t + 28`, `boost` jusqu'à 3, plus de salves).
-- Décor et effets par âge : guirlandes de feuillage, fleurs et pétales, fusées d'or, confettis, grand feu d'artifice multicolore (`BURSTS`, `FLAGS`, `MAST`). `onBang` / `onFeast` jouent les sons. Une danse (ronde de `dancers`), un orchestre (`band`), un festin.
+- Décor et effets par âge : guirlandes de feuillage, fleurs et pétales, fusées d'or, confettis, grand feu d'artifice multicolore (`BURSTS`, `FLAGS`, `MAST`). Pétales et confettis qui tombent sur la place : des points en forme de pétale (`petalTexture`, `alphaTest`) ; sans texture, c'étaient des carrés blancs au-dessus de l'agora (testeurs v6). `onBang` / `onFeast` jouent les sons. Une danse (ronde de `dancers`), un orchestre (`band`), un festin.
 - `fest.update(dt)` est appelé avec le temps **réel** (`dt`), non le temps de jeu : la vitesse du jeu ne l'accélère pas et la pause ne l'arrête pas.
 
 ## Liens avec les autres systèmes
