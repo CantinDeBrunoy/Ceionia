@@ -672,13 +672,11 @@ class Game implements UIHost {
       age: () => this.sim.age,
       village: () => this.villageCenter(), fest: (x, z) => this.festAt(x, z), crowd: (on, x, z) => this.kingCrowd(on, x, z),
     });
-    // la cinématique du portail : au premier passage d'une recrue, de l'arche de l'île jusqu'au Seuil des Enfers
+    // la cinématique du portail : au premier passage d'une recrue, le film (l'arche, la plongée) puis le Seuil des Enfers en direct
     this.portalStage = new PortalStage({
-      cam: this.cam, war: this.war, ui: { root: uiRoot }, audio,
+      cam: this.cam, war: this.war, ui: { root: uiRoot },
       mode: () => this.mode,
-      portal: () => { const p = w.portal; return p ? { x: p.x, z: p.z, y: w.hAt(p.x, p.z), facing: this.portalView.group.rotation.y } : null; },
       hellY: (x, z) => (this.mode === 'hell' && this.hellMode ? this.hellMode.view.groundY(x, z) : null),
-      surge: (k) => { this.portalView.surge = k; },
       pace: (cine) => { if (cine) { this.cineSpeed = this.time.speed; this.time.speed = 1; } else if (this.cineSpeed) { this.time.speed = this.cineSpeed; this.cineSpeed = 0; } },
       enterHell: (quiet) => void this.enterHell(quiet),
       arrived: () => this.portalArrived(),
