@@ -2678,15 +2678,35 @@ function well(p: Parts, age: number) {
     // la place de la pompe : pavés, une femme qui pompe, des seaux, un banc, un réverbère
     p.cyl(0.44, 0.45, 0.008, 14, 0, 0, 0, 0xb8b0a0);
     for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; p.box(0.08, 0.004, 0.05, Math.sin(a) * 0.38, 0.008, Math.cos(a) * 0.38, dark(0xb8b0a0, 0.86 + (i % 3) * 0.06), a); }
-    figure(p, -0.28, -0.08, 0x6a4a6a, Math.PI / 2, false, 0x4a3426); p.cyl(0.03, 0.025, 0.05, 8, -0.04, 0.1, 0.12, C.metal);
+    figure(p, -0.28, -0.08, 0x6a4a6a, Math.PI / 2, false, 0x4a3426);
     for (const [x, z] of [[0.28, 0.32], [0.36, 0.26]]) p.cyl(0.03, 0.025, 0.05, 8, x, 0.008, z, C.metal);
     p.box(0.2, 0.02, 0.06, -0.3, 0.05, 0.32, C.wood, 0.4); for (const d of [-0.07, 0.07]) p.box(0.015, 0.05, 0.05, -0.3 + d * Math.cos(0.4), 0.008, 0.32 - d * Math.sin(0.4), 0x3c4a44, 0.4);
     lampPost(p, 0.34, -0.32, 0.32);
-    p.box(0.4, 0.1, 0.2, 0.0, 0, 0.1, C.darkstone);
-    p.box(0.14, 0.2, 0.14, -0.12, 0, -0.1, C.metal);
-    p.cyl(0.035, 0.05, 0.4, 6, -0.12, 0.2, -0.1, C.roofdark);
-    p.box(0.18, 0.03, 0.04, -0.04, 0.55, -0.1, C.roofdark);
-    waterRect(p, 0.05, 0.1 + 0.02, 0.1, 0.3, 0.14, 0);
+    // la pompe de fonte sur son auge de pierre : socle mouluré, fût cannelé à bagues, chapiteau et son pommeau, balancier
+    // courbe et sa poignée, bec et son goulot, seau suspendu ; l'auge à margelle, l'eau, le trop-plein ; une rigole pavée
+    const iron = 0x2c3a34, gilt = 0xc8a24a, stone = 0xb8b2a4;
+    p.box(0.42, 0.1, 0.2, 0.0, 0, 0.1, stone);
+    for (const s of [-1, 1]) { p.box(0.44, 0.025, 0.022, 0, 0.1, 0.1 + s * 0.09, dark(stone, 0.92)); p.box(0.022, 0.025, 0.2, s * 0.21, 0.1, 0.1, dark(stone, 0.92)); }
+    for (const s of [-1, 1]) p.box(0.06, 0.03, 0.22, s * 0.16, 0, 0.1, dark(stone, 0.8));
+    waterRect(p, 0.0, 0.1 + 0.02, 0.1, 0.38, 0.16, 0);
+    p.box(0.1, 0.04, 0.1, -0.12, 0, -0.1, dark(stone, 0.85));
+    p.cyl(0.05, 0.06, 0.05, 8, -0.12, 0.04, -0.1, iron); p.cyl(0.045, 0.045, 0.012, 8, -0.12, 0.09, -0.1, gilt);
+    p.cyl(0.032, 0.04, 0.34, 8, -0.12, 0.1, -0.1, iron);
+    for (let k = 0; k < 8; k++) { const a = (k / 8) * 6.283; p.box(0.004, 0.3, 0.004, -0.12 + Math.cos(a) * 0.034, 0.12, -0.1 + Math.sin(a) * 0.034, dark(iron, 1.3)); }
+    for (const y of [0.22, 0.42]) p.cyl(0.04, 0.04, 0.012, 8, -0.12, y, -0.1, gilt);
+    p.cyl(0.05, 0.036, 0.04, 8, -0.12, 0.44, -0.1, iron); p.cyl(0.04, 0.05, 0.02, 8, -0.12, 0.48, -0.1, iron);
+    p.sphere(0.022, -0.12, 0.52, -0.1, gilt);
+    // le bec qui avance au-dessus de l'auge, et son goulot
+    p.add(new THREE.CylinderGeometry(0.014, 0.018, 0.16, 6).rotateX(Math.PI / 2 - 0.25), -0.12, 0.33, -0.02, iron);
+    p.cyl(0.012, 0.016, 0.03, 6, -0.12, 0.29, 0.06, iron);
+    p.cyl(0.004, 0.006, 0.17, 4, -0.12, 0.12, 0.065, 0xcfeff8);
+    // le balancier : levier courbe articulé sur le chapiteau, sa poignée
+    rod(p, [-0.12, 0.47, -0.1], [-0.02, 0.5, -0.16], 0.008, iron);
+    rod(p, [-0.02, 0.5, -0.16], [0.08, 0.44, -0.2], 0.007, iron);
+    p.add(new THREE.CylinderGeometry(0.01, 0.01, 0.05, 6).rotateX(Math.PI / 2), 0.085, 0.44, -0.2, 0x6a4a32);
+    rod(p, [-0.09, 0.47, -0.12], [-0.08, 0.38, -0.13], 0.005, iron);
+    // le seau accroché au crochet du bec
+    p.cyl(0.03, 0.024, 0.05, 8, -0.04, 0.1, 0.12, C.metal); p.add(new THREE.TorusGeometry(0.026, 0.002, 3, 8, Math.PI), -0.04, 0.15, 0.12, C.metal);
   } else {
     // fontaine de la place : dallage en couronnes, bassin octogonal à margelle, vasques étagées, jets en gerbe vers le
     // centre, lumières sous l'eau la nuit, bancs tournés vers elle, bornes lumineuses, jardinières fleuries
@@ -12077,18 +12097,45 @@ function futureFarm(p: Parts) {
   circlingDrone(0, 0.75, 0, 0.32, 0.1);
 }
 
-/** Capteur de brume : mât blanc et ses deux filets qui boivent le brouillard, bassin d'eau claire cerclé de lumière */
+/**
+ * Capteur de brume : mât blanc haubané et ses deux filets tendus sur leurs cadres, qui boivent le brouillard ; gouttière qui
+ * mène l'eau au bassin cerclé de lumière ; fontaine à boire, bancs courbes, bacs plantés, borne d'information holographique
+ * et deux habitants qui viennent boire ; dalles autour
+ */
 function futureWell(p: Parts) {
-  p.cyl(0.24, 0.26, 0.06, 14, 0, 0, 0, F.pearl);
-  waterPool(p, 0, 0.05 + 0.012, 0, 0.2, 14);
-  neonRing(p, 0.245, 0.062, 0, 0, F.neon, 0.006);
-  p.cyl(0.018, 0.026, 0.72, 8, 0, 0.05, 0, F.white);
+  p.cyl(0.44, 0.45, 0.012, 16, 0, 0, 0, 0xd8dde2);
+  for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; p.box(0.004, 0.002, 0.1, Math.cos(a) * 0.38, 0.012, Math.sin(a) * 0.38, 0xb8c0c8, -a); }
+  p.cyl(0.24, 0.26, 0.06, 14, 0, 0.012, 0, F.pearl);
+  waterPool(p, 0, 0.062 + 0.012, 0, 0.2, 14);
+  neonRing(p, 0.245, 0.074, 0, 0, F.neon, 0.006);
+  p.cyl(0.018, 0.026, 0.72, 8, 0, 0.06, 0, F.white);
+  for (const y of [0.3, 0.5]) p.cyl(0.03, 0.03, 0.012, 8, 0, y, 0, F.steel);
   for (const s of [-1, 1]) {
+    // le cadre du filet, la toile (deux pans, l'un plus clair), la gouttière qui recueille les gouttes
     p.box(0.004, 0.34, 0.2, s * 0.06, 0.3, 0, 0xd8e4ea, 0, false, s * 0.08);
     for (const y of [0.3, 0.64]) p.box(0.012, 0.012, 0.21, s * (0.06 + (y - 0.47) * 0.08), y, 0, F.steel);
+    for (const z of [-0.105, 0.105]) p.add(new THREE.BoxGeometry(0.01, 0.35, 0.01), s * 0.06, 0.3 + 0.175, z, F.steel, 0, false, s * 0.08);
+    for (let k = 1; k < 4; k++) p.add(new THREE.BoxGeometry(0.005, 0.34, 0.003), s * 0.061, 0.47, -0.105 + k * 0.0525, 0xb8c8d0, 0, false, s * 0.08);
+    p.box(0.024, 0.012, 0.22, s * 0.075, 0.286, 0, F.white);
+    rod(p, [s * 0.075, 0.29, 0.11], [s * 0.16, 0.08, 0.16], 0.005, F.white);
+    // les haubans du mât, ancrés dans la margelle
+    rod(p, [0, 0.74, 0], [s * 0.22, 0.072, s * 0.1], 0.0015, 0x8a929c);
   }
   p.cyl(0.04, 0.03, 0.04, 8, 0, 0.77, 0, F.white); p.sphere(0.02, 0, 0.82, 0, F.neon);
-  p.box(0.04, 0.03, 0.04, 0.17, 0.06, 0.1, F.white); p.sphere(0.012, 0.17, 0.1, 0.1, C.water);
+  // la fontaine à boire, son filet d'eau
+  p.box(0.05, 0.08, 0.05, 0.3, 0.012, 0.18, F.white); p.box(0.06, 0.012, 0.06, 0.3, 0.092, 0.18, F.pearl);
+  p.cyl(0.004, 0.004, 0.03, 4, 0.3, 0.1, 0.165, 0xcfeff8); p.box(0.04, 0.004, 0.004, 0.3, 0.06, 0.205, F.neon, 0, 'neon');
+  // bancs courbes, bacs plantés, borne holographique
+  for (const a of [2.3, 3.9]) {
+    p.add(new THREE.CylinderGeometry(0.34, 0.34, 0.02, 10, 1, false, a, 0.6), 0, 0.05, 0, F.white);
+    p.add(new THREE.CylinderGeometry(0.34, 0.34, 0.006, 10, 1, false, a, 0.6), 0, 0.044, 0, F.neon, 0, 'neon');
+    for (const d of [0.08, 0.52]) p.box(0.02, 0.04, 0.03, Math.sin(a + d) * 0.34, 0.012, Math.cos(a + d) * 0.34, F.pearl, a + d);
+  }
+  for (const [x, z] of [[-0.32, -0.28], [0.34, -0.26]]) { p.cyl(0.06, 0.05, 0.06, 8, x, 0.012, z, F.white); p.sphere(0.05, x, 0.1, z, F.leaf, 0, 0.9); p.sphere(0.03, x + 0.03, 0.14, z, F.leaf2, 0, 0.9); }
+  p.cyl(0.014, 0.02, 0.12, 6, -0.3, 0.012, 0.22, F.white);
+  p.box(0.08, 0.06, 0.004, -0.3, 0.15, 0.22, F.neon, 0.6, 'neon'); p.box(0.06, 0.008, 0.005, -0.3, 0.19, 0.22, F.white, 0.6, 'neon');
+  figure(p, 0.22, 0.24, 0xe8e8f0, 2.2, false, 0x2a2420);
+  figure(p, -0.1, 0.36, 0x3a6ab8, 3.4, false, 0x8a5a3a);
 }
 
 /**
@@ -12156,14 +12203,25 @@ function futureWatertower(p: Parts) {
   circlingDrone(X, 0.9, Z, 0.38, 0.07);
 }
 
-/** Luminaire holographique : mât fin, anneau de lumière qui flotte et son globe, socle lumineux */
+/**
+ * Luminaire holographique : socle blanc cerclé de lumière et son bac planté, mât fin à bagues, console qui porte l'anneau de
+ * lumière flottant et son globe, caméra et capteur, oriflamme lumineuse qui ondule, borne de recharge au pied
+ */
 function futureLamp(p: Parts) {
-  p.cyl(0.04, 0.05, 0.03, 8, 0, 0, 0, F.white);
-  p.cyl(0.012, 0.018, 0.56, 6, 0, 0.03, 0, F.white);
-  p.add(new THREE.TorusGeometry(0.07, 0.008, 4, 16).rotateX(Math.PI / 2), 0, 0.64, 0, F.neon, 0, 'neon');
-  p.sphere(0.035, 0, 0.64, 0, 0xfaf6e6);
-  p.add(new THREE.IcosahedronGeometry(0.03, 0), 0, 0.64, 0, 0xfaf6e6, 0, true);
-  neonRing(p, 0.045, 0.031, 0, 0, F.neon, 0.004);
+  p.cyl(0.06, 0.07, 0.03, 10, 0, 0, 0, F.white);
+  neonRing(p, 0.064, 0.031, 0, 0, F.neon, 0.004, 14);
+  p.cyl(0.05, 0.045, 0.05, 8, 0, 0.03, 0, F.pearl);
+  for (let k = 0; k < 5; k++) { const a = k * 1.26; p.sphere(0.016, Math.cos(a) * 0.03, 0.09, Math.sin(a) * 0.03, k % 2 ? F.leaf : F.leaf2, 0, 0.9); }
+  p.cyl(0.012, 0.018, 0.6, 6, 0, 0.08, 0, F.white);
+  for (const y of [0.22, 0.42]) p.cyl(0.02, 0.02, 0.012, 6, 0, y, 0, F.steel);
+  p.box(0.004, 0.24, 0.004, 0.016, 0.24, 0, F.neon, 0, 'neon');
+  p.box(0.09, 0.012, 0.016, 0.04, 0.66, 0, F.white);
+  p.add(new THREE.TorusGeometry(0.07, 0.008, 4, 16).rotateX(Math.PI / 2), 0.085, 0.62, 0, F.neon, 0, 'neon');
+  p.sphere(0.035, 0.085, 0.62, 0, 0xfaf6e6);
+  p.add(new THREE.IcosahedronGeometry(0.03, 0), 0.085, 0.62, 0, 0xfaf6e6, 0, true);
+  p.box(0.014, 0.014, 0.022, -0.016, 0.6, 0.012, F.dark); p.box(0.008, 0.008, 0.004, -0.016, 0.6, 0.024, 0xff4a3a, 0, true);
+  { const f = sway([-0.016, 0.52, 0], [0, 1, 0], 0.2, 0.7); f.box(0.004, 0.13, 0.05, 0, -0.07, -0.03, F.pink, 0, 'neon'); f.box(0.005, 0.02, 0.05, 0, -0.02, -0.03, F.white); }
+  p.box(0.04, 0.09, 0.03, 0.09, 0, 0.06, F.white); p.box(0.03, 0.02, 0.004, 0.09, 0.06, 0.076, F.mint, 0, 'neon');
 }
 
 /**

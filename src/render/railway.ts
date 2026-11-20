@@ -145,18 +145,88 @@ function coachGeo(age: number, riders: number, line: number) {
   return p.build(false);
 }
 
-/** Wagon de minerai (tombereau) ; chargé, un tas de pierres et de minerai qui brille */
-function wagonGeo(age: number, loaded: boolean) {
-  if (age >= 5) {
-    // wagon de fret caréné : coque argentée au toit arrondi, liseré bleu-vert, trappes de déchargement, témoin du chargement
-    const p = new Parts(), shell = 0xd8dce2;
-    p.box(0.15, 0.035, 0.3, 0, 0.035, 0, 0x2e3238);
-    p.box(0.145, 0.12, 0.31, 0, 0.06, 0, shell);
-    p.add(new THREE.CylinderGeometry(0.0725, 0.0725, 0.31, 12, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.4, 1), 0, 0.18, 0, shell);
-    for (const s of [-1, 1]) { p.box(0.004, 0.012, 0.31, s * 0.073, 0.12, 0, 0x2ab0b0); for (const z of [-0.08, 0.08]) p.box(0.004, 0.06, 0.08, s * 0.0735, 0.07, z, 0xb8bec6); }
-    p.box(0.03, 0.01, 0.03, 0, 0.215, 0.1, loaded ? 0x3aff7a : 0x8a929c, 0, loaded);
-    return p.build(false);
+/**
+ * Châssis caréné d'une voiture de la rame futuriste (longueur `l`) : jupe sombre, bogies aux deux bouts et leurs patins qui
+ * luisent, soufflets d'intercirculation, liseré à la couleur de la ligne ; rend rien, dessine dans `p`
+ */
+function hoverFrame(p: Parts, l: number, line: number) {
+  p.box(0.16, 0.035, l - 0.02, 0, 0.035, 0, 0x2e3238);
+  for (const z of [-l / 2 + 0.07, l / 2 - 0.07]) {
+    p.box(0.15, 0.028, 0.09, 0, 0.012, z, 0x3a4250);
+    for (const s of [-1, 1]) p.box(0.006, 0.006, 0.08, s * 0.072, 0.014, z, 0x9ff8ff, 0, 'neon');
   }
+  for (const z of [-l / 2 - 0.004, l / 2 + 0.004]) p.box(0.09, 0.07, 0.01, 0, 0.07, z, 0x5a6270);
+  for (const s of [-1, 1]) p.box(0.003, 0.006, l - 0.04, s * 0.081, 0.066, 0, line, 0, 'neon');
+}
+
+/**
+ * Wagon-trémie de la rame de fret futuriste : caisse argentée à pans coupés, nervures, trémies et leurs trappes sous le
+ * ventre, chargement de minerai qui luit (vert) dans la cuve ouverte, passerelle et garde-corps, témoin de charge
+ */
+function hopper5(p: Parts, line: number, loaded: boolean) {
+  const shell = 0xd8dce2, l = 0.32;
+  hoverFrame(p, l, line);
+  p.add(new THREE.CylinderGeometry(0.075, 0.05, l, 4, 1, true).rotateY(Math.PI / 4).rotateX(Math.PI / 2).scale(1, 1, 1), 0, 0.13, 0, shell);
+  p.box(0.15, 0.08, l, 0, 0.06, 0, shell);
+  for (const z of [-l / 2, l / 2]) p.box(0.15, 0.1, 0.01, 0, 0.06, z, dark(shell, 0.9));
+  for (let k = 0; k < 6; k++) for (const s of [-1, 1]) p.box(0.006, 0.08, 0.008, s * 0.076, 0.06, -l / 2 + 0.03 + k * 0.052, 0xb8bec6);
+  for (const z of [-0.08, 0.08]) { p.add(new THREE.ConeGeometry(0.05, 0.04, 4).rotateY(Math.PI / 4).rotateX(Math.PI), 0, 0.03, z, 0x8a929c); p.box(0.05, 0.006, 0.03, 0, 0.012, z, 0x2ab0b0); }
+  if (loaded) {
+    p.add(new THREE.IcosahedronGeometry(0.07, 0).scale(1, 0.4, 2), 0, 0.16, 0, 0x5a6670);
+    for (let i = 0; i < 6; i++) p.add(new THREE.OctahedronGeometry(0.012), (hash2(i, 1, 93) - 0.5) * 0.08, 0.18, (hash2(i, 2, 93) - 0.5) * 0.24, 0x3aff7a, 0, 'neon');
+  }
+  for (const s of [-1, 1]) p.box(0.004, 0.02, l - 0.02, s * 0.078, 0.15, 0, 0x8a929c);
+  p.box(0.03, 0.01, 0.03, 0.05, 0.14, l / 2 - 0.02, loaded ? 0x3aff7a : 0x8a929c, 0, loaded ? 'neon' : false);
+}
+
+/**
+ * Fourgon de la rame futuriste : capsule blanche au toit arrondi, deux portes coulissantes à hublot de chaque côté, nervures,
+ * logo lumineux de la ligne, nacelle d'un drone livreur sur le toit et son drone posé
+ */
+function van5(p: Parts, line: number) {
+  const white = 0xf4f6f8, l = 0.4;
+  hoverFrame(p, l, line);
+  p.box(0.155, 0.13, l - 0.01, 0, 0.06, 0, white);
+  p.add(new THREE.CylinderGeometry(0.0775, 0.0775, l - 0.01, 12, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.4, 1), 0, 0.19, 0, white);
+  for (const s of [-1, 1]) {
+    for (const z of [-0.09, 0.09]) {
+      p.box(0.004, 0.11, 0.09, s * 0.078, 0.07, z, 0xe2e8ec);
+      p.box(0.005, 0.003, 0.09, s * 0.0785, 0.18, z, 0x8a929c);
+      p.box(0.005, 0.03, 0.03, s * 0.079, 0.13, z, 0x1e2a38);
+    }
+    for (const z of [-0.18, 0, 0.18]) p.box(0.005, 0.12, 0.006, s * 0.0785, 0.065, z, 0xc8d0d8);
+    p.box(0.005, 0.03, 0.05, s * 0.079, 0.14, 0, line, 0, 'neon');
+  }
+  p.box(0.08, 0.02, 0.1, 0, 0.22, -0.1, 0xd8dce2);
+  p.box(0.06, 0.004, 0.06, 0, 0.24, -0.1, line, 0, 'neon');
+  // le drone livreur posé sur sa nacelle : corps, ventre lumineux, quatre bras et leurs rotors, caisse
+  p.box(0.05, 0.016, 0.05, 0, 0.245, -0.1, 0x3a4250);
+  p.box(0.03, 0.004, 0.03, 0, 0.243, -0.1, 0x5af0ff, 0, 'neon');
+  for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + k * Math.PI / 2; p.box(0.03, 0.006, 0.006, Math.sin(a) * 0.02, 0.255, -0.1 + Math.cos(a) * 0.02, 0x8a929c, a + Math.PI / 2); p.cyl(0.018, 0.018, 0.003, 8, Math.sin(a) * 0.04, 0.262, -0.1 + Math.cos(a) * 0.04, 0xd8dce2); }
+}
+
+/**
+ * Wagon-citerne futuriste : citerne blanche couchée aux bouts bombés, cerclée de bandes à la couleur de la ligne, passerelle
+ * et garde-corps sur le dessus, trou d'homme, vannes et tuyauterie au flanc, berceaux sur le châssis caréné
+ */
+function tank5(p: Parts, line: number) {
+  const white = 0xf2f4f6, l = 0.34;
+  hoverFrame(p, l, line);
+  for (const z of [-0.1, 0.1]) p.box(0.12, 0.05, 0.03, 0, 0.06, z, 0x8a929c);
+  p.add(new THREE.CylinderGeometry(0.07, 0.07, l - 0.08, 12).rotateX(Math.PI / 2), 0, 0.15, 0, white);
+  for (const z of [-1, 1]) p.add(new THREE.SphereGeometry(0.07, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2).rotateX((z * Math.PI) / 2).scale(1, 1, 0.55), 0, 0.15, z * (l / 2 - 0.04), white);
+  for (const z of [-0.09, 0, 0.09]) p.add(new THREE.CylinderGeometry(0.072, 0.072, 0.012, 12).rotateX(Math.PI / 2), 0, 0.15, z, z ? line : 0x3a4250);
+  p.box(0.05, 0.006, l - 0.1, 0, 0.222, 0, 0x8a929c);
+  for (const s of [-1, 1]) for (const z of [-0.1, 0, 0.1]) p.box(0.003, 0.03, 0.003, s * 0.025, 0.225, z, 0xc8d0d8);
+  for (const s of [-1, 1]) p.box(0.003, 0.003, l - 0.1, s * 0.025, 0.255, 0, 0xc8d0d8);
+  p.cyl(0.02, 0.02, 0.02, 8, 0, 0.215, 0.05, 0xd8dce2);
+  p.add(new THREE.CylinderGeometry(0.006, 0.006, 0.18, 5).rotateX(Math.PI / 2), 0.074, 0.1, 0, 0x8a929c);
+  for (const z of [-0.06, 0.06]) { p.cyl(0.008, 0.008, 0.02, 6, 0.074, 0.1, z, 0x5a6270); p.add(new THREE.TorusGeometry(0.008, 0.003, 3, 6).rotateY(Math.PI / 2), 0.086, 0.12, z, 0xd84a3e); }
+}
+
+/** Wagon de minerai (tombereau) ; chargé, un tas de pierres et de minerai qui brille */
+function wagonGeo(age: number, loaded: boolean, line = 0x2ab0b0) {
+  if (age >= 5) { const p = new Parts(); hopper5(p, line, loaded); return p.build(false); }
   const p = new Parts(), side = age >= 4 ? 0x9a5a44 : 0x6f5640;
   p.box(0.15, 0.03, 0.32, 0, 0.05, 0, 0x3c3c40);
   p.box(0.13, 0.012, 0.28, 0, 0.08, 0, dark(side, 0.8));
@@ -176,7 +246,7 @@ function wagonGeo(age: number, loaded: boolean) {
  * coulissante à l'âge industriel ; conteneur bleu sur wagon plat à l'époque moderne ; bandeau à la couleur de la ligne
  */
 function vanGeo(age: number, line: number) {
-  if (age >= 5) return wagonGeo(age, true);
+  if (age >= 5) { const p = new Parts(); van5(p, line); return p.build(false); }
   const p = new Parts();
   p.box(0.16, 0.03, 0.4, 0, 0.05, 0, 0x3c3c40);
   if (age >= 4) {
@@ -198,8 +268,8 @@ function vanGeo(age: number, line: number) {
 }
 
 /** Wagon-citerne : la citerne couchée sur son châssis, cerclée, son dôme et son échelle (noire, puis blanche à l'époque moderne) */
-function tankGeo(age: number) {
-  if (age >= 5) return wagonGeo(age, true);
+function tankGeo(age: number, line = 0x2ab0b0) {
+  if (age >= 5) { const p = new Parts(); tank5(p, line); return p.build(false); }
   const p = new Parts(), tank = age >= 4 ? 0xe8e8e4 : 0x2a2a2e;
   p.box(0.15, 0.03, 0.32, 0, 0.05, 0, 0x3c3c40);
   p.add(new THREE.CylinderGeometry(0.068, 0.068, 0.3, 12).rotateX(Math.PI / 2), 0, 0.15, 0, tank);
@@ -602,7 +672,7 @@ export class RailView {
     const key = `${kind}|${variant}|${this.age}|${color}`;
     let g = this.geos.get(key);
     if (!g) {
-      g = kind === 'loco' ? locoGeo(this.age, color) : kind === 'coach' ? coachGeo(this.age, variant ? 6 : 0, color) : kind === 'van' ? vanGeo(this.age, color) : kind === 'tank' ? tankGeo(this.age) : wagonGeo(this.age, !!variant);
+      g = kind === 'loco' ? locoGeo(this.age, color) : kind === 'coach' ? coachGeo(this.age, variant ? 6 : 0, color) : kind === 'van' ? vanGeo(this.age, color) : kind === 'tank' ? tankGeo(this.age, color) : wagonGeo(this.age, !!variant, color);
       this.geos.set(key, g);
     }
     return g;
