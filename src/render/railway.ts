@@ -51,6 +51,58 @@ class Mesher {
   }
 }
 
+/** Une pièce tirée d'un profil de côté (z, y), large de `w` le long de x */
+function extrudeX(pts: [number, number][], w: number) {
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y))), { depth: w, bevelEnabled: false });
+  return g.translate(0, 0, -w / 2).rotateY(-Math.PI / 2);
+}
+
+/** Châssis d'une voiture de l'époque moderne (longueur `l`, centré en z) : longerons, traverses de tête rouges, réservoirs */
+function frame4(p: Parts, l: number, z: number, color: number) {
+  p.box(0.15, 0.025, l, 0, 0.05, z, color);
+  for (const s of [-1, 1]) p.box(0.006, 0.02, l - 0.01, s * 0.076, 0.052, z, dark(color, 0.75));
+  for (const e of [-1, 1]) p.box(0.152, 0.026, 0.008, 0, 0.05, z + e * (l / 2), 0xb84a3a);
+  p.box(0.09, 0.02, 0.08, 0, 0.03, z, 0x2a2a2e);
+}
+
+/** Bogie moderne centré en z : longerons latéraux, quatre roues, boîtes d'essieu, ressorts, traverse */
+function bogie4(p: Parts, z: number) {
+  for (const s of [-1, 1]) {
+    for (const d of [-0.035, 0.035]) {
+      p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 10).rotateZ(Math.PI / 2), s * 0.066, 0.035, z + d, 0x3c3c40);
+      p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.016, 6).rotateZ(Math.PI / 2), s * 0.077, 0.035, z + d, 0x8a8f96);
+    }
+    p.box(0.01, 0.018, 0.13, s * 0.078, 0.03, z, 0x2a2a2e);
+    p.box(0.012, 0.022, 0.03, s * 0.078, 0.038, z, 0x5a5e66);
+    for (const d of [-0.012, 0.012]) p.cyl(0.006, 0.006, 0.016, 6, s * 0.078, 0.042, z + d, 0xd8a03a);
+  }
+  p.box(0.15, 0.016, 0.03, 0, 0.044, z, 0x2a2a2e);
+}
+
+/** Tampons et attelage à un bout (z, signe vers l'extérieur) */
+function buffers4(p: Parts, z: number) {
+  const s = Math.sign(z);
+  for (const x of [-0.05, 0.05]) {
+    p.add(new THREE.CylinderGeometry(0.007, 0.007, 0.02).rotateX(Math.PI / 2), x, 0.065, z + s * 0.01, 0x5a5e66);
+    p.add(new THREE.CylinderGeometry(0.014, 0.014, 0.005, 8).rotateX(Math.PI / 2), x, 0.065, z + s * 0.021, 0x8a8f96);
+  }
+  p.box(0.02, 0.012, 0.02, 0, 0.058, z + s * 0.012, 0x3c3c40);
+}
+
+/** Pantographe replié sur ses isolateurs, posé sur le toit à (z, y) : châssis, bras inférieur et supérieur, archet */
+function pantograph(p: Parts, z: number, y: number) {
+  const metal = 0x3c3c40, arm = (z0: number, y0: number, z1: number, y1: number) => {
+    const len = Math.hypot(z1 - z0, y1 - y0);
+    for (const x of [-0.022, 0.022]) p.add(new THREE.BoxGeometry(0.004, len, 0.004), x, (y0 + y1) / 2, (z0 + z1) / 2, metal, 0, false, 0, Math.atan2(z1 - z0, y1 - y0));
+  };
+  for (const [x, dz] of [[-0.03, -0.03], [0.03, -0.03], [-0.03, 0.03], [0.03, 0.03]]) { p.cyl(0.006, 0.006, 0.014, 6, x, y, z + dz, 0xb84a3a); }
+  p.box(0.07, 0.006, 0.07, 0, y + 0.014, z, metal);
+  arm(z - 0.025, y + 0.02, z + 0.04, y + 0.05);
+  arm(z + 0.04, y + 0.05, z - 0.005, y + 0.085);
+  p.box(0.1, 0.005, 0.014, 0, y + 0.085, z - 0.005, metal);
+  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.004, 0.004, 0.03), s * 0.055, y + 0.082, z - 0.005, metal, 0, false, s * 0.5);
+}
+
 /** Locomotive (avant = +z) : à vapeur, chaudière noire et roues rouges, à l'âge industriel ; diesel jaune ensuite ; bandeau à la couleur de la ligne */
 export function locoGeo(age: number, line: number) {
   const p = new Parts();
@@ -76,16 +128,43 @@ export function locoGeo(age: number, line: number) {
     return p.build(false);
   }
   if (age >= 4) {
-    const body = 0xf2f2ee, band = line;
-    p.box(0.17, 0.035, 0.42, 0, 0.05, 0, 0x3c3c40);
-    p.box(0.15, 0.16, 0.4, 0, 0.085, -0.01, body);
-    p.box(0.152, 0.03, 0.402, 0, 0.13, -0.01, band);
-    p.box(0.14, 0.1, 0.1, 0, 0.245, 0.12, body);
-    p.box(0.12, 0.05, 0.004, 0, 0.27, 0.172, 0x2e3c48, 0, true);
-    for (const s of [-1, 1]) p.box(0.004, 0.04, 0.07, s * 0.071, 0.27, 0.12, 0x2e3c48);
-    for (let k = 0; k < 3; k++) p.box(0.1, 0.012, 0.05, 0, 0.245, -0.16 + k * 0.07, 0x5a5e66);
-    p.box(0.03, 0.025, 0.006, 0, 0.17, 0.192, 0xfff0c0, 0, true);
-    for (const z of [-0.13, 0.13]) { p.box(0.15, 0.05, 0.12, 0, 0.012, z, 0x2a2a2e); for (const s of [-1, 1]) for (const d of [-0.035, 0.035]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.014, 8).rotateZ(Math.PI / 2), s * 0.07, 0.035, z + d, 0x3c3c40); }
+    // locomotive électrique : caisse blanche à cabine en pente, pare-brise en deux glaces, chevron et bandeau à la couleur de
+    // la ligne, grilles d'aération, porte et vitres de cabine, toit sombre, pantographe sur ses isolateurs, bogies, tampons
+    const white = 0xf2f2ee, roof = 0x4a4e56, glass = 0x2e3c48, grey = 0x8a8f96;
+    frame4(p, 0.4, 0, 0x3c3c40);
+    bogie4(p, -0.13); bogie4(p, 0.13);
+    p.add(extrudeX([[-0.2, 0.075], [0.19, 0.075], [0.205, 0.1], [0.205, 0.15], [0.17, 0.235], [0.15, 0.25], [-0.2, 0.25]], 0.15), 0, 0, 0, white);
+    p.box(0.13, 0.014, 0.33, 0, 0.25, -0.03, roof);
+    // les glaces du pare-brise (en pente) et leur montant, les vitres et la porte de la cabine
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.062, 0.07, 0.004).rotateX(-0.4), s * 0.034, 0.192, 0.189, glass);
+    p.add(new THREE.BoxGeometry(0.008, 0.075, 0.005).rotateX(-0.4), 0, 0.192, 0.19, white);
+    for (const s of [-1, 1]) {
+      p.box(0.004, 0.045, 0.045, s * 0.0755, 0.17, 0.12, glass);
+      p.box(0.004, 0.11, 0.032, s * 0.0755, 0.085, 0.065, dark(white, 0.86));
+      p.box(0.005, 0.03, 0.02, s * 0.0757, 0.155, 0.065, glass);
+      // bandeau, et le chevron qui remonte vers la cabine
+      p.box(0.004, 0.024, 0.36, s * 0.0755, 0.11, -0.03, line);
+      p.add(new THREE.BoxGeometry(0.004, 0.024, 0.07), s * 0.0755, 0.125, 0.165, line, 0, false, 0, 0.55);
+      // les grilles d'aération et leurs lames
+      for (const z of [-0.16, -0.09, -0.02]) {
+        p.box(0.004, 0.07, 0.05, s * 0.0755, 0.145, z, 0x6a6e76);
+        for (let k = 0; k < 4; k++) p.box(0.005, 0.004, 0.048, s * 0.0758, 0.152 + k * 0.016, z, 0xc8ccd2);
+      }
+      // mains montoires et marchepieds de la cabine
+      p.box(0.006, 0.08, 0.004, s * 0.079, 0.09, 0.088, grey);
+      p.box(0.02, 0.004, 0.02, s * 0.07, 0.06, 0.088, grey);
+    }
+    // le front : bandeau, feux (deux en bas, un sous le toit), feux rouges, attelage, tampons, chasse-pierres
+    p.box(0.15, 0.024, 0.005, 0, 0.11, 0.205, line);
+    for (const s of [-1, 1]) { p.box(0.022, 0.014, 0.004, s * 0.05, 0.135, 0.206, 0xfff4d8, 0, true); p.box(0.01, 0.01, 0.004, s * 0.064, 0.09, 0.206, 0xff3a2a, 0, true); }
+    p.box(0.02, 0.01, 0.004, 0, 0.232, 0.162, 0xfff4d8, 0, true);
+    p.add(new THREE.BoxGeometry(0.15, 0.03, 0.02), 0, 0.05, 0.205, 0x2a2a2e, 0, false, 0, -0.4);
+    buffers4(p, 0.205);
+    // le toit : pantographe sur ses isolateurs, disjoncteur, trappes, avertisseurs
+    pantograph(p, -0.06, 0.257);
+    p.cyl(0.012, 0.012, 0.02, 6, 0, 0.257, -0.15, grey); p.cyl(0.006, 0.006, 0.02, 6, 0, 0.277, -0.15, 0xb84a3a);
+    for (const z of [0.04, 0.09]) p.box(0.09, 0.008, 0.04, 0, 0.257, z, dark(roof, 1.2));
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.004, 0.008, 0.02, 6).rotateX(Math.PI / 2), s * 0.03, 0.262, 0.14, grey);
     return p.build(false);
   }
   const boiler = 0x2a2a2e, brass = 0xc8a050, red = 0xb83a2e;
