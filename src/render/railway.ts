@@ -122,7 +122,16 @@ function coachGeo(age: number, riders: number, line: number) {
       p.box(0.004, 0.014, 0.4, s * 0.078, 0.11, 0, line);
       for (const z of [-0.17, 0.17]) p.box(0.005, 0.12, 0.03, s * 0.078, 0.07, z, 0xd8dce2);
     }
-    for (const z of [-0.205, 0.205]) p.box(0.12, 0.13, 0.012, 0, 0.07, z, 0x3c3c40);
+    for (const z of [-0.205, 0.205]) p.box(0.09, 0.07, 0.01, 0, 0.07, z, 0x5a6270);
+    // montants entre les vitres, portes vitrées à leur liseré lumineux ; sur le toit, deux nacelles
+    // de climatisation à grilles et l'antenne ; bogies carénés et leurs patins
+    for (const s of [-1, 1]) {
+      for (let k = 0; k <= 6; k++) p.box(0.005, 0.05, 0.006, s * 0.0788, 0.14, -0.18 + k * 0.06, 0xd8dce2);
+      for (const z of [-0.17, 0.17]) { p.box(0.005, 0.06, 0.014, s * 0.0788, 0.09, z, 0x1e2a38); p.box(0.005, 0.004, 0.03, s * 0.079, 0.19, z, line, 0, 'neon'); }
+    }
+    for (const z of [-0.1, 0.1]) { p.box(0.08, 0.02, 0.09, 0, 0.225, z, 0xd8dce2); for (let k = 0; k < 3; k++) p.box(0.082, 0.003, 0.006, 0, 0.246, z - 0.03 + k * 0.03, 0x8a929c); }
+    p.cyl(0.0015, 0.0015, 0.04, 3, 0.03, 0.235, 0, 0x3c3c40);
+    for (const z of [-0.13, 0.13]) { p.box(0.15, 0.028, 0.09, 0, 0.012, z, 0x3a4250); for (const s of [-1, 1]) p.box(0.006, 0.006, 0.08, s * 0.072, 0.014, z, 0x9ff8ff, 0, 'neon'); }
     return p.build(false);
   }
   const p = new Parts(), wood = age >= 4 ? 0x4a6a8a : 0x7a5a42, roofC = line;
