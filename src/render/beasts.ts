@@ -1424,13 +1424,25 @@ const WOLF_COATS: Coat[] = [
 ];
 
 /**
+ * Chiens de garde (savoir-faire de l'expédition « Le loup des bois ») : des bergers au pelage feu et selle noire, masque noir
+ * au museau ; un berger tout noir et feu ; un fauve charbonné
+ */
+const DOG_COATS: Coat[] = [
+  { fur: 0xb8823e, top: 0x2c2420, saddle: 0x1c1816, belly: 0xd8b07a, cheek: 0xc89458, muzzle: 0x3a2c22, leg: 0xc48c4c, paw: 0x2a2018, inner: 0xcc9c70, tip: 0x1c1816 },
+  { fur: 0x3a302a, top: 0x1e1a18, saddle: 0x141210, belly: 0xb07a40, cheek: 0xa86e38, muzzle: 0x2a201a, leg: 0xb07a42, paw: 0x1e1814, inner: 0xa8805a, tip: 0x141210 },
+  { fur: 0xc49a5c, top: 0x7a5a36, saddle: 0x4a3626, belly: 0xe2c896, cheek: 0xd2ac72, muzzle: 0x2e241e, leg: 0xd0aa70, paw: 0x3a2c22, inner: 0xd6b48a, tip: 0x2a201a },
+];
+
+/**
  * Loup : silhouette haute et sèche — poitrail étroit et profond, ventre levretté, longues pattes fines aux pieds serrés —,
  * pelage gris à dos sombre (selle et crinière de jarres hérissées sur le garrot), joues, gorge et ventre crème ; tête
  * large au long museau étroit, truffe noire, yeux ambrés, oreilles pointues dressées ; queue touffue portée bas, à bout
  * noir. Trotte tête basse, pattes dans la même trace ; galope ventre à terre, oreilles couchées, queue à l'horizontale ;
  * s'assied pour hurler, museau au ciel ; flaire le sol ; dort roulé en boule, la queue sur le museau
+ * `dog` : le chien de garde qu'on en a tiré, même charpente, sans les jarres hérissées de la crinière ; un collier de cuir
+ * clouté et sa médaille, des yeux bruns, la tête portée haut et la queue qui remue en marchant
  */
-function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
+function wolf(c: Coat, dog = false): { rig: Rig; clips: ClipDef[] } {
   const r = new Rig();
   const n0: V3 = [0, 0.148, 0.07], n1: V3 = [0, 0.166, 0.106];
   r.bone('hips', null, 0, 0.13, -0.05);
@@ -1459,18 +1471,25 @@ function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
   // crinière : collerette épaisse autour du cou et jarres hérissées du garrot
   r.add('neck', ell(0.03, 0.034, 0.03), [0, 0.15, 0.072], c.fur, [0.3, 0, 0], c.top);
   r.add('neck', ell(0.024, 0.026, 0.02), [0, 0.136, 0.09], c.cheek, [0.4, 0, 0]);
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < (dog ? 0 : 7); i++) {
     const z = 0.088 - i * 0.016, y = 0.178 - Math.abs(i - 2) * 0.003, b = i < 2 ? 'neck' : 'ribs';
     r.both((s) => r.put(b, seg([s * 0.008, y - 0.006, z], [s * 0.011, y + 0.008 - i * 0.0008, z - 0.012], 0.006, 0.0008, 4), c.saddle));
   }
   // jarres claires le long des flancs et sous le ventre
-  r.both((s) => {
+  if (!dog) r.both((s) => {
     for (let i = 0; i < 5; i++) {
       const z = 0.05 - i * 0.022, b = z > -0.01 ? 'ribs' : 'hips';
       r.put(b, seg([s * 0.026, 0.104, z], [s * 0.028, 0.092, z - 0.008], 0.006, 0.001, 4), c.fur);
     }
   });
   r.put('neck', seg(n0, n1, 0.02, 0.016, 7), c.fur, c.top);
+  if (dog) {
+    // le collier de cuir rouge sombre, ses clous de laiton et la médaille qui pend sous la gorge
+    const mid = along(n0, n1, 0.45);
+    r.add('neck', new THREE.TorusGeometry(0.0205, 0.0042, 4, 12), mid, 0x7a2a1e, [0.95, 0, 0]);
+    for (let k = 0; k < 5; k++) { const a = -1.2 + k * 0.6; r.add('neck', ell(0.0022, 0.0022, 0.0022, 0), [Math.sin(a) * 0.022, mid[1] + Math.cos(a) * 0.012, mid[2] - Math.cos(a) * 0.016], 0xd8b048); }
+    r.add('neck', new THREE.CylinderGeometry(0.0055, 0.0055, 0.0016, 8), [0, mid[1] - 0.026, mid[2] + 0.012], 0xe0c060, [1.35, 0, 0]);
+  }
   // tête : crâne large, joues claires, long museau étroit, arête plus sombre, truffe noire, yeux ambrés
   r.add('head', ell(0.022, 0.02, 0.024), [0, 0.174, 0.114], c.fur, [0, 0, 0], c.top);
   r.both((s) => r.add('head', ell(0.012, 0.015, 0.016), [s * 0.016, 0.163, 0.114], c.cheek, [0, 0, s * 0.3]));
@@ -1478,16 +1497,19 @@ function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
   r.put('head', seg([0, 0.176, 0.126], [0, 0.168, 0.166], 0.0065, 0.0035, 5), c.fur);
   r.add('head', ell(0.0062, 0.0052, 0.0055, 0), [0, 0.165, 0.173], 0x141010);
   r.both((s) => {
-    r.add('head', ell(0.0042, 0.0032, 0.003, 0), [s * 0.0118, 0.18, 0.13], 0xd8a030, [0, s * 0.5, 0]);
+    r.add('head', ell(0.0042, 0.0032, 0.003, 0), [s * 0.0118, 0.18, 0.13], dog ? 0x6a4020 : 0xd8a030, [0, s * 0.5, 0]);
     r.add('head', ell(0.0018, 0.0022, 0.0015, 0), [s * 0.0124, 0.18, 0.1325], 0x100c0a);
     // trait sombre au coin de l'œil
     r.put('head', seg([s * 0.011, 0.179, 0.126], [s * 0.016, 0.177, 0.118], 0.0016, 0.001, 3), c.saddle);
   });
   r.put('jaw', seg([0, 0.156, 0.13], [0, 0.155, 0.164], 0.0075, 0.0045, 5), c.belly);
+  // (le chien halète : le bout de la langue rose dépasse)
+  if (dog) r.add('jaw', ell(0.0045, 0.0014, 0.009, 0), [0, 0.1505, 0.163], 0xd86a7a, [0.5, 0, 0]);
   // oreilles pointues et dressées, intérieur clair
   r.both((s, L) => {
-    r.add(`e${L}`, new THREE.ConeGeometry(0.0095, 0.026, 4), [s * 0.0145, 0.199, 0.11], c.fur, [-0.12, 0, -s * 0.18], c.saddle);
-    r.add(`e${L}`, new THREE.ConeGeometry(0.0055, 0.017, 3), [s * 0.0145, 0.197, 0.1135], c.inner, [-0.12, 0, -s * 0.18]);
+    const ek = dog ? 1.25 : 1;
+    r.add(`e${L}`, new THREE.ConeGeometry(0.0095 * ek, 0.026 * ek, 4), [s * 0.0145, 0.199 + (ek - 1) * 0.012, 0.11], c.fur, [-0.12, 0, -s * 0.18], c.saddle);
+    r.add(`e${L}`, new THREE.ConeGeometry(0.0055 * ek, 0.017 * ek, 3), [s * 0.0145, 0.197 + (ek - 1) * 0.012, 0.1135], c.inner, [-0.12, 0, -s * 0.18]);
   });
   // queue touffue portée bas, bout noir
   r.put('tail1', seg([0, 0.142, -0.098], [0, 0.116, -0.128], 0.01, 0.014, 6), c.fur, c.top);
@@ -1513,7 +1535,12 @@ function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
     neck: ['neck'], graze: [0.95], grazeHead: 0.35,
     lie: { drop: 0.078, f: [-1.42, 0.22], h: [-1.05, 2.15] },
     hook: (n, u, P) => {
-      if (n === 'Walk') {
+      if (n === 'Walk' && dog) {
+        // le chien au pied : tête haute, oreilles droites, la queue levée qui remue
+        R(P, 'neck', -0.05); R(P, 'head', 0.05);
+        R(P, 'tail1', 0.55); R(P, 'tail2', 0.2, 0.35 * sn(u, 2));
+        ears(P, -0.05, 0);
+      } else if (n === 'Walk') {
         // tête portée bas, dans l'axe du dos ; pieds dans la même trace ; la queue pend et balance à peine
         R(P, 'neck', 0.32); R(P, 'head', -0.12);
         for (const [b, s] of [['fL1', 1], ['fR1', -1], ['hL1', 1], ['hR1', -1]] as [string, number][]) R(P, b, 0, 0, s * 0.06);
@@ -3455,7 +3482,7 @@ function whitestag(c: Coat): { rig: Rig; clips: ClipDef[] } {
 
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'mammoth' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon' | 'sheep' | 'pig' | 'hen'
+export type BeastKind = 'bear' | 'elephant' | 'mammoth' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'guarddog' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon' | 'sheep' | 'pig' | 'hen'
   | 'rabbit' | 'duck' | 'duckling' | 'goose' | 'frog' | 'ibex' | 'whitestag';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
@@ -3467,6 +3494,8 @@ const DEFS: Record<BeastKind, BeastDef> = {
   camel: { coats: CAMEL_COATS, build: camel },
   moose: { coats: MOOSE_COATS, build: moose },
   wolf: { coats: WOLF_COATS, build: wolf },
+  // le chien des gardes (expédition « Le loup des bois »), qui suit les patrouilles
+  guarddog: { coats: DOG_COATS, build: (c) => wolf(c, true) },
   croc: { coats: CROC_COATS, build: croc },
   lizard: { coats: LIZARD_COATS, build: lizard },
   turtle: { coats: TURTLE_COATS, build: turtle },

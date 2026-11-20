@@ -22,6 +22,8 @@ export const PATROL_SPEED = 0.5;
 export const PATROL_GAP = 0.3;
 /** Une pause au garde-à-vous toutes les 12 à 28 s, de 3 à 6 s */
 const PAUSE_EVERY: [number, number] = [12, 28], PAUSE_FOR: [number, number] = [3, 6];
+/** Le chien de garde : à quelle distance derrière le meneur, et à côté de lui (cases) */
+export const HOUND_BACK = 0.1, HOUND_SIDE = 0.12;
 /** Pour trouver la rue la plus proche du bâtiment (cases) */
 const ROAD_REACH = 6;
 
@@ -168,25 +170,40 @@ export class Patrols {
     }
   }
 
+  /** Un point de la trace du meneur, `want` cases derrière lui, et le cap qu'on y suit */
+  private onTrail(g: PatrolGroup, want: number): [number, number, number] {
+    const t = g.trail;
+    let acc = 0;
+    for (let k = t.length - 2; k >= 2; k -= 2) {
+      const ax = t[k], az = t[k + 1], bx = t[k - 2], bz = t[k - 1], seg = Math.hypot(ax - bx, az - bz);
+      if (acc + seg >= want) { const f = seg > 1e-6 ? (want - acc) / seg : 0; return [ax + (bx - ax) * f, az + (bz - az) * f, Math.atan2(ax - bx, az - bz)]; }
+      acc += seg;
+    }
+    // (une trace trop courte, au départ : en file derrière le meneur, dans son dos)
+    return [g.x - Math.sin(g.heading) * want, g.z - Math.cos(g.heading) * want, g.heading];
+  }
+
   /** Les soldats d'un groupe : le meneur devant, les autres en file sur sa trace */
   members(g: PatrolGroup): PatrolMember[] {
     const out: PatrolMember[] = [{ x: g.x, z: g.z, heading: g.heading, mode: g.mode, phase: g.phase }];
-    const t = g.trail;
     for (let i = 1; i < g.size; i++) {
-      const want = PATROL_GAP * i;
-      let acc = 0, px = g.x, pz = g.z, hx = g.heading, found = false;
-      for (let k = t.length - 2; k >= 2; k -= 2) {
-        const ax = t[k], az = t[k + 1], bx = t[k - 2], bz = t[k - 1], seg = Math.hypot(ax - bx, az - bz);
-        if (acc + seg >= want) { const f = seg > 1e-6 ? (want - acc) / seg : 0; px = ax + (bx - ax) * f; pz = az + (bz - az) * f; hx = Math.atan2(ax - bx, az - bz); found = true; break; }
-        acc += seg;
-      }
-      // (une trace trop courte, au départ : en file derrière le meneur, dans son dos)
-      if (!found) { px = g.x - Math.sin(g.heading) * want; pz = g.z - Math.cos(g.heading) * want; hx = g.heading; }
+      const [px, pz, hx] = this.onTrail(g, PATROL_GAP * i);
       // au garde-à-vous, tous se tournent du même côté que le meneur
       out.push({ x: px, z: pz, heading: g.mode === 'guard' ? g.heading : hx, mode: g.mode, phase: g.phase + i * 1.7 });
     }
     return out;
   }
+
+  /**
+   * Le chien de garde d'un groupe (savoir-faire de l'expédition « Le loup des bois ») : il trotte au pied du meneur, un peu en
+   * retrait, du côté de la rue (le meneur longe le trottoir de droite) ; au garde-à-vous, il s'arrête à côté de lui
+   */
+  hound(g: PatrolGroup): PatrolMember {
+    const [px, pz, hx] = this.onTrail(g, HOUND_BACK), h = g.mode === 'guard' ? g.heading : hx;
+    return { x: px + Math.cos(h) * HOUND_SIDE, z: pz - Math.sin(h) * HOUND_SIDE, heading: h, mode: g.mode, phase: g.phase };
+  }
+  /** Les chiens de toutes les rondes, un par groupe */
+  hounds(): PatrolMember[] { return this.groups.map((g) => this.hound(g)); }
 
   /** Tous les soldats de toutes les rondes (au plus PATROL_MAX × 3) */
   all(): PatrolMember[] { return this.groups.flatMap((g) => this.members(g)); }

@@ -42,7 +42,7 @@ import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
 import { Patrols, PATROL_MAX } from './sim/patrols';
 import { Sentinels, SENTINEL_MAX } from './sim/sentinels';
-import { PatrolView } from './render/patrols';
+import { PatrolView, HoundView } from './render/patrols';
 import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
 import { Streams } from './render/streams';
@@ -208,6 +208,8 @@ class Game implements UIHost {
   /** les patrouilles de soldats des tours de garde et casernes du village, et leur vue */
   patrols: Patrols;
   patrolView: PatrolView;
+  /** les chiens des gardes, au pied des patrouilles (savoir-faire de l'expédition « Le loup des bois ») */
+  houndView: HoundView;
   /** les sentinelles qui font les cent pas sur les remparts et veillent sur les tours de garde, et leur vue */
   sentinels: Sentinels;
   sentinelView: PatrolView;
@@ -502,6 +504,8 @@ class Game implements UIHost {
     this.patrols = new Patrols(w);
     this.patrolView = new PatrolView(w, () => this.patrols.all(), PATROL_MAX * 3);
     this.patrolView.camera = this.cam.camera;
+    this.houndView = new HoundView(w, () => this.patrols.hounds(), PATROL_MAX);
+    this.houndView.camera = this.cam.camera;
     this.sentinels = new Sentinels(w);
     this.sentinelView = new PatrolView(w, () => this.sentinels.all(), SENTINEL_MAX, 100);
     this.sentinelView.camera = this.cam.camera;
@@ -583,7 +587,7 @@ class Game implements UIHost {
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.houndView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
     this.applyQuality();
 
     const host = this;
@@ -1821,12 +1825,12 @@ class Game implements UIHost {
     const w = this.world;
     if (this.quake) {
       this.quake.t -= dt;
+      // (annoncé plus tôt par les satellites : le grondement vient dans les dernières secondes)
+      if (this.quake.rumble && this.quake.t <= WAKE_WARN) { this.quake.rumble = false; audio.sfxRumble(WAKE_WARN); }
       if (this.quake.t <= 0) { this.erupt(this.quake.cell); this.quake = null; }
       return;
     }
     if (!w.disasters || this.eruptions.active) return;
-      // (annoncé plus tôt par les satellites : le grondement vient dans les dernières secondes)
-      if (this.quake.rumble && this.quake.t <= WAKE_WARN) { this.quake.rumble = false; audio.sfxRumble(WAKE_WARN); }
     this.quakeTimer -= gdt;
     if (this.quakeTimer > 0) return;
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 5);
@@ -2270,6 +2274,7 @@ class Game implements UIHost {
     this.fauna.detail = p.faunaDetail;
     this.agents.detail = p.faunaDetail;
     this.patrolView.detail = p.faunaDetail;
+    this.houndView.detail = p.faunaDetail;
     this.sentinelView.detail = p.faunaDetail;
     this.veg.lodDist = p.vegLod;
     this.blightView.density = p.density;
@@ -2728,6 +2733,7 @@ class Game implements UIHost {
     // les rondes des soldats du village (torche à la main la nuit)
     this.patrols.update(gdt, this.sim.age);
     this.patrolView.update(this.sim.age, this.env.night > 0.5);
+    this.houndView.update(gdt);
     this.sentinels.update(gdt);
     this.sentinelView.update(this.sim.age, this.env.night > 0.5);
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
