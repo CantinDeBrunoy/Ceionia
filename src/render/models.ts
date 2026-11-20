@@ -12126,6 +12126,22 @@ function futureFarm(p: Parts) {
   for (let k = 0; k < 2; k++) p.add(new THREE.BoxGeometry(0.2, 0.008, 0.1), -0.25 + k * 0.22, 0.1, 0.36, 0x2a3a6a, 0, false, 0, 0.35);
   for (let k = 0; k < 2; k++) { p.box(0.08, 0.04, 0.08, 0.05 + k * 0.1, 0, 0.36, 0xc8a060); p.box(0.07, 0.012, 0.07, 0.05 + k * 0.1, 0.04, 0.36, F.leaf); }
   circlingDrone(0, 0.75, 0, 0.32, 0.1);
+  // sous le dôme, les rangs de cultures et leurs lampes ; l'entrée et son sas, son liseré
+  for (let k = 0; k < 4; k++) { p.box(0.36 - Math.abs(k - 1.5) * 0.08, 0.03, 0.05, -0.1, 0.04, -0.2 + k * 0.09, k % 2 ? F.leaf : F.leaf2); p.box(0.3 - Math.abs(k - 1.5) * 0.08, 0.004, 0.01, -0.1, 0.16, -0.2 + k * 0.09, F.pink, 0, 'neon'); }
+  p.box(0.12, 0.15, 0.06, -0.1, 0.04, 0.24, F.white); p.box(0.13, 0.006, 0.006, -0.1, 0.19, 0.27, F.pink, 0, 'neon');
+  // dehors : bacs de culture en plein air et leurs arceaux d'arrosage, robot qui récolte, allée de dalles, bornes
+  for (let k = 0; k < 3; k++) {
+    const x = -0.38 + k * 0.12;
+    p.box(0.09, 0.04, 0.26, x, 0, -0.3 + 0.02, F.white); p.box(0.08, 0.02, 0.24, x, 0.04, -0.28, k === 1 ? 0xd8b04a : F.leaf2);
+    for (let j = 0; j < 3; j++) p.sphere(0.018, x, 0.07, -0.37 + j * 0.08, k === 1 ? 0xf2c23a : F.leaf, 0, 0.9);
+  }
+  p.add(new THREE.TorusGeometry(0.2, 0.005, 3, 10, Math.PI), -0.26, 0.04, -0.4, F.steel); p.add(new THREE.TorusGeometry(0.2, 0.005, 3, 10, Math.PI), -0.26, 0.04, -0.16, F.steel);
+  p.box(0.4, 0.004, 0.004, -0.26, 0.24, -0.28, F.steel, Math.PI / 2);
+  p.box(0.05, 0.03, 0.07, -0.2, 0.0, -0.06 + 0.4, F.white); p.box(0.03, 0.03, 0.03, -0.2, 0.03, -0.04 + 0.4, F.dark); p.box(0.02, 0.006, 0.02, -0.2, 0.06, -0.04 + 0.4, F.mint, 0, 'neon');
+  rod(p, [-0.2, 0.05, 0.33], [-0.24, 0.1, 0.3], 0.004, F.steel);
+  for (let k = 0; k < 4; k++) p.box(0.06, 0.004, 0.06, -0.1, 0, 0.3 + k * 0.05, 0xd8dde2);
+  for (const x of [0.12, 0.42]) { p.cyl(0.008, 0.01, 0.06, 6, x, 0, 0.2, F.white); p.cyl(0.009, 0.009, 0.008, 6, x, 0.06, 0.2, F.pink, 'neon'); }
+  figure(p, 0.1, 0.0, 0xe8e8f0, 1.2, false, 0x4a3426);
 }
 
 /**
@@ -12420,6 +12436,18 @@ function vfarm(p: Parts) {
   p.box(0.2, 0.12, 0.012, 0, 0.012, 0.215, F.smoke);
   for (let k = 0; k < 3; k++) { p.box(0.07, 0.05, 0.07, -0.28 + k * 0.09, 0.012, 0.34, 0xc8a060); p.box(0.06, 0.014, 0.06, -0.28 + k * 0.09, 0.062, 0.34, k % 2 ? 0xd84a3e : F.leaf); }
   circlingDrone(0, 1.6, -0.04, 0.42, 0.08, true);
+  // montants blancs aux quatre angles de la tour, l'escalier de secours au flanc, le monte-charge
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.02, top - 0.012, 0.02, sx * (w / 2 + 0.01), 0.012, -0.04 + sz * (w / 2 + 0.01), F.white);
+  for (let i = 0; i < n; i += 2) { p.box(0.08, 0.008, 0.1, w / 2 + 0.05, 0.012 + i * 0.16 + 0.13, -0.1, F.steel); rod(p, [w / 2 + 0.03, 0.012 + i * 0.16 + 0.13, -0.15], [w / 2 + 0.07, 0.012 + (i + 2) * 0.16 + 0.13, -0.05], 0.004, F.steel); }
+  p.box(0.004, top - 0.04, 0.1, w / 2 + 0.092, 0.012, -0.1, 0xbfe0ee);
+  p.box(0.08, top - 0.1, 0.08, -w / 2 - 0.04, 0.012, 0.1, 0xbfe0ee); p.box(0.07, 0.06, 0.07, -w / 2 - 0.04, 0.6, 0.1, F.white);
+  // l'étal de la récolte devant l'entrée, sa marchande, son auvent ; bacs plantés, vélo cargo
+  p.box(0.22, 0.06, 0.08, 0.22, 0.012, 0.33, F.white); for (let k = 0; k < 4; k++) p.sphere(0.018, 0.14 + k * 0.05, 0.085, 0.33, [0xd84a3e, F.leaf, 0xf2c23a, 0xf28a3c][k], 0, 0.8);
+  for (const s of [-1, 1]) p.cyl(0.004, 0.004, 0.16, 4, 0.22 + s * 0.1, 0.012, 0.37, F.steel);
+  p.add(new THREE.BoxGeometry(0.24, 0.006, 0.12), 0.22, 0.17, 0.35, F.mint, 0, false, 0, 0.2);
+  figure(p, 0.22, 0.25, 0x3a6ab8, 0, false, 0x2a2420);
+  for (const x of [-0.38, 0.38]) { p.box(0.08, 0.05, 0.08, x, 0.012, -0.36, F.pearl); p.sphere(0.04, x, 0.08, -0.36, F.leaf, 0, 0.9); }
+  bike(p, 0.38, 0.12, 0x5af0ff, 0.3);
 }
 
 /**
