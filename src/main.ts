@@ -69,6 +69,8 @@ import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
 import { L_GONE, L_LIFT } from './render/expeditionScenes';
 import { Parade, Spot } from './render/parade';
 import { Fires } from './render/fires';
+import { Calamities } from './calamities';
+import type { CalamityKind } from './sim/calamity';
 import { Traffic } from './render/traffic';
 import { Halos } from './render/halos';
 import { RailBoost } from './render/railBoost';
@@ -232,6 +234,8 @@ class Game implements UIHost {
   /** comment le joueur déplace la vue : retenu pour ce navigateur ; avant le premier choix, le clavier (comme avant) */
   controls: Controls = loadControls() ?? { mode: 'keys', layout: guessLayout(getLang()) };
   fires: Fires;
+  /** crues, séismes, pluies de météorites, réparations des bâtiments abîmés */
+  calam: Calamities;
   traffic: Traffic;
   helis: Helis;
   airships: Airships;
@@ -514,6 +518,14 @@ class Game implements UIHost {
     this.scene.add(this.nightSky.group);
     this.life = new AmbientLife(w, this.buildings);
     this.fires = new Fires(w);
+    this.calam = new Calamities({
+      world: w, time: this.time, env: this.env, audio,
+      age: () => this.sim.age,
+      toast: (m, act, level) => this.ui.toast(m, act, level),
+      goTo: (x, z, d) => this.ensureSurface(() => { this.follow(null); this.cam.goTo(x, z, d); }),
+    });
+    // les catastrophes que le joueur a coupées (absentes des anciens réglages : toutes laissées)
+    this.calam.enabled = { flood: !settings.noFlood, quake: !settings.noQuake, meteor: !settings.noMeteor };
     this.traffic = new Traffic(w);
     this.traffic.avoid = this.roads.islands;
     this.helis = new Helis(w, this.buildings);
@@ -524,6 +536,7 @@ class Game implements UIHost {
     this.emergencies = new Emergencies(w, this.fires, this.roads.islands);
     this.fires.responder = this.emergencies;
     this.fires.top = (b) => this.buildings.topOf(b.id);
+    this.calam.repairs.top = (id) => this.buildings.topOf(id);
     // les pompiers et les voisins au seau : ils restent tant que ça brûle, et leur eau éteint le feu
     this.fires.pails = (b) => this.agents.pails(b);
     this.agents.burning = (id) => this.fires.burning.some((b) => b.id === id);
@@ -581,7 +594,7 @@ class Game implements UIHost {
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.calam.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
     this.applyQuality();
 
     const host = this;
@@ -862,7 +875,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog, noFlood: !this.calam.enabled.flood, noQuake: !this.calam.enabled.quake, noMeteor: !this.calam.enabled.meteor };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -1842,6 +1855,14 @@ class Game implements UIHost {
     return { p: this.gfx, glow: !!this.glow && this.gfx.glow, fine: renderer.getPixelRatio() / (window.devicePixelRatio || 1), level: this.adaptive.level, max: MAX_LEVEL };
   }
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
+  /** Les catastrophes laissées par le joueur, une à une (réglages) */
+  get calamities(): Readonly<Record<CalamityKind, boolean>> { return this.calam.enabled; }
+  setCalamity(k: CalamityKind, on: boolean) { this.calam.enabled[k] = on; this.applySettings(); }
+  /**
+   * Mode développeur : une catastrophe tout de suite, sans attendre son jour (`__game.calamity('flood')`) ; false si elle ne
+   * peut pas avoir lieu (pas d'eau qui déborde, une autre en cours)
+   */
+  calamity(k: CalamityKind) { return this.calam.start(k, true); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
   setHideGoals(on: boolean) { this.hideGoals = on; this.applySettings(); this.ui.update(); }
@@ -1901,7 +1922,7 @@ class Game implements UIHost {
   dispelFog() { this.env.dispelFog(); this.atmosphere.dispel(300); }
 
   /** Incidents en cours (incendies, malaises, cambriolages), pour leurs cartes et la caméra */
-  incidents() { return [...this.fires.incidents(), ...this.emergencies.incidents()]; }
+  incidents() { return [...this.fires.incidents(), ...this.emergencies.incidents(), ...this.calam.incidents()]; }
   /** l'incident que la caméra suit */
   incidentCam: string | null = null;
   followIncident(key: string | null) {
@@ -2711,6 +2732,7 @@ class Game implements UIHost {
     // personne n'accourt vers un feu (tout le monde était à l'intérieur ou loin au moment où il a pris) : on rappelle à l'aide
     if ((this.fireCallT -= dt) <= 0) { this.fireCallT = 4; for (const b of this.fires.burning) if (!this.agents.responders(b)) this.agents.alert(b.z * N + b.x); }
     this.wakeVolcano(gdt, dt);
+    this.calam.update(gdt, dt);
     // nouvelles du village : incendies, feux éteints, bâtiments perdus
     for (const m of this.fires.news.splice(0)) this.ui.toast(m, undefined, m.startsWith('🔥') ? 'danger' : 'info');
     for (const m of this.emergencies.news.splice(0)) this.ui.toast(m, undefined, 'danger');

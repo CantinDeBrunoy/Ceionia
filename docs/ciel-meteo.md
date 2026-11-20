@@ -43,6 +43,7 @@ Le temps du jeu (`GameTime`) fait tourner les heures et les saisons. `Environmen
   - Le décor lit ce qui se voit : `env.shownRain`, `shownSnow`, `shownFog`, `shownOvercast` (ciel couvert visible), calculés dans `Environment.update` ; `Atmosphere` (brume, arc-en-ciel, couleur de la brume des montagnes) et `NightSky` (aurores et étoiles filantes sous un ciel dégagé) s'y fient. La simulation, les sons et les habitants gardent `rainK`, `weatherKind`.
 - Pluie : 1 500 traits, neige : 1 300 flocons, dans un volume de 50 × 24 × 50 autour du point visé ; plus dessinés quand la caméra est à plus de 95.
 - Brouillard (`THREE.Fog`) : 85 → 220 par temps clair, 40 → 120 sous la pluie ou la neige, 8 → 70 dans le brouillard ; il recule quand on dézoome.
+- Une crue qui attend son heure fait venir la pluie (`env.wantKind = 'rain'`, sauf l'hiver et sauf temps imposé par le joueur) et la garde tant que l'eau monte ([catastrophes.md](catastrophes.md)).
 - La pluie remplit l'humidité des champs (`Sim.moisture`, rendement, sécheresse) ; elle règle aussi le vent, les sons, la faune.
 
 ### Brume, nuages, arc-en-ciel, orages (`Atmosphere`)

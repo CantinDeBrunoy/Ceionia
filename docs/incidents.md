@@ -52,6 +52,7 @@ Messages : les nouvelles de `Fires.news` s'affichent en toast `danger` s'ils com
 
 ### Autres événements aléatoires
 - **Volcan qui se réveille** (`Game.wakeVolcano`) : si les catastrophes sont actives et qu'aucune éruption n'est en cours, tous les `5 à 10` jours de jeu (`dayLen × (5 + rnd × 5)`), un volcan au hasard (`VEG_VOLCANO`) tremble 18 s (toast cliquable qui mène à lui), puis entre en éruption ; les bombes peuvent enflammer des bâtiments.
+- **Catastrophes naturelles** (crue) : une au plus par âge, chacune avec son interrupteur ; leurs cartes d'incident (`calam:flood`, `calam:repair`) passent par `Game.incidents()`. Voir [catastrophes.md](catastrophes.md).
 - **Imprévus d'expédition** (`events.ts`) : décisions à prendre en cours de mission (`EVENTS`, `eventsFor(ctx)`, `pickEvent`). Filtrés par destination, mission, scène, âge, mer / eau douce, climat chaud. Jamais deux fois le même par expédition ; 70 % de préférence pour ceux propres à la mission. Voir [expeditions.md](expeditions.md).
 
 ## Fonctionnement dans le code
