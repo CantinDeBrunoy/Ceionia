@@ -262,9 +262,14 @@ describe('la défense de l’île du portail', () => {
     tick(war, 2 * TROOPS.soldier.time + 2);
     const us = war.isle!.sim.alive('player');
     expect(us).toHaveLength(2);
+    expect(war.intro).toBe('none');
     war.sendThroughPortal(us);
     tick(war, 30, () => war.army.troops.every((t) => t.where === 'hell'));
     expect(war.army.troops.every((t) => t.where === 'hell')).toBe(true);
+    // le premier passage : la cinématique du portail est due, et le reste à travers une sauvegarde
+    expect(war.intro).toBe('due');
+    const back = new War(w); back.load(JSON.parse(JSON.stringify(war.save())));
+    expect(back.intro).toBe('due');
     const inHell = war.troopsIn(war.faction);
     expect(inHell).toHaveLength(2);
     for (const u of inHell) expect(Math.hypot(u.x - war.hellMap!.arrival[0], u.z - war.hellMap!.arrival[1])).toBeLessThan(3);

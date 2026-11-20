@@ -97,6 +97,8 @@ import { setFxDensity } from './render/combatFx';
 import { War, clockText } from './sim/war';
 import { INVASION_WAVES } from './sim/hell';
 import { KingdomStage } from './kingdomStage';
+import { PortalStage } from './portalStage';
+import { portalCineReady } from './portalCine';
 import { TrophyStage } from './trophyStage';
 import { cineCalm, trophyOfMission } from './trophyCine';
 import { WarTips, WarTipState, type WarTipId } from './ui/warTips';
@@ -278,6 +280,10 @@ class Game implements UIHost {
   private homeBtn: HomeButton;
   /** la mise en scène du royaume des Enfers (combat du roi, victoire) */
   kingStage: KingdomStage;
+  /** la cinématique du portail, au premier passage d'une recrue (`portalStage.ts`) */
+  portalStage: PortalStage;
+  /** la vitesse du jeu d'avant la cinématique du portail (0 : aucune à rendre) */
+  private cineSpeed = 0;
   /** la petite cinématique d'un trophée qui rejoint la place (retour d'une expédition légendaire) */
   trophyStage: TrophyStage;
   voyageStage!: VoyageStage;
@@ -666,6 +672,17 @@ class Game implements UIHost {
       age: () => this.sim.age,
       village: () => this.villageCenter(), fest: (x, z) => this.festAt(x, z), crowd: (on, x, z) => this.kingCrowd(on, x, z),
     });
+    // la cinématique du portail : au premier passage d'une recrue, de l'arche de l'île jusqu'au Seuil des Enfers
+    this.portalStage = new PortalStage({
+      cam: this.cam, war: this.war, ui: { root: uiRoot }, audio,
+      mode: () => this.mode,
+      portal: () => { const p = w.portal; return p ? { x: p.x, z: p.z, y: w.hAt(p.x, p.z), facing: this.portalView.group.rotation.y } : null; },
+      hellY: (x, z) => (this.mode === 'hell' && this.hellMode ? this.hellMode.view.groundY(x, z) : null),
+      surge: (k) => { this.portalView.surge = k; },
+      pace: (cine) => { if (cine) { this.cineSpeed = this.time.speed; this.time.speed = 1; } else if (this.cineSpeed) { this.time.speed = this.cineSpeed; this.cineSpeed = 0; } },
+      enterHell: (quiet) => void this.enterHell(quiet),
+      arrived: () => this.portalArrived(),
+    });
     this.trophyStage = new TrophyStage({
       cam: this.cam, scene: this.scene, root: uiRoot, trophies: this.trophies, audio,
       won: () => trophiesWon(this.world.exp), calm: (banner) => this.trophyCalm(banner), surface: () => this.mode === 'surface' && !this.isleCmd,
@@ -907,28 +924,35 @@ class Game implements UIHost {
 
   // ---------- Monde des Enfers (expéditions facultatives, par le portail de l'île) ----------
   /** Entre dans les Enfers, devant le portail : on y commande les troupes qui l'ont passé */
-  async enterHell() {
+  async enterHell(quiet = false) {
     if (this.mode !== 'surface') return;
     // (fermés tant que l'invasion du portail n'est pas repoussée)
     const closed = this.war.hellWhy();
     if (closed) { this.ui.toast(closed, this.war.pve === 'on' ? undefined : () => this.openPortalChoice()); return; }
+    // la toute première entrée, par le message ou « Voir les Enfers » : la cinématique du portail la fait à sa place
+    if (!quiet && this.war.intro === 'due' && !this.portalStage.playing) { this.portalStage.play(); return; }
     this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
     const label = 'Passage du portail…';
-    this.loadThrough(async (screen) => {
+    // (`quiet` : derrière le noir de la cinématique du portail, sans écran de chargement ; la cinématique pose la vue, la
+    // bannière et le guide viennent à sa fin, `portalArrived`)
+    const through = quiet
+      ? (fn: (screen: LoadingScreen | null) => Promise<void>) => { if (this.fading) return; this.fading = true; void fn(null).finally(() => { this.fading = false; }); }
+      : (fn: (screen: LoadingScreen | null) => Promise<void>) => this.loadThrough(fn, label);
+    through(async (screen) => {
       const { HellMode } = await loadHell();
-      screen.step(label, 0.35);
+      screen?.step(label, 0.35);
       await painted();
       const f = this.war.ensureFaction();
       if (!this.hellMode || this.hellMode.hell !== f) this.hellMode = new HellMode(this.war.hellMap!, f, this.war.king);
-      screen.step(label, 0.6);
+      screen?.step(label, 0.6);
       await painted();
       const hm = this.hellMode;
       hm.view.fight = this.war.king;
       hm.view.fx.onClash = (k) => this.audio.sfxClash(k);
       hm.view.build();
-      screen.step(label, 0.85);
+      screen?.step(label, 0.85);
       this.surfaceView = this.cam.view();
       this.surfaceZoom = { min: this.cam.minDist, max: this.cam.maxDist };
       this.mode = 'hell';
@@ -949,11 +973,40 @@ class Game implements UIHost {
       this.cam.jump({ x: vx, z: vz, dist: Math.min(30, Math.max(15, 11 + gd * 0.55)), pitch: 0.72, yaw: Math.PI }, hm.view.groundY(vx, vz));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
-      this.ui.banner(tr('Monde des Enfers'), tr('{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.', { zone: hm.zoneName(z) }), 'hell');
-      // la première entrée : le chapitre du tutoriel sur les Enfers (la cible, les troupes, l'attaque, le retour)
-      this.tutorial.chapter('hell');
+      if (!quiet) this.portalArrived();
       this.ui.update();
-    }, label);
+    });
+  }
+
+  /** Arrivé dans les Enfers (à la fin de la cinématique du portail, ou tout de suite) : la bannière, le chapitre du tutoriel */
+  private portalArrived() {
+    const hm = this.hellMode;
+    if (!hm || this.mode !== 'hell') return;
+    this.ui.banner(tr('Monde des Enfers'), tr('{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.', { zone: hm.zoneName(this.cam.target.z) }), 'hell');
+    // la première entrée : le chapitre du tutoriel sur les Enfers (la cible, les troupes, l'attaque, le retour)
+    this.tutorial.chapter('hell');
+    this.ui.update();
+  }
+
+  /**
+   * La cinématique du portail (`portalStage.ts`), à chaque image : jouée une fois, au premier passage d'une recrue, quand
+   * tout est calme (`portalCineReady`) : à la surface, ni fenêtre, ni récit d'expédition en attente, ni autre cinématique, ni
+   * outil en main ou geste en cours. Déjà dans les Enfers (entré autrement), elle n'a plus lieu d'être
+   */
+  private stepPortalCine(dt: number) {
+    const ps = this.portalStage;
+    ps.tick();
+    if (ps.playing) { ps.step(dt); return; }
+    if (this.war.intro !== 'due') return;
+    if (this.mode === 'hell') { this.war.intro = 'seen'; return; }
+    const ready = portalCineReady({
+      due: !!this.world.portal && this.world.portalOpen, surface: this.mode === 'surface',
+      calm: this.portalCalm > 3 && this.popups.open && !this.popupBusy(),
+      reports: this.reportsDue.size > 0 || this.lateReports.length > 0 || this.trophyStage.playing,
+      busyHands: this.midGesture() || this.tools.tool !== 'none' || !!this.islePlace,
+      otherCine: this.voyageStage.playing || this.kingStage.playing || this.revealing || !!this.peaceCine,
+    });
+    if (ready) { this.popups.taken(); this.portalStage.play(); }
   }
 
   /** Où regarder en entrant dans les Enfers : le groupe des troupes les plus avancées, sinon le camp le plus avancé, sinon le portail */
@@ -1618,7 +1671,7 @@ class Game implements UIHost {
    */
   private popupBusy() {
     return !!document.getElementById('loadScreen') || !!uiRoot.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible
-      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.mode !== 'surface'
+      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.mode !== 'surface'
       || document.body.classList.contains('photo');
   }
 
@@ -1725,6 +1778,8 @@ class Game implements UIHost {
         this.ui.toast(n.text, undefined, 'danger');
       } else if (n.kind === 'raid' && n.text.startsWith('🔥')) this.ui.info(n.text);
       else if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(tr('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
+      // (le premier passage : la cinématique du portail le montre, pas de message en plus)
+      else if (n.kind === 'portal' && (this.war.intro === 'due' || this.portalStage.playing)) { /* rien */ }
       else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell' && (n.kind !== 'zone' || /repris|reprendre|tombé|retaken|retake|has fallen/.test(n.text))) this.ui.toast(tr('{text} Cliquez ici pour y aller.', { text: n.text }), () => this.enterHell());
       else this.ui.toast(n.text, undefined, n.kind === 'boss' || n.kind === 'counter' || (n.kind === 'zone' && /repris|reprendre|tombé|retaken|retake|has fallen/.test(n.text)) ? 'danger' : 'info');
       if (n.kind === 'repelled' || n.kind === 'secured' || n.kind === 'invasionDone') audio.sfxAgeUp();
@@ -2646,6 +2701,8 @@ class Game implements UIHost {
       this.cam.camera.position.add(new THREE.Vector3(Math.sin(t * 47) + Math.sin(t * 29) * 0.5, Math.sin(t * 53) * 0.6, Math.sin(t * 41) + Math.sin(t * 23) * 0.5).multiplyScalar(a));
     }
     if (this.mode === 'surface') this.tools.update(dt);
+    // (après la caméra : la cinématique du portail pose la vue elle-même, temps réel)
+    this.stepPortalCine(dt);
 
     // maillages dépendant du monde (limités en fréquence)
     this.terrainTimer -= dt;

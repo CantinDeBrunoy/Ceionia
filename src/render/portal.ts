@@ -39,6 +39,8 @@ export class PortalView {
   private key = '';
   /** braseros et tourbillon allumés (les halos de nuit en dépendent) */
   lit = false;
+  /** l'arche s'emballe (0 … 1) : la cinématique du premier passage (`portalStage.ts`) ; le tourbillon grossit, runes et étincelles s'avivent */
+  surge = 0;
 
   constructor(private world: World) {
     const p = new Parts();
@@ -154,16 +156,18 @@ export class PortalView {
     this.vortexMat.uniforms.uTime.value = this.t;
     this.vortexMat.uniforms.uOpen.value = k;
     this.vortexMat.uniforms.uNight.value = night;
-    this.vortex.scale.setScalar(1 + Math.sin(this.t * 2.2) * 0.012 * k);
+    const su = this.surge;
+    this.vortexMat.uniforms.uNight.value = Math.min(1, night + su * 0.8);
+    this.vortex.scale.setScalar(1 + Math.sin(this.t * (2.2 + su * 6)) * (0.012 + su * 0.03) * k + su * 0.08);
     // les runes : à peine visibles fermé, elles palpitent une fois le portail éveillé, plus vives la nuit
-    this.runeMat.color.setScalar((0.25 + 0.75 * k) * (0.7 + 0.3 * Math.sin(this.t * 2.6)) * (1 + night * 0.9));
+    this.runeMat.color.setScalar((0.25 + 0.75 * k) * (0.7 + 0.3 * Math.sin(this.t * (2.6 + su * 8))) * (1 + night * 0.9 + su * 1.5));
     // les braseros s'allument à l'éveil
     const fire = Math.min(1, k * 1.6);
     for (const [i, f] of this.flames.entries()) {
       f.visible = fire > 0.05;
       f.scale.set(fire * (0.9 + 0.15 * Math.sin(this.t * 13 + i * 2)), fire * flick * (0.9 + 0.2 * Math.sin(this.t * 7.7 + i)), fire * (0.9 + 0.15 * Math.cos(this.t * 11 + i)));
     }
-    this.stepParticles(dt, k);
+    this.stepParticles(dt * (1 + su * 1.5), k);
     const lit = k > 0.5;
     if (lit !== this.lit) { this.lit = lit; return true; }
     return false;
