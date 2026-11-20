@@ -25,6 +25,8 @@ export interface GoalCtx {
   brick: number;
   /** expéditions réussies (identifiants) */
   missions: readonly string[];
+  /** ressources illimitées (bac à sable, ou réglage « Ressources » en Facile) : pas de récompense, pas d'objectif de stock */
+  unlimited?: boolean;
 }
 
 export interface GoalReward { wood?: number; stone?: number; ore?: number; /** bien-être en plus, pendant quelques jours */ joy?: { n: number; days: number } }
@@ -51,6 +53,8 @@ export interface GoalDef {
   kinds?: KindId[];
   /** un clic ouvre les expéditions */
   exp?: boolean;
+  /** demande un stock en réserve : ne veut rien dire quand les ressources sont illimitées (bac à sable), il n'est pas proposé */
+  stock?: boolean;
   measure: Measure;
   reward: GoalReward;
 }
@@ -65,7 +69,8 @@ const countOf = (c: GoalCtx, ks: KindId[]) => {
 const pop = (n: number) => (c: GoalCtx): [number, number] => [Math.floor(c.pop), n];
 const build = (ks: KindId[], n = 1) => (c: GoalCtx): [number, number] => [countOf(c, ks), n];
 const allOk = (c: GoalCtx) => c.ok.food && c.ok.water && c.ok.jobs && c.ok.joy && c.ok.health && c.ok.housing;
-const sec = (p: number) => (c: GoalCtx): [number, number] => [Math.floor(c.security * 100 + 1e-6), p];
+// (sans maison, la part protégée vaut 100 % : elle ne compte qu'à partir d'une maison, sinon l'objectif tombait dès le départ)
+const sec = (p: number) => (c: GoalCtx): [number, number] => [countOf(c, ['house']) ? Math.floor(c.security * 100 + 1e-6) : 0, p];
 
 export const GOALS: GoalDef[] = [
   // ---- Préhistoire
@@ -91,7 +96,7 @@ export const GOALS: GoalDef[] = [
   // ---- Industriel
   { id: 'i-pop80', age: 3, pic: 'logement', kinds: ['house'], text: 'Loger 80 habitants', praise: 'Une vraie ville industrielle.', measure: { t: 'state', f: pop(80) }, reward: { stone: 80 } },
   { id: 'i-station', age: 3, pic: 'train', kinds: ['station'], text: 'Une première gare', praise: 'Le train arrive en gare !', measure: { t: 'state', f: build(['station']) }, reward: { wood: 60 } },
-  { id: 'i-brick', age: 3, pic: 'briques', kinds: ['brickworks'], text: '20 briques en réserve', praise: 'La briqueterie tourne à plein.', measure: { t: 'state', f: (c) => [Math.floor(c.brick), 20] }, reward: { ore: 5 } },
+  { id: 'i-brick', age: 3, pic: 'briques', kinds: ['brickworks'], stock: true, text: '20 briques en réserve', praise: 'La briqueterie tourne à plein.', measure: { t: 'state', f: (c) => [Math.floor(c.brick), 20] }, reward: { ore: 5 } },
   { id: 'i-sport', age: 3, pic: 'bienetre', kinds: ['stadium', 'football', 'funfair'], text: 'Un stade, un terrain de football ou une fête foraine', praise: 'La ville s’amuse !', measure: { t: 'state', f: build(['stadium', 'football', 'funfair']) }, reward: { joy: { n: 2, days: 4 } } },
   { id: 'i-sec', age: 3, pic: 'securite', kinds: ['fire', 'police'], text: 'Protéger 80 % des maisons', praise: 'La ville est bien gardée.', measure: { t: 'state', f: sec(80) }, reward: { stone: 60 } },
   { id: 'i-safe', age: 3, pic: 'boussole', exp: true, text: 'Réussir une expédition sans blessé', praise: 'Tout le monde est rentré sain et sauf.', measure: { t: 'event', ev: 'safeExp' }, reward: { ore: 8 } },
@@ -170,7 +175,7 @@ export function activeGoals(s: GoalState, c: GoalCtx): GoalDef[] {
   const out: GoalDef[] = [];
   for (const g of GOALS) {
     if (out.length >= GOALS_SHOWN) break;
-    if (g.age !== c.age || s.done.includes(g.id) || waiting(g, c)) continue;
+    if (g.age !== c.age || s.done.includes(g.id) || waiting(g, c) || (g.stock && c.unlimited)) continue;
     out.push(g);
   }
   return out;

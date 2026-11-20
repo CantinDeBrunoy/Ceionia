@@ -24,7 +24,7 @@ Trois difficultés, choisies au début d'une partie et sauvegardées avec elle :
 | `gearPrice` (équipement payé aussi en bois et pierre) | `false` | `false` | `true` |
 | `calamity` (catastrophes naturelles : chance qu'un âge en ait une, dégâts) | 1, `none` (spectacle seul) | 0,5, `light` (champs noyés seulement) | 1, `full` |
 
-Le bac à sable et Facile ne diffèrent que par `unlimited`. Le détail des règles est dans les fichiers de chaque système.
+Le bac à sable et Facile ne diffèrent que par `unlimited`. Les petits objectifs paraissent dans les trois modes ; ressources illimitées, ils ne donnent pas de ressources (le bien-être seulement), un feu d'artifice salue chaque réussite et ceux de stock ne sont pas proposés (voir [objectifs.md](objectifs.md)). Le détail des règles est dans les fichiers de chaque système.
 - **Bâtiments débloqués par les expéditions ou la diplomatie** : au bac à sable, tout ce qui est de l'âge s'ouvre (`lockOf` ne regarde ni `reqMission` ni `reqKind`). Les monuments de la diplomatie (arc de triomphe, ambassade, monument de la concorde) y sont aussi proposés sans guerre ni paix (`offered` dans `ui.ts`, demande de l'auteur du 20 nov. 2026). Le comptoir reste réservé à l'archipel : il ne se pose que chez l'allié.
 
 ### Où chaque réglage agit

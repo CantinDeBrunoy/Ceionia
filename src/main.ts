@@ -65,7 +65,7 @@ import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
 import { allyIsle, allyView, onAllyIsle, allyPostReady, allyHarborSpot } from './sim/allyLand';
 import { SpotBeacon } from './render/spotBeacon';
-import { AGES, BUILD_CATS, KINDS, KIND_ORDER, Building, sizeOf, type KindId } from './build/catalog';
+import { AGES, BUILD_CATS, KINDS, KIND_ORDER, Building, sizeOf, lineOf, type KindId } from './build/catalog';
 import { MISSIONS, VICTORY, applyEffects } from './sim/missions';
 import { hasPerk, WAKE_WARN, SAT_WAKE_WARN } from './sim/legacy';
 import { stepGoals, rewardEffects, type GoalCtx } from './sim/goals';
@@ -1948,21 +1948,34 @@ class Game implements UIHost {
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
   setHideGoals(on: boolean) { this.hideGoals = on; this.applySettings(); this.ui.update(); }
   /** Les petits objectifs n'avancent pas au bac à sable ni pendant le tutoriel guidé (ils viennent après) */
-  get goalsOn() { return !this.world.sandbox && !!this.tutorial && !(this.tutorial.on && this.tutorial.guiding); }
+  // (au bac à sable aussi, à la demande de l'auteur : « ça ne rapporte rien, mais ça peut donner un objectif au joueur »)
+  get goalsOn() { return !!this.tutorial && !(this.tutorial.on && this.tutorial.guiding); }
   /** Ce que les objectifs lisent du village */
   goalCtx(): GoalCtx {
     const s = this.sim, w = this.world;
     return {
-      age: s.age, pop: s.pop, day: this.time.days, season: this.time.season, counts: s.counts, brick: w.brick, missions: w.exp.done, security: s.coverage.share,
+      age: s.age, pop: s.pop, day: this.time.days, season: this.time.season, counts: s.counts, brick: w.brick, missions: w.exp.done, security: s.coverage.share, unlimited: w.unlimited,
       ok: { food: s.food.ok, water: s.water.ok, jobs: s.jobs.ok, joy: s.joy.ok, health: s.health.ok, housing: s.housing.ok },
     };
+  }
+  /** Où tirer le feu d'artifice d'un objectif : le dernier bâtiment posé d'une des sortes demandées, sinon le cœur du village */
+  private goalSpot(kinds?: readonly KindId[]): [number, number] | null {
+    let at: [number, number] | null = null;
+    if (kinds?.length) {
+      const want = new Set(kinds.flatMap((k) => lineOf(k)));
+      for (const b of this.world.buildings.values()) if (want.has(b.kind)) { const s = sizeOf(b); at = [b.x + s / 2, b.z + s / 2]; }
+    }
+    return at ?? this.villageCenter();
   }
   /** Fait avancer les objectifs ; un objectif atteint : sa récompense, un son et un mot de félicitation */
   private stepGoals() {
     // (masqués : ils attendent, rien ne se gagne ni ne se dit)
     if (!this.goalsOn || this.hideGoals) return;
     for (const g of stepGoals(this.world.goals, this.goalCtx())) {
-      const r = g.reward, w = this.world;
+      // ressources illimitées (bac à sable) : pas de ressources, le bien-être seulement, et un feu d'artifice au-dessus du
+      // bâtiment de l'objectif (ou du village) ; demande de l'auteur
+      const w = this.world, r = w.unlimited ? { joy: g.reward.joy } : g.reward;
+      if (w.unlimited) { const at = this.goalSpot(g.kinds); if (at) this.fest.fireworks(at[0], at[1]); }
       w.wood += r.wood ?? 0; w.stone += r.stone ?? 0;
       const fx = rewardEffects(r);
       if (fx.length) applyEffects(w, fx, this.time.dayLen); else w.version++;
