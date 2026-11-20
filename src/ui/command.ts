@@ -74,6 +74,8 @@ export interface CommandHost {
   defenseLock(kind: string): string | null;
   /** la défense de l'île qu'on est en train de poser depuis l'onglet Bâtir (sa carte s'allume, la bulle dit comment poser) */
   isleHeld?(): string | null;
+  /** la flèche des outils : lâche le bâtiment du village en main (défense de l'île) et vide la sélection du village */
+  dropHeld?(): void;
   defenseCount(kind: string): number;
   buildDefense(kind: string): void;
   /** met une pièce d'équipement en fabrication à l'atelier du village : null, ou la raison du refus */
@@ -761,7 +763,14 @@ export class CommandUI implements ToolInput {
     else if (a === 'fight') w.startInvasion();
     else if (a === 'wave') { const why = w.callWhy(); if (why) this.deny(why); else { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la vague arrive !')); } }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
-    else if (a.startsWith('tool:')) { this.host.click(); this.setTool(a.slice(5) as BaseTool); return; }
+    else if (a.startsWith('tool:')) {
+      this.host.click();
+      // la flèche lâche tout ce qui est en main, même déjà sur l'outil ordinaire : sur l'île, une caserne prise avec les outils du
+      // village restait en main et le clic ne faisait rien (retour de l'auteur)
+      if (a === 'tool:select') { this.host.dropHeld?.(); if (this.tool === 'select') { if (this.placing) this.stopPlacing(); this.render(); return; } }
+      this.setTool(a.slice(5) as BaseTool);
+      return;
+    }
     else if (a.startsWith('rech:')) { this.recruitHell(a.slice(5) as TroopKind); if (this.placing) { this.render(); return; } }
     else if (a === 'leave') { if (this.theater.kind === 'rival') this.theater.leave?.(); else if (this.theater.kind === 'isle') this.host.leaveIsle(); else this.host.leaveHell(); return; }
     this.host.click();
