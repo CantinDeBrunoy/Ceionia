@@ -360,3 +360,29 @@ describe('pont au-dessus d’une faille', () => {
     expect(w.surfaceAt(21.5, 20.5)).toBeLessThan(1.7);
   });
 });
+
+describe('le pont plutôt que le détour', () => {
+  it('une case d’eau ou de faille compte comme deux cases de terre : le pont gagne quand il est nettement plus court', async () => {
+    const { planRoad } = await import('../src/build/freeRoad');
+    // un bras d'eau de trois cases de large, long de 30 cases
+    const w = flat((x, z) => (x >= 20 && x <= 23 && z >= 10 && z <= 40 ? -0.6 : undefined), 0.55);
+    const p = planRoad(w, 15.5, 25.5, 28.5, 25.5);
+    expect(p.why).toBeNull();
+    expect(p.cells.some((k) => w.isWet(k % N, Math.floor(k / N)))).toBe(true);
+    // un détour de vingt cases ne l'emporte plus sur un pont neuf, même avec un pont plus loin
+    for (let x = 14; x <= 29; x++) w.setRoad(x, 14, true);
+    const q = planRoad(w, 15.5, 34.5, 28.5, 34.5);
+    expect(q.cells.some((k) => w.isWet(k % N, Math.floor(k / N)) && !w.road[k])).toBe(true);
+    expect(Math.max(...q.cells.map((k) => Math.floor(k / N)))).toBeGreaterThanOrEqual(33);
+  });
+
+  it('une faille courte se contourne : le détour d’une ou deux cases vaut mieux qu’un pont', async () => {
+    const { planRoad } = await import('../src/build/freeRoad');
+    const w = flat(() => undefined, 1.5);
+    w.digRiftAlong(21.5, 24.5, 21.5, 25.5, 0.6);
+    w.updateVis();
+    const p = planRoad(w, 12.5, 25.5, 31.5, 25.5);
+    expect(p.why).toBeNull();
+    expect(p.cells.some((k) => w.rift[k])).toBe(false);
+  });
+});

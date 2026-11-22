@@ -10,14 +10,20 @@ const MARGIN = 14;
 const BAND = 0.22;
 /** Saut de hauteur au-delà duquel on ne passe pas d'une case à sa voisine */
 const STEP_H = 0.75;
+/**
+ * Une case de pont neuf (eau ou faille) compte comme `GAP` cases de terre plate, et chaque nouveau franchissement coûte
+ * `CROSS` de plus : le pont l'emporte dès qu'il est nettement plus court que le détour (retour de joueur, 22 nov. 2026 : « le
+ * jeu propose souvent un détour quand je veux un pont » ; c'était +8 par case et +12 par franchissement)
+ */
+export const GAP = 2, CROSS = 3;
 
 /** Route libre prévue de A à B : sa ligne (x, z à la suite), ses cases, et pourquoi on ne peut pas la poser (null : on peut) */
 export interface RoadPlan { pts: number[]; cells: number[]; why: string | null }
 
 /**
  * Route libre, façon Anno : du centre de la case de A à celui de la case de B, le chemin le moins coûteux (A*, 8-voisinage)
- * qui contourne bâtiments, pentes raides, cultures et eau profonde (un pont sur l'eau peu profonde, si l'on ne peut faire
- * autrement), puis tiré en lignes droites tant qu'elles restent praticables, et adouci comme la voie ferrée. La courbe la plus
+ * qui contourne bâtiments, pentes raides, cultures et eau profonde (un pont sur l'eau peu profonde ou sur une faille, quand
+ * il est nettement plus court que le détour), puis tiré en lignes droites tant qu'elles restent praticables, et adouci comme la voie ferrée. La courbe la plus
  * douce dont toutes les cases sont praticables, et qui ne frôle aucun bâtiment, l'emporte
  */
 export function planRoad(w: World, ax: number, az: number, bx: number, bz: number): RoadPlan {
@@ -56,12 +62,13 @@ const unique = (cells: number[]) => [...new Set(cells)];
 function cost(w: World, k: number) {
   const x = k % N, z = Math.floor(k / N), v = w.veg[k];
   if (!w.road[k] && !w.canRoad(x, z)) return Infinity;
+  // l'eau et les failles se franchissent en pont : deux cases de terre (ni pente ni végétation sous un tablier) ; un pont déjà
+  // posé se réutilise comme une route
+  if (w.isGap(x, z)) return w.road[k] ? 2.5 : GAP;
   let c = 1 + w.cellSlope(x, z) * 2.5;
   if (v === VEG_FOREST) c += 1.5;
   else if (v === VEG_ROCKS) c += 1;
   else if (v === VEG_FIELD || v === VEG_GARDEN) c += 4;
-  // l'eau et les failles se franchissent en pont, cher ; un pont déjà posé se réutilise sans surcoût
-  if (w.isGap(x, z) && !w.road[k]) c += 8;
   // une route existante se croise, on ne la longe pas
   if (w.road[k]) c += 1.5;
   // on garde ses distances avec les bâtiments
@@ -96,8 +103,8 @@ function search(w: World, a: number, b: number): number[] | null {
       if (dx && dz && (!isFinite(costAt(z * N + nx)) || !isFinite(costAt(nz * N + x)))) continue;
       // en diagonale entre deux cases sèches, on ne rogne pas le coin d'une case d'eau ou de faille (un pont de plus)
       if (dx && dz && !w.isGap(x, z) && !w.isGap(nx, nz) && (w.isGap(nx, z) || w.isGap(x, nz))) continue;
-      // un nouveau franchissement (de la terre à l'eau ou à la faille, hors pont existant) coûte très cher : peu de ponts, et courts
-      const cross = w.isGap(nx, nz) && !w.road[n] && !(w.isGap(x, z) || w.road[c]) ? 12 : 0;
+      // un nouveau franchissement (de la terre à l'eau ou à la faille, hors pont existant) coûte un peu : pas de pont pour rien
+      const cross = w.isGap(nx, nz) && !w.road[n] && !(w.isGap(x, z) || w.road[c]) ? CROSS : 0;
       const nd = dc + cn * (dx && dz ? Math.SQRT2 : 1) + dh * 3 + cross;
       if (nd < dist[loc(n)]) { dist[loc(n)] = nd; prev[loc(n)] = c; heap.push(nd + h(n), n); }
     }

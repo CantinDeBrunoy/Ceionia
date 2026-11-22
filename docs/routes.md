@@ -18,7 +18,7 @@ Une diagonale en mode « Ligne » est donc un escalier ; le mode « Libre » tra
 **Route libre** (mode « Libre », mode par défaut, `roadMode = 'free'`) : un clic au point A, un clic au point B, ou un glissé de A à B (relâcher à plus de 12 px de l'appui). Un ruban vert (rouge si refusé) montre la courbe prévue, avec une flèche au bout. Un clic sur A, ou Échap, oublie A. Une fois la route posée, l'outil est quitté (`setTool('none')`). R, l'outil étant déjà en main, bascule entre les deux modes (`main.ts`).
 - Longueur : `FREE_MAX = 80` cases à vol d'oiseau (« Trop loin »).
 - Refus avec message (`RoadPlan.why`) : « Hors de la carte. », « On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde. » (A ou B non posable), « Pas de passage : des bâtiments, l'eau profonde ou des pentes trop raides barrent le chemin. ».
-- Le chemin contourne bâtiments, pentes et champs ; il ne franchit l'eau que si l'on ne peut pas faire autrement.
+- Le chemin contourne bâtiments, pentes et champs ; il jette un pont sur l'eau ou une faille dès que c'est nettement plus court que le détour (22 nov. 2026, retour de joueur : « le jeu propose souvent un détour quand je veux un pont »).
 - Un clic de départ sur une route existante est permis ; la nouvelle route la croise ou la rejoint.
 
 **Routes automatiques** (réglage `autoRoads`, vrai par défaut, dans les réglages ; `Game.setAutoRoads`) : à la pose d'un bâtiment, `autoRoad` trace un seul chemin de sa porte jusqu'au réseau (ou, sans réseau encore, jusqu'à la porte du bâtiment le plus proche : le tout premier bâtiment n'a rien à relier). Le réseau et les portes sont ceux de **son île** (`sameLand` : l'île principale, ou celle de l'allié, voir [diplomatie.md](diplomatie.md)) : sur l'île de l'allié, le réseau du village, de l'autre côté de la mer, ne compte pas ; le premier bâtiment y attend le suivant (le comptoir posé près du port s'y relie).
@@ -37,8 +37,8 @@ Une diagonale en mode « Ligne » est donc un escalier ; le mode « Libre » tra
 ## Fonctionnement dans le code
 **Route libre** (`planRoad(w, ax, az, bx, bz)`) :
 1. cases de A et B en centres ; A* en 8-voisinage dans la boîte de A et B élargie de `MARGIN = 14` ;
-2. coût d'une case (`cost`) : `1 + pente × 2,5`, forêt +1,5, rochers +1, champ +4, eau +8 (hors pont existant), route existante +1,5 (on croise, on ne longe pas), voisin d'un bâtiment +0,6 ; infini si `!canRoad` ;
-3. coûts de passage : saut de hauteur supérieur à `STEP_H = 0,75` refusé hors de l'eau, diagonale refusée entre deux obstacles, ou en rognant le coin d'une case d'eau, nouveau franchissement +12 ;
+2. coût d'une case (`cost`) : `1 + pente × 2,5`, forêt +1,5, rochers +1, champ +4, route existante +1,5 ; une case d'eau ou de faille (`isGap`) vaut `GAP = 2` (deux cases de terre plate, avant : +8), 2,5 sur un pont déjà posé (on croise, on ne longe pas), voisin d'un bâtiment +0,6 ; infini si `!canRoad` ;
+3. coûts de passage : saut de hauteur supérieur à `STEP_H = 0,75` refusé hors de l'eau, diagonale refusée entre deux obstacles, ou en rognant le coin d'une case d'eau ou de faille, nouveau franchissement `CROSS = 3` (avant : +12) ;
 4. tirage en lignes droites (jusqu'à 12 cases, `fits(…, cheap = true)`) puis adoucissement de Chaikin à 3, 2, 1 puis 0 passes : la courbe la plus douce qui reste praticable, qui ne frôle aucun bâtiment (`BAND = 0,22`) et qui ne mouille pas plus de cases que le chemin cherché.
 5. Résultat : `{ pts, cells, why }`. `World.addCurve(pts)` arrondit les points au centième, pose les cases (`rasterize` + `setRoad`) et enregistre la courbe dans `World.curves` (`{ id, pts }`).
 
