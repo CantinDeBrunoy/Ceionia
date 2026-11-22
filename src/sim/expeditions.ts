@@ -116,6 +116,16 @@ export function readTeamNote(o: any): TeamNote | null {
   };
 }
 
+/** Le rayon (cases) où l'on compte les arbres autour du lieu d'une expédition, et ce que coûte chaque case boisée au choix du lieu */
+export const WOODS_R = 4, WOODS_COST = 1.2;
+/** Cases de forêt dans le carré de rayon `WOODS_R` autour de (x, z) : 0 dégagé … 81 en pleine forêt */
+export function woodsAround(w: World, x: number, z: number, r = WOODS_R): number {
+  let n = 0;
+  const cx = Math.floor(x), cz = Math.floor(z);
+  for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) if (w.inCells(cx + dx, cz + dz) && w.veg[w.ci(cx + dx, cz + dz)] === VEG_FOREST) n++;
+  return n;
+}
+
 /** Les chasses où le monstre meurt sur place : l'issue s'y tire avant la fin du travail */
 export const FATED = new Set<string>(['megalodon', 'kraken', 'dragon', 'stag']);
 /** Part du travail où se joue l'issue d'une chasse au monstre (après le dernier imprévu, qui survient aux trois quarts au plus) */
@@ -1179,6 +1189,9 @@ export class Expeditions {
       for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) if (w.inCells(x + dx, z + dz)) top = Math.max(top, w.cellAvg(x + dx, z + dz));
       return top - w.cellAvg(x, z);
     };
+    // les arbres tout autour : hors des expéditions de la forêt, un lieu dégagé d'abord (les arbres cachaient l'équipe à la
+    // caméra, notes de joueurs du 22 nov. 2026 ; une « plaine » avait en moyenne 33 cases de forêt sur 81 autour d'elle)
+    const leafy = kind === 'forest' ? () => 0 : (x: number, z: number) => woodsAround(w, x, z) * WOODS_COST;
     for (let z = 2; z < N - 2; z += 2)
       for (let x = 2; x < N - 2; x += 2) {
         const k = w.ci(x, z), h = w.cellAvg(x, z), slope = w.cellSlope(x, z), d = Math.hypot(x + 0.5 - bx, z + 0.5 - bz);
@@ -1192,14 +1205,14 @@ export class Expeditions {
         else if (kind === 'mountain') {
           // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif (au pied d'une simple butte, s'il le faut)
           const up = slope < 1.2 && (h > 1 || loose) && d > 9 ? rise(x, z) : 0;
-          if (up > (loose ? 0.6 : 1.4) || (h > 4.2 && slope < 1.2 && d > 9)) (town[k] ? cand : outside).push([x + 0.5, z + 0.5, Math.abs(d - ideal) - Math.min(up, 4) * 3 + sand + this.rnd() * 5]);
+          if (up > (loose ? 0.6 : 1.4) || (h > 4.2 && slope < 1.2 && d > 9)) (town[k] ? cand : outside).push([x + 0.5, z + 0.5, Math.abs(d - ideal) - Math.min(up, 4) * 3 + sand + leafy(x, z) + this.rnd() * 5]);
           continue;
         }
         // devant une grotte ou une faille : au bord de son emprise (une vraie grotte plutôt qu'une faille)
         // (et à son niveau : une grotte au fond d'un ravin ou en haut d'une falaise, vue du bord, n'est pas une grotte où l'on entre)
         else if (kind === 'cave') { const e = d > 6 ? w.outpostEntrance(x, z, 1) : -1; ok = e >= 0; extra = !ok ? 0 : (w.veg[e] !== VEG_CAVE ? 10 : 0) + (Math.abs(w.cellAvg(e % N, Math.floor(e / N)) - h) > 0.35 ? 25 : 0); }
         else ok = slope < 0.8 && d > 24 && !w.road[k] && w.veg[k] !== VEG_FIELD && w.veg[k] !== VEG_GARDEN;
-        if (ok) (kind === 'cave' || !town[k] ? outside : cand).push([x + 0.5, z + 0.5, Math.abs(d - ideal) + extra + sand + this.rnd() * 5]);
+        if (ok) (kind === 'cave' || !town[k] ? outside : cand).push([x + 0.5, z + 0.5, Math.abs(d - ideal) + extra + sand + leafy(x, z) + this.rnd() * 5]);
       }
     // hors du village d'abord ; entre les maisons seulement s'il n'y a rien d'autre
     if (outside.length) cand.splice(0, cand.length, ...outside);
