@@ -4332,7 +4332,8 @@ export class ExpeditionScene {
   private relief(x: number, z: number, r: number): [number, number] {
     let lo = Infinity, hi = -Infinity;
     // (assez de points pour ne pas manquer une bosse entre deux : le bassin n'y serait plus tout à fait au-dessus du sol)
-    for (const [rr, n] of [[0, 1], [r * 0.35, 8], [r * 0.7, 16], [r, 24]] as [number, number][])
+    // (des anneaux plus serrés depuis le 22 nov. 2026 : un lieu dégagé de la source chaude tombait sur une bosse manquée)
+    for (const [rr, n] of [[0, 1], [r * 0.35, 12], [r * 0.55, 16], [r * 0.75, 24], [r, 32]] as [number, number][])
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2, h = this.world.surfaceAt(x + Math.cos(a) * rr, z + Math.sin(a) * rr);
         lo = Math.min(lo, h); hi = Math.max(hi, h);

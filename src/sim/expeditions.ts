@@ -1191,7 +1191,8 @@ export class Expeditions {
     };
     // les arbres tout autour : hors des expéditions de la forêt, un lieu dégagé d'abord (les arbres cachaient l'équipe à la
     // caméra, notes de joueurs du 22 nov. 2026 ; une « plaine » avait en moyenne 33 cases de forêt sur 81 autour d'elle)
-    const leafy = kind === 'forest' ? () => 0 : (x: number, z: number) => woodsAround(w, x, z) * WOODS_COST;
+    // (pas pour la mer : la scène regarde le large, et sa côte se choisit à son quai, voir `eauEquipe.test.ts`)
+    const leafy = kind === 'forest' || sea ? () => 0 : (x: number, z: number) => woodsAround(w, x, z) * WOODS_COST;
     for (let z = 2; z < N - 2; z += 2)
       for (let x = 2; x < N - 2; x += 2) {
         const k = w.ci(x, z), h = w.cellAvg(x, z), slope = w.cellSlope(x, z), d = Math.hypot(x + 0.5 - bx, z + 0.5 - bz);
