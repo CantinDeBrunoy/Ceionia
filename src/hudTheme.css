@@ -1373,8 +1373,8 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   #dockRow > #dockRight, #troopBar .tfoot > .tcorner { grid-column: 4; justify-self: end; }
 }
 
-/* ---------- la barre du bas repliable (retour de l'auteur, 15 nov. 2026) : une petite languette à flèche sur le bord haut du
-   panneau des modes replie les rayons et les vignettes (`body.dockMin`) ; restent les modes, les outils, la vue et la
+/* ---------- la barre du bas repliable (retour de l'auteur, 15 nov. 2026) : une petite languette à flèche (à droite, sur la
+   mini-carte, depuis le 22 nov. 2026 ; avant sur le panneau des modes) replie les rayons et les vignettes (`body.dockMin`) ; restent les modes, les outils, la vue et la
    mini-carte. Au téléphone, la languette se pose au milieu du bord haut de la barre, et « ⋯ » reste là. Ce que le tutoriel
    désigne (`.tHi`) garde la barre ouverte ---------- */
 #dock #dockSide { position: relative; }
@@ -1384,6 +1384,10 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 #bFold svg { display: block; margin-top: 1px; }
 @media (min-width: 861px) {
   body.dockMin #dock #dockMain:not(:has(.tHi)) { display: none; }
+  /* à droite, sur le bord haut de la mini-carte (`UI.placeFold` y range la languette) : à gauche, sur les modes, on ne la
+     comprenait pas (retour de joueurs, 22 nov. 2026) */
+  #dock #dockRight { position: relative; }
+  #dockRight > #bFold { left: auto; right: 26px; }
 }
 @media (max-width: 860px) {
   #bFold { top: -19px; height: 19px; width: 52px; left: calc(50% - 26px); }

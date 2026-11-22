@@ -396,6 +396,8 @@ const NEED_USE: Record<(typeof GIVES)[number]['k'], string> = {
   housing: 'À loger : {n} habitants', food: 'Consommation du village : {n} de nourriture', water: 'Consommation du village : {n} d’eau',
   jobs: 'À employer : {n} habitants', joy: 'Demande du village : {n} de bien-être', health: 'Consommation du village : {n} de soins',
 };
+/** En dessous de cette largeur (téléphone), la languette de la barre reste au milieu de la barre (`UI.placeFold`) */
+const FOLD_SIDE = '(max-width: 860px)';
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
 /** une décimale quand il y en a une (« 2,4 » de bien-être ne s'affiche plus « 2 » en rouge) */
 const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
@@ -990,6 +992,7 @@ export class UI {
     this.mini = new MiniMap($('#dockRight'), host, () => host.audio.sfxClick());
     // la petite flèche qui replie la barre du bas (état retenu d'une partie à l'autre)
     $('#bFold').onclick = () => { this.setDockMin(!document.body.classList.contains('dockMin')); host.audio.sfxClick(); };
+    matchMedia(FOLD_SIDE).addEventListener('change', () => this.placeFold());
     { let min = false; try { min = localStorage.getItem(DOCK_MIN_KEY) === '1'; } catch { /* sans stockage */ } this.setDockMin(min); }
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
@@ -1036,6 +1039,7 @@ export class UI {
    */
   setDockMin(on: boolean) {
     document.body.classList.toggle('dockMin', on);
+    this.placeFold();
     const b = $('#bFold'), t = tr(on ? 'Déplier la barre de construction' : 'Replier la barre de construction');
     b.innerHTML = ic(on ? 'chevUp' : 'chevDown', 16, 2.6);
     b.title = t;
@@ -1043,6 +1047,15 @@ export class UI {
     b.setAttribute('aria-expanded', String(!on));
     try { localStorage.setItem(DOCK_MIN_KEY, on ? '1' : '0'); } catch { /* sans stockage */ }
     requestAnimationFrame(() => { this.placeCards(); this.refreshArrows(); });
+  }
+
+  /**
+   * La languette qui replie la barre : à droite, sur le bord haut de la mini-carte (à gauche, sur les modes, on ne la
+   * comprenait pas : retour de joueurs, 22 nov. 2026) ; au téléphone, où la colonne de droite se cache, au milieu de la barre
+   */
+  private placeFold() {
+    const b = $('#bFold'), home = matchMedia(FOLD_SIDE).matches ? $('#dockSide') : $('#dockRight');
+    if (b.parentElement !== home) home.prepend(b);
   }
 
   /**
