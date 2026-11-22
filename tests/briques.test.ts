@@ -92,17 +92,19 @@ describe('prix en briques', () => {
     const c = priceIn(w, 'station', 3)!;
     expect(c.brick).toBe(10);
     expect(canPay(w, c)).toBe(false);
-    expect(shortLabel(w, c)).toBe('Il faut ' + costLabel(c) + ` (vous avez 500 bois, 500 pierre et 0 brique)`);
+    // seulement ce qui manque, pas tout le prix (retour de joueurs, 22 nov. 2026)
+    expect(shortLabel(w, c)).toBe('Il manque 10 briques');
     expect(costLabel(c)).toMatch(/ et 10 briques$/);
     w.brick = 12;
     expect(canPay(w, c)).toBe(true);
     pay(w, c);
     expect(w.brick).toBe(2);
     expect(w.wood).toBe(500 - c.wood);
-    // sans briques dans le prix, le message d'avant ne change pas
+    // sans briques dans le prix : le bois seul manque
     const m = priceIn(w, 'mill', 3)!;
     w.wood = 0;
-    expect(shortLabel(w, m)).toBe(`Il faut ${m.wood} bois et ${m.stone} pierre (vous avez 0 bois et ${Math.floor(w.stone)} pierre)`);
+    expect(w.stone).toBeGreaterThanOrEqual(m.stone);
+    expect(shortLabel(w, m)).toBe(`Il manque ${m.wood} bois`);
     // en ressources illimitées, rien à payer
     w.unlimited = true;
     expect(priceIn(w, 'refinery', 4)).toBeNull();

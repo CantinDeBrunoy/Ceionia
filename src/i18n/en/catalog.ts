@@ -480,6 +480,7 @@ registerDict('catalog', {
   '{list} et {last}': '{list} and {last}',
   '{wood} bois et {stone} pierre': '{wood} wood and {stone} stone',
   'Il faut {cost} (vous avez {have})': 'You need {cost} (you have {have})',
+  'Il manque {cost}': 'Missing {cost}',
   '{n} briques': '{n} bricks',
   '{n} brique': '{n} brick',
   '{wood} bois, {stone} pierre et {brick} briques': '{wood} wood, {stone} stone and {brick} bricks',
