@@ -48,9 +48,12 @@ const RAVINE_DEEP = new THREE.Color(0x3a332e);
 /** Champs de lave refroidie : basalte noir, puis mousse quand la végétation revient ; glace des glaciers */
 const LAVA_FIELD = new THREE.Color(0x35302e);
 const LAVA_MOSS = new THREE.Color(0x6f7a4a);
-/** Gisements de pétrole : terre imbibée de brun sombre, et taches de brut presque noires */
-const OIL_SOIL = new THREE.Color(0x5a4c3e);
-const OIL_TAR = new THREE.Color(0x1c1814);
+/**
+ * Gisements de pétrole : terre imbibée d'un violet sombre aux reflets irisés, et taches de brut presque noires. Brun sombre
+ * jusqu'au 22 nov. 2026, on le prenait pour de la terre : les joueurs ne trouvaient pas les gisements
+ */
+const OIL_SOIL = new THREE.Color(0x4b2a63);
+const OIL_TAR = new THREE.Color(0x120a1c);
 const ICE = new THREE.Color(0xcfe6f4);
 /** Sol contaminé de l'île du portail : noirci, veiné de rouge braise, cendre violacée en lisière ; herbe drue des halos */
 const BLIGHT_CHAR = new THREE.Color(0x2c2128), BLIGHT_EMBER = new THREE.Color(0x86342a), BLIGHT_ASH = new THREE.Color(0x6e5a66);
@@ -844,7 +847,7 @@ ${BLIGHT_GLSL}
         const of = this.oilW[i];
         if (of > 0) {
           const k = smoothstep(0, 0.75, of + this.wobble[i] * 0.25);
-          tmp.lerp(OIL_SOIL, k * 0.75).lerp(OIL_TAR, smoothstep(0.1, 0.5, this.wobble[i] + pv * 0.6 + of * 0.5 - 0.35) * k * 0.9);
+          tmp.lerp(OIL_SOIL, k * 0.9).lerp(OIL_TAR, smoothstep(0.1, 0.5, this.wobble[i] + pv * 0.6 + of * 0.5 - 0.35) * k * 0.9);
         }
         // neige : couverture inégale — plaques où l'herbe perce, moins sous les arbres et sur les pentes, qui grandissent
         // avec l'hiver ; bleutée dans les creux, éclatante sur les bosses
