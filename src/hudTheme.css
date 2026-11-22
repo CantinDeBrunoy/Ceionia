@@ -1492,13 +1492,15 @@ body.dockMin #dock > #homeBack { margin-bottom: 26px; }
   #ui > .overlay > .cePop.settings .setPane { max-height: calc(100dvh - 250px); min-height: 300px; }
 }
 /* la bulle du tutoriel ouverte (étapes « L'équipement » et « Les expéditions », chapitres) : les fenêtres des expéditions se
-   rangent à gauche et lui laissent la colonne de droite, au lieu qu'elle couvre une carte de mission ou une approche */
+   rangent à gauche et lui laissent la colonne de droite (390 px et ses marges), au lieu qu'elle couvre une carte de mission
+   ou une approche. Elles prennent tout le reste de l'écran : plafonnées à 1 100 px et réduites de 470 px, elles restaient
+   toutes petites sur un grand écran, une bande vide entre elles et la bulle (retour de joueur, 22 nov. 2026) */
 @media (min-width: 1200px) {
-  body:has(#tuto:not([hidden])) .overlay > .modal.expModal { max-width: min(1100px, calc(100vw - 470px)); margin-left: 36px; margin-right: auto; }
-  body:has(#tuto:not([hidden])) .overlay > .modal.sendModal { max-width: min(1040px, calc(100vw - 470px)); margin-left: 36px; margin-right: auto; }
+  body:has(#tuto:not([hidden])) .overlay > .modal.expModal { width: calc(100vw - 440px); max-width: 1500px; height: min(1000px, 94vh); margin-left: 16px; margin-right: auto; }
+  body:has(#tuto:not([hidden])) .overlay > .modal.sendModal { max-width: min(1180px, calc(100vw - 440px)); margin-left: 16px; margin-right: auto; }
 }
 /* (plus étroite, la liste des missions passe sur une colonne, comme sous 1 180 px) */
-@media (min-width: 1200px) and (max-width: 1640px) {
+@media (min-width: 1200px) and (max-width: 1360px) {
   body:has(#tuto:not([hidden])) .expModal .missions { grid-template-columns: minmax(0, 1fr); }
 }
 /* ---------- Six rayons de construction (le rayon Décorations s'est ajouté) : sur un écran d'ordinateur moyen, les onglets se
