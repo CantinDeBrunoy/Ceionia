@@ -1,7 +1,7 @@
 # Les âges
 
 > Fichiers : `src/build/catalog.ts` (`AGES`, `AgeDef`, `minAge` / `maxAge`), `src/sim/sim.ts` (`ageProgress`, `reqKindsOf`, `usedBefore`, `advance`, `ready`), `src/sim/missions.ts` (`mandatoriesFor`), `src/main.ts` (`sim.onAgeUp`), `src/render/buildings.ts` (évolution des modèles), `src/ui/ui.ts` (`#agePanel`, `showNewAge`, `lockOf`), `src/sim/difficulty.ts` (`newOnly`).
-> Tests : `tests/difficulty.test.ts` (passage d'âge en Normal), `tests/baseAges.test.ts`, `tests/rail.test.ts`, `tests/briques.test.ts`, `tests/or.test.ts`.
+> Tests : `tests/difficulty.test.ts` (passage d'âge en Normal), `tests/conditionsAge.test.ts` (le geste de chaque condition), `tests/baseAges.test.ts`, `tests/rail.test.ts`, `tests/briques.test.ts`, `tests/or.test.ts`.
 > Voir aussi : [besoins-population.md](besoins-population.md), [economie-ressources.md](economie-ressources.md), [difficulte.md](difficulte.md), [batiments-catalogue.md](batiments-catalogue.md), [rendu-modeles.md](rendu-modeles.md), [portail-ile.md](portail-ile.md), [chemin-de-fer.md](chemin-de-fer.md).
 
 ## En bref
@@ -57,7 +57,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - Autres verrous : `reqMission` (expédition réussie), `reqKind` (un autre bâtiment présent : l'usine automobile veut une raffinerie), tutoriel guidé, premier bâtiment obligé (la place du village).
 
 ### Affichage
-- `#agePanel` : nom et devise, barre `ratio`, « Vers X » et « n/m conditions » ; clic : la liste dépliée (chaque ligne cliquable : bâtir le genre, ou ouvrir l'expédition / la fiche du minerai ou de l'or, le rail ; les briques prennent la briqueterie en main dans le rayon du bas, comme une condition de bâtiment, au lieu d'ouvrir leur fiche en haut : deux conduites pour la même sorte de condition, 17 nov. 2026). Bouton `#ageGo` quand `Sim.ready`.
+- `#agePanel` : nom et devise, barre `ratio`, « Vers X » et « n/m conditions » ; clic : la liste dépliée (chaque ligne cliquable : bâtir le genre, ou ouvrir l'expédition / la fiche du minerai ou de l'or, le rail ; le geste de chaque ligne vient de `ageGo(item)` (`sim.ts`), d'après ses champs : `kind`, `missionId` (l'identifiant de l'expédition, posé en `data-m`), sinon le libellé interne ; les briques prennent la briqueterie en main dans le rayon du bas, comme une condition de bâtiment, au lieu d'ouvrir leur fiche en haut : deux conduites pour la même sorte de condition, 17 nov. 2026). Bouton `#ageGo` quand `Sim.ready`.
 - Les briques ne sont plus demandées pour passer à l'époque moderne (décision de l'auteur, 17 nov. 2026) : seulement pour l'âge futuriste (80).
 - Au dernier âge : « Dernier âge atteint », `ageProgress()` renvoie `null`, le conseil passe à la conquête de l'espace ([fin-de-partie.md](fin-de-partie.md)). Le panneau des âges déplié montre « Pour finir le jeu » (`UI.endRoad`) : le cosmodrome, le premier vol, la Lune, la centrale à fusion, la colonie, cochés au fur et à mesure et cliquables ; « profitez de votre village » seulement la colonie fondée (avant, il s'affichait dès l'âge atteint).
 
@@ -79,10 +79,11 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - Pas de retour en arrière d'âge : ne pas permettre Annuler par-dessus un passage (`onAgeUp` vide les piles).
 - `usedBefore` prend le **maximum** sur les âges précédents, pas la somme : ne pas « corriger » en additionnant.
 - Ajouter un âge : `AGES`, les tableaux par âge de **chaque** bâtiment (`names`, `housing`…, prolongés au besoin), `YIELD`, les modèles, les textes d'âge.
-- Reste dans `Sim.computeMessage` et `ui.ts › reqOf` du code lié à l'ancienne condition « île du portail » (étiquette `'île du portail'`), qui ne correspond plus à aucun item. Sans effet, à nettoyer.
+- Reste dans `Sim.computeMessage` du code lié à l'ancienne condition « île du portail » (étiquette `'île du portail'`), qui ne correspond plus à aucun item. Sans effet, à nettoyer.
+- La liste dépliée (`#ageReq`) n'est réécrite que si son HTML change, et jamais pendant un appui (`:active`) : refaite à chaque tick de l'interface (4 fois par seconde), elle remplaçait la ligne entre l'appui et le relâchement, le clic tombait sur le panneau et repliait la liste sans rien ouvrir (retour de joueur, 22 nov. 2026). Les expéditions se retrouvaient aussi par leur titre lu dans le texte : en anglais, aucune ne répondait (`tests/conditionsAge.test.ts`).
 - À vérifier : les capacités des bâtiments (`b.age`) montent pendant l'animation d'évolution sans que `world.version` change ; elles peuvent ne se refléter dans les jauges qu'au prochain changement du village.
 
 ## Pour modifier
-- **Changer une condition** : `AGES[n]` (`catalog.ts`) ; pour l'or, aussi `firstGoldAge` (`trade.ts`) ; la variante Normal se déduit toute seule ; mettre à jour `tests/difficulty.test.ts` (` passage d'âge en Normal`) et le conseil si c'est un nouveau type de condition (`ageProgress` + `computeMessage` + `reqOf` dans `ui.ts` + traduction).
+- **Changer une condition** : `AGES[n]` (`catalog.ts`) ; pour l'or, aussi `firstGoldAge` (`trade.ts`) ; la variante Normal se déduit toute seule ; mettre à jour `tests/difficulty.test.ts` (` passage d'âge en Normal`) et le conseil si c'est un nouveau type de condition (`ageProgress` + `computeMessage` + `ageGo` et le clic de `#agePanel` dans `ui.ts` + traduction).
 - **Rendre une expédition obligatoire** : `mandatory: true` dans `MISSIONS` ; elle apparaît d'elle-même dans les conditions (`mandatoriesFor`).
 - **Ajouter un bâtiment à un âge** : `minAge` et tableaux par âge dans `KINDS` ; la fenêtre de nouveaux bâtiments le liste seule.

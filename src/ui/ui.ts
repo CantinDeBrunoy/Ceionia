@@ -3,7 +3,7 @@ import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
 import { rampartTower } from '../build/rampart';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
-import { Sim, NeedId, GOLD_LABEL } from '../sim/sim';
+import { Sim, NeedId, ageGo } from '../sim/sim';
 import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
@@ -23,7 +23,7 @@ import { Expeditions, Report, ActiveExpedition, nextTeamAt } from '../sim/expedi
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { isleName, kindOffered, CONFLICT_LABEL, allyPostReadyNow, boonsMatter, talkRisk, TALK_RISK } from '../sim/diplomacy';
+import { isleName, kindOffered, allyPostReadyNow, boonsMatter, talkRisk, TALK_RISK } from '../sim/diplomacy';
 import { peoplesView } from '../sim/peoples';
 import { peoplesHtml } from './peoples';
 import { legacyOf } from '../sim/legacy';
@@ -34,7 +34,7 @@ import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCost
 import { choiceStyles, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
 import { priceIn, canPay, costLabel, haveLabel, shortLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, RES_NAME } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
-import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/crossroads';
+import { waysTabShown, type Way, type WayState } from '../sim/crossroads';
 import { waysHtml, type ConflictWay } from './ways';
 import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
 import { flowOf, flowOfBuilding, ledgerOf, LedgerRow, Flow, refundTotal, shortText } from '../sim/ledger';
@@ -382,7 +382,6 @@ const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string;
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
-const reqOf = (label: string) => (label === CHOICE_LABEL ? 'choice' : label === CONFLICT_LABEL ? 'conflict' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
 /**
  * Le bâtiment est-il proposé dans cette partie ? (la diplomatie ; le comptoir : seulement avec l'archipel). Au bac à sable, les
@@ -863,17 +862,15 @@ export class UI {
       // (les défenses de l'île : la vue y va, l'outil en main)
       if (k) { this.pick(k); if (k === 'watchtower' || k === 'barracks') this.host.goIsle?.(); return; }
       // une condition sans bâtiment : on montre comment l'obtenir
+      // une expédition : son identifiant (le titre affiché ne la retrouvait pas en anglais)
+      const m = (e.target as HTMLElement).closest<HTMLElement>('[data-m]')?.dataset.m;
+      if (m) { this.host.audio.sfxClick(); if (MISSIONS.some((x) => x.id === m)) this.gotoMission(m); else this.openExpeditions(); return; }
       const req = (e.target as HTMLElement).closest<HTMLElement>('[data-req]')?.dataset.req;
       if (req === 'ore') { this.openRes('ore'); return; }
       // les briques : la briqueterie en main, dans le rayon du bas, comme une condition de bâtiment (la fiche des briques
       // en haut, avant : deux conduites différentes pour la même sorte de condition)
       if (req === 'brick') { if (this.host.sim.age >= KINDS.brickworks.minAge) this.pick('brickworks'); else this.openRes('brick'); return; }
       if (req === 'gold') { this.openRes('gold'); return; }
-      if (req === 'exp') {
-        const t = /[«“]\s*(.+?)\s*[»”]/.exec((e.target as HTMLElement).closest<HTMLElement>('[data-req]')!.textContent ?? '')?.[1], m = MISSIONS.find((x) => x.title === t);
-        if (m) this.gotoMission(m.id); else this.openExpeditions();
-        return;
-      }
       if (req === 'pop') { this.openNeed('housing'); return; }
       if (req === 'choice') { this.host.audio.sfxClick(); this.host.openCrossroads?.(); return; }
       // le conflit des deux îles à régler : la carte de la diplomatie (paix ou guerre ; l'allié d'abord s'il manque)
@@ -1353,6 +1350,9 @@ export class UI {
   gotoMission(id: string) {
     if (!this.root.querySelector('.expModal')) this.openExpeditions();
     const ov = this.root.querySelector('.expModal')!.closest('.overlay')!;
+    // une recherche en cours pourrait la cacher : on l'efface (le bouton « Toutes » remet le filtre)
+    const find = ov.querySelector<HTMLInputElement>('.expFind input');
+    if (find) find.value = '';
     ov.querySelector<HTMLButtonElement>('[data-tab="missions"]')?.click();
     const card = ov.querySelector<HTMLElement>(`.mission[data-id="${id}"]`);
     if (!card) return;
@@ -2176,9 +2176,18 @@ export class UI {
     if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = tr('Toutes les conditions sont réunies : passer à l’âge suivant ({age})', { age: AGES[ap!.next].name }); }
     // au bac à sable, le panneau liste les âges : un clic y mène, vers l'avant comme vers l'arrière
     const sbReq = sb ? `<b>${tr('Changer d’âge : sans condition')}</b>${AGES.map((a, i) => `<button type="button" class="ageSet${i === sim.age ? ' now' : ''}" data-setage="${i}">${a.name}<small>${a.tagline}</small></button>`).join('')}` : null;
-    if (sbReq !== null) { if ($('#ageReq').dataset.v !== sbReq) { $('#ageReq').innerHTML = sbReq; $('#ageReq').dataset.v = sbReq; } } else { delete $('#ageReq').dataset.v; $('#ageReq').innerHTML = ap
-      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
-      : this.endRoad();}
+    // chaque condition porte son geste (`ageGo`) : un bâtiment, une expédition (son identifiant) ou une fiche
+    const goAttr = (i: (typeof ap & {})['items'][number]) => {
+      const g = ageGo(i);
+      return 'kind' in g ? ` data-kind="${g.kind}" title="${sim.whereOf(g.kind)} ${tr('— cliquer pour le bâtir')}"` : 'mission' in g ? ` data-m="${g.mission}" title="${tr('Cliquer pour voir l’expédition')}"` : ` data-req="${g.req}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`;
+    };
+    const reqHtml = sbReq ?? (ap
+      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${goAttr(i)}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      : this.endRoad());
+    // réécrite seulement si elle change, et pas sous le doigt : la liste refaite quatre fois par seconde entre l'appui et le
+    // relâchement perdait le clic (le nœud appuyé n'existait plus), qui repliait alors la liste sans rien ouvrir
+    const reqBox = $('#ageReq');
+    if (reqBox.dataset.v !== reqHtml && !reqBox.matches(':active')) { reqBox.innerHTML = reqHtml; reqBox.dataset.v = reqHtml; }
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
       const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);
@@ -3113,7 +3122,7 @@ export class UI {
     const has = (k: KindId) => [...w.buildings.values()].some((b) => b.kind === k);
     const row = (ok: boolean, attr: string, text: string) => `<span class="${ok ? 'ok' : ''} kind" ${attr}>${ok ? '✓' : '•'} ${text}</span>`;
     const kind = (k: KindId) => row(has(k), `data-kind="${k}" title="${h.sim.whereOf(k)} ${tr('— cliquer pour le bâtir')}"`, tr('bâtir « {name} »', { name: KINDS[k].names[5] }));
-    const exp = (id: string) => { const m = MISSIONS.find((x) => x.id === id)!; return row(w.missionDone(id), `data-req="exp" title="${tr('Cliquer pour voir l’expédition')}"`, tr('expédition « {title} »', { title: tr(m.title) })); };
+    const exp = (id: string) => { const m = MISSIONS.find((x) => x.id === id)!; return row(w.missionDone(id), `data-m="${id}" title="${tr('Cliquer pour voir l’expédition')}"`, tr('expédition « {title} »', { title: tr(m.title) })); };
     return `<b>${tr('Pour finir le jeu')}</b>${kind('spaceport')}${exp('rocket')}${exp('moon')}${kind('fusion')}${exp(VICTORY)}`;
   }
 
