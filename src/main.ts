@@ -684,7 +684,14 @@ class Game implements UIHost {
     });
     this.command.onCard = () => this.ui.placeCards();
     // (une défense de l'île en main : le clic droit la lâche, il ne donne pas d'ordre aux troupes)
-    this.cam.rightClick = (e) => { if (this.islePlace) { this.tools.escape(); this.endIslePlace(); return; } if (this.command.active) this.command.rightClick(e); };
+    // un clic droit sans glisser : en commandement, un ordre aux troupes ; au village, il lâche le bâtiment en main, comme
+    // Échap (son endroit fixé d'abord, s'il l'était). Demandé par des joueurs (22 nov. 2026)
+    this.cam.rightClick = (e) => {
+      if (this.islePlace) { this.tools.escape(); this.endIslePlace(); return; }
+      if (this.command.active) { this.command.rightClick(e); return; }
+      const t = this.tools;
+      if (t.tool === 'build' || (t.tool === 'move' && t.holding())) { t.escape(); this.audio.sfxClick(); }
+    };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(false); });
     // le grand choix de la fin de l'Antiquité (les Enfers, explorer le monde, ni l'un ni l'autre), et chaque voie prise plus tard
     this.worldChoice = new WorldChoice(uiRoot, {

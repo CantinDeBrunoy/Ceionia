@@ -343,7 +343,7 @@ registerDict('catalog', {
   '{n} pans : {cost}': '{n} pieces: {cost}',
   'Cliquez le point B : le mur se pose d’un trait (il saute les routes)': 'Click point B: the wall goes up in one stroke (it skips roads)',
   'Cliquez le point A, puis le point B : le mur se pose d’un trait': 'Click point A, then point B: the wall goes up in one stroke',
-  'R : tourner': 'R: rotate', 'Échap : lâcher': 'Esc: put down',
+  'R : tourner': 'R: rotate', 'Échap : lâcher': 'Esc: put down', 'Échap ou clic droit : lâcher': 'Esc or right-click: put down',
   'Un rempart part d’une case libre (ou d’un pan déjà posé) : pas d’une route, d’un bâtiment ni de l’eau.': 'A rampart starts from a free cell (or a piece already built): not from a road, a building or water.',
   'Rien à poser ici : le tracé ne passe que sur des routes, des bâtiments ou de l’eau.': 'Nothing to build here: the line only crosses roads, buildings or water.',
   '{n} pans posés': '{n} pieces built', 'Un pan posé': 'One piece built',
