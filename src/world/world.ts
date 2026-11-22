@@ -42,6 +42,11 @@ export const TREE_LINE = 5.8;
 export const MOUNTAIN_H = 2.4;
 /** Station de ski : un sommet d'au moins ALPINE_PEAK à moins de ALPINE_REACH cases */
 export const ALPINE_PEAK = 5.2, ALPINE_REACH = 7;
+/**
+ * Pente d'une case (`cellSlope`) au-delà de laquelle on n'y pose pas de route case par case ; une route libre y monte en
+ * lacets jusqu'à `SWITCH_SLOPE` (au-delà : une paroi)
+ */
+export const ROAD_SLOPE = 1.3, SWITCH_SLOPE = 3;
 export const SNOW_LINE: [number, number] = [7, 8.2];
 /** Relief affiché : VR sous-sommets par case, lissé (la grille de jeu reste N×N) */
 export const VR = 2;
@@ -1657,7 +1662,8 @@ export class World {
     for (const l of this.listeners) l.onRemove(b);
   }
 
-  canRoad(cx: number, cz: number) {
+  /** `steep` : une route en lacets (tracé libre), qui monte des pentes jusqu'à `SWITCH_SLOPE` */
+  canRoad(cx: number, cz: number, steep = false) {
     // (archipel : pas de route hors de son île et de celle de l'allié ; aucun pont ne les relie, les ports suffisent)
     if (!this.inCells(cx, cz) || !this.playable(cx, cz)) return false;
     const k = this.ci(cx, cz);
@@ -1667,14 +1673,14 @@ export class World {
     if (this.decor[k]) return false;
     // sur l'eau : un pont, sauf au large
     if (this.isWet(cx, cz)) return this.lake[k] === 1 || this.cellAvg(cx, cz) > -1.7;
-    return this.cellSlope(cx, cz) < 1.3;
+    return this.cellSlope(cx, cz) < (steep ? SWITCH_SLOPE : ROAD_SLOPE);
   }
 
-  setRoad(cx: number, cz: number, on: boolean): boolean {
+  setRoad(cx: number, cz: number, on: boolean, steep = false): boolean {
     if (!this.inCells(cx, cz)) return false;
     const k = this.ci(cx, cz);
     if (on) {
-      if (this.road[k] || !this.canRoad(cx, cz)) return false;
+      if (this.road[k] || !this.canRoad(cx, cz, steep)) return false;
       this.road[k] = 1;
       this.veg[k] = 0;
       this.vegDirty = true;
@@ -1695,7 +1701,8 @@ export class World {
   addCurve(pts: number[]): number {
     const line = roundPts(pts);
     let n = 0;
-    for (const k of rasterize(line, N)) if (this.setRoad(k % N, Math.floor(k / N), true)) n++;
+    // (une route libre peut monter en lacets sur une pente raide : voir `freeRoad.ts`)
+    for (const k of rasterize(line, N)) if (this.setRoad(k % N, Math.floor(k / N), true, true)) n++;
     this.curves.push({ id: Math.max(0, ...this.curves.map((c) => c.id)) + 1, pts: line });
     this.curveMap = null;
     this.roadsDirty = true;
@@ -1800,7 +1807,8 @@ export class World {
         if (this.veg[k] && !this.vegFits(this.veg[k], this.cellAvg(cx, cz), this.cellSlope(cx, cz), false)) { this.veg[k] = 0; this.vegDirty = true; }
         // un ravin noyé (creusé sous l'eau avec l'outil Eau) disparaît
         if (this.rift[k] && this.cellAvg(cx, cz) < 0.1) { this.rift[k] = 0; this.decor[k] = 0; this.vegDirty = true; }
-        if (this.road[k] && !this.canRoad(cx, cz)) { this.road[k] = 0; this.roadsDirty = true; }
+        // (une route en lacets reste tant que la pente ne dépasse pas celle des lacets)
+        if (this.road[k] && !this.canRoad(cx, cz, true)) { this.road[k] = 0; this.roadsDirty = true; }
       }
     this.version++;
   }

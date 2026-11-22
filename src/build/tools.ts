@@ -739,7 +739,7 @@ export class ToolController implements ToolInput {
     const c = this.cell(), w = this.h.world;
     if (!c || !w.inCells(c.x, c.z)) return;
     if (!this.freeFrom) {
-      if (!w.road[w.ci(c.x, c.z)] && !w.canRoad(c.x, c.z)) { this.deny(tr('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.')); return; }
+      if (!w.road[w.ci(c.x, c.z)] && !w.canRoad(c.x, c.z, true)) { this.deny(tr('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.')); return; }
       this.freeFrom = [c.x + 0.5, c.z + 0.5];
       this.freeDrag = [e.x, e.y];
       this.h.audio.sfxClick();
@@ -1179,7 +1179,7 @@ export class ToolController implements ToolInput {
       if (!c || !w.inCells(c.x, c.z)) return;
       let ok = true;
       // en mode libre, une route existante est un bon point de départ ; une fois A choisi, la case dit si la route passe
-      if (t === 'road' && this.roadMode === 'free') ok = this.freeFrom && this.freePlan && this.freeLine.visible ? !this.freePlan.why : w.canRoad(c.x, c.z) || !!w.road[w.ci(c.x, c.z)];
+      if (t === 'road' && this.roadMode === 'free') ok = this.freeFrom && this.freePlan && this.freeLine.visible ? !this.freePlan.why : w.canRoad(c.x, c.z, true) || !!w.road[w.ci(c.x, c.z)];
       else if (t === 'road') ok = w.canRoad(c.x, c.z) && !w.road[w.ci(c.x, c.z)];
       else if (t === 'bulldoze') ok = false;
       else ok = !!this.hitBuilding;
