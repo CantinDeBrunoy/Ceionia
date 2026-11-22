@@ -294,7 +294,7 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', '', 'Club alpin', 'Station de montagne', 'Station d’altitude'],
     desc: 'Chalet des alpinistes et des skieurs, au pied des sommets.',
     joy: [0, 0, 0, 7, 10, 12], jobs: [0, 0, 0, 2, 4, 5],
-    perk: 'Ne se pose que dans la montagne. Des cordées grimpent les parois voisines. Quand la neige tient, des skieurs dévalent les pentes jusqu’au chalet (un télésiège les remonte à l’époque moderne). À l’époque moderne, des wingsuits s’élancent aussi du sommet et un parapente tourne au-dessus des pentes.',
+    perk: 'Se pose au pied d’une grosse montagne, jamais sur ses pentes. Des cordées grimpent les parois voisines. Quand la neige tient, des skieurs dévalent les pentes jusqu’au chalet (un télésiège les remonte à l’époque moderne). À l’époque moderne, des wingsuits s’élancent aussi du sommet et un parapente tourne au-dessus des pentes.',
   },
   stadium: {
     id: 'stadium', size: 3, minAge: 3, icon: '🏟️', cat: 'life',

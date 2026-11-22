@@ -1105,15 +1105,25 @@ describe('expéditions', () => {
     expect(w.stone - stone).toBeCloseTo(12, 5);
   });
 
-  it('le club alpin ne se pose que dans la montagne ; le coiffeur se pose partout', () => {
+  it('le club alpin ne se pose qu’au pied d’une grosse montagne, jamais sur ses pentes ; le coiffeur se pose partout', () => {
     const w = continent();
     const [fx, fz] = flatLand(w);
     expect(w.canPlace('alpine', fx, fz)).toMatch(/montagne/);
     expect(w.canPlace('barber', fx, fz)).toBeNull();
-    let spot: number[] | null = null;
-    for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 10 && !spot; x++) if (w.canPlace('alpine', x, z) === null) spot = [x, z];
+    let spot: number[] | null = null, slope: number[] | null = null;
+    for (let z = 10; z < N - 10; z++) for (let x = 10; x < N - 10; x++) {
+      const why = w.canPlace('alpine', x, z);
+      if (why === null && !spot) spot = [x, z];
+      if (why?.includes('pas sur ses pentes') && !slope) slope = [x, z];
+    }
+    // au pied : sous la montagne, ses pentes à trois cases au plus, un grand sommet à huit cases
     expect(spot).not.toBeNull();
-    expect(w.flatTarget(spot![0], spot![1], 2)).toBeGreaterThanOrEqual(2.4);
+    expect(w.flatTarget(spot![0], spot![1], 2)).toBeLessThan(2.4);
+    expect(w.mountainNear(spot![0], spot![1], 2, 3)).toBe(true);
+    expect(w.bigPeakNear(spot![0] + 1, spot![1] + 1)).toBe(true);
+    // en haut : plus jamais, avec la raison
+    expect(slope).not.toBeNull();
+    expect(w.flatTarget(slope![0], slope![1], 2)).toBeGreaterThanOrEqual(2.4);
   });
 
   it('les bûcherons se posent en forêt, la carrière près des rochers ; ils donnent bois et pierre', () => {

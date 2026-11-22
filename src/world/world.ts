@@ -40,8 +40,12 @@ export const MIN_H = -2.4;
 export const TREE_LINE = 5.8;
 /** Altitude à partir de laquelle on est dans la montagne (mines, carrières) */
 export const MOUNTAIN_H = 2.4;
-/** Station de ski : un sommet d'au moins ALPINE_PEAK à moins de ALPINE_REACH cases */
-export const ALPINE_PEAK = 5.2, ALPINE_REACH = 7;
+/**
+ * Club alpin : au pied d'une grosse montagne (retour de joueur, 22 nov. 2026 : le télésiège monte de là). Son emprise reste
+ * sous `MOUNTAIN_H`, le flanc de la montagne commence à `ALPINE_FOOT` cases au plus, et un sommet d'au moins `ALPINE_PEAK`
+ * se dresse à `ALPINE_REACH` cases au plus de son centre (le télésiège cherche le sommet à dix cases)
+ */
+export const ALPINE_PEAK = 5.2, ALPINE_REACH = 8, ALPINE_FOOT = 3;
 /**
  * Pente d'une case (`cellSlope`) au-delà de laquelle on n'y pose pas de route case par case ; une route libre y monte en
  * lacets jusqu'à `SWITCH_SLOPE` (au-delà : une paroi)
@@ -1318,6 +1322,14 @@ export class World {
     return false;
   }
 
+  /** Le flanc d'une montagne (une case à `MOUNTAIN_H` ou plus) à `reach` cases au plus de l'emprise s × s en (x, z) */
+  mountainNear(x: number, z: number, s: number, reach: number): boolean {
+    for (let cz = z - reach; cz < z + s + reach; cz++)
+      for (let cx = x - reach; cx < x + s + reach; cx++)
+        if (this.inCells(cx, cz) && this.cellAvg(cx, cz) >= MOUNTAIN_H) return true;
+    return false;
+  }
+
   /** Une grosse montagne (sommet d'au moins ALPINE_PEAK) à moins de ALPINE_REACH cases */
   bigPeakNear(cx: number, cz: number): boolean {
     for (let z = Math.floor(cz - ALPINE_REACH); z <= Math.ceil(cz + ALPINE_REACH); z++)
@@ -1368,9 +1380,12 @@ export class World {
     // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
     const high = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
     if (kind === 'mine' && !high) return tr('Une mine ne se creuse que dans la montagne');
-    if (kind === 'alpine' && !high) return tr('Un club alpin ne se pose que dans la montagne');
-    // une station de ski : au pied d'une grosse montagne, pas d'une simple colline
-    if (kind === 'alpine' && !this.bigPeakNear(x + s / 2, z + s / 2)) return tr('Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline');
+    // le club alpin : au pied d'une grosse montagne, jamais sur ses pentes (le télésiège monte de là jusqu'au sommet)
+    if (kind === 'alpine') {
+      if (high) return tr('Le club alpin se pose au pied de la montagne, pas sur ses pentes : le télésiège monte de là');
+      if (!this.mountainNear(x, z, s, ALPINE_FOOT)) return tr('Le club alpin se pose au pied d’une montagne : ses pentes doivent commencer à {n} cases au plus', { n: ALPINE_FOOT });
+      if (!this.bigPeakNear(x + s / 2, z + s / 2)) return tr('Au pied d’une grosse montagne, pas d’une simple colline : un sommet doit se dresser à {n} cases au plus', { n: ALPINE_REACH });
+    }
     if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return tr('À poser en lisière ou dans une forêt');
     if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return tr('À poser près des rochers ou dans la montagne (des rochers se posent avec Paysage › Nature › Rochers)');
     // le puits de pétrole se fore sur un gisement

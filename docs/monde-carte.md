@@ -10,7 +10,7 @@ La carte est une grille de `N × N` cases ; le relief est défini sur les `(N+1)
 ## Règles du jeu
 - Taille : `MapDef.size` = 192 pour une nouvelle partie du Continent (`MAPS`) ; `MapDef.sizes` = `[192, 320]`, les tailles qu'une sauvegarde peut avoir. Une partie garde la taille qui l'a créée : `playSize(carte, n de la sauvegarde)` (`mapgen.ts`) la donne à `setMapSize` dans `main.ts` › `start`. Id de carte `CONTINENT = 3` (numéro des sauvegardes d'origine ; une carte inconnue retombe sur lui dans `main.ts`).
 - Hauteurs : `MIN_H = -2.4`, `MAX_H = 16`, mer à `SEA = 0` (`world.ts`). Les pinceaux et le générateur écrêtent à ces bornes.
-- Repères d'altitude (`world.ts`) : `MOUNTAIN_H = 2.4` (on est « dans la montagne » : mine, carrière, club alpin), `TREE_LINE = 5.8` (plus d'arbres posés par le générateur au-dessus), `SNOW_LINE = [7, 8.2]` (neiges éternelles, fondu), `ALPINE_PEAK = 5.2` et `ALPINE_REACH = 7` (station de ski : un sommet d'au moins 5,2 à moins de 7 cases).
+- Repères d'altitude (`world.ts`) : `MOUNTAIN_H = 2.4` (on est « dans la montagne » : mine, carrière ; le club alpin se pose en dessous, à son pied), `TREE_LINE = 5.8` (plus d'arbres posés par le générateur au-dessus), `SNOW_LINE = [7, 8.2]` (neiges éternelles, fondu), `ALPINE_PEAK = 5.2` et `ALPINE_REACH = 7` (station de ski : un sommet d'au moins 5,2 à moins de 7 cases).
 - Aucun brouillard de guerre : toute la carte est visible dès le départ. La brume affichée est météo (`fogLevel` dans `main.ts`), voir [ciel-meteo.md](ciel-meteo.md).
 - Début de partie : `World.startSpot()` cherche la place 3 × 3 libre la plus proche du centre ; `clearStart` (`mapgen.ts`, version 3) y retire arbres et rochers.
 
