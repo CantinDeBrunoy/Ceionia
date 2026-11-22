@@ -148,6 +148,7 @@ export class ZoneHighlight {
   /** Une tuile par case de la zone, posée sur le relief affiché ; le liseré suit le bord des zones */
   private build(cells: Uint8Array) {
     const t = drapeTiles(this.getWorld(), 0, 0, N - 1, N - 1, (x, z) => cells[z * N + x] === 1);
+    t.inner.dispose();
     this.mesh.geometry.dispose();
     this.mesh.geometry = t.tiles;
     this.edge.geometry.dispose();
@@ -158,27 +159,31 @@ export class ZoneHighlight {
 
 /**
  * Les cases de (x0, z0) à (x1, z1) où `on` est vrai, en tuiles posées sur le relief affiché (quatre petits carreaux : il a
- * deux sous-sommets par case), et le liseré qui suit le bord de la zone. Sert aux emplacements et à la portée d'un bâtiment
+ * deux sous-sommets par case), et le liseré qui suit le bord de la zone. Sert aux emplacements et à la portée d'un bâtiment.
+ * `grid` : aussi les côtés entre deux cases de la zone (`inner`), pour qu'on compte les cases
  */
-export function drapeTiles(w: World, x0: number, z0: number, x1: number, z1: number, inside: (x: number, z: number) => boolean) {
+export function drapeTiles(w: World, x0: number, z0: number, x1: number, z1: number, inside: (x: number, z: number) => boolean, grid = false) {
   x0 = Math.max(0, x0); z0 = Math.max(0, z0); x1 = Math.min(N - 1, x1); z1 = Math.min(N - 1, z1);
   // au-dessus de l'eau (le quai du port mord dessus), au ras du sol ailleurs
   const y = (x: number, z: number, k: number) => Math.max(w.hAt(x, z), w.lake[k] ? w.lakeLevel[k] : SEA) + 0.05;
   const on = (x: number, z: number) => x >= x0 && z >= z0 && x <= x1 && z <= z1 && inside(x, z);
   const list: number[] = [];
-  let e = 0;
+  let e = 0, g = 0;
   for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) if (inside(x, z)) {
     list.push(z * N + x);
     e += +!on(x - 1, z) + +!on(x + 1, z) + +!on(x, z - 1) + +!on(x, z + 1);
+    if (grid) g += +on(x + 1, z) + +on(x, z + 1);
   }
   const n = list.length;
-  const pos = new Float32Array(n * 9 * 3), idx = new Uint32Array(n * 24), line = new Float32Array(e * 4 * 3);
-  let v = 0, t = 0, l = 0;
-  const seg = (ax0: number, az0: number, ax1: number, az1: number, k: number) => {
+  const pos = new Float32Array(n * 9 * 3), idx = new Uint32Array(n * 24), line = new Float32Array(e * 4 * 3), mesh = new Float32Array(g * 4 * 3);
+  let v = 0, t = 0, l = 0, m = 0;
+  const seg = (ax0: number, az0: number, ax1: number, az1: number, k: number, out = line) => {
     // deux traits par côté de case, par le milieu : il épouse le relief
     const xm = (ax0 + ax1) / 2, zm = (az0 + az1) / 2;
     for (const [ax, az, bx, bz] of [[ax0, az0, xm, zm], [xm, zm, ax1, az1]]) {
-      line.set([ax, y(ax, az, k) + 0.02, az, bx, y(bx, bz, k) + 0.02, bz], l); l += 6;
+      const at = out === line ? l : m;
+      out.set([ax, y(ax, az, k) + 0.02, az, bx, y(bx, bz, k) + 0.02, bz], at);
+      if (out === line) l += 6; else m += 6;
     }
   };
   for (const k of list) {
@@ -197,11 +202,15 @@ export function drapeTiles(w: World, x0: number, z0: number, x1: number, z1: num
     if (!on(cx + 1, cz)) seg(cx + 1, cz, cx + 1, cz + 1, k);
     if (!on(cx, cz - 1)) seg(cx, cz, cx + 1, cz, k);
     if (!on(cx, cz + 1)) seg(cx, cz + 1, cx + 1, cz + 1, k);
+    if (grid && on(cx + 1, cz)) seg(cx + 1, cz, cx + 1, cz + 1, k, mesh);
+    if (grid && on(cx, cz + 1)) seg(cx, cz + 1, cx + 1, cz + 1, k, mesh);
   }
   const tiles = new THREE.BufferGeometry();
   tiles.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   tiles.setIndex(new THREE.BufferAttribute(idx, 1));
   const edge = new THREE.BufferGeometry();
   edge.setAttribute('position', new THREE.BufferAttribute(line, 3));
-  return { tiles, edge, n };
+  const inner = new THREE.BufferGeometry();
+  inner.setAttribute('position', new THREE.BufferAttribute(mesh, 3));
+  return { tiles, edge, inner, n };
 }

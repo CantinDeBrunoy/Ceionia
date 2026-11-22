@@ -19,21 +19,23 @@ export class RangeView {
   private t = 0;
 
   constructor(scene: THREE.Scene) {
-    const tile = (color: number, opacity: number, edge: number, order: number) => {
+    const tile = (color: number, opacity: number, edge: number, grid: number, order: number) => {
       const m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-      const l = new THREE.LineBasicMaterial({ color: edge, transparent: true, opacity: 0.9, depthWrite: false });
-      m.userData.base = opacity; l.userData.base = 0.9;
-      this.mats.push(m, l);
+      const l = new THREE.LineBasicMaterial({ color: edge, transparent: true, opacity: 1, depthWrite: false });
+      const q = new THREE.LineBasicMaterial({ color: edge, transparent: true, opacity: grid, depthWrite: false });
+      m.userData.base = opacity; l.userData.base = 1; q.userData.base = grid;
+      this.mats.push(m, l, q);
       const mesh = new THREE.Mesh(new THREE.BufferGeometry(), m);
-      const line = new THREE.LineSegments(new THREE.BufferGeometry(), l);
-      mesh.renderOrder = line.renderOrder = order; mesh.frustumCulled = line.frustumCulled = false;
-      mesh.add(line);
+      const line = new THREE.LineSegments(new THREE.BufferGeometry(), l), cells = new THREE.LineSegments(new THREE.BufferGeometry(), q);
+      mesh.renderOrder = line.renderOrder = cells.renderOrder = order; mesh.frustumCulled = line.frustumCulled = cells.frustumCulled = false;
+      mesh.add(line, cells);
       mesh.visible = false;
       scene.add(mesh);
       return mesh;
     };
-    this.others = tile(0x6aa8ff, 0.12, 0x9cc4ff, 6);
-    this.mine = tile(0x3d8bff, 0.3, 0xd8e8ff, 7);
+    // (bleu franc, liseré blanc, et le quadrillage des cases à portée : on les compte)
+    this.others = tile(0x6aa8ff, 0.14, 0xb8d4ff, 0, 6);
+    this.mine = tile(0x1f6fff, 0.36, 0xffffff, 0.35, 7);
   }
 
   /** La portée d'un genre (0 : il n'en a pas) */
@@ -52,7 +54,7 @@ export class RangeView {
     const s = KINDS[kind].size / 2, cx = x + s, cz = z + s, R = Math.ceil(r);
     const near = (ox: number, oz: number, rr: number) => (px: number, pz: number) => Math.hypot(px + 0.5 - ox, pz + 0.5 - oz) <= rr;
     const inMine = near(cx, cz, r);
-    this.set(this.mine, drapeTiles(w, Math.floor(cx) - R, Math.floor(cz) - R, Math.floor(cx) + R, Math.floor(cz) + R, inMine));
+    this.set(this.mine, drapeTiles(w, Math.floor(cx) - R, Math.floor(cz) - R, Math.floor(cx) + R, Math.floor(cz) + R, inMine, true));
     // les postes du même service déjà bâtis (les gardes, la police et la tour de garde veillent ensemble)
     const fire = kind === 'fire', same = (k: string) => (fire ? k === 'fire' : k === 'police' || k === 'watchtower');
     const covered = new Uint8Array(N * N);
@@ -73,9 +75,11 @@ export class RangeView {
   private set(mesh: THREE.Mesh, t: ReturnType<typeof drapeTiles>) {
     mesh.geometry.dispose();
     mesh.geometry = t.tiles;
-    const line = mesh.children[0] as THREE.LineSegments;
+    const [line, cells] = mesh.children as THREE.LineSegments[];
     line.geometry.dispose();
     line.geometry = t.edge;
+    cells.geometry.dispose();
+    cells.geometry = t.inner;
     mesh.visible = t.n > 0;
   }
 
