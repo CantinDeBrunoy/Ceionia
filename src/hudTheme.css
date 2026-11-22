@@ -1602,3 +1602,19 @@ button.round.off:hover { opacity: 0.85; }
 #info .xneed .xbar u { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #3A2A18; text-decoration: none; }
 #info .xneed small { display: block; color: #5A4630; font-size: 11.5px; }
 #info .xneed.short small { color: #A33A1E; font-weight: 700; }
+
+/* ---------- L'âge de chaque bâtiment dans le menu de construction : une petite pastille à son image (`ageMk`), à gauche sous
+   la taille, aux couleurs des âges (terre, marbre, vert, brique, verre, néon) ; celle de l'âge du village bordée d'or.
+   Après un passage d'âge, on distinguait mal les bâtiments de chaque époque (retour de joueurs, 22 nov. 2026) ---------- */
+#items .ageMk { position: absolute; left: 6px; top: 5px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-style: normal; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 1px 3px rgba(60, 40, 20, 0.25); }
+#items .ageMk .pic { width: 14px; height: 14px; }
+#items button.tile.big .ageMk { top: 18px; }
+#items .ageMk.a0 { background: linear-gradient(140deg, #fbe7c4, #e0a96a); }
+#items .ageMk.a1 { background: linear-gradient(140deg, #fdf7ea, #e2cfa2); }
+#items .ageMk.a2 { background: linear-gradient(140deg, #d6f7c9, #7fd4a6); }
+#items .ageMk.a3 { background: linear-gradient(140deg, #f6d8cc, #d09a84); }
+#items .ageMk.a4 { background: linear-gradient(140deg, #dceefe, #9cc6f0); }
+#items .ageMk.a5 { background: linear-gradient(140deg, #ecdcff, #b596f3); }
+#items .ageMk.now { box-shadow: 0 0 0 1.5px #E9B949, 0 0 6px rgba(233, 185, 73, 0.7); }
+#items button.tile.locked .ageMk { filter: grayscale(0.4); opacity: 0.85; }
+@media (max-width: 1180px) { #items .ageMk { width: 17px; height: 17px; left: 4px; top: 3px; } #items .ageMk .pic { width: 12px; height: 12px; } #items button.tile.big .ageMk { top: 14px; } }

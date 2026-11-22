@@ -1147,7 +1147,10 @@ export class UI {
         const tip = `${d.names[a]}${gv.length ? ` : ${gv.join(', ').toLowerCase()}` : ''}`;
         // la vignette 3D du bâtiment (son vrai modèle, à cet âge) ; en attendant qu'elle soit rendue, son icône au trait
         const th = this.host.thumb?.(k, a), img = th ? `<b class="th"><img src="${th}" alt="" draggable="false"></b>` : `<b class="th" data-th="${k}|${a}">${ic(KIND_ICON[k], 28, 1.6)}</b>`;
-        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" title="${tip}" aria-label="${tip}">${img}<span class="lbl">${d.names[a]}</span><small class="gv">${gv[0] ?? ''}</small>${badge}</button>`;
+        // l'âge où il apparaît, en petite pastille : après un passage d'âge, on distingue les bâtiments de chaque époque
+        // (retour de joueurs, 22 nov. 2026) ; ceux de l'âge du village ont la leur en avant
+        const era = `<i class="ageMk a${d.minAge}${d.minAge === age ? ' now' : ''}" aria-hidden="true">${hudPic(AGE_PIC[d.minAge] ?? AGE_PIC[0], 14)}</i>`;
+        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" title="${tip} · ${AGES[d.minAge].name}" aria-label="${tip}">${img}<span class="lbl">${d.names[a]}</span><small class="gv">${gv[0] ?? ''}</small>${era}${badge}</button>`;
       };
       const toolTile = (id: string, sub: string) => {
         const i = this.toolInfo(id);
