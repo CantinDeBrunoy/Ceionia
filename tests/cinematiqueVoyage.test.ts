@@ -13,14 +13,14 @@ import { tr, setLang } from '../src/i18n';
 import '../src/i18n/en';
 
 describe('la cinématique « Explorer le monde » : le film', () => {
-  it('une vidéo d’environ 20 s, la même pour tous, en WebM et en MP4 de secours, légère (sous 8 Mo chacune)', () => {
+  it('une vidéo d’environ 20 s, la même pour tous, en WebM et en MP4 de secours, sous 16 Mo chacune (1080p peu compressée depuis le 22 nov. 2026 ; la limite de Cloudflare est de 25 Mio par fichier)', () => {
     expect(VOY_FILM.dur).toBeGreaterThanOrEqual(15);
     expect(VOY_FILM.dur).toBeLessThanOrEqual(25);
     for (const f of ['public/voyage/traversee.webm', 'public/voyage/traversee.mp4']) {
       const size = statSync(f).size;
       expect(size, f).toBeGreaterThan(200_000);
       // (bien sous la limite de taille par fichier des ressources de Cloudflare Workers, 25 Mio)
-      expect(size, f).toBeLessThan(8 * 1024 * 1024);
+      expect(size, f).toBeLessThan(16 * 1024 * 1024);
     }
     const ui = readFileSync('src/ui/voyage.ts', 'utf8');
     expect(ui).toContain('./voyage/traversee.webm');
