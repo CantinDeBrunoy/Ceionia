@@ -355,7 +355,7 @@ registerDict('war', {
   'Vos troupes sont tombées dans les Enfers': 'Your troops have fallen in Hell',
   // ---- la cinématique du portail (portalCine.ts) ----
   'Le portail s’éveille': 'The portal awakens',
-  'Un premier soldat franchit l’arche': 'A first soldier steps through the arch',
+  'Au-delà, un autre monde': 'Beyond, another world',
   'Le Seuil du portail': 'The Portal Threshold',
   'Les Grottes de braise': 'The Ember Caves',
   'Leur forteresse garde le passage': 'Their fortress guards the way',

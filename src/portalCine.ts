@@ -16,11 +16,11 @@ export type PortalShot = 'threshold' | 'embers' | 'back';
 
 /** Le film (s) : sa durée, et ses bandeaux, au temps de la vidéo ; fichiers et prompt : `.claude/prompts-video-portail.md` */
 export const PORTAL_FILM = {
-  dur: 16,
+  dur: 20,
   webm: './portail/passage.webm',
   mp4: './portail/passage.mp4',
   captions: [
-    { at: 1, dur: 5.5, text: 'Le portail s’éveille', sub: 'Un premier soldat franchit l’arche' },
+    { at: 1, dur: 5.5, text: 'Le portail s’éveille', sub: 'Au-delà, un autre monde' },
   ] as { at: number; dur: number; text: string; sub?: string }[],
 };
 
@@ -30,7 +30,6 @@ export const PORTAL_FALLBACK = 4;
 /** Le direct, dans les Enfers (secondes : 13,5 s en tout) */
 export const PORTAL_LIVE: readonly { id: PortalShot; dur: number }[] = [
   { id: 'threshold', dur: 5 },
-  { id: 'embers', dur: 5.5 },
   { id: 'back', dur: 3 },
 ];
 export const LIVE_TOTAL = PORTAL_LIVE.reduce((s, p) => s + p.dur, 0);
@@ -38,7 +37,6 @@ export const LIVE_TOTAL = PORTAL_LIVE.reduce((s, p) => s + p.dur, 0);
 /** Les bandeaux du direct : à quel moment du plan (s) ils paraissent, combien de temps ils restent ; textes français */
 export const PORTAL_CAPTIONS: { shot: PortalShot; at: number; dur: number; text: string; sub?: string }[] = [
   { shot: 'threshold', at: 0.9, dur: 3.8, text: 'Les Enfers', sub: 'Le Seuil du portail' },
-  { shot: 'embers', at: 0.6, dur: 4.4, text: 'Les Grottes de braise', sub: 'Leur forteresse garde le passage' },
 ];
 
 /** Le noir du raccord se lève en `PORTAL_LIFT` secondes au début du direct ; un court fondu le ferme */

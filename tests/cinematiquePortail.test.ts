@@ -4,11 +4,11 @@ import { World } from '../src/world/world';
 import { War } from '../src/sim/war';
 
 describe('la cinématique du portail : la partition', () => {
-  it('le film (deux plans de 8 s de Veo), puis le direct ; environ 30 s en tout', () => {
-    expect(PORTAL_FILM.dur).toBe(16);
+  it('le film (une vidéo de 20 s de Veo, qui montre aussi les Grottes de braise), puis le direct au Seuil ; environ 28 s en tout', () => {
+    expect(PORTAL_FILM.dur).toBe(20);
     expect(PORTAL_FILM.webm).toMatch(/\.webm$/);
     expect(PORTAL_FILM.mp4).toMatch(/\.mp4$/);
-    expect(PORTAL_LIVE.map((p) => p.id)).toEqual(['threshold', 'embers', 'back']);
+    expect(PORTAL_LIVE.map((p) => p.id)).toEqual(['threshold', 'back']);
     expect(PORTAL_FILM.dur + LIVE_TOTAL).toBeGreaterThanOrEqual(25);
     expect(PORTAL_FILM.dur + LIVE_TOTAL).toBeLessThanOrEqual(32);
     expect(portalShotAt(0)?.shot).toBe('threshold');
