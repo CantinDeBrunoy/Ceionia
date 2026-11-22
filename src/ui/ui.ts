@@ -391,6 +391,11 @@ const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string;
 const offered = (w: World, k: KindId) => (w.sandbox ? k !== 'tradepost' || archipelagoOn(w) : kindOffered(w, k) && (k !== 'tradepost' || archipelagoOn(w)));
 
 /** « +1 emploi », « +3 emplois » */
+/** La consommation du village, par besoin, dans la carte d'un équipement survolé (`needUse`) */
+const NEED_USE: Record<(typeof GIVES)[number]['k'], string> = {
+  housing: 'À loger : {n} habitants', food: 'Consommation du village : {n} de nourriture', water: 'Consommation du village : {n} d’eau',
+  jobs: 'À employer : {n} habitants', joy: 'Demande du village : {n} de bien-être', health: 'Consommation du village : {n} de soins',
+};
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
 /** une décimale quand il y en a une (« 2,4 » de bien-être ne s'affiche plus « 2 » en rouge) */
 const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
@@ -1444,7 +1449,7 @@ export class UI {
     const d: KindDef = KINDS[k], age = this.host.sim.age, lock = this.lockOf(k), a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
     // ce qu'il produirait ou consommerait par jour à cet âge (sans gare de marchandises), puis ce qu'il apporte au village
-    const effs = flowChips(flowOf(k, a, 1, this.host.world.unlimited)) + GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
+    const effs = flowChips(flowOf(k, a, 1, this.host.world.unlimited)) + GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff give n-${g.k}">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
     // les grands bâtiments se paient en bois et en pierre, tous en Normal (sauf en ressources illimitées) ; le premier bûcheron est offert
     const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
     // (les défenses se comptent au village et sur l'île du portail)
@@ -1453,9 +1458,27 @@ export class UI {
     // la carte d'explication (à droite du menu) : la vignette 3D, le nom, « 2 × 2 · Médiéval », à quoi il sert ; le détail
     // (effets, conseil) quand on le survole dans la barre, pas quand on l'a en main
     box.innerHTML = `<div class="ihead">${this.cardThumb(k, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub">${d.size} × ${d.size} · ${AGES[a].name}</small><small class="xcount">${count}</small></div></div>
-      <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
+      <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${this.needUse(k, a)}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${k === 'wall' && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) })}${rich ? '' : tr(' — vous avez {have}', { have: haveLabel(w, cost) })}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
       ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && tl.placeWhy && !(cost && !rich && tl.placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}`;
+  }
+
+  /**
+   * Un équipement (eau, santé, nourriture…) survolé : ce que le village en consomme, ce qu'il en a, et ce qu'il aurait avec
+   * celui-ci, sur une jauge à la couleur du besoin. La carte ne disait que « +18 eau » (retour de joueur, 22 nov. 2026)
+   */
+  private needUse(k: KindId, a: number) {
+    const d = KINDS[k], sim = this.host.sim;
+    return GIVES.filter((g) => d[g.k]?.[a]).map((g) => {
+      const need = sim[g.k], add = d[g.k]![a], housing = g.k === 'housing';
+      const use = housing ? Math.floor(sim.pop) : need.demand, cap = need.cap, top = Math.max(use, cap + add, 1);
+      const pct = (v: number) => `${Math.round(Math.min(1, v / top) * 1000) / 10}%`;
+      const head = tr(NEED_USE[g.k], { n: num(use) });
+      const state = !use ? tr('Personne n’en demande encore') : cap >= use ? tr('Comblé : {cap} pour {use}', { cap: num(cap), use: num(use) }) : tr('Il en manque {n}', { n: num(use - cap) });
+      return `<div class="xneed n-${g.k}${cap < use ? ' short' : ''}"><div class="xnh">${ic(g.icon, 15, 2.2)}<b>${head}</b></div>
+        <div class="xbar"><i style="width:${pct(cap)}"></i><i class="add" style="left:${pct(cap)};width:${pct(add)}"></i><u style="left:${pct(use)}"></u></div>
+        <small>${state} · ${tr('avec celui-ci : {n}', { n: num(cap + add) })}</small></div>`;
+    }).join('');
   }
 
   /**

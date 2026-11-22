@@ -603,4 +603,15 @@ registerDict('goals', {
   'Soleil': 'Sun', 'Arbre': 'Tree', 'Épis': 'Wheat', 'Étoile': 'Star', 'Vagues': 'Waves', 'Couronne': 'Crown',
   'Droit': 'Straight', 'À queue d’aronde': 'Swallowtail', 'En flamme': 'Pennant',
   'Les Enfers : vos troupes et votre base, de l’autre côté du portail': 'Hell: your troops and your base, on the other side of the portal',
+  // la carte d'un équipement survolé : la consommation du village (needUse)
+  'À loger : {n} habitants': 'To house: {n} residents',
+  'Consommation du village : {n} de nourriture': 'Village consumption: {n} food',
+  'Consommation du village : {n} d’eau': 'Village consumption: {n} water',
+  'À employer : {n} habitants': 'To employ: {n} residents',
+  'Demande du village : {n} de bien-être': 'Village demand: {n} well-being',
+  'Consommation du village : {n} de soins': 'Village consumption: {n} health care',
+  'Personne n’en demande encore': 'Nobody needs it yet',
+  'Comblé : {cap} pour {use}': 'Covered: {cap} for {use}',
+  'Il en manque {n}': '{n} short',
+  'avec celui-ci : {n}': 'with this one: {n}',
 });

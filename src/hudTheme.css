@@ -1582,3 +1582,23 @@ button.round.off:hover { opacity: 0.85; }
 /* fiche d'un habitant : sa maison et son lieu de travail se cliquent (la vue y va), comme des liens */
 #selCard .stat .golink { min-height: 0; padding: 0; margin: 0; border: none; background: none; box-shadow: none; border-radius: 0; font: inherit; font-weight: 700; color: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted rgba(110, 80, 40, 0.45); text-underline-offset: 3px; }
 #selCard .stat .golink:hover { color: #8A5A12; text-decoration: underline solid; background: none; }
+
+/* ---------- La carte d'un équipement survolé (eau, santé…) : la consommation du village sur une jauge à la couleur du besoin
+   (`needUse`), et des pastilles teintées pareil. Elle ne disait que « +18 eau », grise (retour de joueur, 22 nov. 2026) ---------- */
+#info .n-water { --nc: #2F86D6; --ns: #E2F0FC; }
+#info .n-food { --nc: #D7892A; --ns: #FCEFD9; }
+#info .n-health { --nc: #2E9A5E; --ns: #E0F4E8; }
+#info .n-joy { --nc: #D9A21B; --ns: #FDF3D2; }
+#info .n-jobs { --nc: #8A6440; --ns: #F3E8DB; }
+#info .n-housing { --nc: #C0663A; --ns: #FAE6DB; }
+#info .effs .eff.give { background: var(--ns); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nc) 45%, transparent); color: color-mix(in srgb, var(--nc) 75%, #2a1c0c); font-weight: 800; border: 0; }
+#info .effs .eff.give svg { color: var(--nc); }
+#info .xneed { margin: 8px 0 0; padding: 7px 10px 8px; border-radius: 12px; background: linear-gradient(180deg, #FFFDF8, var(--ns)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nc) 30%, transparent); }
+#info .xneed .xnh { display: flex; align-items: center; gap: 6px; color: var(--nc); }
+#info .xneed .xnh b { color: #3A2A18; font-size: 12.5px; font-weight: 800; }
+#info .xneed .xbar { position: relative; height: 8px; margin: 6px 0 5px; border-radius: 999px; background: rgba(90, 60, 20, 0.12); overflow: hidden; }
+#info .xneed .xbar i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px; background: var(--nc); }
+#info .xneed .xbar i.add { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--nc) 55%, #fff) 0 4px, color-mix(in srgb, var(--nc) 35%, #fff) 4px 8px); border-radius: 0 999px 999px 0; }
+#info .xneed .xbar u { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #3A2A18; text-decoration: none; }
+#info .xneed small { display: block; color: #5A4630; font-size: 11.5px; }
+#info .xneed.short small { color: #A33A1E; font-weight: 700; }
