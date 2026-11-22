@@ -298,7 +298,8 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   stadium: {
     id: 'stadium', size: 3, minAge: 3, icon: '🏟️', cat: 'life',
-    names: ['', '', '', 'Stade', 'Stade d’athlétisme', 'Stade à dôme'],
+    // (« Stade » tout court jusqu'au 22 nov. 2026 : on le confondait avec le stade de football, retour de joueurs)
+    names: ['', '', '', 'Stade d’athlétisme', 'Grand stade d’athlétisme', 'Stade d’athlétisme à dôme'],
     desc: 'Piste d’athlétisme autour d’une pelouse, sautoirs, tribunes : on y court, on y saute, on y lance.',
     joy: [0, 0, 0, 8, 12, 15], jobs: [0, 0, 0, 1, 2, 3],
   },
@@ -694,7 +695,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   stable: 'écuries', apiary: 'ruchers', baths: 'thermes et piscines', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
   barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
   theater: 'théâtres', acropolis: 'acropoles', forum: 'forums et marchés', senate: 'sénats',
-  harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions', circus: 'cirques', arena: 'arènes', zoo: 'zoos',
+  harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades d’athlétisme', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions', circus: 'cirques', arena: 'arènes', zoo: 'zoos',
   carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs', oilwell: 'puits de pétrole', refinery: 'raffineries', brickworks: 'briqueteries',
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
   watchtower: 'tours de garde', barracks: 'casernes de la garnison', wall: 'remparts', gate: 'portes de la ville',

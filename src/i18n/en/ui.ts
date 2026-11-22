@@ -579,7 +579,7 @@ registerDict('goals', {
   'Loger 80 habitants': 'House 80 villagers', 'Une vraie ville industrielle.': 'A true industrial town.',
   'Une première gare': 'A first station', 'Le train arrive en gare !': 'The train pulls into the station!',
   '20 briques en réserve': '20 bricks in store', 'La briqueterie tourne à plein.': 'The brickworks is running at full steam.',
-  'Un stade, un terrain de football ou une fête foraine': 'A stadium, a football pitch or a funfair', 'La ville s’amuse !': 'The town is having fun!',
+  'Un stade d’athlétisme, un terrain de football ou une fête foraine': 'An athletics stadium, a football pitch or a funfair', 'La ville s’amuse !': 'The town is having fun!',
   'Protéger 80 % des maisons': 'Protect 80% of the homes', 'La ville est bien gardée.': 'The town is well guarded.',
   // Moderne
   'Loger 130 habitants': 'House 130 residents', 'Une grande ville moderne.': 'A big modern city.',
