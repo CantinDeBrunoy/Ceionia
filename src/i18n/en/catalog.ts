@@ -348,6 +348,7 @@ registerDict('catalog', {
   'Rien à poser ici : le tracé ne passe que sur des routes, des bâtiments ou de l’eau.': 'Nothing to build here: the line only crosses roads, buildings or water.',
   '{n} pans posés': '{n} pieces built', 'Un pan posé': 'One piece built',
   ' ({n} cases sautées : routes, bâtiments ou eau)': ' ({n} cells skipped: roads, buildings or water)',
+  ' (une case sautée : route, bâtiment ou eau)': ' (one cell skipped: road, building or water)',
   '. Cliquez plus loin pour prolonger le mur. Échap : arrêter.': '. Click further away to extend the wall. Esc: stop.',
   // (clôtures et haies, tracées comme les remparts)
   'Trop long : {n} cases au plus d’un coup (cliquez plus près, puis prolongez).': 'Too long: {n} cells at most in one go (click closer, then extend).',

@@ -841,7 +841,7 @@ export class ToolController implements ToolInput {
     const wall = t.kind === 'wall', fence = t.kind === 'fence';
     const msg = r.built === 0 ? tr('Rien à poser ici : le tracé ne passe que sur des routes, des bâtiments ou de l’eau.')
       : (wall ? (r.built > 1 ? tr('{n} pans posés', { n: r.built }) : tr('Un pan posé')) : fence ? (r.built > 1 ? tr('{n} cases de clôture posées', { n: r.built }) : tr('Une case de clôture posée')) : (r.built > 1 ? tr('{n} cases de haie posées', { n: r.built }) : tr('Une case de haie posée')))
-      + (r.skipped ? tr(' ({n} cases sautées : routes, bâtiments ou eau)', { n: r.skipped }) : '') + tr(wall ? '. Cliquez plus loin pour prolonger le mur. Échap : arrêter.' : '. Cliquez plus loin pour prolonger. Échap : arrêter.');
+      + (r.skipped > 1 ? tr(' ({n} cases sautées : routes, bâtiments ou eau)', { n: r.skipped }) : r.skipped ? tr(' (une case sautée : route, bâtiment ou eau)') : '') + tr(wall ? '. Cliquez plus loin pour prolonger le mur. Échap : arrêter.' : '. Cliquez plus loin pour prolonger. Échap : arrêter.');
     this.h.toast(msg);
     // B devient le point A du mur suivant
     this.freeFrom = [c.x + 0.5, c.z + 0.5];
