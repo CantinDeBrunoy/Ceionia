@@ -72,11 +72,24 @@ const xz = (k: number): [number, number] => [k % N, Math.floor(k / N)];
 /** Niveau de l'eau d'une case (lac, sinon la mer) */
 export function waterLevel(w: World, k: number) { return w.lake[k] ? w.lakeLevel[k] : SEA; }
 
-/** La case est de l'eau à franchir : vraie eau (mer, rivière, lac), ou un torrent qui la traverse */
-export function isWater(w: World, k: number) { return w.realWater(k % N, Math.floor(k / N)) || w.torrents.has(k); }
+/**
+ * La case est un vide à franchir : vraie eau (mer, rivière, lac), un torrent qui la traverse, ou une faille (le pont passe
+ * d'un rebord à l'autre au-dessus du ravin)
+ */
+export function isWater(w: World, k: number) { return w.rift[k] === 1 || w.realWater(k % N, Math.floor(k / N)) || w.torrents.has(k); }
 
-/** « Niveau d'eau » d'une case au point de sol `ground` : celui de la vraie eau, sinon le torrent, juste au-dessus du sol */
-function waterAt(w: World, k: number, ground: number) { return w.realWater(k % N, Math.floor(k / N)) ? waterLevel(w, k) : ground + TORRENT_WATER; }
+/**
+ * « Niveau d'eau » d'une case au point de sol `ground` : celui de la vraie eau, sinon le torrent, juste au-dessus du sol. Une
+ * faille n'a pas d'eau : son niveau est celui du rebord (le relief de jeu, que le ravin creusé à l'affichage ne change pas),
+ * si bien que le tablier file à plat d'un bord à l'autre au-dessus du vide
+ */
+function waterAt(w: World, k: number, ground: number) {
+  const x = k % N, z = Math.floor(k / N);
+  if (w.rift[k] === 1) return w.cellAvg(x, z) - DECK_CLEAR + RIFT_CLEAR;
+  return w.realWater(x, z) ? waterLevel(w, k) : ground + TORRENT_WATER;
+}
+/** Le tablier d'un pont sur une faille passe d'autant au-dessus du rebord */
+export const RIFT_CLEAR = 0.06;
 
 /**
  * Cases de route portées par un pont : celles qui passent sur l'eau (vraie eau, pas une flaque, ou un torrent), et les cases

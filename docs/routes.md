@@ -8,7 +8,7 @@
 Une route est une case de `World.road` (0 ou 1). Le joueur en trace de deux façons (ligne case par case, ou courbe de A à B) ; le jeu en trace seul entre un bâtiment neuf et le réseau. Les routes ne coûtent rien. Habitants, charrettes et secours ne circulent que sur ces cases. Le dessin (`RoadView`) regarde les cases voisines et les courbes pour produire chaussée, trottoirs, places, ronds-points, ponts et lanternes, avec un revêtement qui change avec l'âge.
 
 ## Règles du jeu
-**Poser une case** (`World.canRoad`) : pas sur un bâtiment ni sur une grotte ou une faille ; sur l'eau, un pont est permis sur un lac et sur la mer jusqu'à `cellAvg > -1,7` (pas au large) ; sur terre, pente de la case `cellSlope < 1,3`. Une route efface la végétation de la case (`setRoad`).
+**Poser une case** (`World.canRoad`) : pas sur un bâtiment ni sur une grotte ; sur une faille, toujours (un pont, depuis le 22 nov. 2026) ; sur l'eau, un pont est permis sur un lac et sur la mer jusqu'à `cellAvg > -1,7` (pas au large) ; sur terre, pente de la case `cellSlope < 1,3`. Une route efface la végétation de la case (`setRoad`).
 
 **Route en ligne** (mode « Ligne ») : on glisse, une case posée par case traversée (Bresenham, 200 cases au plus par événement, `applyRoad` → `strokeRoad`, `src/build/roadLine.ts`). Chaque case refusée est sautée en silence. Deux règles depuis le 19 nov. 2026 (l'auteur trouvait une route tracée à la main « bizarre », large et bosselée) :
 - un pas en diagonale passe d'abord par une case de côté (la plus proche du trait) : deux cases qui ne se touchent que par un coin se dessinaient en deux morceaux ;
@@ -30,7 +30,7 @@ Une diagonale en mode « Ligne » est donc un escalier ; le mode « Libre » tra
 
 **Démolir une route** : outil Démolir, une case ou un disque ; voir [placement-construction.md](placement-construction.md). Le relief qui rend une case impraticable après sculpture la retire (`World.sanitize`).
 
-**Ponts** : il n'y a pas d'outil pont. Une route posée sur de l'eau devient un pont à l'affichage et pour la simulation. `crossings.ts` détecte les franchissements une seule fois (cases mouillées, plus les une ou deux cases sèches prises entre deux bras, `MAX_DRY_GAP = 4`) et fixe le profil du tablier (`DECK_CLEAR = 0,24` au-dessus de l'eau). Détail : [eau-rivieres.md](eau-rivieres.md).
+**Ponts** : il n'y a pas d'outil pont. Une route posée sur de l'eau ou sur une faille devient un pont à l'affichage et pour la simulation (sur une faille, un tablier à plat d'un rebord à l'autre). Les tracés (libre, automatique) traitent la faille comme l'eau (`World.isGap`). `crossings.ts` détecte les franchissements une seule fois (cases mouillées, plus les une ou deux cases sèches prises entre deux bras, `MAX_DRY_GAP = 4`) et fixe le profil du tablier (`DECK_CLEAR = 0,24` au-dessus de l'eau). Détail : [eau-rivieres.md](eau-rivieres.md).
 
 **Trottoirs et voies** : les piétons ne marchent sur le trottoir (`SIDEWALK = 0,37` de l'axe) qu'à partir de l'âge 3 (`sidewalkAt`) et pas sur un pont ; les véhicules roulent à droite, à `LANE = 0,15` de l'axe (`render/traffic.ts`).
 

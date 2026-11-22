@@ -1233,6 +1233,9 @@ export class World {
     return this.lake[this.ci(cx, cz)] === 1 || this.cellAvg(cx, cz) < 0.08 || this.cellMin(cx, cz) <= -0.15;
   }
 
+  /** Une case qu'une route ne franchit qu'en pont : l'eau, ou le vide d'une faille */
+  isGap(cx: number, cz: number) { return this.rift[this.ci(cx, cz)] === 1 || this.isWet(cx, cz); }
+
   /**
    * Hauteur du tablier d'un pont de chemin de fer posé sur une case d'eau, ou null si la case est sèche : au-dessus de l'eau
    * de `DECK_CLEAR`, comme les ponts des routes (`crossings.ts`)
@@ -1658,7 +1661,10 @@ export class World {
     // (archipel : pas de route hors de son île et de celle de l'allié ; aucun pont ne les relie, les ports suffisent)
     if (!this.inCells(cx, cz) || !this.playable(cx, cz)) return false;
     const k = this.ci(cx, cz);
-    if (this.occ[k] || this.decor[k]) return false;
+    if (this.occ[k]) return false;
+    // au-dessus d'une faille : un pont, d'un rebord à l'autre (voir `crossings.ts`)
+    if (this.rift[k]) return true;
+    if (this.decor[k]) return false;
     // sur l'eau : un pont, sauf au large
     if (this.isWet(cx, cz)) return this.lake[k] === 1 || this.cellAvg(cx, cz) > -1.7;
     return this.cellSlope(cx, cz) < 1.3;

@@ -62,7 +62,8 @@ Plusieurs définitions coexistent (`world.ts`) ; chacune sert un usage.
 | `isWaterCell` | `cellAvg < 0.08` | distance à l'eau (`waterDist`) et biomes |
 | `nearWater(r = 3)` | `cellAvg < -0.05` ou lac | feux (pompiers : `fires.ts`) |
 | `waterNear(x, z, s, reach)` | `cellAvg < -0.05` ou lac | bâtiments de la mer (`SEA_REACH = 5`) |
-| `isWet` | lac, `cellAvg < 0.08`, ou un coin à `<= -0.15` | routes : un pont est nécessaire ; autoroutes (surcoût `WET = 8`, `CROSS = 14` dans `autoroads.ts`) |
+| `isWet` | lac, `cellAvg < 0.08`, ou un coin à `<= -0.15` | routes : un pont est nécessaire |
+| `isGap` | `isWet`, ou une case de faille (`rift`) | tracés de route (libre et automatique : surcoûts, franchissements, `WET = 8`, `CROSS = 14` dans `autoroads.ts`) |
 | `realWater` | lac, `cellAvg < 0.02`, ou un coin à `<= -0.2` | détection des ponts (ni flaque, ni rive qui trempe à peine) |
 | `isWater` (`crossings.ts`) | `realWater` ou case de torrent | cases à franchir |
 | `canRoad` | sur l'eau : lac ou `cellAvg > -1.7` ; à sec : pente `< 1.3` | pose et maintien des routes |
@@ -74,6 +75,7 @@ Une seule détection et un seul profil de tablier servent à la fois au dessin (
 - `carriedGroups` : groupes voisins ; `findCrossings` découpe chaque groupe en tronçons (`Span`) d'une rive à l'autre. Une case de route à 3 voisins ou plus est un **nœud** (plateau carré). L'axe passe par les milieux des bords entre cases (une route en escalier donne une diagonale) : simplification de Douglas-Peucker (tolérance 0,55), arrondi de Chaikin, pas de `STEP = 0,2`.
 - Profil en long (`deckProfile`) : corde entre les deux bouts, au-dessus de l'eau + `DECK_CLEAR = 0,24` (débord `OVERHANG = 0,12` de chaque côté de l'eau) et du sol + `ABOVE_GROUND = 0,03` ; enveloppe convexe supérieure : jamais de marche ni de creux. Rampe d'accès de `RAMP_IN = 0,45` sur la case de la rive (`World.surfaceAt` y donne la hauteur du tablier).
 - Torrent : sans niveau d'eau propre, son « eau » est le sol + `TORRENT_WATER = 0,05` ; le tablier passe à `DECK_CLEAR` au-dessus.
+- **Faille** (22 nov. 2026, retour de joueur : « le pont ne marche pas sur les failles ») : une case de ravin (`World.rift`) compte comme un vide à franchir (`isWater`). Son « eau » est le relief de jeu de la case (le rebord, que le creux de l'affichage ne change pas) moins `DECK_CLEAR` plus `RIFT_CLEAR = 0,06` : le tablier file à plat d'un rebord à l'autre, au-dessus du vide. Au dessin, les piles posées au-dessus d'une faille descendent jusqu'au fond du ravin (ailleurs, 1,8 au plus).
 - `World.crossings()` met le résultat en cache, invalidé par `version`, `visVersion` et `torrentVersion`. Sans changement de l'un des trois, pas de recalcul.
 - Les voies ferrées utilisent les mêmes ponts et enjambent un torrent sur un ponceau (`railView.streams`).
 - Traversée en galère vers l'île du portail (`ferry.ts`) : tracé droit sur l'eau, sans route ni pont, vue seulement.
