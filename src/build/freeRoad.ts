@@ -29,11 +29,16 @@ const LACET_REACH = 5;
 const LACET_LOCAL = 0.7;
 /** Une courbe adoucie peut monter un peu plus vite dans un virage, mesuré sur une case de long */
 const LACET_CURVE = 0.75;
-/** Les pas longs, en biais : (dx, dz) premiers entre eux, hors des huit voisines */
+/**
+ * Les pas longs, en biais : (dx, dz) premiers entre eux, de 3 à `LACET_REACH` cases (un pas de 2 sur 1 monte déjà trop sur
+ * une pente raide, et ne ferait que des zigzags serrés)
+ */
 const LONG: [number, number][] = [];
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 for (let dz = -LACET_REACH; dz <= LACET_REACH; dz++) for (let dx = -LACET_REACH; dx <= LACET_REACH; dx++)
-  if (Math.max(Math.abs(dx), Math.abs(dz)) >= 2 && gcd(Math.abs(dx), Math.abs(dz)) === 1) LONG.push([dx, dz]);
+  if (Math.max(Math.abs(dx), Math.abs(dz)) >= 3 && gcd(Math.abs(dx), Math.abs(dz)) === 1) LONG.push([dx, dz]);
+/** Une épingle (un pas qui repart à plus de 120° du précédent) coûte autant de cases : peu de lacets, et de longues branches */
+const HAIRPIN = 6;
 
 /** Une case de lacet : une pente au-delà de celle d'une route ordinaire (pas l'eau ni une faille, qu'on franchit en pont) */
 const steepAt = (w: World, x: number, z: number) => !w.isGap(x, z) && w.cellSlope(x, z) >= ROAD_SLOPE;
@@ -110,7 +115,7 @@ function cost(w: World, k: number) {
  * de ses cases est une case de lacet), ne monte pas plus que `LACET_GRADE`, ne passe ni sur l'eau ni sur une route ni par une
  * case impraticable, et n’a pas de ressaut (`LACET_LOCAL`)
  */
-function longStep(w: World, x: number, z: number, nx: number, nz: number, costAt: (k: number) => number) {
+function longStep(w: World, x: number, z: number, nx: number, nz: number, costAt: (k: number) => number, before: number[]) {
   const L = Math.hypot(nx - x, nz - z), h0 = groundAt(w, x + 0.5, z + 0.5), h1 = groundAt(w, nx + 0.5, nz + 0.5);
   if (Math.abs(h1 - h0) > LACET_GRADE * L) return Infinity;
   // (le relief le long du pas, tous les demi-cases : ni ressaut, ni crête, ni creux)
@@ -129,6 +134,8 @@ function longStep(w: World, x: number, z: number, nx: number, nz: number, costAt
     const c = costAt(k);
     if (!isFinite(c) || w.isGap(cx, cz) || w.road[k]) return Infinity;
     steep ||= steepAt(w, cx, cz);
+    // (une épingle : les deux branches ne se touchent qu'au virage, sinon elles se fondent en une large tache)
+    if (Math.max(Math.abs(cx - x), Math.abs(cz - z)) > 2 && before.some((b) => Math.max(Math.abs((b % N) - cx), Math.abs(Math.floor(b / N) - cz)) <= 1)) return Infinity;
     sum += c; n++;
   }
   return steep && n ? (sum / n) * L : Infinity;
@@ -189,14 +196,19 @@ function search(w: World, a: number, b: number): number[] | null {
     }
     // les pas longs des lacets (`longStep` ne les permet que si l'une de leurs cases est raide)
     if (w.isGap(x, z) || !steepNear(x, z)) continue;
+    // (les cases du pas qui mène ici, loin du virage : le pas suivant ne doit pas les longer)
+    const p = prev[loc(c)], before = p < 0 ? [] : rasterize([(p % N) + 0.5, Math.floor(p / N) + 0.5, x + 0.5, z + 0.5], N).filter((k) => Math.max(Math.abs((k % N) - x), Math.abs(Math.floor(k / N) - z)) > 2);
+    const ix = p < 0 ? 0 : x - (p % N), iz = p < 0 ? 0 : z - Math.floor(p / N), il = Math.hypot(ix, iz) || 1;
     for (const [dx, dz] of LONG) {
       const nx = x + dx, nz = z + dz;
       if (nx < lx || nx > hx || nz < lz || nz > hz) continue;
       const n = nz * N + nx;
       // (une case déjà atteinte moins cher que la longueur du pas, au mieux, n'a rien à y gagner)
       if (done[loc(n)] || dist[loc(n)] <= dc + Math.hypot(dx, dz) || !isFinite(costAt(n))) continue;
-      const s = longStep(w, x, z, nx, nz, costAt);
-      if (isFinite(s)) relax(c, n, dc + s + Math.abs(w.cellAvg(nx, nz) - hc) * 3);
+      const s = longStep(w, x, z, nx, nz, costAt, before);
+      // (le pas repart presque en sens inverse du précédent : une épingle)
+      const pin = p >= 0 && (ix * dx + iz * dz) / (il * Math.hypot(dx, dz)) < -0.5 ? HAIRPIN : 0;
+      if (isFinite(s)) relax(c, n, dc + s + Math.abs(w.cellAvg(nx, nz) - hc) * 3 + pin);
     }
   }
   if (!isFinite(dist[loc(b)])) return null;
