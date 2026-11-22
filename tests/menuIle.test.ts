@@ -80,13 +80,13 @@ describe('le menu de l’île', () => {
     expect((isle.ui as any).hint()).toContain('Cliquez sur l’île pour poser');
   });
 
-  it('chaque onglet Bâtir montre aussi, grisés, les bâtiments de l’autre théâtre', () => {
+  it('l’onglet Bâtir de l’île montre aussi, grisés, ceux des Enfers ; aux Enfers, plus les défenses de l’île (passage direct)', () => {
     const isle = build('isle');
     (isle.ui as any).isleTab = 'build';
     (isle.ui as any).barKey = '';
     isle.ui.render();
     expect(isle.html()).toMatch(/class="trb tb tbv off far" aria-disabled="true"/);
-    expect(build('hell').html()).toMatch(/class="trb tb tbv off far" aria-disabled="true"/);
+    expect(build('hell').html()).not.toMatch(/class="trb tb tbv off far"/);
   });
 
   it('les Enfers sans le superflu : ni carte de passage, ni « Suivre », ni bulle d’aide tant qu’on ne bâtit pas', () => {

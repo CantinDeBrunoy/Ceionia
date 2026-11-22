@@ -14,8 +14,8 @@ export interface ConflictWay { ally: People; badge: 'free' | 'wait' | 'taken'; b
 const WAYS: Record<Way, { img: string; icon: string; title: string; pitch: string; gives: string[] }> = {
   hell: {
     img: './ui/portail.webp', icon: 'militaire', title: 'Les Enfers',
-    pitch: 'Derrière l’arche noire de l’île au large, des démons attendent. Tiendrez-vous l’île, puis oserez-vous passer de l’autre côté ?',
-    gives: ['Une invasion en trois vagues', 'Les Enfers et leur roi'],
+    pitch: 'Derrière l’arche noire de l’île au large, des démons attendent. Oserez-vous passer de l’autre côté ?',
+    gives: ['Une troupe et un camp au Seuil', 'Les Enfers et leur roi'],
   },
   world: {
     img: './expeditions/dio-caravel.webp', icon: 'boussole', title: 'Explorer le monde',
@@ -40,7 +40,7 @@ export function waysHtml(ways: { hell: WayState; world: WayState }, conflict: Co
     const st = ways[way], b = wayBadge(st), d = WAYS[way];
     const label = way === 'hell' ? (st === 'ask' ? tr('Rouvrir le portail') : tr('Ouvrir le portail')) : tr('Explorer le monde');
     const go = b === 'free' ? `<button class="wyGo" data-way="${way}">${hudPic(d.icon, 26)}<span>${label}</span></button>`
-      : `<p class="wyNote">${b === 'taken' ? tr(way === 'hell' ? 'Le portail est ouvert : les démons vous attendent sur l’île.' : 'Le monde s’est agrandi : les deux îles sont là, au large.')
+      : `<p class="wyNote">${b === 'taken' ? tr(way === 'hell' ? 'Le portail est ouvert : vos troupes vous attendent dans les Enfers.' : 'Le monde s’est agrandi : les deux îles sont là, au large.')
         : tr(way === 'hell' ? 'Cette carte n’a pas d’île du portail.' : 'Ce monde ne peut plus s’agrandir.')}</p>`;
     return `<article class="wayCard ${way} st-${b}" data-wayc="${way}">
       <div class="wyArt"><img src="${d.img}" alt="" draggable="false" loading="lazy" decoding="async"></div>

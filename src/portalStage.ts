@@ -6,8 +6,8 @@ import { KINGDOM_TEXT } from './ui/kingdom';
 import { tr } from './i18n';
 
 /**
- * La mise en scène de la cinématique du portail (partition dans `portalCine.ts`) : une fois par partie, au premier passage
- * d'une recrue. D'abord **le film** (la vidéo de l'auteur, WebM puis MP4 de secours ; sans vidéo, le tourbillon peint qui
+ * La mise en scène de la cinématique du portail (partition dans `portalCine.ts`) : une fois par partie, à l'ouverture du
+ * portail (avant : au premier passage d'une recrue). D'abord **le film** (la vidéo de l'auteur, WebM puis MP4 de secours ; sans vidéo, le tourbillon peint qui
  * grandit, puis le noir), opaque par-dessus le jeu : derrière lui, l'entrée dans les Enfers se fait sans écran de chargement
  * (`enterHell(true)`). Puis **le direct**, qui s'ouvre sur le noir où le film a fini : le Seuil où les troupes sortent du
  * portail, la faille jusqu'aux Grottes de braise, le retour aux troupes. Habillage de la traversée et de la fin du royaume

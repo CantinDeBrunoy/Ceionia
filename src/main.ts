@@ -297,10 +297,10 @@ class Game implements UIHost {
   private homeBtn: HomeButton;
   /** la mise en scène du royaume des Enfers (combat du roi, victoire) */
   kingStage: KingdomStage;
-  /** la cinématique du portail, au premier passage d'une recrue (`portalStage.ts`) */
+  /** la cinématique du portail, à l'ouverture du portail (`portalStage.ts`) */
   portalStage: PortalStage;
-  /** la vitesse du jeu d'avant la cinématique du portail (0 : aucune à rendre) */
-  private cineSpeed = 0;
+  /** la pause et la vitesse d'avant la cinématique du portail */
+  private portalPace: { paused: boolean; speed: number } | null = null;
   /** le temps d'avant le plan en direct de l'ouverture (la pause du tutoriel), rendu à sa fin */
   private openPace: { paused: boolean; speed: number } | null = null;
   /** la petite cinématique d'un trophée qui rejoint la place (retour d'une expédition légendaire) */
@@ -728,12 +728,17 @@ class Game implements UIHost {
       age: () => this.sim.age,
       village: () => this.villageCenter(), fest: (x, z) => this.festAt(x, z), crowd: (on, x, z) => this.kingCrowd(on, x, z),
     });
-    // la cinématique du portail : au premier passage d'une recrue, le film (l'arche, la plongée) puis le Seuil des Enfers en direct
+    // la cinématique du portail : à l'ouverture du portail (le choix « Les Enfers »), le film (l'arche, la plongée) puis le Seuil des Enfers en direct
     this.portalStage = new PortalStage({
       cam: this.cam, war: this.war, ui: { root: uiRoot },
       mode: () => this.mode,
       hellY: (x, z) => (this.mode === 'hell' && this.hellMode ? this.hellMode.view.groundY(x, z) : null),
-      pace: (cine) => { if (cine) { this.cineSpeed = this.time.speed; this.time.speed = 1; } else if (this.cineSpeed) { this.time.speed = this.cineSpeed; this.cineSpeed = 0; } },
+      // (le jeu en pause au moment du choix : le temps court quand même pendant la cinématique, sans quoi les troupes restaient
+      // cachées derrière l'arche ; la pause et la vitesse d'avant reviennent à la fin)
+      pace: (cine) => {
+        if (cine) { this.portalPace = { paused: this.time.paused, speed: this.time.speed }; this.time.paused = false; this.time.speed = 1; }
+        else if (this.portalPace) { this.time.paused = this.portalPace.paused; this.time.speed = this.portalPace.speed; this.portalPace = null; }
+      },
       enterHell: (quiet) => void this.enterHell(quiet),
       arrived: () => this.portalArrived(),
     });
@@ -983,8 +988,9 @@ class Game implements UIHost {
     // (fermés tant que l'invasion du portail n'est pas repoussée)
     const closed = this.war.hellWhy();
     if (closed) { this.ui.toast(closed, this.war.pve === 'on' ? undefined : () => this.openPortalChoice()); return; }
-    // la toute première entrée, par le message ou « Voir les Enfers » : la cinématique du portail la fait à sa place
-    if (!quiet && this.war.intro === 'due' && !this.portalStage.playing) { this.portalStage.play(); return; }
+    // la toute première entrée (le choix « Les Enfers », l'arche, le bouton du village) : la cinématique du portail la fait à sa
+    // place ; une ancienne partie jamais entrée (`none`) la voit aussi
+    if (!quiet && (this.war.intro === 'due' || (this.war.intro === 'none' && this.war.direct)) && !this.portalStage.playing) { this.portalStage.play(); return; }
     this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
@@ -999,6 +1005,8 @@ class Game implements UIHost {
       screen?.step(label, 0.35);
       await painted();
       const f = this.war.ensureFaction();
+      // la première arrivée : le camp de base, la caserne avancée et la troupe de départ, offerts au Seuil
+      this.war.welcome(this.sim.age);
       if (!this.hellMode || this.hellMode.hell !== f) this.hellMode = new HellMode(this.war.hellMap!, f, this.war.king);
       screen?.step(label, 0.6);
       await painted();
@@ -1036,14 +1044,14 @@ class Game implements UIHost {
   private portalArrived() {
     const hm = this.hellMode;
     if (!hm || this.mode !== 'hell') return;
-    this.ui.banner(tr('Monde des Enfers'), tr('{zone} : le royaume démoniaque est tout au fond. L’expédition est facultative, et le portail ramène sur l’île.', { zone: hm.zoneName(this.cam.target.z) }), 'hell');
+    this.ui.banner(tr('Monde des Enfers'), tr('{zone} : le royaume démoniaque est tout au fond. L’expédition est facultative, et le portail ramène au village.', { zone: hm.zoneName(this.cam.target.z) }), 'hell');
     // la première entrée : le chapitre du tutoriel sur les Enfers (la cible, les troupes, l'attaque, le retour)
     this.tutorial.chapter('hell');
     this.ui.update();
   }
 
   /**
-   * La cinématique du portail (`portalStage.ts`), à chaque image : jouée une fois, au premier passage d'une recrue, quand
+   * La cinématique du portail (`portalStage.ts`), à chaque image : jouée une fois, à l'ouverture du portail (ou au premier passage, ancien chemin), quand
    * tout est calme (`portalCineReady`) : à la surface, ni fenêtre, ni récit d'expédition en attente, ni autre cinématique, ni
    * outil en main ou geste en cours. Déjà dans les Enfers (entré autrement), elle n'a plus lieu d'être
    */
@@ -1151,6 +1159,8 @@ class Game implements UIHost {
 
   /** Prend le commandement de la garnison de l'île (la vue y va) */
   commandIsle() {
+    // (au passage direct, plus de garnison sur l'île : « Voir l'île » et les messages qui y menaient vont aux Enfers)
+    if (this.war.direct) { void this.enterHell(); return; }
     if (this.mode === 'hell') { this.ensureSurface(() => this.commandIsle(), true); return; }
     const p = this.world.portal;
     if (this.mode !== 'surface' || !p || !this.war.ensure()) return;
@@ -1168,8 +1178,13 @@ class Game implements UIHost {
     this.ui.update();
   }
 
-  /** « Affronter les démons » : le chapitre du tutoriel (une fois), puis la vue va sur l'île, au commandement, où l'on bâtit */
+  /**
+   * « Affronter les démons » (le choix « Les Enfers », un portail rouvert) : au passage direct, on entre aussitôt dans les
+   * Enfers, par la cinématique du portail la première fois (décision de l'auteur, 22 nov. 2026 : plus d'étape sur l'île).
+   * Avant : le chapitre du tutoriel de l'île, puis la vue sur l'île, au commandement, où l'on bâtissait
+   */
   private pveStart() {
+    if (this.war.direct) { if (this.war.intro !== 'seen') this.war.intro = 'due'; void this.enterHell(); return; }
     this.tutorial.chapter('pve');
     this.commandIsle();
   }
@@ -1180,7 +1195,7 @@ class Game implements UIHost {
    */
   private isleSaid = false;
   private isleBrief() {
-    if (this.isleSaid || this.tutorial.active) return;
+    if (this.isleSaid || this.tutorial.active || this.war.direct) return;
     this.isleSaid = true;
     this.ui.toast(tr('⚔️ Bâtissez ici, sur l’île du portail (pas au village) : « {barracks} », puis recrutez des soldats et menez-les aux Enfers.', { barracks: this.sim.nameOf('barracks') }), undefined, 'action');
   }
@@ -1188,7 +1203,7 @@ class Game implements UIHost {
   /** Une tour de garde ou une caserne posée au village quand l'île n'en a pas : elle ne garde pas le portail, on le dit */
   private defenseWhere(b: Building) {
     // (plus d'invasion : la tour de garde de l'île ne sert plus, seule la caserne y mène les recrues au portail)
-    if (b.kind !== 'barracks' || this.war.pve !== 'on' || this.world.onPortalIsland(b.x, b.z) || this.tutorial.chapterOn === 'pve') return;
+    if (b.kind !== 'barracks' || this.war.direct || this.war.pve !== 'on' || this.world.onPortalIsland(b.x, b.z) || this.tutorial.chapterOn === 'pve') return;
     if (isleDefenses(this.world).barracks) return;
     this.ui.toast(tr('« {name} » est au village : pour mener des soldats aux Enfers, il en faut une sur l’île du portail. Cliquez ici pour y aller.', { name: this.sim.nameOf(b.kind) }), () => this.commandIsle(), 'action');
   }
@@ -1253,7 +1268,8 @@ class Game implements UIHost {
    */
   private syncIsleView() {
     const p = this.world.portal, v = this.cam.view();
-    this.isleNear = this.mode === 'surface' && !!p && this.world.portalOpen && nearIsle(this.isleNear, Math.hypot(v.x - p.x, v.z - p.z), p.r);
+    // (au passage direct, l'île n'est plus qu'un décor : pas d'interface de commandement)
+    this.isleNear = this.mode === 'surface' && !!p && this.world.portalOpen && !this.war.direct && nearIsle(this.isleNear, Math.hypot(v.x - p.x, v.z - p.z), p.r);
     if (!this.isleNear) { if (this.isleCmd) this.leaveIsle(); return; }
     if (this.isleCmd || this.fading || this.tools.tool !== 'none' || this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.citizenCam !== null || this.railEdit || this.kingStage.playing || this.trophyStage.playing) return;
     this.enterIsle();
@@ -1261,6 +1277,14 @@ class Game implements UIHost {
 
   /** « Voir l'île » : la vue va sur l'île du portail, au commandement */
   viewIsle() { this.commandIsle(); }
+
+  /**
+   * Le bouton rond « Les Enfers » du village (`UI`) : le portail ouvert et la cinématique déjà vue (avant, c'est le choix
+   * « Les Enfers » qui fait l'entrée) ; il y mène, comme l'arche de l'île
+   */
+  isleGarrison() { return !this.war.direct; }
+  hellOpen() { return this.war.direct && this.war.active && !this.war.hellWhy() && this.war.intro === 'seen' && this.mode === 'surface'; }
+  goHell() { void this.enterHell(); }
 
   /** La vue va sur l'île du portail (pour y bâtir ses défenses) */
   /** La vue va sur l'île de l'allié, là où l'on peut bâtir (loin de leur ville) */
@@ -1714,8 +1738,8 @@ class Game implements UIHost {
     w.crossroads = true;
     if (!w.portalOpen) { w.portalWoken = true; this.war.wake(); }
     else this.war.acceptPve();
-    this.pveStart();
     this.ui.update(); this.saveNow();
+    this.pveStart();
   }
 
   /**

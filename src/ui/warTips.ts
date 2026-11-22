@@ -38,7 +38,7 @@ export const WAR_TIP_TEXT: Record<WarTipId, string> = {
   isle: '🗼 Portail ouvert ! Posez une caserne sur son île pour y recruter. Cliquez pour y aller.',
   garrison: '⚔️ Vos soldats sont sur l’île : menez-les aux Enfers. Cliquez pour les commander.',
   orders: '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. « ? » : aide.',
-  hell: '🔥 Les Enfers (facultatif) : abattez les forteresses. Chaque âge ouvre une zone. 🌀 Île : retour.',
+  hell: '🔥 Enfers (facultatif) : abattez les forteresses. Chaque âge ouvre une zone. 🌀 Portail : retour.',
   ageLock: '🔒 Les démons d’après sont trop forts : montez d’âge pour ouvrir la zone suivante.',
   base: '🏕️ Zone conquise ! Posez un camp de base (rangée « Base »), puis caserne et infirmerie.',
   kingdom: '👑 Le royaume est ouvert ! Fuyez les cercles rouges des boules de feu. Combat facultatif.',
@@ -48,8 +48,12 @@ localize(WAR_TIP_TEXT, Object.keys(WAR_TIP_TEXT) as never);
 /** Une aide tient sur deux lignes : au plus ce nombre de caractères */
 export const WAR_TIP_MAX = 100;
 
-/** L'ordre où on les vérifie (la première qui convient s'affiche) */
-const ORDER: WarTipId[] = ['kingdom', 'base', 'hell', 'ageLock', 'orders', 'garrison', 'isle'];
+/**
+ * L'ordre où on les vérifie (la première qui convient s'affiche). `isle`, `garrison` et `orders` (la caserne de l'île, la
+ * garnison à mener aux Enfers, les ordres sur l'île) ne sont plus montrées : le choix « Les Enfers » y mène tout droit
+ * (décision de l'auteur, 22 nov. 2026). Leurs textes restent pour les anciens états enregistrés
+ */
+const ORDER: WarTipId[] = ['kingdom', 'base', 'hell', 'ageLock'];
 
 /** Le moment de chaque aide */
 const WHEN: Record<WarTipId, (s: WarTipState) => boolean> = {

@@ -14,6 +14,8 @@ import { Sim } from '../src/sim/sim';
 
 // (l'invasion en trois vagues, retirée du jeu, reste éprouvée ici : voir `War.waves`)
 War.wavesDefault = true;
+// (les essais de l'île : la garnison s'y tient, plus de passage direct aux Enfers)
+War.directDefault = false;
 
 /** Une simulation des Enfers sans démons ni bâtiments (on y pose ceux du test) */
 const emptyHell = () => {

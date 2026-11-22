@@ -14,11 +14,10 @@ describe('les aides du volet militaire', () => {
     expect(nextWarTip(base({ age: 3 }), none)).toBeNull();
   });
 
-  it('au moment utile : les défenses de l’île, la garnison, ses ordres, les Enfers, la base, le royaume', () => {
-    expect(nextWarTip(base({ age: 1, portalOpen: true }), none)).toBe('isle');
-    expect(nextWarTip(base({ age: 1, portalOpen: true, towers: 1, barracks: 1 }), none)).toBeNull();
-    expect(nextWarTip(base({ age: 1, portalOpen: true, towers: 1, barracks: 1, isleTroops: 3 }), none)).toBe('garrison');
-    expect(nextWarTip(base({ age: 1, portalOpen: true, towers: 1, barracks: 1, isleTroops: 3, commanding: 'isle' }), none)).toBe('orders');
+  it('au moment utile : les Enfers, la base, le royaume (plus rien sur l’île : le choix « Les Enfers » y mène tout droit)', () => {
+    expect(nextWarTip(base({ age: 1, portalOpen: true }), none)).toBeNull();
+    expect(nextWarTip(base({ age: 1, portalOpen: true, towers: 1, barracks: 1, isleTroops: 3 }), none)).toBeNull();
+    expect(nextWarTip(base({ age: 1, portalOpen: true, towers: 1, barracks: 1, isleTroops: 3, commanding: 'isle' }), none)).toBeNull();
     const hell = base({ age: 2, portalOpen: true, towers: 1, barracks: 1, commanding: 'hell' });
     expect(nextWarTip(hell, none)).toBe('hell');
     expect(nextWarTip({ ...hell, frontier: 2 }, new Set(['hell']))).toBe('base');
