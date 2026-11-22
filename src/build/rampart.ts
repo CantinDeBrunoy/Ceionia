@@ -1,5 +1,5 @@
 import { World } from '../world/world';
-import { Building, KINDS, isRampart, sizeOf } from './catalog';
+import { Building, KINDS, KindId, isRampart, sizeOf } from './catalog';
 import { wallLine, Cell } from '../ui/wallPlan';
 import { WALL_N, WALL_E, WALL_S, WALL_W } from '../render/hellBase';
 import { TOWER_SHIFT, NODE_TOWER, NODE_PLAIN, NODE_FLIP_Z, NODE_FLIP_X, rampartNode } from '../render/ramparts';
@@ -115,34 +115,42 @@ export function toggledTower(w: World, b: Building): boolean | undefined {
 }
 
 /** Le tracé d'un mur de `a` à `b` : ses cases (centres), et pour chacune si un pan s'y pose (ou s'il y en a déjà un) */
-export interface RampartTrace { cells: Cell[]; ok: boolean[]; had: boolean[]; why: string | null }
+export interface RampartTrace { cells: Cell[]; ok: boolean[]; had: boolean[]; why: string | null; /** ce qu'on trace : un pan de rempart, une clôture, une haie */ kind?: KindId }
 
-export function traceRampart(w: World, a: Cell, b: Cell): RampartTrace {
-  const line = wallLine(a, b), why = line.length > RAMPART_MAX ? tr('Trop long : {n} pans au plus d’un coup (cliquez plus près, puis prolongez).', { n: RAMPART_MAX }) : null;
+/**
+ * Le tracé d'une ligne de `kind` (un pan de rempart par défaut, ou une clôture, une haie) de `a` à `b`, en escalier à angles
+ * droits ; une case qui porte déjà ce genre (ou, pour un rempart, une porte ou un pan) compte comme posée
+ */
+export function traceRampart(w: World, a: Cell, b: Cell, kind: KindId = 'wall'): RampartTrace {
+  const line = wallLine(a, b), why = line.length > RAMPART_MAX ? tr(kind === 'wall' ? 'Trop long : {n} pans au plus d’un coup (cliquez plus près, puis prolongez).' : 'Trop long : {n} cases au plus d’un coup (cliquez plus près, puis prolongez).', { n: RAMPART_MAX }) : null;
   const cells = line.slice(0, RAMPART_MAX);
-  const had = cells.map(([x, z]) => { const o = w.buildingAt(Math.floor(x), Math.floor(z)); return !!o && isRampart(o.kind); });
-  const ok = cells.map(([x, z], i) => had[i] || w.canPlace('wall', Math.floor(x), Math.floor(z)) === null);
-  return { cells, ok, had, why };
+  const had = cells.map(([x, z]) => { const o = w.buildingAt(Math.floor(x), Math.floor(z)); return !!o && (kind === 'wall' ? isRampart(o.kind) : o.kind === kind); });
+  const ok = cells.map(([x, z], i) => had[i] || w.canPlace(kind, Math.floor(x), Math.floor(z)) === null);
+  return { cells, ok, had, why, kind };
 }
 
-/** Ce que coûte un tracé : le prix d'un pan fois les pans à poser (null : rien) */
+/** Ce que coûte un tracé : le prix d'une pièce fois les pièces à poser (null : rien) */
 export function rampartCost(w: World, t: RampartTrace, age: number): Cost | null {
-  const unit = priceIn(w, 'wall', age), n = t.ok.filter((o, i) => o && !t.had[i]).length;
-  return unit && n ? { wood: unit.wood * n, stone: unit.stone * n } : null;
+  const unit = priceIn(w, t.kind ?? 'wall', age), n = t.ok.filter((o, i) => o && !t.had[i]).length;
+  if (!unit || !n) return null;
+  return { wood: unit.wood * n, stone: unit.stone * n, ...(unit.brick ? { brick: unit.brick * n } : {}) };
 }
 
-/** Pose les pans du tracé qui le peuvent, dans l'ordre, tant qu'on peut les payer ; `built` : posés, `skipped` : cases sautées, `short` : le bois ou la pierre a manqué */
+/** Pose les pièces du tracé qui le peuvent, dans l'ordre, tant qu'on peut les payer ; `built` : posées, `skipped` : cases sautées, `short` : le bois ou la pierre a manqué */
 export function layRampart(w: World, t: RampartTrace, age: number): { built: number; skipped: number; short: boolean } {
+  const kind = t.kind ?? 'wall';
   let built = 0, skipped = 0, short = false;
   for (let i = 0; i < t.cells.length; i++) {
     if (t.had[i]) continue;
     if (!t.ok[i]) { skipped++; continue; }
     const [x, z] = t.cells[i], cx = Math.floor(x), cz = Math.floor(z);
-    if (w.canPlace('wall', cx, cz) !== null) { skipped++; continue; }
-    const cost = priceIn(w, 'wall', age);
-    if (!canPay(w, cost)) { short = true; break; }
+    if (w.canPlace(kind, cx, cz) !== null) { skipped++; continue; }
+    const cost = priceIn(w, kind, age);
+    if (cost && !canPay(w, cost)) { short = true; break; }
     pay(w, cost);
-    w.place('wall', cx, cz, 0, false, Math.max(age, KINDS.wall.minAge), built === 0);
+    // (une clôture seule court dans le sens du tracé : d'est en ouest, ou du nord au sud)
+    const p = t.cells[i - 1] ?? t.cells[i + 1], rot = kind !== 'wall' && p && Math.floor(p[0]) === cx ? 1 : 0;
+    w.place(kind, cx, cz, rot, false, Math.max(age, KINDS[kind].minAge), built === 0);
     built++;
   }
   return { built, skipped, short };

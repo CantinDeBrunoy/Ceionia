@@ -349,6 +349,15 @@ registerDict('catalog', {
   '{n} pans posés': '{n} pieces built', 'Un pan posé': 'One piece built',
   ' ({n} cases sautées : routes, bâtiments ou eau)': ' ({n} cells skipped: roads, buildings or water)',
   '. Cliquez plus loin pour prolonger le mur. Échap : arrêter.': '. Click further away to extend the wall. Esc: stop.',
+  // (clôtures et haies, tracées comme les remparts)
+  'Trop long : {n} cases au plus d’un coup (cliquez plus près, puis prolongez).': 'Too long: {n} cells at most in one go (click closer, then extend).',
+  'Une clôture part d’une case libre (ou d’un morceau déjà posé) : pas d’une route, d’un bâtiment ni de l’eau.': 'A fence starts from a free cell (or a piece already built): not from a road, a building or water.',
+  '{n} cases de clôture posées': '{n} fence cells built', 'Une case de clôture posée': 'One fence cell built',
+  '{n} cases de haie posées': '{n} hedge cells built', 'Une case de haie posée': 'One hedge cell built',
+  '. Cliquez plus loin pour prolonger. Échap : arrêter.': '. Click further away to extend. Esc: stop.',
+  '{n} cases : {cost}': '{n} cells: {cost}',
+  'Cliquez le point B : la ligne se pose d’un trait, en angles droits': 'Click point B: the line goes down in one stroke, at right angles',
+  'Cliquez le point A, puis le point B : la ligne se pose d’un trait': 'Click point A, then point B: the line goes down in one stroke',
   'La porte se pose sur une rue droite : pas dans un virage ni à un carrefour': 'The gate goes on a straight street: not in a bend nor at a crossroads',
   'À cheval sur le rivage de l’île : posez-le tout entier sur l’île': 'Straddling the island’s shore: place it entirely on the island',
   // ---- pluriels (KIND_LABEL)
