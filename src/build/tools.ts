@@ -781,7 +781,11 @@ export class ToolController implements ToolInput {
       const s = sampleCurve(this.freePlan.pts, 0.2), pos: number[] = [];
       for (let i = 0; i + 3 < s.length; i += 2) {
         const p = [s[i], s[i + 1]], q = [s[i + 2], s[i + 3]], l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1, nx = (-(q[1] - p[1]) / l) * 0.46, nz = ((q[0] - p[0]) / l) * 0.46;
-        const y = (x: number, z: number) => w.surfaceAt(x, z) + 0.1;
+        // (au-dessus d'une faille, le ruban passe au niveau du rebord, comme le futur pont, et ne plonge pas au fond du ravin)
+        const y = (x: number, z: number) => {
+          const cx = Math.floor(x), cz = Math.floor(z), rift = w.inCells(cx, cz) && w.rift[w.ci(cx, cz)] === 1;
+          return (rift ? Math.max(w.surfaceAt(x, z), w.cellAvg(cx, cz)) : w.surfaceAt(x, z)) + 0.1;
+        };
         const a = [p[0] + nx, y(p[0] + nx, p[1] + nz), p[1] + nz], b = [p[0] - nx, y(p[0] - nx, p[1] - nz), p[1] - nz];
         const d = [q[0] + nx, y(q[0] + nx, q[1] + nz), q[1] + nz], e = [q[0] - nx, y(q[0] - nx, q[1] - nz), q[1] - nz];
         pos.push(...a, ...b, ...e, ...a, ...e, ...d);
