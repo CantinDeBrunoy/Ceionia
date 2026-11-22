@@ -27,7 +27,7 @@ import { isleName, kindOffered, CONFLICT_LABEL, allyPostReadyNow, boonsMatter, t
 import { peoplesView } from '../sim/peoples';
 import { peoplesHtml } from './peoples';
 import { legacyOf } from '../sim/legacy';
-import { boonText, effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
+import { boonText, effectSummary, effectChips, giftChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
@@ -1292,7 +1292,7 @@ export class UI {
     const range = (a: number[], f: (n: number) => string) => { const lo = Math.min(...a), hi = Math.max(...a); return lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`; };
     const risks = cs.map((c) => this.host.expeditions.preview(c).risk);
     const lvl = Math.max(...risks) <= 0.12 ? 'low' : Math.max(...risks) <= 0.22 ? 'mid' : 'high';
-    const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(this.winOf(c))).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
+    const gains = giftChips(cs.flatMap((c) => this.winOf(c)));
     return `<div class="mpills"><span title="${tr('Habitants dans l’équipe')}">${ic('team', 15, 2)} ${range(cs.map((c) => c.party), String)}</span><span title="${tr('Durée')}">${ic('clock', 15, 2)} ${['courte', 'moyenne', 'longue'].filter((l) => cs.some((c) => workLabel(c.work) === l)).map((l) => tr(l)).join('–')}</span><span class="crisk ${lvl}" title="${tr('Risque d’échec')}">${ic('alert', 14, 2.2)} ${range(risks, (r) => `${Math.round(r * 100)}`)} %</span></div>
       ${gains.length ? `<div class="mgains">${gains.map((c) => `<span class="chip" title="${attr(c.title)}">${pic(c.icon, 26)}</span>`).join('')}</div>` : ''}`;
   }
@@ -2945,7 +2945,7 @@ export class UI {
     const card = (k: number) => {
       const x = cs[k], sk = styles[k].style, name = sk ? tr(STYLE[sk]) : x.label, off = !!ex.why(m, x);
       const px = ex.preview(x), lv = px.risk <= 0.12 ? 'low' : px.risk <= 0.22 ? 'mid' : 'high';
-      const wx = done ? redoEffects(x.win) : this.winOf(x), sn = new Set<string>(), gx = effectChips(wx).filter((e) => (sn.has(e.icon) ? false : (sn.add(e.icon), true))).slice(0, 3);
+      const wx = done ? redoEffects(x.win) : this.winOf(x), gx = giftChips(wx, 3);
       const phrase = cardPhrase(x.text), text = sk && x.label ? `<b>${x.label}</b>${phrase ? ` — ${phrase}` : ''}` : phrase;
       return `<button type="button" role="radio" data-pick="${k}" class="sCard ${k === i ? 'on' : ''} ${sk ?? ''} ${off ? 'off' : ''}" aria-checked="${k === i}" title="${attr(x.label)}">
         <span class="scHead">${sk ? `<img class="scEmb" src="./expeditions/depart/embleme-${EMB[sk]}.webp" alt="" decoding="async">` : pic(m.icon, 44)}<span class="scName"><b>${name}</b>${styles[k].effect ? `<small>${tr(EFFECT[styles[k].effect!])}</small>` : ''}</span></span>

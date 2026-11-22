@@ -1320,7 +1320,7 @@ export function effectChips(effects: Effect[]): { icon: string; n: string; title
       for (const [k, c] of Object.entries(n) as [HerdKind, number][]) out.push({ icon: HERD_ICON[k], n: `${c}`, title: `${c} ${plural(c, ...HERD_NAME[k])}` });
     } else if (e.t === 'ore') out.push({ icon: '⛏️', n: `+${e.n}`, title });
     else if (e.t === 'need') out.push({ icon: NEED_ICON[e.need], n: `${e.n > 0 ? '+' : '−'}${Math.abs(e.n)}${e.days ? ` · ${tr('{n} j', { n: e.days })}` : ''}`, title });
-    else if (e.t === 'perk') out.push({ icon: '⭐', n: '', title });
+    else if (e.t === 'perk') out.push({ icon: '⭐', n: tr('savoir-faire'), title });
     else if (e.t === 'injured') out.push({ icon: '🤕', n: `${e.n}`, title });
     else if (e.t === 'unherd') out.push({ icon: HERD_ICON[e.kind], n: `−${e.n}`, title });
     else if (e.t === 'diplo') out.push({ icon: DIPLO_ICON[e.act], n: '', title });
@@ -1328,6 +1328,19 @@ export function effectChips(effects: Effect[]): { icon: string; n: string; title
     else if (e.t === 'gold') out.push({ icon: '💰', n: `+${e.n}`, title });
   }
   return out;
+}
+
+/**
+ * Les récompenses d'un choix en pastilles, sans doublon d'icône, les gains propres à la mission d'abord : savoir-faire,
+ * diplomatie, bêtes, or, avantages pour le dénouement, puis minerai et besoins. `max` : les premières seulement. La fenêtre de
+ * départ n'en montre que trois : « La pierre noire du volcan » n'y montrait que son minerai, son travail et son bien-être, et
+ * pas les armes d'obsidienne qu'elle débloque (notes de joueurs du 22 nov. 2026)
+ */
+export function giftChips(effects: Effect[], max = Infinity): { icon: string; n: string; title: string }[] {
+  const RANK: Record<Effect['t'], number> = { perk: 0, diplo: 1, herd: 2, gold: 3, boon: 4, ore: 5, need: 6, injured: 7, unherd: 8 };
+  const ranked = effects.map((e, i) => ({ e, i })).sort((a, b) => RANK[a.e.t] - RANK[b.e.t] || a.i - b.i).map((x) => x.e);
+  const seen = new Set<string>();
+  return effectChips(ranked).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true))).slice(0, max);
 }
 
 /** Une intro en deux temps : sa première phrase (ce qu'on affiche) et le reste (replié sous « En savoir plus »). Rien n'est perdu : head + rest = le texte */

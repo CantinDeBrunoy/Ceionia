@@ -8,6 +8,7 @@ registerDict('missions', {
   '{n} j': '{n} d',
   'blessé': 'injured', 'blessés': 'injured',
   'rien': 'nothing',
+  'savoir-faire': 'know-how',
   // savoir-faire rapportés par les expéditions
   'blé des collines : champs +30 %': 'wheat of the hills: fields +30%',
   'peaux de mammouth : des fourrures pour tout le camp': 'mammoth hides: furs for the whole camp',
