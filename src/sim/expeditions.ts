@@ -83,6 +83,37 @@ export interface ActiveExpedition {
    * que le monstre meure (ou s'échappe) sous les yeux de l'équipe, avant qu'elle ne reparte ; elle devient `ok` à la fin
    */
   fate?: boolean;
+  /**
+   * relancée après le rechargement de la traversée (`Expeditions.resume`) : le temps de travail déjà fait, où reprendre à
+   * l'arrivée (sans nouvel imprévu d'arrivée)
+   */
+  resumeT?: number;
+}
+
+/**
+ * Une équipe en route, notée le temps du rechargement de « Explorer le monde » (une équipe n'est pas sauvegardée) : sa mission,
+ * son choix, son âge, son étape, la part du travail déjà faite, ses imprévus tranchés et ce qu'ils ont changé
+ */
+export interface TeamNote {
+  m: string; c: number; age: number; phase: Phase;
+  /** part du travail sur place déjà faite (0 … 1) */
+  done: number;
+  ok: boolean; events: number; seen: string[]; picks: number[]; notes: string[];
+  riskK: number; hurt: number; bonus: Effect[]; fate?: boolean;
+}
+
+/** Lit une note d'équipe (`sessionStorage`) : null si elle est abîmée ou si sa mission n'existe plus */
+export function readTeamNote(o: any): TeamNote | null {
+  if (!o || typeof o !== 'object') return null;
+  const m = MISSIONS.find((x) => x.id === o.m);
+  if (!m || !m.choices[o.c] || !['gather', 'out', 'work', 'back', 'home'].includes(o.phase)) return null;
+  const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+  const strs = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+  return {
+    m: m.id, c: o.c, age: num(o.age, m.age), phase: o.phase, done: Math.min(1, Math.max(0, num(o.done, 0))), ok: !!o.ok,
+    events: num(o.events, 1), seen: strs(o.seen), picks: Array.isArray(o.picks) ? o.picks.map((x: unknown) => num(x, -1)) : [], notes: strs(o.notes),
+    riskK: num(o.riskK, 1), hurt: num(o.hurt, 0), bonus: Array.isArray(o.bonus) ? o.bonus : [], ...(typeof o.fate === 'boolean' ? { fate: o.fate } : {}),
+  };
 }
 
 /** Les chasses où le monstre meurt sur place : l'issue s'y tire avant la fin du travail */
@@ -437,7 +468,58 @@ export class Expeditions {
   /** pourquoi le dernier départ a échoué alors que `why` ne disait rien (pas de haute mer à portée…), ou null */
   lastFail: string | null = null;
 
-  start(m: Mission, ci: number, age = m.age): ActiveExpedition | null {
+  /** Les équipes en route, notées avant le rechargement de la traversée (voir `resume`) */
+  teamNotes(): TeamNote[] {
+    return this.active.filter((a) => !a.noRoute).map((a) => {
+      // (un imprévu en attente de réponse est oublié : il reviendra, ou un autre)
+      const open = a.picks.length && a.picks[a.picks.length - 1] < 0 ? 1 : 0;
+      const total = Math.max(1, a.c.work + a.extra);
+      return {
+        m: a.m.id, c: a.m.choices.indexOf(a.c), age: a.age, phase: a.phase, ok: a.ok,
+        done: a.phase === 'work' ? Math.min(0.95, a.t / total) : a.phase === 'back' || a.phase === 'home' ? 1 : 0,
+        events: a.events, seen: a.seen.slice(0, a.seen.length - open), picks: a.picks.slice(0, a.picks.length - open), notes: [...a.notes],
+        riskK: a.riskK, hurt: a.hurt, bonus: [...a.bonus], ...(a.fate !== undefined ? { fate: a.fate } : {}),
+      };
+    });
+  }
+
+  /**
+   * Relance les équipes notées avant le rechargement de « Explorer le monde » (un joueur avait vu son expédition annulée
+   * pendant la cinématique, notes du 22 nov. 2026). Une équipe en chemin repart ; une équipe au travail repart, et reprend sur
+   * place là où elle en était, ses imprévus tranchés gardés ; une équipe sur le retour rentre aussitôt avec son issue. Elle
+   * emporte le même équipement (revenu en réserve au chargement). Rend le nombre d'équipes relancées et les missions (`id`) qui
+   * n'ont pas pu repartir (le joueur en est prévenu)
+   */
+  resume(notes: TeamNote[]): { back: number; lost: string[] } {
+    let back = 0;
+    const lost: string[] = [];
+    for (const n of notes) {
+      const m = MISSIONS.find((x) => x.id === n.m);
+      if (!m) continue;
+      const a = this.start(m, n.c, n.age, true);
+      if (!a) {
+        lost.push(m.id);
+        this.onNews?.(tr('{icon} « {title} » n’a pas pu repartir après la traversée : l’équipe est rentrée au village, son équipement aussi.', { icon: m.icon, title: m.title }));
+        continue;
+      }
+      back++;
+      a.seen = [...n.seen]; a.picks = [...n.picks]; a.notes = [...n.notes]; a.events = Math.max(n.events, a.seen.length);
+      a.riskK = n.riskK; a.hurt = n.hurt; a.bonus = [...n.bonus];
+      if (n.fate !== undefined) a.fate = n.fate;
+      if (n.phase === 'back' || n.phase === 'home') {
+        // (l'issue était tirée : l'équipe est rentrée pendant la traversée)
+        a.ok = n.ok; a.phase = 'home'; a.t = 4;
+        this.onNews?.(tr('{icon} « {title} » : l’équipe est rentrée pendant la traversée.', { icon: m.icon, title: m.title }));
+        continue;
+      }
+      if (n.phase === 'work') a.resumeT = n.done * Math.max(1, a.c.work + a.extra);
+      this.onNews?.(tr('{icon} L’expédition « {title} » reprend la route après la traversée.', { icon: m.icon, title: m.title }));
+    }
+    return { back, lost };
+  }
+
+  /** `quiet` : sans annoncer le départ (une équipe relancée, voir `resume`) */
+  start(m: Mission, ci: number, age = m.age, quiet = false): ActiveExpedition | null {
     const c = m.choices[ci];
     if (!c || this.why(m, c)) return null;
     const base = this.base()!;
@@ -537,7 +619,7 @@ export class Expeditions {
     } else {
       // elle part aussitôt, chacun de là où il est, sans se rassembler d'abord au village (à l'aire d'envol s'il faut voler)
       this.agents.partyGo(party, air ? air.pad[0] : dest[0], air ? air.pad[1] : dest[1]);
-      this.onNews?.(tr(!air ? '{icon} L’expédition « {title} » part vers {dest}.' : air.kind === 'heli' ? '{icon} L’expédition « {title} » part en hélicoptère vers {dest}.' : air.kind === 'drone' ? '{icon} L’expédition « {title} » part en drone vers {dest}.' : '{icon} L’expédition « {title} » part en montgolfière vers {dest}.', { icon: m.icon, title: m.title, dest: destName(c) }));
+      if (!quiet) this.onNews?.(tr(!air ? '{icon} L’expédition « {title} » part vers {dest}.' : air.kind === 'heli' ? '{icon} L’expédition « {title} » part en hélicoptère vers {dest}.' : air.kind === 'drone' ? '{icon} L’expédition « {title} » part en drone vers {dest}.' : '{icon} L’expédition « {title} » part en montgolfière vers {dest}.', { icon: m.icon, title: m.title, dest: destName(c) }));
     }
     return a;
   }
@@ -572,10 +654,11 @@ export class Expeditions {
         ag.partyGo(a.party, a.air ? a.air.pad[0] : a.dest[0], a.air ? a.air.pad[1] : a.dest[1]);
         this.onNews?.(tr('{icon} L’expédition « {title} » part vers {dest}.', { icon: a.m.icon, title: a.m.title, dest: destName(a.c) }));
       } else if (a.phase === 'out' && this.arrived(a, dt)) {
-        a.phase = 'work'; a.t = 0;
+        a.phase = 'work'; a.t = a.resumeT ?? 0;
         ag.partyAct(a.party, 'work');
         ag.mountParty(a.party, false);
-        this.raise(a, true);
+        // (une équipe relancée après la traversée reprend son travail : son imprévu d'arrivée est déjà passé)
+        if (a.resumeT === undefined) this.raise(a, true);
       } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * nextEventAt(a)) {
         this.raise(a, false);
       } else if (a.phase === 'work' && a.fate === undefined && FATED.has(a.c.scene) && a.seen.length >= a.events && a.t >= (a.c.work + a.extra) * FATE_AT) {

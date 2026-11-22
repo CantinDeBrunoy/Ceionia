@@ -79,7 +79,7 @@ import { Traffic } from './render/traffic';
 import { Halos } from './render/halos';
 import { RailBoost } from './render/railBoost';
 import { UpgradeBadges } from './render/upgradeBadges';
-import { Expeditions, type Report } from './sim/expeditions';
+import { Expeditions, readTeamNote, type Report, type TeamNote } from './sim/expeditions';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
@@ -197,6 +197,23 @@ function readVoyageMusic(): { key: string; name: string; t: number } | null {
     sessionStorage.removeItem(VOYAGE_MUSIC);
     return m && typeof m.key === 'string' && typeof m.name === 'string' && typeof m.t === 'number' ? m : null;
   } catch { return null; }
+}
+
+/**
+ * Les équipes en route gardées le temps du rechargement de la traversée (`sessionStorage`) : une équipe n'est pas sauvegardée,
+ * et le rechargement l'annulait (notes de joueurs du 22 nov. 2026). Relancées au calme après la cinématique (`Expeditions.resume`)
+ */
+const LATE_TEAMS = 'village-lowpoly:late-teams';
+function keepLateTeams(ts: TeamNote[]) {
+  try { if (ts.length) sessionStorage.setItem(LATE_TEAMS, JSON.stringify(ts)); else sessionStorage.removeItem(LATE_TEAMS); } catch { /* sans stockage, les équipes sont perdues, comme avant (leur équipement revient) */ }
+}
+function readLateTeams(): TeamNote[] {
+  try {
+    const raw = sessionStorage.getItem(LATE_TEAMS);
+    sessionStorage.removeItem(LATE_TEAMS);
+    const list = JSON.parse(raw ?? '[]');
+    return Array.isArray(list) ? list.map(readTeamNote).filter((n): n is TeamNote => !!n) : [];
+  } catch { return []; }
 }
 
 /** Les récits d'expédition gardés le temps du rechargement de la traversée (`sessionStorage`) */
@@ -1693,6 +1710,11 @@ class Game implements UIHost {
     if (this.voyageStage.playing) return;
     // les récits gardés pendant la traversée : au calme, après la cinématique des îles
     if (this.lateReports.length && !w.reveal && !this.revealing && this.portalCalm > 3 && this.popups.open && !this.popupBusy() && !this.diploChoice.visible) { for (const r of this.lateReports.splice(0)) this.expeditions.onReport?.(r); return; }
+    // les équipes en route pendant la traversée repartent, une fois la cinématique finie
+    if (this.lateTeams.length && !w.reveal && !this.revealing && !this.voyage) {
+      this.expeditions.resume(this.lateTeams.splice(0));
+      this.ui.update();
+    }
     if (w.crossroads) return;
     const { hell, world } = this.ways();
     if (crossroadsSettled(w, hell, world)) { w.crossroads = true; this.ui.update(); return; }
@@ -1721,6 +1743,8 @@ class Game implements UIHost {
   private reportsDue = new Set<Report>();
   /** les récits gardés pendant la traversée (rechargement de « Explorer le monde »), à montrer au calme */
   private lateReports: Report[] = readLateReports();
+  /** les équipes en route gardées pendant la traversée, à relancer après la cinématique */
+  private lateTeams: TeamNote[] = readLateTeams();
 
   /**
    * La cinématique des îles peut partir : au sortir de la traversée, tout de suite (elle tient la brume tant que l'écran de
@@ -1800,6 +1824,8 @@ class Game implements UIHost {
       sessionStorage.setItem(AUTOSTART, `${w.mapId}|continue|voyage`);
       // un récit d'expédition pas encore montré survit au rechargement (il s'ouvre après la cinématique des îles)
       keepLateReports([...this.reportsDue]);
+      // les équipes en route repartiront après la cinématique (le rechargement les aurait annulées)
+      keepLateTeams(this.expeditions.teamNotes());
       film.mark();
       keepVoyageMusic(audio.musicMark());
       location.reload();

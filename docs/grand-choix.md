@@ -1,7 +1,7 @@
 # Le grand choix de la fin de l'Antiquité
 
 > Fichiers : `src/sim/crossroads.ts` (règles pures : état des deux voies, quand la carte s'ouvre, quand l'onglet se montre), `src/ui/worldChoice.ts` (la carte : trois réponses, ou une seule voie), `src/ui/ways.ts` (l'onglet « Grands choix » des expéditions), `src/voyageCine.ts` (la partition de la cinématique : plans, bandeaux, fondus), `src/voyageStage.ts` (le survol en direct : navires, caméra, habillage), `src/ui/voyage.ts` (le film de la traversée et sa reprise après le rechargement, la brume dessous), `public/voyage/` (la vidéo, WebM et MP4), `index.html` (le fond couleur de brume pendant le rechargement), `src/ui/loading.ts` (`LoadingScreen` en mode traversée), `src/main.ts` (`stepCrossroads`, `ways`, `takeWay`, `openHell`, `exploreWorld`, `revealIsles`, `boot`), `src/ui/ui.ts` (`openExpeditions`, onglet `ways`), `src/sim/war.ts` (`War.wake`), `src/world/world.ts` (`crossroads`, `portalWoken`), `src/hudTheme.css` (styles « le grand choix »), `src/style.css` (styles de la cinématique « Explorer le monde »)
-> Tests : `tests/grandChoix.test.ts`, `tests/cinematiqueVoyage.test.ts`
+> Tests : `tests/grandChoix.test.ts`, `tests/cinematiqueVoyage.test.ts`, `tests/traverseeEquipes.test.ts`
 > Voir aussi : [ouverture.md](ouverture.md) (la cinématique d'ouverture, même schéma), [portail-ile.md](portail-ile.md), [monde-carte.md](monde-carte.md) (« Explorer le monde »), [diplomatie.md](diplomatie.md), [expeditions.md](expeditions.md), [ages.md](ages.md), [bac-a-sable.md](bac-a-sable.md), [sauvegarde.md](sauvegarde.md)
 
 ## En bref
@@ -67,6 +67,7 @@ Elle fait office de chargement. Décision de l'auteur (15 nov. 2026), après une
   - Pendant le film, avant ou après le rechargement : il s'arrête sur la brume (un clic tant que le son attend un geste lance d'abord la musique, voir plus haut), et le survol ne se jouera pas (`skip` noté dans `VOY_KEY`). Le chargement, lui, va au bout.
   - Pendant le survol : tout de suite au village.
 - **Une seule fois** : `world.reveal` (sauvegardé) demande le survol. Il passe à faux quand le survol commence, et la sauvegarde qui suit la fin ne le porte plus : une partie rechargée ensuite ne rejoue rien. Une partie rechargée autrement pendant le survol (onglet fermé) le rejoue une fois, au calme, ouvert par un fondu au noir. La note du film est effacée à la fin du survol, et à tout démarrage qui n'est pas une traversée.
+- **Les équipes en route survivent au rechargement** : notées avant (`LATE_TEAMS`), relancées au calme après la cinématique, là où elles en étaient (voir [expeditions.md](expeditions.md), `Expeditions.resume`). Avant (notes de joueurs du 22 nov. 2026), le rechargement les annulait.
 - **Pendant la cinématique, pas de visiteurs de la faune** (`Fauna.quiet`) : leur recensement près de la vue coûtait 200 à 300 ms toutes les 3 s au-dessus de la mer.
 - **Les Enfers, ni l'un ni l'autre** : « Les Enfers » a sa propre cinématique, celle du portail, jouée aussitôt (voir [enfers.md](enfers.md)) ; « Ni l'un ni l'autre » ne change rien à l'écran.
 

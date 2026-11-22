@@ -58,6 +58,9 @@ registerDict('expeditions', {
   '{icon} L’expédition « {title} » part en montgolfière vers {dest}.': '{icon} The expedition “{title}” is flying to {dest} by hot-air balloon.',
   '{icon} « {title} » : l’équipe rentre… et elle n’a pas l’air bredouille !': '{icon} “{title}”: the team is heading home... and it doesn’t look empty-handed!',
   '{icon} « {title} » : l’équipe rentre, la mine basse.': '{icon} “{title}”: the team is heading home, looking glum.',
+  '{icon} « {title} » : l’équipe est rentrée pendant la traversée.': '{icon} “{title}”: the team came home during the crossing.',
+  '{icon} L’expédition « {title} » reprend la route après la traversée.': '{icon} The “{title}” expedition sets off again after the crossing.',
+  '{icon} « {title} » n’a pas pu repartir après la traversée : l’équipe est rentrée au village, son équipement aussi.': '{icon} “{title}” could not set off again after the crossing: the team is back in the village, with its equipment.',
   '{name} perdue en route': '{name} lost on the way',
   // fabrication de l'équipement
   'Il faut un atelier pour fabriquer {what} : bâtissez-en un (à votre âge : {name})': 'You need a workshop to make {what}: build one (at your age: {name})',
