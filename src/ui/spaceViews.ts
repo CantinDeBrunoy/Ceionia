@@ -3,6 +3,7 @@ import { L_GONE } from '../render/expeditionScenes';
 import { drawVoyage } from './voyageArt';
 import { ic } from './icons';
 import { tr } from '../i18n';
+import { BLASON_COLORS, Blason, DEFAULT_BLASON, EMBLEM_HOLE, EMBLEM_PATH, SHAPE_PATH, hex } from '../sim/blason';
 
 /**
  * Les grands moments de la conquête de l'espace, en images. Pendant l'expédition « Un homme sur la Lune », une fois la fusée
@@ -14,6 +15,16 @@ import { tr } from '../i18n';
 /** Part du travail sur place où l'on suit l'alunissage (après la sortie du ciel de la fusée) */
 const CAST_FROM = L_GONE + 0.02, CAST_TO = 0.985;
 const W = 360, H = 216;
+
+/**
+ * Le drapeau planté sur la Lune : celui du village (son blason, comme sur ses tours et ses bannières). Le champ, l'emblème,
+ * leurs tracés SVG (rectangle de 100 × 66, hampe à gauche) et la place de l'emblème, mêmes proportions que `flagSvg`. Avant
+ * (notes de joueurs du 22 nov. 2026), la retransmission plantait un drapeau bleu, blanc, rouge
+ */
+export function moonFlag(bl: Blason = DEFAULT_BLASON) {
+  const side = 66 * 0.74;
+  return { field: hex(BLASON_COLORS[bl.a]), emblem: hex(BLASON_COLORS[bl.b]), shape: SHAPE_PATH[bl.s], mark: EMBLEM_PATH[bl.e], hole: EMBLEM_HOLE[bl.e] ?? null, cx: bl.s === 'droit' ? 50 : 42, side };
+}
 
 /** Un nombre de 0 à 1, toujours le même pour (i, k) : les étoiles, les cratères */
 const rnd = (i: number, k: number) => { const s = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -28,7 +39,8 @@ export class SpaceCast {
   private shown = false;
   private t0 = performance.now();
 
-  constructor(root: HTMLElement) {
+  /** `blason` : celui du village, lu à chaque image (il peut changer en cours de partie) */
+  constructor(root: HTMLElement, private blason: () => Blason = () => DEFAULT_BLASON) {
     this.el = document.createElement('div');
     this.el.className = 'spacecast panel';
     this.el.setAttribute('aria-hidden', 'true');
@@ -104,12 +116,7 @@ export class SpaceCast {
         // le drapeau du village qui se dresse et se déploie
         const ph = 34 * smooth(plant), fw = 20 * smooth(clamp((plant - 0.4) / 0.6));
         c.fillStyle = '#dcdcdc'; c.fillRect(fx, ly - ph, 1.6, ph);
-        if (fw > 0) {
-          const wave = Math.sin(time * 2) * 1.2;
-          c.fillStyle = '#3a6ab8'; c.fillRect(fx + 1.6, ly - ph, fw / 3, 13);
-          c.fillStyle = '#f4f6f8'; c.fillRect(fx + 1.6 + fw / 3, ly - ph + wave * 0.3, fw / 3, 13);
-          c.fillStyle = '#d8443a'; c.fillRect(fx + 1.6 + (2 * fw) / 3, ly - ph + wave * 0.6, fw / 3, 13);
-        }
+        if (fw > 0) this.flag(c, fx + 1.6, ly - ph, fw, 13, Math.sin(time * 2) * 0.012);
       }
       this.astronaut(c, ax, ay, plant >= 1 ? Math.sin(time * 4) : 0, walk > 0 && walk < 1 ? time : 0);
     }
@@ -121,6 +128,21 @@ export class SpaceCast {
       : u < 0.66 ? tr('L’écoutille s’ouvre, l’astronaute descend l’échelle…')
       : u < 0.82 ? tr('« Un petit pas pour un habitant… »')
       : tr('« … un grand bond pour le village ! »');
+  }
+
+  /**
+   * Le drapeau du village, sa hampe en (x, y) (coin haut), large de `w` (il se déploie), haut de `h` ; `lean` le fait onduler
+   * (un léger cisaillement : le bout monte ou descend de `lean` × 100 pixels)
+   */
+  private flag(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, lean: number) {
+    const f = moonFlag(this.blason());
+    c.save();
+    c.transform(w / 100, lean, 0, h / 66, x, y);
+    c.fillStyle = f.field; c.fill(new Path2D(f.shape));
+    c.translate(f.cx - f.side / 2, 33 - f.side / 2); c.scale(f.side / 100, f.side / 100);
+    c.fillStyle = f.emblem; c.fill(new Path2D(f.mark));
+    if (f.hole) { c.fillStyle = f.field; c.fill(new Path2D(f.hole)); }
+    c.restore();
   }
 
   /** Le module lunaire, ses pieds posés en (x, y) : étage de descente doré, étage de remontée, hublot, antenne, échelle */
@@ -148,7 +170,8 @@ export class SpaceCast {
     c.fillStyle = '#f4f6f8';
     if (wave) { c.save(); c.translate(x + 4, y - 15); c.rotate(-2.4 + wave * 0.3); c.fillRect(-1, 0, 2.4, 8); c.restore(); }
     else c.fillRect(x + 4, y - 15, 2.2, 7);
-    c.fillStyle = '#3a6ab8'; c.fillRect(x - 3, y - 14, 2.4, 1.6);
+    // (l'écusson à l'épaule : la couleur du blason)
+    c.fillStyle = moonFlag(this.blason()).field; c.fillRect(x - 3, y - 14, 2.4, 1.6);
   }
 }
 

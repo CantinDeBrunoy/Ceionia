@@ -691,7 +691,7 @@ class Game implements UIHost {
     // (la pose d'une défense depuis la barre de l'île prend l'outil sans quitter le commandement de l'île)
     this.tools.setTool = (t, kind) => { if (t === 'none' || this.mode === 'under' || (this.islePlace && t === 'build' && kind === this.islePlace)) setTool(t, kind); else this.ensureSurface(() => setTool(t, kind)); };
     this.ui = new UI(uiRoot, host);
-    this.spaceCast = new SpaceCast(uiRoot);
+    this.spaceCast = new SpaceCast(uiRoot, () => this.world.blason);
     // les vignettes des bâtiments de la base des Enfers : leurs modèles viennent avec le module des Enfers, chargé à part
     this.thumbs.addSource('hell', () => import('./render/hellThumbs').then((m) => m.hellThumb));
     // le contrôle des troupes : ses ordres au clic droit (sans glisser), la barre des troupes, l'alerte d'incursion

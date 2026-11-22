@@ -5,7 +5,7 @@
 > Voir aussi : [rendu-modeles.md](rendu-modeles.md), [armee-combat.md](armee-combat.md), [interface.md](interface.md), [sauvegarde.md](sauvegarde.md), [diplomatie.md](diplomatie.md) (les blasons des deux peuples rivaux)
 
 ## En bref
-Le village du joueur a **un seul drapeau** : deux couleurs (le champ, l'emblème), un emblème et une forme. Il flotte sur tous ses bâtiments, ses navires et sa base des Enfers, et ses troupes en portent les couleurs (tabards, boucliers, panaches, capes, caparaçons). Le joueur le choisit au début d'une partie neuve (facultatif) et le change quand il veut dans l'onglet « Blason » de la fenêtre des expéditions (ou dans Paramètres › Partie) : tout le jeu se teint à l'image suivante, sans rien recharger.
+Le village du joueur a **un seul drapeau** : deux couleurs (le champ, l'emblème), un emblème et une forme. Il flotte sur tous ses bâtiments, ses navires et sa base des Enfers, et sur la Lune (la retransmission de l'alunissage, `moonFlag` dans `ui/spaceViews.ts`, voir [fin-de-partie.md](fin-de-partie.md)), et ses troupes en portent les couleurs (tabards, boucliers, panaches, capes, caparaçons). Le joueur le choisit au début d'une partie neuve (facultatif) et le change quand il veut dans l'onglet « Blason » de la fenêtre des expéditions (ou dans Paramètres › Partie) : tout le jeu se teint à l'image suivante, sans rien recharger.
 
 ## Règles du jeu
 - Teintes (`BLASON_COLORS`) : azur, bleu nuit, pourpre, bordeaux, gueules (rouge), sinople (vert), ocre, or, argent, sable (noir). **Ni turquoise ni rouge laqué** : ce sont les couleurs des Sablais et des Jadéens (test).
