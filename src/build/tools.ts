@@ -16,6 +16,7 @@ import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
+import { RangeView } from './rangeView';
 import { isStart, startRefusal, START_KIND } from './startLock';
 import { traceRampart, layRampart, rampartCost, RampartTrace, rampartMask, toggledTower } from './rampart';
 import { linearMask } from './decor';
@@ -156,6 +157,8 @@ export class ToolController implements ToolInput {
   private zones: ZoneHighlight;
   /** couverture des pompiers et de la police, surlignée depuis la fiche du besoin Sécurité */
   readonly coverage: CoverageView;
+  /** la portée du poste de sécurité en main ou sélectionné */
+  readonly range: RangeView;
   /** la surbrillance s'éteint une fois le bâtiment posé, jusqu'au prochain choix dans la barre */
   private zonesOff = false;
 
@@ -204,6 +207,7 @@ export class ToolController implements ToolInput {
     h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.freePulse, this.freeArrow, this.door);
     this.zones = new ZoneHighlight(() => this.h.world, h.scene);
     this.coverage = new CoverageView(() => this.h.world, h.scene);
+    this.range = new RangeView(h.scene);
     this.zones.onEmpty = (m) => this.h.toast(m);
   }
 
@@ -584,6 +588,7 @@ export class ToolController implements ToolInput {
     this.zones.set(stay ?? (this.holding() && !this.zonesOff ? this.kind : null), !!stay);
     this.zones.update(dt);
     this.coverage.update(dt);
+    this.range.update(dt);
     // la pastille du point A bat doucement : on ne la perd pas de vue
     if (this.freePulse.visible) {
       this.pulseT += dt;
@@ -1107,12 +1112,27 @@ export class ToolController implements ToolInput {
     this.door.visible = true;
   }
 
+  /** La portée du poste de sécurité qu'on tient (sous la souris) ou qu'on a sélectionné, case par case */
+  private showRange() {
+    const t = this.tool, w = this.h.world, hit = this.hit, sel = t === 'none' ? this.selectedBuilding() : undefined;
+    if (sel) { this.range.show(w, sel.kind, sel.x, sel.z, sel.age, sel.id); return; }
+    if ((t === 'build' || (t === 'move' && this.moveOrigin)) && hit) {
+      const an = this.anchor && this.anchor.kind === this.kind ? this.anchor : null;
+      const o = an ? { x: an.x, z: an.z } : footprintOrigin(this.kind, hit.x, hit.z);
+      // (un poste qu'on déplace est ôté du monde pendant le geste : il ne compte pas parmi les autres)
+      this.range.show(w, this.kind, o.x, o.z, this.h.getAge());
+      return;
+    }
+    this.range.show(w, null);
+  }
+
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
     this.placeWhy = null;
     this.door.visible = false;
     this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = this.freePulse.visible = this.freeArrow.visible = this.wallCells.visible = false;
     this.wallCost = '';
+    this.showRange();
     if (t === 'road' && this.roadMode === 'free') this.freePreview();
     else if (this.tracingWall) this.wallPreview();
     // le bâtiment sélectionné : son emprise s'éclaire
