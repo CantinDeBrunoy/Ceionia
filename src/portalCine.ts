@@ -1,6 +1,7 @@
 /**
  * La cinématique du portail des Enfers : sa partition, sans rien de graphique (la mise en scène est dans `portalStage.ts`).
- * Elle se joue une fois par partie, au premier passage d'une recrue (choix de l'auteur, 20 nov. 2026 : le joueur ne voyait
+ * Elle se joue une fois par partie, dès que le portail s'ouvre (le choix « Les Enfers », passage direct décidé par l'auteur le
+ * 22 nov. 2026 ; avant, au premier passage d'une recrue : choix de l'auteur, 20 nov. 2026, le joueur ne voyait
  * pas ce passage, un message disait seulement qu'un soldat attendait ses ordres « dans les Enfers »). Même schéma que la
  * traversée de l'archipel (`voyageCine.ts`), décision de l'auteur : « cinématique de l'exploration, vidéo Gemini, puis après
  * on voit en jeu » :

@@ -79,6 +79,14 @@ export interface UIHost {
   /** prendre le commandement de la garnison de l'île du portail (tour de garde, caserne) */
   commandIsle?(): void;
   /**
+   * une garnison se commande sur l'île du portail (le bouton « Commander la garnison » des tours et casernes) ; faux au passage
+   * direct : Karim (v6) le trouvait sans suite, les troupes vivent dans les Enfers
+   */
+  isleGarrison?(): boolean;
+  /** le portail ouvert, on peut aller aux Enfers (le bouton rond « Les Enfers » paraît), et y aller */
+  hellOpen?(): boolean;
+  goHell?(): void;
+  /**
    * Les deux voies du grand choix (les Enfers, explorer le monde), pour l'onglet « Grands choix » des expéditions : où elles en sont,
    * et les prendre (la carte de la voie s'ouvre pour confirmer)
    */
@@ -663,6 +671,7 @@ export class UI {
           </div>
           <nav id="menuBtns">
             <button id="bExp" class="round" title="${tr('Expéditions (J)')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span id="expBadge"></span></button>
+            <button id="bHell" class="round" title="${tr('Les Enfers : vos troupes et votre base, de l’autre côté du portail')}" aria-label="${tr('Les Enfers')}" style="display:none">${ic('flame', 21)}</button>
             <button id="bPeoples" class="round" title="${tr('Peuples')}" aria-label="${tr('Peuples')}" style="display:none">${ic('flag', 21)}</button>
             <button id="bBell" class="round" title="${tr('Notifications (N)')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
             <button id="bSettings" class="round" title="${tr('Paramètres')}" aria-label="${tr('Paramètres')}">${ic('gear', 21)}</button>
@@ -892,6 +901,7 @@ export class UI {
     $('#bSettings').onclick = () => this.openSettings();
     $('#bExp').onclick = () => this.openExpeditions();
     $('#bPeoples').onclick = () => { this.host.audio.sfxClick(); this.openPeoples(); };
+    $('#bHell').onclick = () => { this.host.audio.sfxClick(); this.host.goHell?.(); };
     $('#bPhoto').onclick = () => host.setPhoto(true);
     $('#pExit').onclick = () => host.setPhoto(false);
     $('#pCap').onclick = () => host.capture();
@@ -1526,7 +1536,7 @@ export class UI {
     const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = tr(b.auto ? 'façade tournée vers la route' : 'orientée à la main');
     box.innerHTML = `<div class="ihead">${this.cardThumb(b.kind, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub" title="${attr(`${AGES[b.age].name}${size ? tr(' · {size} cases', { size }) : ''} · ${facing}`)}">${sizeOf(b)} × ${sizeOf(b)} · ${AGES[b.age].name}</small></div><button class="xfold" data-act="fold" title="${tr('Replier ou déplier')}" aria-label="${tr('Replier ou déplier')}">▾</button><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
       ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${upgrades}
-      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle && h.world.portalOpen ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
+      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle && h.world.portalOpen && h.isleGarrison?.() ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
       <div class="acts xacts"><button data-act="move">${hudPic('deplacer', 18)} ${tr('Déplacer')}</button><button data-act="rot">${ic('rotate', 16, 2)} ${tr('Tourner')} <kbd>R</kbd></button><button data-act="del" class="danger xdel" title="${tr('Démolir')}" aria-label="${tr('Démolir')}">${ic('demolish', 17, 2)}</button></div>`;
     box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
     box.scrollTop = scroll;
@@ -2605,6 +2615,8 @@ export class UI {
     const pb = $('#bPeoples');
     pb.style.display = arch || (canMeet && h.sim.age >= 1 && !h.world.sandbox) ? '' : 'none';
     pb.classList.toggle('off', !arch);
+    // les Enfers : le portail ouvert (décision de l'auteur, 22 nov. 2026 : l'arche de l'île et ce bouton y mènent)
+    $('#bHell').style.display = h.hellOpen?.() ? '' : 'none';
     this.offerPending();
   }
 

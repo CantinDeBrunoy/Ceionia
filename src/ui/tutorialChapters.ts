@@ -5,9 +5,9 @@ import type { UI } from './ui';
 
 /**
  * Les chapitres du tutoriel : de courtes suites d'étapes qu'un événement lance, une seule fois (voir `Tutorial.chapter`).
- * « Affronter les démons » guide sur l'île du portail quand le joueur choisit le PvE : ses défenses (les joueurs ne
- * comprenaient pas qu'elles se bâtissent sur l'île), la garnison, les ordres, l'invasion. « Les Enfers », à la première
- * entrée : la cible, les troupes, l'attaque, le retour. « L'or des voisins », quand le joueur choisit son allié : un port chez
+ * « Affronter les démons » guidait sur l'île du portail (sa caserne, la garnison, l'envoi aux Enfers) : il n'est plus lancé,
+ * le choix « Les Enfers » mène tout droit aux Enfers (décision de l'auteur, 22 nov. 2026). « Les Enfers », à la première
+ * entrée : la cible, les troupes, l'attaque, les renforts, le retour. « L'or des voisins », quand le joueur choisit son allié : un port chez
  * soi, un port et un comptoir chez l'allié, puis à quoi sert l'or. Le tutoriel principal n'en dépend pas (le PvE et
  * l'archipel sont facultatifs)
  */
@@ -76,12 +76,22 @@ export const CHAPTER_TEXT = {
       title: 'Vos troupes',
       text: 'Choisissez des troupes : une carte en bas, ou « Tous ».',
       tasks: ['Choisir des troupes'],
-      none: 'Aucune troupe ici : « Renforts » fait venir la garnison de l’île.',
+      none: 'Aucune troupe ici : recrutez-en dans « Recruter », à la caserne avancée.',
     },
     attack: {
       title: 'À l’attaque',
       text: 'Faites un clic droit sur la cible 🎯 : vos troupes y marchent et l’attaquent.',
       tasks: ['Donner un ordre d’un clic droit'],
+    },
+    camp: {
+      title: 'Le camp de base',
+      text: 'Votre camp est là, au Seuil : vos troupes s’y soignent, et « Bâtir » pose d’autres bâtiments autour.',
+      tasks: [] as string[],
+    },
+    recruit: {
+      title: 'Des renforts',
+      text: 'D’autres troupes se recrutent ici, dans « Recruter » : elles sortent de la caserne avancée, près du camp.',
+      tasks: [] as string[],
     },
     back: {
       title: 'Le retour',
@@ -244,6 +254,10 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
       check: () => [!!h.lastOrder() && h.lastOrder() !== order],
       anchor: () => null,
     }),
+    // (le camp offert à l'arrivée : la vue y est déjà, la bulle montre l'onglet Bâtir)
+    step('hellCamp', E.camp, { read: true, check: () => [], anchor: () => tab('build') ?? q('#troopBar [data-a="build:camp"]') }),
+    // (au passage direct, plus de garnison sur l'île : les renforts se recrutent ici)
+    step('hellRecruit', E.recruit, { read: true, check: () => [], anchor: () => tab('rec') ?? q('#troopBar [data-a^="rech:"]') }),
     step('hellBack', E.back, { read: true, check: () => [], anchor: () => bar('leave') }),
   ];
 

@@ -2314,7 +2314,7 @@ img.pic { display: inline-block; flex: none; vertical-align: -0.22em; object-fit
 
 /* Enfers, écran allégé : le haut du village caché (carte, besoins, horloge, expéditions, nouvelles, habitants : on les retrouve
    en rentrant) ; en bas, les troupes au milieu, et à droite l'aide, « Ma base » (un tiroir fermé à l'arrivée) et « Village » */
-body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsBox, body.hell #clock, body.hell #bExp, body.hell #bPeoples, body.hell #bBell, body.hell #resPanel .hsep, body.hell #resPanel .pop { display: none !important; }
+body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsBox, body.hell #clock, body.hell #bExp, body.hell #bPeoples, body.hell #bHell, body.hell #bBell, body.hell #resPanel .hsep, body.hell #resPanel .pop { display: none !important; }
 #troopBar .tfg { display: inline-flex; align-items: center; gap: 7px; margin-left: 2px; padding: 4px 12px 4px 6px; border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 999px; background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font: inherit; font-size: 12.5px; font-weight: 800; white-space: nowrap; }
 #troopBar button.tfg { cursor: pointer; }
 #troopBar button.tfg:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }

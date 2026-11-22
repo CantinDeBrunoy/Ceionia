@@ -10,8 +10,8 @@ Chaque étape a des tâches ; quand elles sont faites, la bulle dit « Bien jou�
 Rien n'est bloqué : « Suivant » passe toujours, « Passer le tutoriel » le met de côté.
 Un « Suivant » qui arrive moins de 0,9 s après un passage automatique (`LATE_MS`), ou enfoncé sur l'étape d'avant (`downOn`),
 est ignoré : il visait l'étape qui vient de se cocher et sautait la suivante (étapes 4 et 6 jamais vues, testeur v6).
-Plus tard dans la partie, des chapitres courts se lancent sur un événement : le choix d'affronter les démons, la première entrée
-dans les Enfers. Ils ne se montrent qu'une fois.
+Plus tard dans la partie, des chapitres courts se lancent sur un événement : la première entrée dans les Enfers, le choix
+de l'allié. Ils ne se montrent qu'une fois.
 
 ## Règles du jeu
 - **Activation** (`startsOn`) : chaque **nouvelle partie** (hors bac à sable) relance la suite principale depuis la première
@@ -56,7 +56,9 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   (`layoutKeys` : Z Q S D et A / E en AZERTY, W A S D et Q / E en QWERTY) ; à la souris, la phrase du bord de l'écran et du
   glissé (`camera.mouse`). `viewKeys` (lettres lues de `getLayoutMap`) reste pour les tests. Au doigt, la phrase tactile seule.
 - **Fin** : « Terminer » à la dernière étape. Le temps encore en pause repart à vitesse ×1. Le tutoriel reste dans les réglages (« Recommencer »).
-- **Chapitre « Affronter les démons »** (`pve`, 3 étapes depuis le 17 nov. 2026 : plus d'invasion, plus de tour de garde), lancé par le bouton « Affronter les démons » de la carte du
+- **Chapitre « Affronter les démons »** (`pve`) : **plus lancé** depuis le passage direct (22 nov. 2026, décision de l'auteur :
+  le choix « Les Enfers » joue la cinématique et mène tout droit aux Enfers, voir [enfers.md](enfers.md)). Le code reste
+  (`Game.pveStart` ne l'appelle que si `War.direct` est faux, c'est-à-dire jamais en jeu). Ce qu'il faisait (3 étapes depuis le 17 nov. 2026 : plus d'invasion, plus de tour de garde), lancé par le bouton « Affronter les démons » de la carte du
   portail. La vue va alors au commandement de l'île, menu ouvert sur « Bâtir » :
   1. `pveDefenses` « La caserne de l'île » : poser une caserne **sur l'île**. Une caserne posée au village pendant l'étape
      ne compte pas, et une ligne le dit. Hors de l'île, la bulle propose « Aller sur l'île ».
@@ -64,11 +66,13 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   3. `pveSend` « Aux Enfers » : choisir des soldats (« Tous »), puis « Envoyer aux Enfers » (`sent` de l'hôte : soldats
      passés ou en marche vers l'arche). Remplace « Vos ordres » et « L'invasion » ; un chapitre enregistré plus loin reprend
      à sa dernière étape.
-- **Chapitre « Les Enfers »** (`hell`, 4 étapes), à la première entrée dans les Enfers :
+- **Chapitre « Les Enfers »** (`hell`, 6 étapes), à la première entrée dans les Enfers (à la fin de la cinématique du portail). Se passe (« Passer ce chapitre »), ne se montre qu'une fois, la bulle à côté de ce qu'elle montre :
   1. `hellGoal` : le marqueur à l'écran montre le prochain bastion ; cliquer l'objectif au bout de la frise (il centre la vue).
   2. `hellPick` : choisir des troupes (sans troupe : « Renforts » fait venir la garnison).
   3. `hellAttack` : un ordre d'un clic droit sur la cible (la bulle se tient à l'écart).
-  4. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.
+  4. `hellCamp` « Le camp de base » (à lire, 22 nov. 2026) : le camp offert au Seuil, où les troupes se soignent ; « Bâtir » pose les autres bâtiments autour. L'anneau entoure l'onglet Bâtir.
+  5. `hellRecruit` « Des renforts » (à lire, 22 nov. 2026) : d'autres troupes se recrutent ici, onglet « Recruter » de « Ma base » (la caserne avancée offerte à l'arrivée) ; l'anneau entoure l'onglet.
+  6. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.
 - **Chapitre « L'or des voisins »** (`arch`, 4 étapes), lancé 3,2 s après le choix de l'allié, le temps de la bannière « Une alliance ! » : `Game.watchAlly` (`main.ts`, à chaque pas de `stepDiplo`) voit `world.diplo.ally` changer pendant la session, quelle que soit la carte qui l'a fait choisir ; une partie chargée avec son allié déjà choisi ne le relance pas :
   1. `archHome` « Relier les deux îles » : le but d'emblée (« reliez vos îles : un port chez vous, puis un port chez eux »), avec deux tâches, le port de l'île principale et celui de l'île alliée ; l'étape passe avec le premier (`need: 1`). Déjà bâti : elle passe.
   2. `archAllyHarbor` « Un port chez l'allié » : la vue va sur l'île de l'allié (`Game.goAlly`, le lobe le plus loin de la ville), sauf en pleine pose (`handsBusy` du `ChapterHost` : le bouton « Aller sur l'île alliée » y mène) ; un port sur sa côte, hors de sa ville. Ailleurs, la bulle propose « Aller sur l'île alliée ».
@@ -79,7 +83,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
 - **Quand les chapitres se lancent** : une seule fois chacun, même le tutoriel fini, même s'il est en cours (la suite
   principale reprend après le chapitre). Jamais si le joueur a mis le tutoriel de côté (« Passer le tutoriel », ou
   désactivé à l'accueil ou dans les réglages). Sauf « L'or des voisins » (`ALWAYS`, `chapterDue`) : un mécanisme neuf que le joueur ne connaît pas ; il ne se tait que si le tutoriel est désactivé à l'accueil (`off`). « Passer ce chapitre » ne passe que le chapitre. « Recommencer » les réarme.
-- **Sans tutoriel**, la règle des défenses sur l'île est dite trois fois :
+- **Sans tutoriel**, au temps de la garnison de l'île (avant le passage direct ; ces messages se taisent quand `War.direct`), la règle des défenses sur l'île était dite trois fois :
   - la carte du portail : « Pour les affronter : « Tour de garde » et « Caserne » sur l'île du portail, pas au village… » ;
   - à l'arrivée sur l'île sans ses défenses (`Game.commandIsle`) : menu sur « Bâtir » et un message, une fois par session ;
   - une tour de garde ou une caserne posée au village quand l'île n'en a pas : un message qui mène à l'île.
@@ -124,7 +128,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   pour vu. `next` au bout, ou « Passer ce chapitre » : `endChapter` (vu, `onChapterEnd`, la suite principale reprend ou la
   bulle se cache). `Chapter.live()` faux l'achève aussi (Enfers quittés, portail refermé) ; `Chapter.away()` vrai le cache
   sans l'achever (le chapitre de l'île hors de la surface).
-- **Déclencheurs** (`main.ts`) : « Les Enfers » du grand choix (`Game.openHell`, voir [grand-choix.md](grand-choix.md)), ou `PortalChoice` « fight » → `acceptPve`, → `Game.pveStart` (`tutorial.chapter('pve')`, puis
+- **Déclencheurs** (`main.ts`) : au passage direct, `Game.pveStart` entre dans les Enfers (cinématique la première fois), et le chapitre `hell` vient à l'arrivée (`portalArrived`). Avant : « Les Enfers » du grand choix (`Game.openHell`, voir [grand-choix.md](grand-choix.md)), ou `PortalChoice` « fight » → `acceptPve`, → `Game.pveStart` (`tutorial.chapter('pve')`, puis
   `commandIsle`) ; `Game.enterHell`, une fois la vue posée → `tutorial.chapter('hell')`.
 - **Après un chapitre fini** (`onChapterEnd`) : les aides militaires qui disaient la même chose sont marquées vues
   (`isle` et `orders` pour l'île, `hell` pour les Enfers).

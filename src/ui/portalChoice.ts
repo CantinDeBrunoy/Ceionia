@@ -57,14 +57,18 @@ export class PortalChoice {
       const th = this.host.thumb?.(k, age);
       return `<figure>${th ? `<img src="${th}" alt="" draggable="false">` : `<span class="pcPh"></span>`}<figcaption>${name(k)}</figcaption></figure>`;
     };
-    const missing = !this.host.thumb?.('watchtower', age) || !this.host.thumb?.('barracks', age);
+    // (au passage direct, plus rien à bâtir sur l'île : on passe le portail, la base et les troupes attendent de l'autre côté)
+    const missing = !w.direct && (!this.host.thumb?.('watchtower', age) || !this.host.thumb?.('barracks', age));
+    const how = w.direct
+      ? `<p>${closed ? tr('Vos troupes et votre base vous attendent de l’autre côté, telles que vous les avez laissées.') : tr('Une petite troupe passe aussitôt, avec un camp et une caserne pour en recruter d’autres.')}</p>`
+      : `<p>${tr('Pour les affronter, bâtissez sur l’île du portail (pas au village) :')}</p><div class="pcB">${fig('barracks')}</div><p>${tr('puis recrutez des soldats : ils passent le portail.')}</p>`;
     const choice = (a: string, cls: string, icon: string, title: string, sub: string) => `<button data-a="${a}" class="${cls}">${hudPic(icon, 34)}<span><b>${title}</b><small>${sub}</small></span></button>`;
     this.el.innerHTML = `<img class="pcDio" src="./ui/portail.webp" alt="" draggable="false">
       <h4>${closed ? tr('Portail fermé') : tr('Le portail est ouvert !')}</h4>
       <p class="pcSub">${closed ? tr('Rouvrir le portail pour affronter les démons ?') : tr('Des démons rôdent de l’autre côté.')}</p>
-      <div class="pcHow"><p>${tr('Pour les affronter, bâtissez sur l’île du portail (pas au village) :')}</p><div class="pcB">${fig('barracks')}</div><p>${tr('puis recrutez des soldats : ils passent le portail.')}</p></div>
+      <div class="pcHow">${how}</div>
       <small class="pcNote">${tr('Vous pourrez changer d’avis plus tard.')}</small>
-      <div class="pcBtns">${choice('fight', 'pcGo', 'militaire', tr('Affronter les démons'), tr('invasions, Enfers, royaume'))}${closed ? choice('keep', 'pcNo', 'cadenas', tr('Garder le portail fermé'), tr('continuer sans combats')) : choice('close', 'pcNo', 'cadenas', tr('Fermer le portail'), tr('continuer sans combats'))}</div>`;
+      <div class="pcBtns">${choice('fight', 'pcGo', 'militaire', tr('Affronter les démons'), w.direct ? tr('Enfers, base, royaume') : tr('invasions, Enfers, royaume'))}${closed ? choice('keep', 'pcNo', 'cadenas', tr('Garder le portail fermé'), tr('continuer sans combats')) : choice('close', 'pcNo', 'cadenas', tr('Fermer le portail'), tr('continuer sans combats'))}</div>`;
     if (missing && this.tries++ < 8) setTimeout(() => { if (this.visible) this.render(); }, 700);
     else if (!missing) this.tries = 0;
   }

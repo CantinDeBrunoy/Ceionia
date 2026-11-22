@@ -15,6 +15,8 @@ import { HellBase, CAMP_MARGIN } from '../src/sim/hellBase';
 
 // (l'invasion en trois vagues, retirée du jeu, reste éprouvée ici : voir `War.waves`)
 War.wavesDefault = true;
+// (les essais de l'île : la garnison s'y tient, plus de passage direct aux Enfers)
+War.directDefault = false;
 
 /**
  * Le volet militaire joué de bout en bout : les blocages et les petits défauts relevés en jouant (accès aux Enfers, retour

@@ -36,6 +36,11 @@ export type Invasion = 'wait' | 'ready' | 'coming' | 'raid' | 'done';
 const INVASIONS: Invasion[] = ['wait', 'ready', 'coming', 'raid', 'done'];
 /** La force d'une vague, pour le joueur */
 export type WaveForce = 'small' | 'medium' | 'big';
+/**
+ * La troupe de départ, offerte à la première arrivée dans les Enfers (avec un camp de base et une caserne avancée au Seuil) :
+ * le joueur n'a rien eu à recruter avant (décision de l'auteur, 22 nov. 2026 : plus d'étape sur l'île du portail)
+ */
+export const START_TROOPS: readonly TroopKind[] = ['soldier', 'soldier', 'archer', 'soldier'];
 /** Soldats valides à la garnison pour que l'invasion soit annoncée (moins en Facile et au bac à sable) */
 export const invasionTroops = (d: string) => (d === 'easy' || d === 'sandbox' ? 2 : 3);
 /** Un compte à rebours en m:ss (secondes de jeu) */
@@ -75,8 +80,10 @@ export interface WarSave {
   /** l'invasion du portail (absent d'une ancienne sauvegarde : déduit de l'historique de la partie) et les Enfers déjà visités */
   invasion?: Invasion;
   visited?: boolean;
-  /** la cinématique du portail (premier passage d'une recrue) : à jouer (`due`) ou déjà jouée (`seen`) ; absent : pas encore */
+  /** la cinématique du portail (à l'ouverture du portail) : à jouer (`due`) ou déjà jouée (`seen`) ; absent : pas encore */
   intro?: 'due' | 'seen';
+  /** les dons de la première arrivée (camp, caserne avancée, troupe de départ) sont faits */
+  welcomed?: boolean;
   /** le choix du joueur sur le PvE (absent d'une ancienne sauvegarde : déduit, voir `readLegacyPve`) ; la carte du choix s'est ouverte */
   pve?: Pve;
   sealed?: boolean;
@@ -104,10 +111,20 @@ export class War {
   /** le joueur est déjà allé dans les Enfers (ou y a envoyé une troupe) : le guidage vers eux s'efface */
   visited = false;
   /**
-   * La cinématique du portail (`portalCine.ts`) : `none` tant qu'aucune recrue n'a passé l'arche, `due` au premier passage
+   * La cinématique du portail (`portalCine.ts`) : `none` tant que le portail n'a pas été passé, `due` dès qu'il s'ouvre (le choix
+   * « Les Enfers », `Game.pveStart`) ou au premier passage d'une recrue (ancien chemin)
    * (elle attend le calme pour se jouer), `seen` une fois jouée ou passée. Une ancienne partie déjà allée aux Enfers : `seen`
    */
   intro: 'none' | 'due' | 'seen' = 'none';
+  /** les dons de la première arrivée sont faits (`welcome`) ; une ancienne partie déjà allée aux Enfers : vrai */
+  welcomed = false;
+  /**
+   * Le passage direct (décision de l'auteur, 22 nov. 2026) : plus de garnison sur l'île du portail. Les troupes vivent dans les
+   * Enfers : celles d'une ancienne partie restées sur l'île y passent d'elles-mêmes, les recrues y arrivent, les blessés s'y
+   * soignent. Les essais de l'île (vagues, combat sur l'île) l'éteignent (`directDefault`)
+   */
+  static directDefault = true;
+  direct = War.directDefault;
   /**
    * Le PvE (l'invasion, les Enfers, le royaume) est une option : `ask` : le joueur n'a pas encore choisi (le portail vient de
    * s'ouvrir) ; `on` : il affronte les démons ; `off` : il a refermé le portail (ni vague ni passage, le jeu continue sans PvE)
@@ -181,11 +198,11 @@ export class War {
 
   /**
    * Casernes : celles de l'île, les casernes avancées des Enfers, et celles du village (chacune ajoute ses places à la
-   * garnison, une fois qu'une caserne de l'île accueille les recrues)
+   * garnison ; au passage direct elles comptent toujours, avant seulement quand une caserne de l'île accueillait les recrues)
    */
   private barracks() {
     const isle = isleDefenses(this.world).barracks;
-    return isle + (isle ? villageBarracks(this.world) : 0) + (this.portalOut ? 0 : this.base?.posts() ?? 0);
+    return isle + (isle || this.direct ? villageBarracks(this.world) : 0) + (this.portalOut ? 0 : this.base?.posts() ?? 0);
   }
 
   /** Contexte de recrutement */
@@ -304,6 +321,8 @@ export class War {
       if (!t || !sim) continue;
       // (le portail éteint : plus personne ne part pour les Enfers)
       if (t.where === 'isle' && (this.portalOut || this.hellWhy())) continue;
+      // (au passage direct, les troupes restent dans les Enfers : sur l'île, elles repasseraient aussitôt)
+      if (t.where === 'hell' && this.direct) continue;
       const goal = t.where === 'isle' ? this.isle!.map.portal : this.hellMap!.arrival;
       // devant l'arche (le portail lui-même est une emprise)
       const [gx, gz] = t.where === 'isle' ? this.isle!.map.freeNear(goal[0], goal[1] + 1.5, 3) : goal;
@@ -349,6 +368,49 @@ export class War {
   }
 
   /**
+   * La première arrivée dans les Enfers, au passage direct : un camp de base et une caserne avancée offerts au Seuil, près du
+   * point d'arrivée, et la troupe de départ (`START_TROOPS`) qui complète l'armée jusqu'à quatre troupes, à la forme de l'âge.
+   * Une fois par partie (`welcomed`) ; rien n'est payé ni pris dans la réserve. Vrai si les dons sont faits
+   */
+  welcome(age: number): boolean {
+    if (this.welcomed || !this.direct || this.portalOut || this.pve !== 'on') return false;
+    this.ensureFaction();
+    const b = this.base!, m = this.hellMap!;
+    this.welcomed = true;
+    // l'emplacement valable le plus proche d'un point, au Seuil (la zone 0, tenue d'emblée)
+    const spot = (kind: BaseKind, x: number, z: number): [number, number] | null => {
+      const cells: [number, number, number][] = [];
+      for (let cz = 0; cz < HELL_ZONES[1].z0; cz++) for (let cx = 0; cx < m.W; cx++) cells.push([cx + 0.5, cz + 0.5, Math.hypot(cx + 0.5 - x, cz + 0.5 - z)]);
+      cells.sort((p, q) => p[2] - q[2]);
+      const c = cells.find(([cx, cz]) => b.canBuild(kind, cx, cz) === null);
+      return c ? [c[0], c[1]] : null;
+    };
+    if (!b.buildings().some((x) => x.kind === 'camp')) { const p = spot('camp', m.arrival[0], m.arrival[1] + 3); if (p) b.build('camp', p[0], p[1]); }
+    const camp = b.camp(0);
+    if (camp && !b.posts()) { const p = spot('post', camp.site.x + 3, camp.site.z); if (p) b.build('post', p[0], p[1]); }
+    for (let i = this.army.troops.length; i < START_TROOPS.length; i++) {
+      const kind = START_TROOPS[i], st = troopStats(kind, age);
+      this.army.troops.push({ id: this.army.nextId++, kind, hp: st.hp, maxHp: st.hp, where: 'hell', heal: 0, gear: [...troopKit(kind, age).gear] });
+    }
+    return true;
+  }
+
+  /**
+   * Au passage direct, plus de garnison sur l'île : les troupes qui s'y trouvent (une ancienne partie, ou rentrées quand le
+   * portail s'est refermé) passent dans les Enfers, au camp ; les recrues en route y arriveront
+   */
+  private passIsle() {
+    for (const t of this.army.troops) {
+      if (t.where !== 'isle') continue;
+      const u = this.unitOf.get(t.id);
+      if (u) t.hp = Math.max(1, Math.round(u.hp));
+      this.undeploy(t);
+      t.where = 'hell'; t.x = undefined; t.z = undefined;
+    }
+    for (const r of this.army.queue) if (r.at !== 'hell') r.at = 'hell';
+  }
+
+  /**
    * Un pas de guerre (`dt` : secondes de jeu, 0 en pause). Renvoie la vague qui vient d'arriver, s'il y en a une
    */
   update(dt: number, age: number, healK = 1): RaidWave | null {
@@ -383,6 +445,8 @@ export class War {
     // le royaume tombé, le portail s'éteint : les troupes des Enfers rentrent sur l'île (une fois la vue revenue à la surface)
     // (de même quand le joueur le referme)
     if ((f.victory || this.pve === 'off') && !this.hellInView) this.bringHome(age);
+    // (le portail ouvert, au passage direct : personne ne reste sur l'île)
+    else if (this.direct && this.pve === 'on' && !f.victory) this.passIsle();
     // les troupes valides sans unité prennent place ; celles qui n'existent plus quittent le combat
     for (const t of ready(this.army)) if (!this.unitOf.has(t.id)) this.deploy(t, age);
     for (const [id, u] of [...this.unitOf]) {
@@ -564,6 +628,10 @@ export class War {
           if (sim === this.faction && this.base?.countOf('infirmary')) {
             wound(this.army, t.id, HEAL_TIME / 2, 'hell');
             this.news.push({ kind: 'info', text: tr('🩹 Un {troop} est tombé : on le porte à l’infirmerie de la base, il s’y soigne.', { troop: this.nm(t.kind) }) });
+          } else if (sim === this.faction && this.direct) {
+            // (au passage direct, plus de caserne sur l'île : il se soigne au camp de base)
+            wound(this.army, t.id, HEAL_TIME, 'hell');
+            this.news.push({ kind: 'info', text: tr('🩹 Un {troop} est tombé : on le porte au camp de base, il s’y soigne.', { troop: this.nm(t.kind) }) });
           } else {
             wound(this.army, t.id);
             this.news.push({ kind: 'info', text: tr('🩹 Un {troop} est tombé : on le ramène blessé à la caserne, il s’y soigne.', { troop: this.nm(t.kind) }) });
@@ -632,7 +700,8 @@ export class War {
 
   /** Après la victoire : l'étape du guidage vers les Enfers (choisir les troupes, puis les envoyer) ; null : rien à guider */
   guideStep(selected: number): 'select' | 'send' | null {
-    if (!this.active || this.inv !== 'done' || this.visited || this.portalOut || !this.garrison()) return null;
+    // (au passage direct, rien à guider : le choix « Les Enfers » y mène tout droit)
+    if (this.direct || !this.active || this.inv !== 'done' || this.visited || this.portalOut || !this.garrison()) return null;
     return selected > 0 ? 'send' : 'select';
   }
 
@@ -666,6 +735,8 @@ export class War {
    * tout reprend où il en était : l'invasion à sa vague, les Enfers et la base avancée tels que laissés
    */
   acceptPve(): boolean {
+    // (plus d'invasion : les Enfers s'ouvrent tout de suite, sans attendre le pas suivant ; voir `update`)
+    if (!this.waves && this.inv !== 'raid') { this.inv = 'done'; this.legacyInv = false; }
     if (this.pve === 'on') return false;
     this.pve = 'on'; this.choiceSeen = true; this.legacyPve = false;
     return true;
@@ -748,6 +819,7 @@ export class War {
       invasion: this.legacyInv ? undefined : this.inv,
       visited: this.visited || undefined,
       intro: this.intro === 'none' ? undefined : this.intro,
+      welcomed: this.welcomed || undefined,
       pve: this.legacyPve ? undefined : this.pve,
       choiceSeen: this.choiceSeen || undefined,
       raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })), t: Math.round(isle.raidT) } : null,
@@ -771,6 +843,8 @@ export class War {
     this.inv = iv === 'coming' ? 'ready' : iv ?? 'wait'; this.legacyInv = !iv; this.visited = o.visited === true;
     // (une ancienne partie déjà allée aux Enfers ne rejoue pas leur découverte)
     this.intro = o.intro === 'due' || o.intro === 'seen' ? o.intro : this.visited ? 'seen' : 'none';
+    // (une ancienne partie, même déjà allée aux Enfers, reçoit les dons à sa prochaine entrée : ce qui manque seulement)
+    this.welcomed = o.welcomed === true;
     this.choiceSeen = o.choiceSeen === true;
     const pv = (['ask', 'on', 'off'] as Pve[]).find((x) => x === o.pve);
     this.pve = pv ?? 'ask'; this.legacyPve = !pv; this.wasSealed = o.sealed === true;

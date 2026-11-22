@@ -70,7 +70,7 @@ registerDict('war', {
   'Espace': 'Space',
   'pause active : les ordres se donnent en pause': 'active pause: orders can be given while paused',
   '🌀 · 🔥': '🌀 · 🔥',
-  'passer le portail. « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île': 'cross the portal. “See Hell” leads there, “Reinforcements” brings in the island garrison',
+  'revenir ici depuis le village : le bouton « Les Enfers », ou un clic sur l’arche de l’île': 'come back here from the village: the “Hell” button, or a click on the island’s arch',
 
   // ---- barre de commandement : pose des bâtiments, murs ----
   'Mur : cliquez pour choisir le début (A), puis la fin (B), ou glissez de A à B. G : porte ici.': 'Wall: click to choose the start (A), then the end (B), or drag from A to B. G: gate here.',
@@ -359,4 +359,11 @@ registerDict('war', {
   'Le Seuil du portail': 'The Portal Threshold',
   'Les Grottes de braise': 'The Ember Caves',
   'Leur forteresse garde le passage': 'Their fortress guards the way',
+  '🩹 Un {troop} est tombé : on le porte au camp de base, il s’y soigne.': '🩹 One {troop} fell: it is carried to the base camp to heal.',
+  '{zone} : le royaume démoniaque est tout au fond. L’expédition est facultative, et le portail ramène au village.': '{zone}: the demon kingdom lies at the very end. The expedition is optional, and the portal leads back to the village.',
+  'Clic sur le portail': 'Click on the portal',
+  'retourner au village': 'go back to the village',
+  'Vos troupes et votre base vous attendent de l’autre côté, telles que vous les avez laissées.': 'Your troops and your base await you on the other side, just as you left them.',
+  'Une petite troupe passe aussitôt, avec un camp et une caserne pour en recruter d’autres.': 'A small troop crosses right away, with a camp and a barracks to recruit more.',
+  'Enfers, base, royaume': 'Hell, base, kingdom',
 });

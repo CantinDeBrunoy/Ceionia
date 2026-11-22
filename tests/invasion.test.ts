@@ -12,6 +12,8 @@ import type { Difficulty } from '../src/sim/difficulty';
 
 // (l'invasion en trois vagues, retirée du jeu, reste éprouvée ici : voir `War.waves`)
 War.wavesDefault = true;
+// (les essais de l'île : la garnison s'y tient, plus de passage direct aux Enfers)
+War.directDefault = false;
 
 /**
  * L'invasion du portail : annoncée une fois (tour + caserne + garnison), trois vagues de plus en plus grosses à repousser

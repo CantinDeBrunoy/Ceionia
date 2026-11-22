@@ -150,14 +150,14 @@ export const CONTROLS_HELP: [string, string][] = [
   ['Clic', 'choisir une troupe (double-clic : toutes celles de la même sorte, Maj : ajouter)'],
   ['Glisser', 'tracer un cadre autour des troupes à choisir'],
   ['Clic droit', 'aller là, ou attaquer l’ennemi visé (au doigt : appui long)'],
-  ['Clic droit sur le portail', 'les troupes choisies passent de l’autre côté'],
+  ['Clic sur le portail', 'retourner au village'],
   ['A puis clic', 'attaquer en marchant : on combat ce qu’on croise'],
   ['H · R', 'tenir la position · se replier'],
   ['Clic droit glissé', 'tourner la vue, et en le montant ou le descendant, incliner la caméra (clavier : Page haut / Page bas)'],
   ['Flèches · ZQSD', 'déplacer la vue (aussi : Maj + clic droit glissé, ou clic milieu glissé)'],
   ['Molette', 'zoomer'],
   ['Espace', 'pause active : les ordres se donnent en pause'],
-  ['🌀 · 🔥', 'passer le portail. « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île'],
+  ['🔥', 'revenir ici depuis le village : le bouton « Les Enfers », ou un clic sur l’arche de l’île'],
 ];
 
 export class CommandUI implements ToolInput {
@@ -644,10 +644,13 @@ export class CommandUI implements ToolInput {
     this.render();
   }
 
-  /** On peut passer le portail (le royaume tombé, il est éteint : plus de passage vers les Enfers) */
+  /**
+   * On peut passer le portail (le royaume tombé, il est éteint : plus de passage vers les Enfers ; au passage direct, les troupes
+   * des Enfers n'en sortent pas, un clic droit sur l'arche est un ordre de marche comme un autre)
+   */
   private canCross() {
     const t = this.theater, w = this.host.war;
-    return !!t && !(t.kind === 'isle' && w.portalOut);
+    return !!t && !(t.kind === 'isle' && w.portalOut) && !(t.kind === 'hell' && w.direct);
   }
 
   /** Envoie les troupes choisies (elles seules) de l'autre côté du portail ; ce qu'on dit au joueur */
@@ -1174,7 +1177,7 @@ export class CommandUI implements ToolInput {
       ? `${fam('hold', 'Tenir', 'Tenir la zone', btn('camp', hasCamp ? 'point de repli' : 'à poser d’abord', hasCamp ? '' : ' first') + btn('post', 'recrues sur place') + btn('smithy', '+20 % de force') + btn('infirmary', 'soins rapides'))}${
         fam('def', 'Défendre', 'Se défendre', btn('tower', 'archers') + btn('palisade', 'glisser pour tracer') + btn('gate', 'sur un mur'))}${
         fam('lit', 'Éclairer', 'Éclairer : repousse la brume', btn('brazier', 'repousse la brume'))}${
-        fam('far', 'Sur l’île', 'Les défenses de l’île', this.farTiles('isle', age))}`
+        w.direct ? '' : fam('far', 'Sur l’île', 'Les défenses de l’île', this.farTiles('isle', age))}`
       : `<div class="tfam"><div class="tbuilds">${TROOP_KINDS.filter((k) => age >= TROOPS[k].age).map((k) => {
         const p = this.hellPlan(k), fm = troopForm(k, age);
         return this.troopCard(`rech:${k}`, k, age, p.state === 'ready' ? 'go' : p.state === 'craft' ? 'craft' : 'off', `${troopLabel(k, age)}. ${fm.desc} — ${p.tip}`, p.sub, Math.round(TROOPS[k].time * 0.75));

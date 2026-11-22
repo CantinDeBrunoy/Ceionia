@@ -11,6 +11,9 @@ import { powerOf, BALANCE_NORMAL, BALANCE_EASY, BALANCE_LEGACY } from '../src/si
 import { HellBase } from '../src/sim/hellBase';
 import type { Difficulty } from '../src/sim/difficulty';
 
+// (les batailles sur l'île : la garnison s'y tient, plus de passage direct aux Enfers)
+War.directDefault = false;
+
 /** Équilibre des Enfers, suite : garnisons, renforts, contre-attaques, annonce, et batailles complètes sur l'île */
 
 describe('équilibre : garnisons, renforts, contre-attaques', () => {
