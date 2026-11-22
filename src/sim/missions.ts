@@ -407,14 +407,14 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Suivre ses leçons', text: 'Garde haute, jeu de jambes : on apprend sans casse.',
-        dest: 'plain', scene: 'pugilat', doing: 's’entraîne au pugilat dans le cercle de sable', party: 4, work: 24, risk: 0.18,
+        dest: 'plain', scene: 'pugilat', danger: ['weather'], doing: 's’entraîne au pugilat dans le cercle de sable', party: 4, work: 24, risk: 0.18,
         win: [joy(2), joy(3, 4)], lose: [hurt(1, 2)],
         winText: 'Les poings bandés de cuir, nos jeunes tiennent la garde : le village veut des gradins pour les voir combattre.',
         loseText: 'Un direct mal paré, un nez en sang : on rentre penauds.',
       },
       {
         label: 'Défier ses élèves', text: 'De vrais combats, au loin. Plus de gloire, plus de bosses.',
-        dest: 'far', scene: 'pugilat', doing: 'combat les élèves du champion devant la foule', party: 5, work: 30, risk: 0.32,
+        dest: 'far', scene: 'pugilat', danger: ['weather'], doing: 'combat les élèves du champion devant la foule', party: 5, work: 30, risk: 0.32,
         win: [joy(3), joy(5, 6), jobs(1)], lose: [hurt(2, 3), joy(-1, 3)],
         winText: 'Victoire aux points devant toute la vallée ! On parle déjà de bâtir une arène pour accueillir les combats.',
         loseText: 'Nos champions sont rentrés couverts de bosses : deux blessés.',
@@ -770,7 +770,7 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Par la plaine, en contournant tout', text: 'Le plus long, le plus sûr.',
-        dest: 'plain', scene: 'rails', doing: 'pose la voie ferrée à travers la plaine', party: 3, work: 26, risk: 0.1,
+        dest: 'plain', scene: 'rails', danger: ['weather'], doing: 'pose la voie ferrée à travers la plaine', party: 3, work: 26, risk: 0.1,
         win: [jobs(4), joy(1), { t: 'perk', id: 'railfast' }], lose: [],
         winText: 'Le tracé le plus long, mais le plus sûr : les ouvriers arrivent en nombre.',
         loseText: 'Les relevés étaient faux : il faudra recommencer.',
@@ -817,14 +817,14 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Rouler prudemment jusqu’à l’arrivée', text: 'Finir la course, c’est déjà la gagner.',
-        dest: 'plain', scene: 'race', doing: 'prépare la voiture et file sur la route de la course', party: 3, work: 22, risk: 0.15,
+        dest: 'plain', scene: 'race', danger: ['weather'], doing: 'prépare la voiture et file sur la route de la course', party: 3, work: 22, risk: 0.15,
         win: [jobs(3), joy(1)], lose: [],
         winText: 'La voiture franchit la ligne sous les vivats : l’ingénieur ouvre une usine au village, et les premières automobiles remplacent les charrettes.',
         loseText: 'Une roue cassée dans le fossé : la voiture rentre en remorque.',
       },
       {
         label: 'Pousser la machine à fond', text: 'La victoire, ou le fossé.',
-        dest: 'plain', scene: 'race', doing: 'pousse la voiture à fond sur la route de la course', party: 3, work: 18, risk: 0.35,
+        dest: 'plain', scene: 'race', danger: ['weather'], doing: 'pousse la voiture à fond sur la route de la course', party: 3, work: 18, risk: 0.35,
         win: [jobs(4), joy(3)], lose: [hurt(1, 2)],
         winText: 'Première sur la ligne ! Toute la région parle de la voiture du village : une usine automobile s’y installe, et les charrettes cèdent la route aux autos.',
         loseText: 'Un tête-à-queue dans le virage : le pilote est blessé.',
@@ -837,7 +837,7 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Gonfler la montgolfière dans la plaine', text: 'Par temps calme, au ras des champs.',
-        dest: 'plain', scene: 'balloon', doing: 'gonfle la montgolfière et tient les cordes', party: 4, work: 20, risk: 0.15,
+        dest: 'plain', scene: 'balloon', danger: ['weather'], doing: 'gonfle la montgolfière et tient les cordes', party: 4, work: 20, risk: 0.15,
         win: [joy(2)], lose: [hurt(1, 1)],
         winText: 'Le ballon s’élève au-dessus du village sous les applaudissements : un aérodrome s’ouvre, montgolfières et dirigeable y viendront.',
         loseText: 'Un coup de vent a couché le ballon : une main brûlée au brûleur.',
@@ -858,14 +858,14 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Forer un puits d’essai tout près', text: 'Court et sans danger.',
-        dest: 'plain', scene: 'drill', doing: 'fore un puits d’essai là où le brut suinte', party: 2, work: 12, risk: 0.1, carry: 'cart',
+        dest: 'plain', scene: 'drill', danger: ['weather'], doing: 'fore un puits d’essai là où le brut suinte', party: 2, work: 12, risk: 0.1, carry: 'cart',
         win: [jobs(2)], lose: [],
         winText: 'Le pétrole jaillit du puits d’essai ! L’ingénieur promet sa raffinerie : bâtissez-la, avec des puits de pétrole sur les taches sombres.',
         loseText: 'Rien que de l’eau boueuse : il faudra forer ailleurs.',
       },
       {
         label: 'Suivre les suintements au-delà des collines', text: 'Plus loin, un gisement plus riche.',
-        dest: 'far', scene: 'drill', doing: 'suit les suintements et fore au cœur du gisement', party: 3, work: 16, risk: 0.2, carry: 'cart',
+        dest: 'far', scene: 'drill', danger: ['weather'], doing: 'suit les suintements et fore au cœur du gisement', party: 3, work: 16, risk: 0.2, carry: 'cart',
         win: [jobs(3), joy(1)], lose: [hurt(1, 1)],
         winText: 'Un geyser de pétrole au-delà des collines ! Toute la région en parle, et l’ingénieur promet sa raffinerie au village.',
         loseText: 'Le trépan s’est brisé : un foreur blessé à la main.',
@@ -962,7 +962,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Chercher la météorite tombée dans la plaine', text: 'Elle est tombée la nuit dernière, quelque part par là.',
-        dest: 'far', scene: 'crater', doing: 'dégage la météorite de son cratère', party: 2, work: 16, risk: 0.15, carry: 'cart',
+        dest: 'far', scene: 'crater', danger: ['weather'], doing: 'dégage la météorite de son cratère', party: 2, work: 16, risk: 0.15, carry: 'cart',
         win: [joy(2), { t: 'ore', n: 4 }], lose: [],
         winText: 'La météorite fumait encore au fond de son trou : du fer tombé du ciel, et un observatoire promis au village !',
         loseText: 'Rien qu’un rocher ordinaire… la météorite est tombée ailleurs.',
