@@ -183,7 +183,7 @@ export class AudioEngine {
    * fenêtre qui arrête la propagation (bulle du tutoriel) ne l'empêche pas, et sur plusieurs gestes (au toucher, seul le
    * lever du doigt compte). Les écouteurs se retirent quand le contexte tourne et que la musique, s'il y en a, joue
    */
-  unlockOn(target: Window) {
+  unlockOn(target: Window, now = !import.meta.env.DEV) {
     const kinds = ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click'] as const;
     const wake = () => {
       this.start(); this.applyVolumes();
@@ -192,9 +192,33 @@ export class AudioEngine {
     for (const k of kinds) target.addEventListener(k, wake, true);
     // un essai tout de suite : un navigateur qui autorise la lecture automatique (site déjà écouté souvent, son autorisé
     // pour le site) lance la musique dès l'accueil ; sinon le contexte reste suspendu et le premier geste le réveille.
-    // Pas en développement : une page d'essai rechargée d'elle-même (Vite) jouerait la musique sans que personne l'ait voulu
-    if (!import.meta.env.DEV) wake();
+    // Pas en développement : une page d'essai rechargée d'elle-même (Vite) jouerait la musique sans que personne l'ait voulu.
+    // `now` : le rechargement voulu de la traversée essaie même en développement (le joueur vient de cliquer : le navigateur
+    // garde souvent ce geste d'une page à la suivante, sur le même site)
+    if (now) wake();
   }
+
+  /**
+   * Le son attend un geste du joueur : contexte pas encore lancé ou suspendu, ou morceau voulu dont la lecture a été refusée.
+   * Faux si la musique est coupée et que rien d'autre n'attend
+   */
+  get locked() {
+    if (!this.ctx) return true;
+    return this.ctx.state !== 'running' || (!!this.track && this.track.el.paused && !this.track.dropped);
+  }
+
+  /** Où en est le morceau en cours (liste, nom, secondes), pour le reprendre après un rechargement ; null sans morceau */
+  musicMark(): { key: string; name: string; t: number } | null {
+    const t = this.track;
+    return t ? { key: t.key, name: t.name, t: t.el.currentTime || 0 } : null;
+  }
+
+  /**
+   * Le prochain morceau de cette liste reprend ce morceau à ce moment (la traversée : la musique continue là où le
+   * rechargement l'a coupée, au lieu de repartir du début)
+   */
+  resumeMusic(m: { key: string; name: string; t: number } | null) { this.resume = m && typeof m.name === 'string' && Number.isFinite(m.t) ? m : null; }
+  private resume: { key: string; name: string; t: number } | null = null;
 
   /** À appeler depuis un geste utilisateur */
   start() {
@@ -306,11 +330,15 @@ export class AudioEngine {
     // (l'âge vient de changer : son morceau d'ouverture d'abord, une seule fois)
     const open = this.opener?.key === key && list.includes(this.opener.name) ? this.opener.name : null;
     if (this.opener?.key === key) this.opener = null;
-    const name = open ?? pool[Math.floor(Math.random() * pool.length)];
+    // (repris après un rechargement : le même morceau, au même moment)
+    const back = this.resume?.key === key && list.includes(this.resume.name) ? this.resume : null;
+    if (this.resume?.key === key) this.resume = null;
+    const name = back?.name ?? open ?? pool[Math.floor(Math.random() * pool.length)];
     this.lastTrack.set(key, name);
     const el = new Audio();
     el.preload = 'auto';
     el.src = `${import.meta.env.BASE_URL}sons/musique/${name}.mp3`;
+    if (back && back.t > 0) el.addEventListener('loadedmetadata', () => { if (back.t < el.duration - MUSIC_FADE) el.currentTime = back.t; }, { once: true });
     const src = ctx.createMediaElementSource(el), g = ctx.createGain();
     g.gain.value = 0.0001;
     src.connect(g); g.connect(this.musicG);

@@ -153,6 +153,8 @@ renderer.toneMappingExposure = 1.0;
 const audio = new AudioEngine();
 /** Les réglages du son enregistrés, appliqués au moteur (au menu principal comme en partie) */
 const audioSettings = (s: Partial<Settings>) => Object.assign(audio, soundSettings(s));
+// (le film de la traversée : un clic quand le son attend encore un geste lance la musique au lieu de passer le film)
+VoyageFilm.soundLocked = () => audio.locked && !audio.muteMusic;
 /** distance de la caméra quand elle revient sur le village (assez près pour reconnaître ses maisons) */
 const VILLAGE_DIST = 30;
 /** après un appui sur la carte, la vue ne part pas d'elle-même pendant ce temps (ms ; voir `Game.handsBusy`) */
@@ -180,6 +182,22 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Sur place, une scène qui file plus vite que ceci (cases par seconde) est suivie sans lissage */
 const FOLLOW_FAST = 2;
 const goalName = (g: BattleGoal) => ({ plage: tr('la plage'), remparts: tr('les remparts'), port: tr('le port'), palais: tr('le palais') })[g];
+
+/**
+ * Le morceau de la traversée et son moment, gardés le temps du rechargement (`sessionStorage`) : la musique y reprend dès le
+ * début du rechargement, là où elle s'était arrêtée (un joueur l'entendait se couper, notes de joueurs du 22 nov. 2026)
+ */
+const VOYAGE_MUSIC = 'village-lowpoly:voyage-music';
+function keepVoyageMusic(m: { key: string; name: string; t: number } | null) {
+  try { if (m) sessionStorage.setItem(VOYAGE_MUSIC, JSON.stringify(m)); else sessionStorage.removeItem(VOYAGE_MUSIC); } catch { /* sans stockage, le morceau repart du début */ }
+}
+function readVoyageMusic(): { key: string; name: string; t: number } | null {
+  try {
+    const m = JSON.parse(sessionStorage.getItem(VOYAGE_MUSIC) ?? 'null');
+    sessionStorage.removeItem(VOYAGE_MUSIC);
+    return m && typeof m.key === 'string' && typeof m.name === 'string' && typeof m.t === 'number' ? m : null;
+  } catch { return null; }
+}
 
 /** Les récits d'expédition gardés le temps du rechargement de la traversée (`sessionStorage`) */
 const LATE_REPORTS = 'village-lowpoly:late-reports';
@@ -1770,6 +1788,8 @@ class Game implements UIHost {
     clearFilmMark();
     // (la brume seule avant le rechargement : le film joue une fois, en entier, sur la page d'après ; voir `VoyageFilm`)
     const film = new LoadingScreen(app, true, true).film as VoyageFilm;
+    // la musique de la traversée part tout de suite (le clic l'autorise), et reprendra au même moment après le rechargement
+    audio.music('voyage');
     void new Promise<void>((r) => setTimeout(r, 700)).then(async () => {
       await painted();
       const save = this.buildSave();
@@ -1781,6 +1801,7 @@ class Game implements UIHost {
       // un récit d'expédition pas encore montré survit au rechargement (il s'ouvre après la cinématique des îles)
       keepLateReports([...this.reportsDue]);
       film.mark();
+      keepVoyageMusic(audio.musicMark());
       location.reload();
     });
   }
@@ -3090,6 +3111,11 @@ async function boot() {
   const auto = sessionStorage.getItem(AUTOSTART), voyage = auto?.split('|')[2] === 'voyage';
   // (une traversée d'avant, restée notée : rien à reprendre hors d'un rechargement de traversée)
   if (!voyage) clearFilmMark();
+  // la traversée : la musique reprend tout de suite, avant même les modèles, là où le rechargement l'a coupée. Le joueur
+  // vient de cliquer : la plupart des navigateurs laissent le son repartir sans nouveau geste. Sinon, un clic sur le film
+  // lance le son sans le passer (`VoyageFilm.soundLocked`)
+  const music = readVoyageMusic();
+  if (voyage) { audioSettings(loadSettings()); audio.resumeMusic(music); audio.music('voyage'); audio.unlockOn(window, true); }
   // en développement, `?n=384&seed=11` lance tout de suite une nouvelle partie de cette taille (essais, captures de l'archipel)
   const dev = import.meta.env.DEV ? new URLSearchParams(location.search) : null, devN = Number(dev?.get('n')) || 0;
   /**

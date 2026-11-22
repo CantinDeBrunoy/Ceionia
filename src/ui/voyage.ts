@@ -49,6 +49,11 @@ export function resumeAt(m: FilmMark | null): number {
  * noires, le bandeau (suivant le temps de la vidéo), « Passer » et le filet d'avancée
  */
 export class VoyageFilm {
+  /**
+   * Le son attend encore un geste du joueur (le navigateur a refusé la lecture automatique après le rechargement) : un clic
+   * sur le film lance alors la musique sans le passer ; Échap, Espace et « Passer » le passent toujours. Posé par `main.ts`
+   */
+  static soundLocked: () => boolean = () => false;
   readonly video: HTMLVideoElement;
   private cap: HTMLElement;
   private sub: HTMLElement;
@@ -102,7 +107,8 @@ export class VoyageFilm {
     v.addEventListener('timeupdate', () => this.paint());
     this.paint();
     el.querySelector<HTMLButtonElement>('.vySkip')!.onclick = (e) => { e.stopPropagation(); this.skip(); };
-    el.addEventListener('pointerdown', () => this.skip());
+    // (le son d'abord : avant, ce clic coupait le film, et le joueur ne l'entendait jamais en musique)
+    el.addEventListener('pointerdown', () => { if (!VoyageFilm.soundLocked()) this.skip(); });
     this.keyHandler = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Space') return;
       e.preventDefault(); e.stopImmediatePropagation();
