@@ -1,4 +1,4 @@
-import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang, bothOf, bothLangs } from '../i18n';
+import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang, bothOf, bothLangs, isEnglish } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
 import { rampartTower } from '../build/rampart';
@@ -10,7 +10,7 @@ import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
 import type { GfxParams } from '../render/adaptive';
 import { AudioEngine } from '../audio/audio';
-import { CameraRig } from '../core/camera';
+import { CameraRig, CAM_SENS } from '../core/camera';
 import { type Controls, type CamControl, type KbLayout, layoutKeys } from '../core/controls';
 import { type Blason, flagSvg } from '../sim/blason';
 import { chooseBlason, blasonPickerHtml, bindBlasonPicker } from './blason';
@@ -132,6 +132,13 @@ export interface UIHost {
   /** comment le joueur déplace la vue (souris ou clavier, et la disposition du clavier) ; voir `core/controls.ts` */
   controls: Controls;
   setControls(c: Controls): void;
+  /** sensibilité de la vue et défilement au bord de l'écran (Paramètres › Partie) */
+  camSens: number;
+  edgeScroll: boolean;
+  setCamSens(v: number): void;
+  setEdgeScroll(on: boolean): void;
+  /** les saisons éteintes (Paramètres › Temps et météo) */
+  setSeasonsOff(list: number[]): void;
   /** le blason du village (couleurs des drapeaux et des troupes) ; voir `sim/blason.ts` */
   setBlason(b: Blason): void;
   /** effets de la météo affichés (pluie, neige, brouillard), et les couper ou les rendre */
@@ -396,6 +403,8 @@ const NEED_USE: Record<(typeof GIVES)[number]['k'], string> = {
   housing: 'À loger : {n} habitants', food: 'Consommation du village : {n} de nourriture', water: 'Consommation du village : {n} d’eau',
   jobs: 'À employer : {n} habitants', joy: 'Demande du village : {n} de bien-être', health: 'Consommation du village : {n} de soins',
 };
+/** La sensibilité de la vue, en facteur (« ×1,2 ») */
+const sensText = (v: number) => `×${v.toFixed(1).replace('.', isEnglish() ? '.' : ',')}`;
 /** En dessous de cette largeur (téléphone), la languette de la barre reste au milieu de la barre (`UI.placeFold`) */
 const FOLD_SIDE = '(max-width: 860px)';
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
@@ -3320,6 +3329,9 @@ export class UI {
         <h4>${tr('Saison et heure')}</h4>
         <div class="row">${SEASONS.map((s, i) => `<button data-season="${i}" class="${t.season === i ? 'active' : ''}">${ic(SEASON_ICONS[i], 16)} ${s}</button>`).join('')}</div>
         <div class="row"><label>${tr('Heure')}</label><input id="sHour" type="range" min="0" max="23.9" step="0.1" value="${t.hour.toFixed(1)}"><span id="vHour">${Math.floor(t.hour)}h</span></div>
+        <h4>${tr('Saisons jouées')}</h4>
+        <div class="row">${SEASONS.map((s, i) => `<button data-son="${i}" aria-pressed="${t.isOn(i)}" class="${t.isOn(i) ? 'active' : ''}">${ic(SEASON_ICONS[i], 16)} ${s}</button>`).join('')}</div>
+        <p class="hint">${tr('Une saison éteinte est sautée : le village passe tout droit à la suivante. Gardez-en une seule pour la vivre toute l’année.')}</p>
         <h4>${tr('Météo')}</h4>
         <div class="row">${[['auto', '', tr('Auto')], ['clear', 'sun', tr('Clair')], ['rain', 'rain', tr('Pluie')], ['snow', 'snow', tr('Neige')], ['fog', 'fog', tr('Brume')]].map(([k, i, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${i ? ic(i, 16) + ' ' : ''}${l}</button>`).join('')}</div>
         <h4>${tr('Effets affichés')}</h4>
@@ -3340,6 +3352,9 @@ export class UI {
         <div class="row"><label>${tr('Déplacer la vue')}</label><button data-ctl="mouse">${tr('À la souris')}</button><button data-ctl="keys">${tr('Au clavier')}</button></div>
         <div class="row"><label>${tr('Clavier')}</label><button data-lay="azerty">AZERTY</button><button data-lay="qwerty">QWERTY</button></div>
         <p class="hint" id="ctlHint"></p>
+        <div class="row"><label>${tr('Sensibilité de la vue')}</label><input id="sSens" type="range" min="${CAM_SENS.min}" max="${CAM_SENS.max}" step="0.1" value="${h.camSens}"><span id="vSens">${sensText(h.camSens)}</span></div>
+        <div class="row"><label>${tr('Bord de l’écran')}</label><button id="gEdge" class="${h.edgeScroll ? 'active' : ''}">${tr(h.edgeScroll ? 'Activé' : 'Désactivé')}</button></div>
+        <p class="hint">${tr('La souris amenée au bord de l’écran fait défiler la vue. La sensibilité règle la vitesse de la vue : tourner, défiler, zoomer.')}</p>
         <div class="row"><label>${tr('Raccourcis clavier')}</label><button id="gKeys">${tr('Voir la liste')} <small>?</small></button></div>
         <h4>${tr('Blason du village')}</h4>
         <div class="row"><label>${tr('Drapeau')}</label><span class="setFlag">${flagSvg(h.world.blason, 66)}</span><button id="gBlason">${tr('Changer le blason')}</button></div>
@@ -3419,7 +3434,7 @@ export class UI {
     // la fenêtre suit le jeu tant qu'elle est ouverte : vitesse en cours, saison et heure qui avancent
     const live = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-sp]').forEach((b) => { const v = +b.dataset.sp!; b.classList.toggle('active', v === 0 ? t.paused : !t.paused && t.speed === v); });
-      ov.querySelectorAll<HTMLButtonElement>('[data-season]').forEach((b) => b.classList.toggle('active', +b.dataset.season! === t.season));
+      ov.querySelectorAll<HTMLButtonElement>('[data-season]').forEach((b) => { b.classList.toggle('active', +b.dataset.season! === t.season); b.disabled = !t.isOn(+b.dataset.season!); });
       const hour = q<HTMLInputElement>('#sHour');
       if (document.activeElement !== hour) { hour.value = t.hour.toFixed(1); q('#vHour').textContent = `${Math.floor(t.hour)}h`; }
 
@@ -3439,6 +3454,27 @@ export class UI {
       t.setSeason(+b.dataset.season!);
       ov.querySelectorAll('[data-season]').forEach((x) => x.classList.toggle('active', x === b));
       h.applySettings();
+    }));
+    // les saisons jouées : chacune s'éteint ou se rallume ; la dernière allumée reste (sans saison, l'année n'aurait rien) : son
+    // bouton le dit au survol
+    const seasonsOn = () => {
+      const only = t.offList().length >= 3;
+      ov.querySelectorAll<HTMLButtonElement>('[data-son]').forEach((x) => {
+        const v = t.isOn(+x.dataset.son!);
+        x.classList.toggle('active', v);
+        x.classList.toggle('only', v && only);
+        x.setAttribute('aria-pressed', String(v));
+        x.title = v && only ? tr('Gardez au moins une saison.') : '';
+      });
+    };
+    seasonsOn();
+    ov.querySelectorAll<HTMLButtonElement>('[data-son]').forEach((b) => (b.onclick = () => {
+      const i = +b.dataset.son!, off = t.offList(), on = off.includes(i);
+      if (!on && off.length >= 3) return;
+      h.setSeasonsOff(on ? off.filter((x) => x !== i) : [...off, i]);
+      seasonsOn();
+      live();
+      a.sfxClick();
     }));
     ov.querySelectorAll<HTMLButtonElement>('[data-w]').forEach((b) => (b.onclick = () => {
       const k = b.dataset.w!;
@@ -3512,6 +3548,13 @@ export class UI {
     ov.querySelectorAll<HTMLButtonElement>('[data-ctl]').forEach((b) => (b.onclick = () => { h.setControls({ ...h.controls, mode: b.dataset.ctl as CamControl }); h.audio.sfxClick(); ctl(); }));
     ov.querySelectorAll<HTMLButtonElement>('[data-lay]').forEach((b) => (b.onclick = () => { h.setControls({ ...h.controls, layout: b.dataset.lay as KbLayout }); h.audio.sfxClick(); ctl(); }));
     ctl();
+    { const s = q<HTMLInputElement>('#sSens'); s.oninput = () => { h.setCamSens(+s.value); q('#vSens').textContent = sensText(h.camSens); }; }
+    q('#gEdge').onclick = () => {
+      h.setEdgeScroll(!h.edgeScroll);
+      q('#gEdge').textContent = tr(h.edgeScroll ? 'Activé' : 'Désactivé');
+      q('#gEdge').classList.toggle('active', h.edgeScroll);
+      h.audio.sfxClick();
+    };
     q('#gRoads').onclick = () => {
       h.setAutoRoads(!h.autoRoads);
       q('#gRoads').textContent = tr(h.autoRoads ? 'Activées' : 'Désactivées');

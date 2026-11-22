@@ -14,7 +14,7 @@ Entre deux passages d'âge, le joueur a toujours trois petits objectifs en cours
 - Quatre façons de mesurer (`Measure`) :
   - `state` : un état du village (habitants, bâtiments, part des maisons protégées, briques en réserve, expéditions réussies). Un bâtiment amélioré compte pour son genre d'origine (`lineOf`).
   - `streak` : une condition tenue plusieurs jours de suite (nourriture et eau, tous les besoins). La série part du jour où la condition devient vraie pendant que l'objectif est en cours, et repart de zéro si elle casse.
-  - `winter` : l'hiver vu pendant que l'objectif est en cours, puis le printemps (« Passer votre premier hiver »).
+  - `winter` : l'hiver vu pendant que l'objectif est en cours, puis le printemps (« Passer votre premier hiver »). L'hiver éteint par le joueur (Paramètres › Saisons jouées, `GoalCtx.noWinter`) : il ne se propose pas.
   - `event` : un événement compté à partir du moment où l'objectif est en cours (`base`) : expédition réussie sans blessé (`safeExp`, sans les pourparlers), expédition légendaire réussie (`legend`, `isLegendary`). Il en faut une de plus qu'à son arrivée.
 - Récompenses (`reward`) : bois et pierre ajoutés directement ; minerai et bien-être passent par `applyEffects` (le bien-être est un bonus temporaire de `world.exp.temp`, comme ceux des expéditions). Le cosmodrome n'en a pas : c'est la fin.
 - Atteint : un son de fête (`sfxFeast`), un message (`notice`) « Objectif atteint : … » avec la félicitation et la récompense, et la pastille dorée « Bravo ! » pendant `GOAL_WIN_MS` = 5 s.

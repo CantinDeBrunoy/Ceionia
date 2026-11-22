@@ -27,6 +27,8 @@ export interface GoalCtx {
   missions: readonly string[];
   /** ressources illimitées (bac à sable, ou réglage « Ressources » en Facile) : pas de récompense, pas d'objectif de stock */
   unlimited?: boolean;
+  /** l'hiver éteint par le joueur (Paramètres › Saisons jouées) : « Passer votre premier hiver » ne se propose pas */
+  noWinter?: boolean;
 }
 
 export interface GoalReward { wood?: number; stone?: number; ore?: number; /** bien-être en plus, pendant quelques jours */ joy?: { n: number; days: number } }
@@ -175,7 +177,7 @@ export function activeGoals(s: GoalState, c: GoalCtx): GoalDef[] {
   const out: GoalDef[] = [];
   for (const g of GOALS) {
     if (out.length >= GOALS_SHOWN) break;
-    if (g.age !== c.age || s.done.includes(g.id) || waiting(g, c) || (g.stock && c.unlimited)) continue;
+    if (g.age !== c.age || s.done.includes(g.id) || waiting(g, c) || (g.stock && c.unlimited) || (g.measure.t === 'winter' && c.noWinter)) continue;
     out.push(g);
   }
   return out;

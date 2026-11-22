@@ -1,8 +1,9 @@
 /**
  * Comment le joueur déplace la vue, choisi au premier lancement et changé dans les paramètres (Partie › Contrôles) :
- * - `mouse` : la souris au bord de l'écran fait défiler la vue, et l'outil Voir la fait glisser au clic gauche ;
+ * - `mouse` : l'outil Voir fait glisser la vue au clic gauche ;
  * - `keys` : les lettres ZQSD (AZERTY) ou WASD (QWERTY) la déplacent, A / E ou Q / E la tournent.
- * Les flèches, la molette et le clic droit marchent dans les deux cas. Le choix vaut pour toutes les parties de ce
+ * Les flèches, la molette, le clic droit et la souris au bord de l'écran (réglage à part, `Game.edgeScroll`, allumé par
+ * défaut) marchent dans les deux cas. Le choix vaut pour toutes les parties de ce
  * navigateur (`ceionia.controles`), pas pour une sauvegarde.
  */
 export type CamControl = 'mouse' | 'keys';

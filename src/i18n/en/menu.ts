@@ -139,6 +139,13 @@ registerDict('menu', {
   'Règles': 'Rules',
   'Catastrophes': 'Disasters',
   'Activées': 'On',
+  // réglages de la vue et des saisons (22 nov. 2026)
+  'Saisons jouées': 'Seasons played',
+  'Une saison éteinte est sautée : le village passe tout droit à la suivante. Gardez-en une seule pour la vivre toute l’année.': 'A season switched off is skipped: the village goes straight to the next one. Keep only one to live it all year round.',
+  'Gardez au moins une saison.': 'Keep at least one season.',
+  'Sensibilité de la vue': 'Camera sensitivity',
+  'Bord de l’écran': 'Screen edge',
+  'La souris amenée au bord de l’écran fait défiler la vue. La sensibilité règle la vitesse de la vue : tourner, défiler, zoomer.': 'Moving the mouse to the edge of the screen scrolls the view. Sensitivity sets how fast the view turns, scrolls and zooms.',
   'Désactivées': 'Off',
   'Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.':
     'On: the volcano wakes up by itself, lava and fires can destroy buildings. Off: no spontaneous eruption, no fire.',

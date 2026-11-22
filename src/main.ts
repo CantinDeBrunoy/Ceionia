@@ -34,7 +34,7 @@ import { Transports } from './render/transports';
 import { VegView, syncChunks } from './render/vegetation';
 import { Environment } from './render/env';
 import { computeSeason, makeSeasonState } from './render/season';
-import { CameraRig, SURFACE_MIN_PITCH, PointerInfo, ToolInput } from './core/camera';
+import { CameraRig, SURFACE_MIN_PITCH, PointerInfo, ToolInput, CAM_SENS } from './core/camera';
 import { GameTime } from './core/time';
 import { SurfaceGate } from './core/surface';
 import { Sim } from './sim/sim';
@@ -123,7 +123,7 @@ import { bindPostReady, pathDue, ENDGAME_AGE, CONFLICT_LABEL, ageGate, allyPendi
 import { RivalBattle, BattleGoal } from './sim/rivalBattle';
 import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
-import { SaveData, Settings, Quality, saveSlot, loadSlot, openSlot, setAside, exportAside, clockOf, readClock, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
+import { SaveData, Settings, Quality, saveSlot, loadSlot, openSlot, setAside, exportAside, clockOf, readClock, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings, readCamSens, readSeasonsOff } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
@@ -510,6 +510,10 @@ class Game implements UIHost {
     setTeamBlason(w.blason);
     Object.assign(this.time, { dayLen: settings.dayLen === undefined || settings.dayLen === OLD_DAY_LEN ? 130 : settings.dayLen, seasonLen: settings.seasonLen === undefined || settings.seasonLen === OLD_SEASON_LEN ? 240 : settings.seasonLen, speed: settings.speed ?? 1 });
     audioSettings(settings);
+    // la vue et les saisons (réglages du 22 nov. 2026 : une ancienne sauvegarde prend les valeurs par défaut)
+    this.camSens = readCamSens(settings.camSens, CAM_SENS.min, CAM_SENS.max);
+    this.edgeScroll = settings.edgeScroll ?? true;
+    this.time.setOff(readSeasonsOff(settings.seasonsOff));
     if (settings.quality) this.quality = settings.quality;
     this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? (weak ? 2 : 0))));
     this.autoRoads = settings.autoRoads ?? true;
@@ -945,7 +949,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, noIntro: this.introOff, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog, noFlood: !this.calam.enabled.flood, noQuake: !this.calam.enabled.quake, noMeteor: !this.calam.enabled.meteor };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, volV: VOL_V, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges, hideGoals: this.hideGoals, noIntro: this.introOff, hideRain: !this.env.show.rain, hideSnow: !this.env.show.snow, hideFog: !this.env.show.fog, noFlood: !this.calam.enabled.flood, noQuake: !this.calam.enabled.quake, noMeteor: !this.calam.enabled.meteor, camSens: this.camSens, edgeScroll: this.edgeScroll, seasonsOff: this.time.offList() };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -2006,7 +2010,7 @@ class Game implements UIHost {
   goalCtx(): GoalCtx {
     const s = this.sim, w = this.world;
     return {
-      age: s.age, pop: s.pop, day: this.time.days, season: this.time.season, counts: s.counts, brick: w.brick, missions: w.exp.done, security: s.coverage.share, unlimited: w.unlimited,
+      age: s.age, pop: s.pop, day: this.time.days, season: this.time.season, counts: s.counts, brick: w.brick, missions: w.exp.done, security: s.coverage.share, unlimited: w.unlimited, noWinter: !this.time.isOn(3),
       ok: { food: s.food.ok, water: s.water.ok, jobs: s.jobs.ok, joy: s.joy.ok, health: s.health.ok, housing: s.housing.ok },
     };
   }
@@ -2037,6 +2041,13 @@ class Game implements UIHost {
   }
   /** Contrôles de la vue : retenus pour ce navigateur et appliqués à la caméra */
   setControls(c: Controls) { this.controls = c; saveControls(c); this.applyControls(); }
+  /** Sensibilité de la vue (Paramètres › Partie), et le défilement au bord de l'écran : appliqués et sauvés */
+  camSens = 1;
+  edgeScroll = true;
+  setCamSens(v: number) { this.camSens = readCamSens(v, CAM_SENS.min, CAM_SENS.max); this.applyControls(); this.applySettings(); }
+  setEdgeScroll(on: boolean) { this.edgeScroll = on; this.applyControls(); this.applySettings(); }
+  /** Les saisons éteintes (Paramètres › Temps et météo) : l'horloge les saute */
+  setSeasonsOff(list: number[]) { this.time.setOff(readSeasonsOff(list)); this.applySettings(); }
   /** Change le blason du village : tout le jeu se teint à l'image suivante, la partie le garde */
   setBlason(b: Blason) { this.world.blason = { ...b }; this.world.blasonSeen = true; setTeamBlason(b); }
   /**
@@ -2055,7 +2066,9 @@ class Game implements UIHost {
   private applyControls() {
     const mouse = this.controls.mode === 'mouse';
     this.cam.letterKeys = !mouse;
-    this.cam.edgeScroll = mouse;
+    // le bord de l'écran fait défiler la vue quels que soient les contrôles, sauf si le joueur l'a éteint (Paramètres › Partie)
+    this.cam.edgeScroll = this.edgeScroll;
+    this.cam.sens = this.camSens;
     // (la barre du bas et le HUD : la carte visible entre leurs blocs ne fait pas défiler la vue)
     this.cam.edgeShields = () => ['dockRow', 'hud'].map((id) => document.getElementById(id)?.getBoundingClientRect()).filter((r): r is DOMRect => !!r && r.width > 0);
     // à la souris, un glissé du clic gauche déplace la vue quand l'outil Voir est en main (un clic sans bouger choisit toujours)

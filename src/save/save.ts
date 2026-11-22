@@ -43,7 +43,18 @@ export interface Settings {
   noMeteor?: boolean;
   /** la cinématique d'ouverture coupée (une partie neuve commence sans elle) ; absent : elle se joue */
   noIntro?: boolean;
+  /** sensibilité de la vue (`CameraRig.sens`, 0,4 à 2,5) ; absente : 1 */
+  camSens?: number;
+  /** la vue défile quand la souris touche le bord de l'écran ; absent : oui (décision de l'auteur, 22 nov. 2026) */
+  edgeScroll?: boolean;
+  /** les saisons éteintes (0 printemps … 3 hiver), que l'horloge saute ; absent : aucune */
+  seasonsOff?: number[];
 }
+
+/** La sensibilité de la vue lue d'une sauvegarde : un nombre dans ses bornes, sinon 1 */
+export const readCamSens = (v: unknown, min: number, max: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : 1);
+/** Les saisons éteintes lues d'une sauvegarde : des indices de 0 à 3, sans doublon (n'importe quoi d'autre : aucune) */
+export const readSeasonsOff = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < 4))] : []);
 
 /** « auto » : la qualité s'ajuste d'elle-même aux images qui traînent (voir `render/adaptive`) */
 export type Quality = 'auto' | 'high' | 'medium' | 'low';
