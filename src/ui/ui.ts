@@ -2153,7 +2153,7 @@ export class UI {
       vName.dataset.fit = '1';
       vName.style.fontSize = '';
       let px = parseFloat(getComputedStyle(vName).fontSize) || 24;
-      while (vName.scrollWidth > vName.clientWidth + 1 && px > 14) { px -= 1; vName.style.fontSize = `${px}px`; }
+      while (vName.scrollWidth > vName.clientWidth && px > 14) { px -= 1; vName.style.fontSize = `${px}px`; }
     }
     // le logo de la carte du village change avec l'âge (picto et teinte du fond)
     const logo = $('#vLogo');
