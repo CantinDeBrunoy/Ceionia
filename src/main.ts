@@ -1,5 +1,6 @@
 import './style.css';
 import './hudTheme.css';
+import './hudAllege.css';
 import './i18n/en';
 import { onLangChange, tr, nplural, getLang } from './i18n';
 import * as THREE from 'three';

@@ -17,6 +17,7 @@ registerDict('ui', {
   'Dissiper le brouillard': 'Clear the fog',
   // ---- HUD : horloge, habitants, carrousel des vignettes
   '{season}, jour {n}': '{season}, day {n}',
+  '{season} · j. {n}': '{season} · d. {n}',
   'Depuis hier': 'Since yesterday', 'stable': 'steady',
   'Précédents': 'Previous', 'Suivants': 'Next',
   // ---- mode Paysage : ses sous-menus et leurs groupes
@@ -44,6 +45,7 @@ registerDict('ui', {
   // ---- barre du haut : âge
   'Vers {age}': 'Towards {age}',
   '{met}/{n} conditions ▾': '{met}/{n} conditions ▾',
+  '{met}/{n} conditions': '{met}/{n} conditions',
   'Dernier âge atteint': 'Final age reached',
   'Dernier âge atteint : profitez de votre village !': 'Final age reached: enjoy your village!',
   'Passer à : {age}': 'Advance to: {age}',
@@ -624,6 +626,7 @@ registerDict('ui', {
 /** Les petits objectifs de la barre du haut (`sim/goals.ts`, pastille `#goalBox`) */
 registerDict('goals', {
   'Besoins précédents': 'Previous needs', 'Besoins suivants': 'Next needs',
+  'Besoins': 'Needs', 'Voir tous les besoins': 'See all needs', 'Tous les besoins sont comblés : voir le détail': 'All needs are met: see the details',
   'Objectif atteint : {goal}.': 'Goal reached: {goal}.', 'Bravo !': 'Well done!',
   '{n} j': '{n} d', '+{n} bois': '+{n} wood', '+{n} pierre': '+{n} stone', '+{n} minerai': '+{n} ore',
   'bien-être +{n} pendant {d} jours': 'well-being +{n} for {d} days', 'Récompense : {r}': 'Reward: {r}',
