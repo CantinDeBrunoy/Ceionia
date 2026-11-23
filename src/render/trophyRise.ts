@@ -15,7 +15,7 @@ function glowTexture() {
   if (glowTex) return glowTex;
   const c = document.createElement('canvas');
   c.width = c.height = 64;
-  const g = c.getContext('2d')!, r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  const g = c.getContext('2d', { willReadFrequently: true })!, r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.35, 'rgba(255,255,255,0.45)'); r.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = r; g.fillRect(0, 0, 64, 64);
   glowTex = new THREE.CanvasTexture(c);
@@ -28,7 +28,7 @@ function fadeTexture() {
   if (fadeTex) return fadeTex;
   const c = document.createElement('canvas');
   c.width = 4; c.height = 64;
-  const g = c.getContext('2d')!, r = g.createLinearGradient(0, 0, 0, 64);
+  const g = c.getContext('2d', { willReadFrequently: true })!, r = g.createLinearGradient(0, 0, 0, 64);
   r.addColorStop(0, 'rgba(255,255,255,0)'); r.addColorStop(0.6, 'rgba(255,255,255,0.35)'); r.addColorStop(1, 'rgba(255,255,255,1)');
   g.fillStyle = r; g.fillRect(0, 0, 4, 64);
   fadeTex = new THREE.CanvasTexture(c);

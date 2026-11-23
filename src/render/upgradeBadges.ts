@@ -7,7 +7,7 @@ import { priceIn, canPay } from '../sim/economy';
 function badgeTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
-  const g = c.getContext('2d')!;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
   g.fillStyle = '#ffffff';
   g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.fill();
   g.fillStyle = '#f2a900';

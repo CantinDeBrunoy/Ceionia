@@ -692,4 +692,5 @@ registerDict('goals', {
   'Comblé : {cap} pour {use}': 'Covered: {cap} for {use}',
   'Il en manque {n}': '{n} short',
   'avec celui-ci : {n}': 'with this one: {n}',
+  'L’affichage s’est rétabli après un raté de la carte graphique.': 'The display recovered after a graphics card hiccup.',
 });

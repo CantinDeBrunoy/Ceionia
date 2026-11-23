@@ -1,7 +1,7 @@
 # Chargement et performances
 
 > Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir, `ageToPrep` et `prepAge`), `src/render/agePrep.ts` (`AgePrep`, l'âge suivant préparé au repos), `src/render/thumbs.ts` (`prepare`), `src/render/buildings.ts` (`prepareAge`), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/render/still.ts` (branches immobiles), `src/render/snow.ts` (`setSnowMap`), `src/render/terrainView.ts` (`stepRecolor`), `src/style.css` (`#loadScreen`), `src/ui/preload.ts` (`preloadPics`, `whenIdle`), `src/ui/minimap.ts` (`shownW`)
-> Tests : `tests/chargement.test.ts`, `tests/qualite.test.ts`, `tests/saisons.test.ts` (balayage du sol), `tests/glaceBiomes.test.ts` (carte de neige)
+> Tests : `tests/chargement.test.ts`, `tests/toilesSansGpu.test.ts` (carte graphique qui décroche), `tests/qualite.test.ts`, `tests/saisons.test.ts` (balayage du sol), `tests/glaceBiomes.test.ts` (carte de neige)
 > Voir aussi : [architecture.md](architecture.md), [rendu-modeles.md](rendu-modeles.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [traduction.md](traduction.md)
 
 ## En bref
@@ -185,6 +185,14 @@ Ce qui reste, par ordre de gain (voir le plan) : les triangles qui restent à la
 - Le temps de script varie de ±2 ms selon la charge de la machine. Comparer les postes un par un (chronos autour de `refreshSeason`, `stepRecolor`, `scene.updateMatrixWorld`, `shadowMap.render`), ou alterner les deux versions.
 - `scene.updateMatrixWorld` : three passe toujours `force = true` aux enfants (une matrice automatique marque son objet à chaque image). Un objet à `matrixWorldAutoUpdate = false` est quand même parcouru : pour sortir une branche du calcul, `still`.
 - En boucle serrée, les matrices de toute la scène prennent 0,6 ms ; dans une vraie image, 2,3 ms (mémoire froide). Chronométrer dans la boucle du jeu.
+
+## La carte graphique qui décroche
+
+Un pilote relancé, un partage d'écran ou une mise en veille peuvent faire perdre le contexte WebGL : l'écran blanchit une demi-seconde, puis le contexte revient et three.js renvoie de lui-même géométries et textures (il appelle `preventDefault` sur `webglcontextlost`). Mais le navigateur vide au passage les toiles 2D tenues par la carte graphique : une texture tirée d'une toile revenait vide (sol terne et brun, sans son grain) et le fond de la mini-carte gris (retour de joueur, 24 nov. 2026).
+
+- Toutes les toiles 2D des textures (`src/render/`, hors `thumbs.ts`) et le fond de la mini-carte (`Minimap.base`) sont créées avec `getContext('2d', { willReadFrequently: true })` : elles vivent en mémoire ordinaire et survivent. Le premier `getContext` fixe ce choix, il doit porter l'option. Test : `tests/toilesSansGpu.test.ts`.
+- `Game.watchGpu` : à la perte, la partie est sauvegardée ; au retour, ombres et décor sont redemandés et un message le dit. Sans retour dans `GPU_WAIT` (4 s), la page recharge la partie (`AUTOSTART` `<carte>|continue`).
+- Pour l'essayer : `WEBGL_lose_context` sur la toile `#view` (`loseContext()`, puis `restoreContext()` ou rien). Cela ne vide pas les toiles 2D comme une vraie panne. En développement, `?n=` force une partie neuve au rechargement : essayer depuis `/`.
 
 ## Pièges et invariants
 - Un calcul fait à chaque pas de saison (toutes les 2 s) tombe d'un bloc sur une image : au-delà de 2 ms, l'étaler ou le garder en cache. Ce qui ne dépend que du monde (biomes, relief) ne se refait pas avec la saison.

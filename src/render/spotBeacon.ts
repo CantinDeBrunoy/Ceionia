@@ -5,7 +5,7 @@ import { SEA } from '../world/world';
 function anchorTex() {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
-  const g = c.getContext('2d')!;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
   g.fillStyle = '#ffd45a'; g.strokeStyle = '#fff6d8'; g.lineWidth = 8;
   g.beginPath(); g.arc(64, 64, 54, 0, Math.PI * 2); g.fill(); g.stroke();
   g.font = '72px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';

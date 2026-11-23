@@ -169,6 +169,8 @@ const GESTURE_MS = 1500;
 /** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
 const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
+/** Attente du retour de la carte graphique avant de recharger la partie (voir `Game.watchGpu`) */
+const GPU_WAIT = 4000;
 /** Secondes entre deux réglages de l'ambiance sonore */
 const AUDIO_STEP = 0.05;
 /** Pas de saison (120 par saison) entre deux balayages des teintes du sol : un toutes les 12 s à vitesse normale */
@@ -911,6 +913,7 @@ class Game implements UIHost {
     audio.unlockOn(window);
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveNow(); audio.pause(document.hidden); });
     window.addEventListener('pagehide', () => this.saveNow());
+    this.watchGpu();
     // changer de langue en jeu : on sauvegarde, la page recharge et reprend la partie dans la nouvelle langue
     onLangChange(() => { this.saveNow(); sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`); this.running = false; location.reload(); });
 
@@ -1019,6 +1022,31 @@ class Game implements UIHost {
   private loadError: string | null = null;
   /** La dernière écriture a été refusée par le navigateur : on ne le redit qu'après une écriture réussie */
   private saveFailed = false;
+  /**
+   * La carte graphique qui décroche (pilote relancé, partage d'écran, mise en veille) : l'écran blanchit, puis le contexte
+   * WebGL revient et three.js renvoie tout de lui-même. Les toiles des textures et de la mini-carte vivent en mémoire
+   * ordinaire (`willReadFrequently`) pour ne pas revenir vides (sol terne, carte grise : retour de joueur, 24 nov. 2026).
+   * S'il ne revient pas dans `GPU_WAIT` ms : on sauvegarde et la page recharge la partie
+   */
+  private watchGpu() {
+    let wait = 0;
+    canvas.addEventListener('webglcontextlost', () => {
+      this.saveNow();
+      clearTimeout(wait);
+      wait = window.setTimeout(() => {
+        if (!renderer.getContext().isContextLost()) return;
+        sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`);
+        this.running = false;
+        location.reload();
+      }, GPU_WAIT);
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      clearTimeout(wait);
+      renderer.shadowMap.needsUpdate = true;
+      this.propsDirty = true;
+      this.ui.toast(tr('L’affichage s’est rétabli après un raté de la carte graphique.'));
+    });
+  }
   saveNow() {
     if (!this.running) return;
     const ok = saveSlot(this.buildSave());

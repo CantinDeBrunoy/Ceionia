@@ -83,7 +83,7 @@ export class MiniMap {
   private drawBase() {
     const w = this.world, S = N * PX, b = this.base;
     if (b.width !== S) { b.width = b.height = S; }
-    const g = b.getContext('2d')!, img = g.createImageData(S, S);
+    const g = b.getContext('2d', { willReadFrequently: true })!, img = g.createImageData(S, S);
     for (let z = 0; z < N; z++)
       for (let x = 0; x < N; x++) {
         const k = w.ci(x, z), h = w.cellAvg(x, z), v = w.veg[k];

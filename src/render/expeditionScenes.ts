@@ -806,7 +806,7 @@ function softPuff() {
   if (puffTex) return puffTex;
   const c = document.createElement('canvas');
   c.width = c.height = 64;
-  const x = c.getContext('2d')!, gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  const x = c.getContext('2d', { willReadFrequently: true })!, gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
   gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
   x.fillStyle = gr;
   x.fillRect(0, 0, 64, 64);

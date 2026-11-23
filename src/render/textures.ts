@@ -34,7 +34,7 @@ export function groundDetailTexture(size = 512): THREE.Texture {
   // brins d'herbe : petits traits clairs et sombres, recopiés de l'autre côté des bords pour raccorder
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
-  const g = cv.getContext('2d')!;
+  const g = cv.getContext('2d', { willReadFrequently: true })!;
   g.fillStyle = 'rgb(128,128,128)';
   g.fillRect(0, 0, size, size);
   g.lineCap = 'round';

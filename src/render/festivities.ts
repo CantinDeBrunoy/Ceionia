@@ -74,7 +74,7 @@ interface Fest {
 function dotTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 32;
-  const g = c.getContext('2d')!, r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  const g = c.getContext('2d', { willReadFrequently: true })!, r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
   r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.35, 'rgba(255,255,255,0.85)'); r.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = r; g.fillRect(0, 0, 32, 32);
   return new THREE.CanvasTexture(c);
@@ -87,7 +87,7 @@ function dotTexture() {
 function petalTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 32;
-  const g = c.getContext('2d')!;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
   // un ovale plus large en haut, tracé ligne à ligne (rien que des rectangles)
   g.fillStyle = 'rgba(240,240,240,1)';
   for (let y = 3; y < 29; y++) {

@@ -25,7 +25,7 @@ interface Spear { mesh: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; t: 
 function dotTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 32;
-  const g = c.getContext('2d')!, r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  const g = c.getContext('2d', { willReadFrequently: true })!, r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
   r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.4, 'rgba(255,255,255,0.8)'); r.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = r; g.fillRect(0, 0, 32, 32);
   return new THREE.CanvasTexture(c);

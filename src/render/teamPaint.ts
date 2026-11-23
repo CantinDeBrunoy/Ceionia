@@ -94,7 +94,7 @@ export function setTeamBlason(bl: Blason) {
   TEAM.uTeamB.value.setHex(BLASON_COLORS[bl.b]);
   TEAM.uTeamShape.value = SHAPES.indexOf(bl.s);
   if (emb && canvas) {
-    const g = canvas.getContext('2d');
+    const g = canvas.getContext('2d', { willReadFrequently: true });
     if (!g || typeof Path2D === 'undefined') return;
     // le masque de l'emblème en blanc sur noir, un peu en retrait du bord (le filtrage ne bave pas sur la toile)
     g.fillStyle = '#000'; g.fillRect(0, 0, 128, 128);
