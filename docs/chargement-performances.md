@@ -1,6 +1,6 @@
 # Chargement et performances
 
-> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir, `ageToPrep` et `prepAge`), `src/render/agePrep.ts` (`AgePrep`, l'âge suivant préparé au repos), `src/render/thumbs.ts` (`prepare`), `src/render/buildings.ts` (`prepareAge`), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/render/still.ts` (branches immobiles), `src/render/snow.ts` (`setSnowMap`), `src/render/terrainView.ts` (`stepRecolor`), `src/style.css` (`#loadScreen`), `src/ui/preload.ts` (`preloadPics`, `whenIdle`), `src/ui/minimap.ts` (`shownW`)
+> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir, `ageToPrep` et `prepAge`), `src/render/agePrep.ts` (`AgePrep`, l'âge suivant préparé au repos), `src/render/thumbs.ts` (`prepare`), `src/render/buildings.ts` (`prepareAge`), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/render/still.ts` (branches immobiles), `src/render/snow.ts` (`setSnowMap`), `src/render/terrainView.ts` (`stepRecolor`), `src/style.css` (`#loadScreen`, `.mtitle`, `.newAge`), `src/ui/preload.ts` (`preloadPics`, `whenIdle`), `src/ui/minimap.ts` (`shownW`)
 > Tests : `tests/chargement.test.ts`, `tests/qualite.test.ts`, `tests/saisons.test.ts` (balayage du sol), `tests/glaceBiomes.test.ts` (carte de neige)
 > Voir aussi : [architecture.md](architecture.md), [rendu-modeles.md](rendu-modeles.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [traduction.md](traduction.md)
 
@@ -103,7 +103,7 @@ Ce qui a été corrigé quand même, parce que la mesure le montrait :
 Restent, vus pendant ces mesures, sans rapport direct avec les fenêtres :
 - **Le passage d'âge** : traité à part, voir ci-dessous.
 - **Un shader compilé en pleine partie** : une fois, 65 ms (`getProgramInfoLog`) au départ de la première expédition d'une session ; pas reproduit dans une partie rechargée.
-- Le flou d'arrière-plan des fenêtres (`backdrop-filter`) ne change rien ici à la durée des images (17 ms, flou ou non) ; à revoir sur une machine où le halo est actif.
+- Le flou d'arrière-plan des fenêtres (`backdrop-filter`) ne change rien ici à la durée des images (17 ms, flou ou non), sauf le titre collant flouté et l'animation d'entrée de la fenêtre du nouvel âge (voir « La fenêtre du nouvel âge » plus bas) ; à revoir sur une machine où le halo est actif.
 
 ### Mesurer les fenêtres
 - Harnais dans la page : durée entre deux `requestAnimationFrame`, et `PerformanceObserver` `long-animation-frame` (scripts en cause, `forcedStyleAndLayoutDuration`). Une trace DevTools complète fausse tout : images de plusieurs secondes.
@@ -131,10 +131,25 @@ Ce qui est fait :
 - **La faune coupe ses pas longs** : un pas par `seaRoom`, et les zones de vie en trois pas.
 - Au passage, il ne reste que les routes, le recensement de la faune et l'échange des modèles déjà prêts : des images de 22 à 37 ms de script.
 
+- **La fenêtre du nouvel âge** (`showNewAge`, 3,6 s après), réglée le 24 nov. 2026, voir ci-dessous.
+
 Ce qui reste :
-- **La fenêtre du nouvel âge** (`showNewAge`, 3,6 s après) : une image de 67 à 83 ms à sa première ouverture, dont 15 à 20 ms de script ; le reste se passe hors du script (peinture, composition). Une deuxième ouverture ne coûte rien. Ouvrir une autre fenêtre avant ne l'évite pas. Non résolu.
 - Un passage d'âge juste après la réunion des conditions (avant la fin de la préparation) fait le reste comme avant.
 - Au bac à sable (`setAge`), rien n'est préparé : l'âge s'y change à volonté.
+
+### La fenêtre du nouvel âge
+Avant : une image de 75 à 140 ms à sa première ouverture (7 à 13 images par seconde le temps d'un battement), dont 15 à 20 ms de script. Le reste n'était ni du script ni du style : le fil principal attendait la composition (`long-animation-frame` : 80 ms avant le début du rendu, sans script). Ce n'étaient ni des images à décoder (les icônes sont des SVG en ligne), ni le filtre gris des tuiles fermées, ni les polices. En retirant un à un les effets (CSS ajouté avant l'ouverture), deux causes :
+- **Le flou d'arrière-plan du titre** (`.mtitle`, `backdrop-filter: blur(14px) saturate(1.4)`) : un titre collant flouté, dans une fenêtre déjà floutée, sur un voile flouté. Il coûtait à lui seul 70 à 80 ms, ouverture directe comme après un passage d'âge. Les fenêtres des expéditions, de l'envoi, des cartes de choix (`cePop`) et du menu l'avaient déjà retiré : c'est pourquoi en ouvrir une avant ne changeait rien. Remède : plus de flou sur `.mtitle`, un fond blanc plus couvrant (0,92 au lieu de 0,82) pour cacher le texte qui défile dessous. Sur la capture, la fenêtre au repos est la même. Ceci vaut pour toutes les fenêtres génériques (`modal`).
+- **L'animation d'entrée** (`rise`) : 3,6 s après un passage d'âge (pas en ouverture directe), animer la fenêtre floutée coûtait encore une image de 40 à 50 ms, en fondu comme en glissement, et même en n'animant que son contenu. Remède : `.newAge` sans animation d'entrée, la fenêtre paraît d'un coup.
+
+Mesure du 24 nov. 2026 : Chrome sans fenêtre, RTX 3060, 1 600 × 900, serveur de développement, profil neuf par essai, machine partagée avec trois autres sessions. Partie neuve à l'Antiquité (`'3|fresh|normal|1'`), village de test de 120 bâtiments et 240 habitants, âge suivant préparé (`agePrep.idle`), puis le passage. Image la plus longue entre 3,3 et 4,6 s, quatre essais de chaque, en alternant (« avant » : l'ancien CSS remis par une feuille ajoutée) :
+
+| | Image la plus longue | En images par seconde |
+| --- | --- | --- |
+| Avant | 76, 97, 93, 91 ms | 10 à 13 |
+| Après | 17, 17, 17, 17 ms | 60, aucune image ratée |
+
+En ouverture directe (`showNewAge(2)` sans passage) : 86 à 104 ms avant, 17 à 18 ms après.
 
 ### Mesurer le passage d'âge
 - Même méthode que pour les fenêtres (Chrome sans fenêtre, protocole DevTools, `--mute-audio` et `AudioContext` remplacé avant tout script par `Page.addScriptToEvaluateOnNewDocument`). Partie lancée par `sessionStorage['village-lowpoly:autostart'] = '3|new|normal'`, village bâti par `__bench.setup({ buildings: 120, pop: 240, age: 1 })` (`tools/bench/page.js` évalué dans la page), `saveNow`, puis rechargement avec `'3|continue'`.
