@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { TUTO_TEXT, parseState, setAside, chapterDue, stepIndex, viewKeys, startsOn, retired, type TutoState } from '../src/ui/tutorial';
-import { CHAPTER_TEXT, chapterTexts } from '../src/ui/tutorialChapters';
+import { CHAPTER_TEXT, chapterTexts, chapters } from '../src/ui/tutorialChapters';
 import { i18nEntries, setLang } from '../src/i18n';
 import '../src/i18n/en';
 
@@ -106,7 +106,7 @@ describe('tutoriel : les chapitres', () => {
 
   it('chaque étape tient en une phrase courte', () => {
     const all = chapterTexts();
-    expect(all.length).toBe(13); // (« Le camp de base » et « Des renforts » s'ajoutent aux Enfers : on arrive au camp, on recrute là-bas)
+    expect(all.length).toBe(15); // (aux Enfers : « Se déplacer », « Revenir au camp », « Le camp de base » et « Des renforts » s'ajoutent)
     for (const st of all) {
       expect(st.text.length, st.title).toBeLessThan(120);
       expect(st.text.replace(/«[^»]*»/g, '').slice(0, -1).includes('. '), st.title).toBe(false);
@@ -172,5 +172,37 @@ describe('démarrage du tutoriel', () => {
     expect(startsOn({ on: false, step: 4, end: 'skip' }, false)).toBe(false);
     expect(startsOn({ on: true, step: 4 }, false)).toBe(true);
     expect(startsOn(null, false)).toBe(false);
+  });
+
+  it('les Enfers : où attaquer, choisir, se déplacer, attaquer, revenir au camp ; chaque geste attend d’être fait', () => {
+    let order: { kind: string } | null = null, retreats = 0, selected = 0;
+    const h = { root: { querySelector: () => null }, age: () => 1, mode: () => 'hell', selected: () => selected, lastOrder: () => order, retreats: () => retreats } as never;
+    const steps = chapters({ clicked: () => false } as never, {} as never, h).hell.steps;
+    expect(steps.map((s) => s.id)).toEqual(['hellGoal', 'hellPick', 'hellMove', 'hellAttack', 'hellRetreat', 'hellCamp', 'hellRecruit', 'hellBack']);
+    const by = (id: string) => steps.find((s) => s.id === id)!;
+    // choisir
+    expect(by('hellPick').check()).toEqual([false]);
+    selected = 3;
+    expect(by('hellPick').check()).toEqual([true]);
+    // un clic droit au sol : une marche (une attaque ne compte pas pour cette étape)
+    by('hellMove').begin!();
+    order = { kind: 'attack' };
+    expect(by('hellMove').check()).toEqual([false]);
+    order = { kind: 'move' };
+    expect(by('hellMove').check()).toEqual([true]);
+    // un clic droit sur la cible
+    by('hellAttack').begin!();
+    expect(by('hellAttack').check()).toEqual([false]);
+    order = { kind: 'attack' };
+    expect(by('hellAttack').check()).toEqual([true]);
+    // R : le repli au camp
+    by('hellRetreat').begin!();
+    expect(by('hellRetreat').check()).toEqual([false]);
+    retreats++;
+    expect(by('hellRetreat').check()).toEqual([true]);
+    const E = CHAPTER_TEXT.hell;
+    expect(E.pick.text).toMatch(/glissez un cadre/);
+    expect(E.move.text).toMatch(/clic droit/);
+    expect(E.retreat.text).toMatch(/touche R/);
   });
 });

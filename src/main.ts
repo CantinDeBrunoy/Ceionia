@@ -928,7 +928,7 @@ class Game implements UIHost {
       isle: () => isleDefenses(this.world), village: () => this.villageDefenses(),
       army: () => this.war.army.troops.length + this.war.army.queue.length, sent: () => this.war.army.troops.filter((t) => t.where === 'hell').length + this.war.crossing.size, pve: () => this.war.pve === 'on',
       theater: () => { const k = this.command.theater?.kind ?? null; return k === 'rival' ? null : k; }, mode: () => this.mode, atIsle: () => this.lookingAtIsle(),
-      selected: () => this.command.cmd.selected.size, lastOrder: () => this.command.cmd.lastOrder,
+      selected: () => this.command.cmd.selected.size, lastOrder: () => this.command.cmd.lastOrder, retreats: () => this.command.cmd.retreats,
       commandIsle: () => this.commandIsle(),
       arch: () => !!allyIsle(this.world), allyIsle: () => (this.world.diplo.ally ? isleName(this.world.diplo.ally) : ''),
       harbors: () => this.harborsByIsle(), posts: () => this.postsAtAlly(),
