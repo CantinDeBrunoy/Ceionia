@@ -58,7 +58,8 @@ body.allege .pn { flex-direction: row; align-items: baseline; gap: 6px; }
 body.allege .pn small:not(.alert) { display: none; }
 body.allege .pn small.alert { font-size: 11.5px; }
 
-/* les besoins : seuls ceux qui manquent, en pastilles rosées (picto et pourcentage) ; tout va bien : « Besoins ✓ » */
+/* les besoins : seuls ceux qui manquent, en pastilles rosées (picto et pourcentage) ; tout va bien : « Besoins ✓ » (le logement
+   plein n'est pas un manque : il attend des places, le conseil le dit) */
 body.allege #needsBox { position: relative; gap: 4px; }
 body.allege #needsOk {
   display: inline-flex; order: 2; align-items: center; gap: 6px; min-width: 0; min-height: 0; height: 28px; padding: 0 6px; border: none;
@@ -75,9 +76,8 @@ body.allege #needs .need { flex-direction: row; gap: 4px; width: auto; height: 2
 body.allege #needs .need > span { display: none; }
 body.allege #needs .need img.pic { width: 20px; height: 20px; }
 body.allege #needs .need .pv { order: 0; font-size: 13.5px; }
-body.allege #needs .need.warn, body.allege #needs .need.full { background: linear-gradient(180deg, rgba(252, 215, 205, 0.95), rgba(252, 228, 218, 0.8)); }
-body.allege #needs .need.full .pv { color: #D9473A; }
-body.allege #needsBox:not(.all) #needs .need:not(.warn):not(.full) { display: none; }
+body.allege #needs .need.warn { background: linear-gradient(180deg, rgba(252, 215, 205, 0.95), rgba(252, 228, 218, 0.8)); }
+body.allege #needsBox:not(.all) #needs .need:not(.warn) { display: none; }
 body.allege #needsBox.allOk:not(.all) #needView { display: none; }
 /* la liste entière, dépliée sous la barre : les sept besoins, avec leur nom */
 body.allege #needsBox.all #needView {
@@ -125,3 +125,22 @@ body.allege #hudNotes { top: calc(var(--hudB, 56px) + 8px); max-width: min(620px
 body.allege #msg { min-height: 34px; padding: 3px 12px 3px 5px; border-radius: 999px; font-size: 13px; }
 body.allege #msg .mi { width: 26px; height: 26px; }
 body.allege #msg .mi img.pic { width: 18px; height: 18px; }
+
+/* ---------- la colonne de gauche : les équipes dans une pastille, plus d'interrupteur « Aides » (il est dans Paramètres › Partie) ---------- */
+#expPill { display: none; }
+body.allege #helpBtn { display: none !important; }
+body.allege #expPill:not([hidden]) {
+  display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; min-width: 0; min-height: 0; height: 34px; padding: 0 10px 0 12px;
+  border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--hInk); pointer-events: auto;
+  background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
+}
+body.allege #expPill:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+body.allege #expPill .sep { font-style: normal; color: var(--hInk2); }
+body.allege #expPill img.pic { width: 16px; height: 16px; }
+body.allege #expPill .chev { display: grid; place-items: center; margin-left: 2px; color: var(--hInk2); transition: transform 0.15s; }
+body.allege #expList.open #expPill .chev { transform: rotate(180deg); }
+/* une décision attend : le liseré orangé des cartes qui attendent */
+body.allege #expPill.ask { box-shadow: 0 0 0 2px #e8a33a, var(--hShadow); }
+body.allege #expPill.ask .dec { color: #a8600c; }
+/* les cartes des équipes, seulement la pastille ouverte (les incidents, eux, restent : ils pressent) */
+body.allege #expList:not(.open) .expCard:not(.incident) { display: none; }

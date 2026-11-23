@@ -702,7 +702,7 @@ export class UI {
           </nav>
         </div>
       </header>
-      <div id="expList"><button id="helpBtn" type="button" aria-pressed="false"></button><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
+      <div id="expList"><button id="helpBtn" type="button" aria-pressed="false"></button><button id="expPill" type="button" aria-expanded="false" hidden></button><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="bUp" title="${tr('Remonter à la surface (U)')}">${ic('up', 18)} ${tr('Remonter')}</button>
@@ -934,6 +934,12 @@ export class UI {
     };
     $('#bSettings').onclick = () => this.openSettings();
     $('#bExp').onclick = () => this.openExpeditions();
+    // l'écran allégé : les équipes en route tiennent dans une pastille, un clic déplie leurs cartes (et les replie)
+    $('#expPill').onclick = () => {
+      const on = $('#expList').classList.toggle('open');
+      $('#expPill').setAttribute('aria-expanded', String(on));
+      this.host.audio.sfxClick();
+    };
     $('#bPeoples').onclick = () => { this.host.audio.sfxClick(); this.openPeoples(); };
     $('#bHell').onclick = () => { this.host.audio.sfxClick(); this.host.goHell?.(); };
     $('#bPhoto').onclick = () => host.setPhoto(true);
@@ -2291,7 +2297,8 @@ export class UI {
     // l'écran allégé : un mot quand tout va bien (« Besoins ✓ »), sinon seuls les besoins qui manquent ; le bouton déplie la
     // liste entière (la sécurité, simple indicateur, n'y paraît qu'alors)
     {
-      const miss = NEEDS.filter((n) => !sim[n.k].ok).length, ok = $('#needsOk');
+      // (un village plein n'est pas en manque : il attend des places pour grandir, comme le dit le conseil, bleu et non orange)
+      const miss = NEEDS.filter((n) => n.k !== 'housing' && !sim[n.k].ok).length, ok = $('#needsOk');
       const v = `${miss}|${getLang()}`;
       if (ok.dataset.v !== v) {
         ok.dataset.v = v;
@@ -2722,6 +2729,18 @@ export class UI {
       $('.cam', card).classList.toggle('active', h.incidentCam === i.key);
     }
     for (const [key, card] of this.incCards) if (!liveI.has(key)) { card.remove(); this.incCards.delete(key); }
+    // la pastille de l'écran allégé : « 2 en route · ⚠ 1 décision » (cachée sans équipe dehors)
+    const pill = $<HTMLButtonElement>('#expPill'), nDec = ex.active.filter((a) => a.wait).length;
+    const ph = ex.active.length ? `${ic('compass', 15, 2.2)}<span>${tr('{n} en route', { n: ex.active.length })}</span>${nDec ? `<i class="sep">·</i>${pic('⚠', 16)}<span class="dec">${tr(nDec > 1 ? '{n} décisions' : '{n} décision', { n: nDec })}</span>` : ''}<b class="chev">${ic('chevDown', 13, 2.6)}</b>|${getLang()}` : '';
+    if (pill.dataset.v !== ph) {
+      pill.dataset.v = ph;
+      pill.innerHTML = ph.slice(0, ph.lastIndexOf('|'));
+      pill.hidden = !ex.active.length;
+      pill.classList.toggle('ask', !!nDec);
+      const t = tr('Les équipes en route : cliquer pour voir leurs cartes');
+      pill.title = t; pill.setAttribute('aria-label', t);
+      if (!ex.active.length) { list.classList.remove('open'); pill.setAttribute('aria-expanded', 'false'); }
+    }
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
     $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
@@ -3433,6 +3452,7 @@ export class UI {
         <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
         <p class="hint">${tr('Une flèche dorée flotte au-dessus des bâtiments qu’on peut améliorer et dont on a de quoi payer l’amélioration.')}</p>
         <div class="row"><label>${tr('Objectifs')}</label><button id="gGoals" class="${h.hideGoals ? '' : 'active'}">${tr(h.hideGoals ? 'Masqués' : 'Affichés')}</button></div>
+        <div class="row"><label title="${tr('Le conseil du moment, au milieu sous la barre du haut : ce qu’il faut bâtir ensuite')}">${tr('Conseils du moment')}</label><button id="gHelp" class="${this.help ? 'active' : ''}">${tr(this.help ? 'Affichés' : 'Masqués')}</button></div>
         <p class="hint">${tr('Trois petits objectifs à la fois dans la barre du haut, chacun avec une récompense.')}</p>
         <div class="row"><label>${tr('Ressources')}</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? tr(h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
         <p class="hint">${tr('Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.')}</p>
@@ -3587,6 +3607,12 @@ export class UI {
       h.setIntroOff(!h.introOff);
       q('#gIntro').textContent = tr(h.introOff ? 'Désactivée' : 'Activée');
       q('#gIntro').classList.toggle('active', !h.introOff);
+    };
+    // (les aides : la pastille « Aides » de la colonne de gauche n'est plus dans l'écran allégé, l'interrupteur est ici)
+    q('#gHelp').onclick = () => {
+      this.setHelp(!this.help);
+      q('#gHelp').textContent = tr(this.help ? 'Affichés' : 'Masqués');
+      q('#gHelp').classList.toggle('active', this.help);
     };
     q('#gGoals').onclick = () => {
       h.setHideGoals(!h.hideGoals);
