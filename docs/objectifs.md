@@ -8,7 +8,7 @@
 Entre deux passages d'âge, le joueur a toujours trois petits objectifs en cours, montrés un à la fois dans une pastille de la barre du haut. Chacun donne une petite récompense (bois, pierre, minerai, ou bien-être pendant quelques jours) et un mot de félicitation. Quand un objectif est atteint, le suivant de la liste de l'âge prend sa place. Idée venue des testeurs de la vague v6 (5 sur 5 : « après le tutoriel, je me suis senti lâché », « les conditions d'âge, c'est long »).
 
 ## Règles du jeu
-- Chaque âge a sa liste (`GOALS`, champ `age`), de cinq à six objectifs, dans l'ordre où ils arrivent. `activeGoals` en prend les `GOALS_SHOWN` = 3 premiers non faits.
+- Chaque âge a sa liste (`GOALS`, champ `age`), de cinq à sept objectifs, dans l'ordre où ils arrivent. `activeGoals` en prend les `GOALS_SHOWN` = 3 premiers non faits.
 - Un objectif qui demande un bâtiment encore fermé par une expédition (`reqMission`, ou `minAge` au-dessus de l'âge) **attend** : il ne compte pas parmi les trois, le suivant passe devant. Exemple : « Une taverne au village » attend l'expédition du brasseur.
 - Au passage d'âge, les objectifs de l'âge d'avant qui ne sont pas faits ne sont plus proposés (au bac à sable, revenir à un âge d'avant ramène ceux de cet âge qui ne sont pas faits).
 - Quatre façons de mesurer (`Measure`) :
@@ -29,7 +29,7 @@ Entre deux passages d'âge, le joueur a toujours trois petits objectifs en cours
 | Antiquité | Loger 24 habitants (+40 pierre) ; Une expédition sans blessé (+30 pierre) ; Thermes, théâtre ou arène (bien-être +2) ; 6 braseros (+30 bois) ; Tous les besoins comblés 2 jours de suite (+40 bois) |
 | Médiéval | Loger 45 habitants (+60 pierre) ; Ouvrir une mine (+40 bois) ; Une taverne (bien-être +2) ; Protéger la moitié des maisons (+40 pierre) ; Un port (+40 pierre) ; Une expédition légendaire (bien-être +3 pendant 6 j) |
 | Industriel | Loger 80 habitants (+80 pierre) ; Une première gare (+60 bois) ; 20 briques en réserve (+5 minerai) ; Stade, terrain de football ou fête foraine (bien-être +2) ; Protéger 80 % des maisons (+60 pierre) ; Une expédition sans blessé (+8 minerai) |
-| Moderne | Loger 130 habitants (+100 pierre) ; Aéroport ou héliport (+80 bois) ; Zoo ou parc aquatique (bien-être +3) ; Protéger toutes les maisons (+80 pierre) ; Tous les besoins comblés 3 jours de suite (+10 minerai) |
+| Moderne | Loger 130 habitants (+100 pierre) ; Aéroport ou héliport (+80 bois) ; Zoo ou parc aquatique (bien-être +3) ; Protéger toutes les maisons (+80 pierre) ; Un circuit automobile (bien-être +3 pendant 4 j) ; Une centrale électrique (+80 pierre) ; Tous les besoins comblés 3 jours de suite (+10 minerai) |
 | Futuriste | Loger 200 habitants (+120 pierre) ; Une arcologie (+100 bois) ; Deux fermes verticales (+80 pierre) ; Une centrale à fusion (bien-être +3) ; Le cosmodrome (rien) |
 
 « Poser 3 décorations » était prévu à l'Antiquité ; les décorations n'existant pas encore, il est remplacé par les braseros (la torche de l'Antiquité). À changer quand elles arriveront.

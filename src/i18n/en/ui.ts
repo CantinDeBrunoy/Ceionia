@@ -584,6 +584,8 @@ registerDict('goals', {
   // Moderne
   'Loger 130 habitants': 'House 130 residents', 'Une grande ville moderne.': 'A big modern city.',
   'Un aéroport ou un héliport': 'An airport or a heliport', 'La ville prend son envol.': 'The city takes flight.',
+  'Un circuit automobile': 'A racetrack', 'Les moteurs rugissent, la foule aussi !': 'The engines roar, and so does the crowd!',
+  'Une centrale électrique': 'A power station', 'La ville ne manquera plus de courant.': 'The city will never run short of power.',
   'Un zoo ou un parc aquatique': 'A zoo or a water park', 'Une sortie pour toute la famille !': 'A day out for the whole family!',
   'Protéger toutes les maisons': 'Protect every home', 'Pas une maison sans secours.': 'Not one home without help nearby.',
   'Tous les besoins comblés 3 jours de suite': 'Every need met 3 days in a row', 'Une ville où il fait bon vivre.': 'A city where life is good.',

@@ -267,7 +267,8 @@ describe('fin de l’âge industriel : le pétrole, puis le chemin de fer', () =
   it('l’époque moderne exige la raffinerie, des puits, une ligne et deux gares reliées, après les expéditions de l’âge', () => {
     expect(AGES[4].reqLate).toEqual({ refinery: 1, oilwell: 2 });
     expect(AGES[4].reqRail).toBe(true);
-    for (const n of [1, 2, 3, 5]) { expect(AGES[n].reqLate, `âge ${n}`).toBeUndefined(); expect(AGES[n].reqRail).toBeFalsy(); }
+    for (const n of [1, 2, 3]) { expect(AGES[n].reqLate, `âge ${n}`).toBeUndefined(); expect(AGES[n].reqRail).toBeFalsy(); }
+    // (l'âge futuriste a les siennes : l'aéroport, le circuit automobile, la centrale électrique, voir epoqueModerne.test.ts)
     // en Normal aussi : aucun âge d'avant ne les demandait
     expect(reqKindsOf(4, 'normal', true)).toEqual({ refinery: 1, oilwell: 2 });
     const { labels } = village();

@@ -45,9 +45,9 @@ export const GOLD_LABEL = 'or (comptoir des voisins)';
  * Bâtiments que demande l'âge `n`, par genre : en Facile, autant qu'il en faut au village ; en Normal, ce qu'il en faut
  * de plus que n'en demandaient déjà les âges d'avant (un genre qu'ils demandaient déjà autant n'est plus demandé)
  */
-export function reqKindsOf(n: number, d: Difficulty, late = false): Partial<Record<KindId, number>> {
-  // (`late` : ceux de la fin de l'âge, après ses expéditions)
-  const req = late ? AGES[n].reqLate ?? {} : AGES[n].reqKinds;
+export function reqKindsOf(n: number, d: Difficulty, late = false, modern = true): Partial<Record<KindId, number>> {
+  // (`late` : ceux de la fin de l'âge, après ses expéditions ; sans `modern`, pas d'étapes de l'époque moderne)
+  const req = late ? (n === FUTURE_AGE && !modern ? {} : AGES[n].reqLate ?? {}) : AGES[n].reqKinds;
   if (!rulesOf(d).newOnly) return req;
   const out: Partial<Record<KindId, number>> = {};
   for (const [k, c] of Object.entries(req) as [KindId, number][]) {
@@ -56,6 +56,14 @@ export function reqKindsOf(n: number, d: Difficulty, late = false): Partial<Reco
   }
   return out;
 }
+
+/** L'âge futuriste : ses étapes de fin d'époque moderne (`reqLate` : aéroport, circuit automobile, centrale électrique) */
+export const FUTURE_AGE = 5;
+/**
+ * Une sauvegarde d'avant les étapes de l'époque moderne (`modernSteps` null) : déjà à l'époque moderne ou au-delà, elle
+ * en est dispensée (elle ne doit pas se retrouver retenue) ; plus tôt, elle les aura comme une partie neuve
+ */
+export const modernStepsFor = (saved: boolean | null, age: number) => saved ?? age < FUTURE_AGE - 1;
 
 /** Combien de bâtiments de ce genre les âges d'avant `n` ont déjà demandés (ceux-là ne comptent plus, en Normal) */
 export function usedBefore(k: KindId, n: number): number {
@@ -284,7 +292,7 @@ export class Sim {
     // nouvel âge) ne font pas avancer vers le suivant ; ceux bâtis en avance, avant que le jeu ne les demande, comptent déjà
     const fresh = rulesOf(w.difficulty).newOnly && this.age > 0;
     const kinds = (late: boolean) => {
-      for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty, late)) as [KindId, number][]) {
+      for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty, late, w.modernSteps !== false)) as [KindId, number][]) {
         const line = lineOf(k), sum = (r: Record<string, number>) => line.reduce((n, x) => n + (r[x] ?? 0), 0);
         const used = fresh ? Math.min(sum(w.ageBase), usedBefore(k, n)) : 0;
         const have = Math.max(0, sum(this.counts) - used);

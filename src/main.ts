@@ -37,7 +37,7 @@ import { computeSeason, makeSeasonState } from './render/season';
 import { CameraRig, SURFACE_MIN_PITCH, PointerInfo, ToolInput } from './core/camera';
 import { GameTime } from './core/time';
 import { SurfaceGate } from './core/surface';
-import { Sim } from './sim/sim';
+import { Sim, modernStepsFor } from './sim/sim';
 import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
 import { Patrols, PATROL_MAX } from './sim/patrols';
@@ -489,6 +489,8 @@ class Game implements UIHost {
         // (une partie agrandie avant le 21 nov. 2026 : sa côte, abîmée près du bord de l'ancienne carte, est réparée une fois)
         w.fromJSON(repairCoast(save.world, save.map, save.seed));
         this.sim.age = save.age; this.sim.pop = save.pop;
+        // (une partie d'avant les étapes de l'époque moderne, déjà à cette époque : elle en est dispensée)
+        w.modernSteps = modernStepsFor(w.modernSteps, this.sim.age);
         readClock(this.time, save);
         addDefaultDecor(w, save.seed);
       } catch (e) {

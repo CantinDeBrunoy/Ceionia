@@ -221,7 +221,7 @@ export const KIND_ICON: Record<KindId, string> = {
   shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
   concord: 'concord', tradepost: 'scales', triumph: 'arch', embassy: 'dome',
   hedge: 'hedge', fence: 'fence', flowerbed: 'flower', bench: 'bench', statue: 'statue', paving: 'paving', fountain: 'fountain', pond: 'pond', coralpool: 'coral',
-  explorers: 'compass',
+  explorers: 'compass', racetrack: 'flag', powerplant: 'bulb',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', deco: 'flower', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */
