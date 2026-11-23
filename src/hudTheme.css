@@ -996,6 +996,13 @@ body.hell #resPanel { display: none !important; }
 #diploChoice .dcPrepIt small { font-size: 12px; font-weight: 700; color: #2f6a44; }
 #diploChoice .dcPrepIt.done { opacity: 0.55; }
 #diploChoice .dcPrepIt.done[disabled] { filter: none; cursor: default; }
+#diploChoice .dcAlert { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; margin: 6px 0 0; padding: 6px 12px; border-radius: 14px; text-align: left; cursor: pointer; color: #3A2213; border-color: #b8452a; box-shadow: 0 0 0 3px rgba(200, 70, 40, 0.25); animation: dcAlarm 1.6s ease-in-out infinite; }
+#diploChoice .dcAlert em { font-style: normal; font-size: 22px; }
+#diploChoice .dcAlert span { display: flex; flex-direction: column; }
+#diploChoice .dcAlert b { font-family: var(--hSerif); font-size: 16px; font-weight: 800; }
+#diploChoice .dcAlert small { font-family: var(--hSerif); font-style: italic; font-size: 12.5px; }
+@keyframes dcAlarm { 50% { box-shadow: 0 0 0 5px rgba(200, 70, 40, 0.12); } }
+#diploChoice .dcNotes { margin: 6px 0 0; padding: 6px 12px; border-radius: 10px; background: rgba(255, 250, 238, 0.6); border: 1px solid rgba(200, 160, 95, 0.45); font-size: 13px; line-height: 1.45; color: var(--hInk); text-align: left; }
 #diploChoice .dcFoot { display: flex; justify-content: center; gap: 22px; margin: 12px 0 8px; }
 #diploChoice .dcLink { padding: 4px 6px; border: 0; background: none; font-family: var(--hSerif); font-size: 14px; font-weight: 700; color: #8a5a2a; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 #diploChoice .dcLink:hover { color: #3A2213; }

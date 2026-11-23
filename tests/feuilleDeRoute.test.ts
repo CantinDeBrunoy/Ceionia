@@ -3,6 +3,7 @@ import { newDiplo, chooseAlly, choosePath, applyDiplo, loseAllyBattle, winAllyWa
 import { roadView, prepGain, type RoadCtx } from '../src/sim/diploRoad';
 import { ISLE_MISSIONS } from '../src/sim/isleMissions';
 import { roadHtml } from '../src/ui/diploChoice';
+import { campaignResult, RAID_FIRST } from '../src/sim/campaign';
 
 /**
  * La feuille de route du conflit des deux îles (retour de joueurs, 22 nov. 2026 : « perdu » après « Aider notre allié » ou
@@ -23,12 +24,12 @@ describe('la feuille de route', () => {
     expect(roadView(w, ctx())).toBeNull();
   });
 
-  it('la guerre : les éclaireurs d’abord, puis la bataille, et des visites qui donnent des troupes', () => {
+  it('la guerre : les éclaireurs d’abord, puis la campagne de l’île rivale, et des visites qui donnent des troupes', () => {
     const w = world();
     chooseAlly(w.diplo, 'orient');
     choosePath(w.diplo, 'war');
     let r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => [s.id, s.state, s.go])).toEqual([[WAR_MISSION, 'now', 'mission'], ['battle', 'next', 'wait']]);
+    expect(r.steps.map((s) => [s.id, s.state, s.go])).toEqual([[WAR_MISSION, 'now', 'mission'], ['plage', 'next', 'wait'], ['port', 'next', 'wait'], ['tour', 'next', 'wait'], ['assault', 'next', 'wait']]);
     // (pour la guerre, seulement les visites qui rapportent à la bataille ; le vol des semences n'y est pas)
     expect(r.prep.length).toBeGreaterThan(3);
     expect(r.prep.every((p) => /alliés|soldats|ennemis/.test(p.gain))).toBe(true);
@@ -39,13 +40,33 @@ describe('la feuille de route', () => {
     w.exp.done.push(WAR_MISSION);
     applyDiplo(w.diplo, 'landing');
     r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => [s.state, s.go])).toEqual([['done', 'wait'], ['now', 'battle']]);
+    expect(r.steps.slice(0, 2).map((s) => [s.state, s.go])).toEqual([['done', 'wait'], ['now', 'battle']]);
     expect(r.canChange).toBe(false);
     // perdue : la bataille attend que les troupes se refassent
     loseAllyBattle(w.diplo, 0, 100);
     r = roadView(w, ctx())!;
     expect(r.steps[1]).toMatchObject({ state: 'now', go: 'wait' });
     expect(r.steps[1].sub).toMatch(/jours/);
+  });
+
+  it('la campagne : la plage prise, le port est l’étape du moment ; une sortie rivale passe avant tout', () => {
+    const w = world();
+    chooseAlly(w.diplo, 'orient');
+    choosePath(w.diplo, 'war');
+    w.exp.done.push(WAR_MISSION);
+    applyDiplo(w.diplo, 'landing');
+    campaignResult(w.diplo, 'landing', true, [12, 9], 0, 100);
+    let r = roadView(w, ctx())!;
+    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'now', 'next', 'next']);
+    expect(r.steps[2]).toMatchObject({ id: 'port', go: 'battle' });
+    expect(r.alert).toBeUndefined();
+    expect(r.notes.join(' ')).toMatch(/21 soldats sur 25/);
+    expect(r.notes.join(' ')).toMatch(/sortie rivale/);
+    w.exp.clock = RAID_FIRST * 100;
+    r = roadView(w, ctx())!;
+    expect(r.alert).toBeTruthy();
+    expect(r.steps[2].go).toBe('wait');
+    expect(roadHtml(r)).toContain('dcAlert');
   });
 
   it('la paix : les émissaires, puis l’ambassade ; les visites qui rendent les pourparlers plus sûrs', () => {

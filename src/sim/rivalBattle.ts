@@ -477,8 +477,9 @@ export class RivalBattle {
     // la tour du rempart : ses archers et la tour elle-même, qui tire (comme l'avant-poste d'une zone des Enfers)
     if (has('tour')) {
       this.post('tour', OUTPOST.tour, this.goalAt.tour, true);
-      const [tx, tz] = this.goalAt.tour;
-      this.tower = this.sim.addPlayerBuilding('watchtower', tx, tz, 0.8, 1, TOWER_HP);
+      // (la tour se dresse au sommet du rempart, où la ville a la sienne ; ses gardes se tiennent devant, dehors)
+      const [tx, tz] = corner;
+      this.tower = this.sim.addPlayerBuilding('watchtower', tx, tz, 1.1, 1, TOWER_HP);
       this.tower.side = 'hell';
     }
     // (la tour prise : des archers en moins sur les remparts)

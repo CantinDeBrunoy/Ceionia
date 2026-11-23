@@ -111,6 +111,7 @@ Règles de pose (`HellBase.canBuild`) : zone tenue (`Hell.held` : le seuil, ou u
 - [fin-du-royaume.md](fin-du-royaume.md) : la zone 6, le roi, la citadelle.
 - [ages.md](ages.md) : `ZONE_AGE` suit les âges ; un passage d'âge rouvre la brume (`War.ageUp`).
 - [economie-ressources.md](economie-ressources.md) : bois, pierre, minerai du village.
+- [diplomatie.md](diplomatie.md) : la campagne de l'île rivale reprend les idées des Enfers (camp et caserne avancée offerts, avant-poste qui tire, contre-attaques sur le camp) dans le moteur de la bataille de l'archipel, et pose sur la plage rivale les modèles de la base (`hellThumb`, `render/rivalCamp.ts`) : changer une vignette de « Ma base » change aussi ce camp.
 
 ## Pièges et invariants
 - **Passage direct** : `War.direct` vaut vrai en jeu. Les essais de l'île (invasion, combat sur l'île, garnison qui passe le portail) l'éteignent (`War.directDefault = false` en tête du fichier, comme `wavesDefault`) : sinon leurs troupes passeraient aussitôt aux Enfers. `welcome` ne fait rien sans `direct`, ni le portail fermé ou éteint.

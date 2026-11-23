@@ -4,12 +4,14 @@ import { tr } from '../i18n';
 import { archipelagoOn, isleOffered, isleName, Path, PEACE_CHAIN, rivalOf, WAR_MISSION, type BoonKind } from './diplomacy';
 import { ISLE_MISSIONS } from './isleMissions';
 import { MISSIONS, type Mission } from './missions';
+import { corps, corpsMax, raidDue, type Front } from './campaign';
 
 /**
  * La feuille de route du conflit des deux îles (retour de joueurs, 22 nov. 2026 : après « Aider notre allié » ou « Négocier
  * la paix », on ne savait plus quoi faire). Une fois la voie prise, une fenêtre montre ce qui prépare la suite (les visites
  * facultatives sur les îles, avec ce qu'elles rapportent pour cette voie) et les étapes qui la déclenchent, dans l'ordre :
- * la guerre (les éclaireurs, puis la bataille), la paix (les émissaires, puis l'ambassade). Règle pure : `DiploChoice` la
+ * la guerre (les éclaireurs, puis la campagne de l'île rivale : le débarquement, le port, la tour du rempart, l'assaut ; voir
+ * `sim/campaign.ts`), la paix (les émissaires, puis l'ambassade). Règle pure : `DiploChoice` la
  * dessine (`showRoad`), `Game.openDiploChoice` la rouvre
  */
 
@@ -24,6 +26,10 @@ export interface Road {
   path: Path; ally: People; rival: People; prep: RoadPrep[]; steps: RoadStep[];
   /** on peut encore changer de voie (pas une fois la bataille engagée) */
   canChange: boolean;
+  /** une sortie rivale fond sur le camp : la défendre passe avant tout (son bouton mène à la bataille) */
+  alert?: string;
+  /** l'état de la campagne, une ligne chacun (le corps, la prochaine sortie) */
+  notes: string[];
 }
 
 /** Ce que gagne une visite des îles pour une voie (vide : rien pour elle), d'après ses meilleurs gains */
@@ -77,12 +83,33 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
     const s = mission(WAR_MISSION, tr('reconnaître la côte de {isle}', { isle: isleName(rival) }), true);
     if (scouted) { s.state = 'done'; s.go = 'wait'; s.sub = tr('C’est fait'); }
     steps.push(s);
-    const wait = d.battle === 'lost' ? Math.max(0, d.retry - w.exp.clock) : 0;
-    steps.push({
-      id: 'battle', icon: '⚔️', title: tr('La bataille de {isle}', { isle: isleName(rival) }),
-      sub: wait > 0 ? tr('nos troupes se refont : encore {n} jours', { n: Math.max(1, Math.ceil(wait / ctx.dayLen)) }) : tr('la plage, le port, les remparts, le palais'),
-      state: scouted ? 'now' : 'next', go: scouted && wait <= 0 ? 'battle' : 'wait',
-    });
+    // la campagne de l'île rivale : chaque bataille dans l'ordre (la plage, le port, la tour, l'assaut)
+    const clock = w.exp.clock, held = d.camp.held, raid = raidDue(d, clock);
+    const wait = d.battle === 'lost' ? Math.max(0, d.retry - clock) : 0;
+    const waitSub = tr('nos troupes se refont : encore {n} jours', { n: Math.max(1, Math.ceil(wait / ctx.dayLen)) });
+    const BATTLES: [Front | 'assault', string, string, string][] = [
+      ['plage', '⛵', tr('Le débarquement'), tr('la plage : un camp et une caserne avancée')],
+      ['port', '⚓', tr('Le port de {isle}', { isle: isleName(rival) }), tr('un avant-poste et sa garnison')],
+      ['tour', '🏰', tr('La tour du rempart'), tr('une tour qui tire, et ses archers')],
+      ['assault', '⚔️', tr('L’assaut'), tr('les remparts, puis le palais')],
+    ];
+    // (l'étape du moment : la première pas encore tenue ; une sortie en cours la fait attendre)
+    const first = BATTLES.findIndex(([f]) => f === 'assault' || !held.includes(f));
+    for (const [i, [f, icon, title, sub]] of BATTLES.entries()) {
+      const done = f !== 'assault' && held.includes(f), now = scouted && i === first;
+      steps.push({
+        id: f, icon, title, sub: done ? tr('C’est fait') : now && wait > 0 ? waitSub : sub,
+        state: done ? 'done' : now ? 'now' : 'next', go: now && !raid && wait <= 0 ? 'battle' : 'wait',
+      });
+    }
+    const alert = raid ? tr('Une sortie rivale fond sur notre camp') : undefined;
+    const notes: string[] = [];
+    if (held.length) {
+      const [s0, a0] = corps(d), [s1, a1] = corpsMax(d);
+      notes.push(tr('Notre corps : {n} soldats sur {m}', { n: s0 + a0, m: s1 + a1 }) + (s0 + a0 < s1 + a1 ? tr(' · la caserne avancée le refait') : ''));
+      if (!raid && d.camp.raid > clock) notes.push(tr('Prochaine sortie rivale dans {n} jours', { n: Math.max(1, Math.ceil((d.camp.raid - clock) / ctx.dayLen)) }));
+    }
+    return { path, ally, rival, prep, steps, canChange: d.battle === 'none', alert, notes };
   }
-  return { path, ally, rival, prep, steps, canChange: d.battle === 'none' };
+  return { path, ally, rival, prep, steps, canChange: d.battle === 'none', notes: [] };
 }

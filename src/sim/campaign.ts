@@ -36,6 +36,8 @@ export const CORPS: [number, number] = [15, 10];
 export const RAID_FIRST = 1.5, RAID_EVERY = 3, RAID_WARN = 0.5, RAID_GRACE = 0.5;
 /** La caserne avancée forme une recrue tous les `TRAIN_DAYS` jours de jeu */
 export const TRAIN_DAYS = 0.15;
+/** Laissée seule, la garnison du camp ne compte que cette part du corps (les autres sont ailleurs sur l’île) */
+export const HOLD_SHARE = 0.6;
 
 export const newCamp = (): CampState => ({ held: [], lost: [0, 0], raid: 0, raids: 0, train: 0, warned: false });
 
