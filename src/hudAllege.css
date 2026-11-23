@@ -144,3 +144,18 @@ body.allege #expPill.ask { box-shadow: 0 0 0 2px #e8a33a, var(--hShadow); }
 body.allege #expPill.ask .dec { color: #a8600c; }
 /* les cartes des équipes, seulement la pastille ouverte (les incidents, eux, restent : ils pressent) */
 body.allege #expList:not(.open) .expCard:not(.incident) { display: none; }
+
+/* ---------- le conseil et les messages à une seule place : au milieu, sous la barre ; un message passe devant le conseil, qui
+   revient quand il s'efface (un seul message à la fois, `UI.tickNotifs`) ---------- */
+body.allege #toasts {
+  position: fixed; top: calc(var(--hudB, 56px) + 8px); left: 50%; transform: translateX(-50%); z-index: 3; align-items: center;
+  max-width: min(620px, calc(100vw - 560px));
+}
+body.allege.toastOn #hudNotes { visibility: hidden; }
+body.allege #toasts .toast {
+  min-height: 34px; padding: 3px 12px 3px 5px; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1.25;
+  background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+body.allege #toasts .toast > .pic { width: 26px; height: 26px; padding: 4px; background: #FFF6E2; }
+body.allege #toasts .toast.danger { color: #8f1d24; background: linear-gradient(180deg, #FFF1EC, #FCE0D8); }
+body.allege #toasts .toast.act:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }

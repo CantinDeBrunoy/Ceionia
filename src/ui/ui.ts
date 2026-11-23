@@ -2126,7 +2126,8 @@ export class UI {
   private tickNotifs() {
     const now = performance.now();
     // une bannière à l'écran : un seul message en plus, pas deux
-    this.notifs.max = window.matchMedia('(max-width: 600px)').matches || this.banners.showing() ? 1 : 2;
+    // (l'écran allégé : une seule place pour le conseil et les messages, un message à la fois)
+    this.notifs.max = window.matchMedia('(max-width: 600px)').matches || this.banners.showing() || allege() ? 1 : 2;
     const open = !!this.root.querySelector('.overlay');
     this.notifs.setBlocked(open, now);
     this.notifs.tick(now, this.toastHover);
@@ -2163,6 +2164,8 @@ export class UI {
         el.querySelector('span')!.textContent = lead ? lead[1] : txt; el.dataset.v = txt;
       }
     }
+    // un message à l'écran passe devant le conseil du moment, qui revient après lui (écran allégé : ils ont la même place)
+    document.body.classList.toggle('toastOn', q.visible.length > 0);
     $('#bellBadge').textContent = q.unread ? String(Math.min(q.unread, 99)) : '';
     $('#bBell').classList.toggle('new', q.unread > 0);
     if (!$('#notifPanel').hidden) this.renderNotifPanel();
