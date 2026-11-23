@@ -75,13 +75,15 @@ de l'allié. Ils ne se montrent qu'une fois.
   3. `pveSend` « Aux Enfers » : choisir des soldats (« Tous »), puis « Envoyer aux Enfers » (`sent` de l'hôte : soldats
      passés ou en marche vers l'arche). Remplace « Vos ordres » et « L'invasion » ; un chapitre enregistré plus loin reprend
      à sa dernière étape.
-- **Chapitre « Les Enfers »** (`hell`, 6 étapes), à la première entrée dans les Enfers (à la fin de la cinématique du portail). Se passe (« Passer ce chapitre »), ne se montre qu'une fois, la bulle à côté de ce qu'elle montre :
-  1. `hellGoal` : le marqueur à l'écran montre le prochain bastion ; cliquer l'objectif au bout de la frise (il centre la vue).
-  2. `hellPick` : choisir des troupes (sans troupe : « Renforts » fait venir la garnison).
-  3. `hellAttack` : un ordre d'un clic droit sur la cible (la bulle se tient à l'écart).
-  4. `hellCamp` « Le camp de base » (à lire, 22 nov. 2026) : le camp offert au Seuil, où les troupes se soignent ; « Bâtir » pose les autres bâtiments autour. L'anneau entoure l'onglet Bâtir.
-  5. `hellRecruit` « Des renforts » (à lire, 22 nov. 2026) : d'autres troupes se recrutent ici, onglet « Recruter » de « Ma base » (la caserne avancée offerte à l'arrivée) ; l'anneau entoure l'onglet.
-  6. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.
+- **Chapitre « Les Enfers »** (`hell`, 8 étapes), à la première entrée dans les Enfers (à la fin de la cinématique du portail). Se passe (« Passer ce chapitre »), ne se montre qu'une fois, la bulle à côté de ce qu'elle montre. Les gestes attendent d'être faits (24 nov. 2026, demande de l'auteur : il manquait comment déplacer les troupes et où attaquer) :
+  1. `hellGoal` « Où attaquer » : l'anneau entoure le 🎯 à l'écran (`#hellGoal.show .hgPin`, ou sa flèche au bord quand la cible est hors de vue ; sinon l'objectif de la frise) ; cliquer l'objectif au bout de la frise centre la vue.
+  2. `hellPick` « Vos troupes » : clic sur une troupe, cadre glissé, ou « Tous » (`selected` > 0).
+  3. `hellMove` « Se déplacer » : un clic droit au sol, une marche en formation (`lastOrder` neuf de genre `move`). La bulle se tient à l'écart ; sans troupe choisie, elle redit comment choisir.
+  4. `hellAttack` « À l'attaque » : un clic droit sur la cible (`lastOrder` neuf de genre `attack`).
+  5. `hellRetreat` « Revenir au camp » : la touche R replie les troupes choisies au camp (`Command.retreats`, compté seulement avec des troupes choisies).
+  6. `hellCamp` « Le camp de base » (à lire, 22 nov. 2026) : le camp offert au Seuil, où les troupes se soignent ; « Bâtir » pose les autres bâtiments autour. L'anneau entoure l'onglet Bâtir.
+  7. `hellRecruit` « Des renforts » (à lire) : d'autres troupes se recrutent ici, onglet « Recruter » de « Ma base » (la caserne avancée offerte à l'arrivée) ; l'anneau entoure l'onglet.
+  8. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.
 - **Chapitre « L'or des voisins »** (`arch`, 4 étapes), lancé 3,2 s après le choix de l'allié, le temps de la bannière « Une alliance ! » : `Game.watchAlly` (`main.ts`, à chaque pas de `stepDiplo`) voit `world.diplo.ally` changer pendant la session, quelle que soit la carte qui l'a fait choisir ; une partie chargée avec son allié déjà choisi ne le relance pas :
   1. `archHome` « Relier les deux îles » : le but d'emblée (« reliez vos îles : un port chez vous, puis un port chez eux »), avec deux tâches, le port de l'île principale et celui de l'île alliée ; l'étape passe avec le premier (`need: 1`). Déjà bâti : elle passe.
   2. `archAllyHarbor` « Un port chez l'allié » : la vue va sur l'île de l'allié (`Game.goAlly`, le lobe le plus loin de la ville), sauf en pleine pose (`handsBusy` du `ChapterHost` : le bouton « Aller sur l'île alliée » y mène) ; un port sur sa côte, hors de sa ville. Ailleurs, la bulle propose « Aller sur l'île alliée ».

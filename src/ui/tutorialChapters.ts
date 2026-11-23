@@ -68,20 +68,30 @@ export const CHAPTER_TEXT = {
   hell: {
     title: 'Les Enfers',
     goal: {
-      title: 'La cible',
-      text: 'Le 🎯 marque le prochain bastion à abattre : un avant-poste, puis la forteresse de la zone.',
+      title: 'Où attaquer',
+      text: 'Le 🎯 montre où attaquer, un avant-poste puis la forteresse : l’objectif en haut y centre la vue.',
       tasks: ['Centrer la vue sur la cible'],
     },
     pick: {
       title: 'Vos troupes',
-      text: 'Choisissez des troupes : une carte en bas, ou « Tous ».',
+      text: 'Cliquez sur une troupe, glissez un cadre autour d’elles, ou prenez « Tous ».',
       tasks: ['Choisir des troupes'],
       none: 'Aucune troupe ici : recrutez-en dans « Recruter », à la caserne avancée.',
+    },
+    move: {
+      title: 'Se déplacer',
+      text: 'Faites un clic droit sur le sol : les troupes choisies y marchent, en formation.',
+      tasks: ['Déplacer les troupes d’un clic droit'],
     },
     attack: {
       title: 'À l’attaque',
       text: 'Faites un clic droit sur la cible 🎯 : vos troupes y marchent et l’attaquent.',
-      tasks: ['Donner un ordre d’un clic droit'],
+      tasks: ['Attaquer d’un clic droit'],
+    },
+    retreat: {
+      title: 'Revenir au camp',
+      text: 'La touche R replie les troupes choisies au camp, sans combattre : elles s’y soignent.',
+      tasks: ['Se replier avec R'],
     },
     camp: {
       title: 'Le camp de base',
@@ -130,7 +140,9 @@ export interface ChapterHost {
   atIsle(): boolean;
   /** troupes choisies ; le dernier ordre donné (un objet neuf à chaque ordre) */
   selected(): number;
-  lastOrder(): object | null;
+  lastOrder(): { kind: string } | null;
+  /** replis ordonnés (touche R) depuis le début de la partie */
+  retreats(): number;
   /** prendre le commandement de l'île (la vue y va) */
   commandIsle(): void;
   /** l'archipel et un allié choisi ; le nom de son île */
@@ -161,7 +173,7 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
   const isle = () => h.theater() === 'isle';
   const goIsle = () => (!isle() && !h.atIsle() ? { label: P.goIsle, run: () => h.commandIsle() } : null);
   const command = () => (!isle() ? { label: P.command, run: () => h.commandIsle() } : null);
-  let village = { towers: 0, barracks: 0 }, troops = 0, order: object | null = null;
+  let village = { towers: 0, barracks: 0 }, troops = 0, order: object | null = null, retreats = 0;
   const A = CHAPTER_TEXT.arch;
   const kname = (k: 'harbor' | 'tradepost') => tr('« {name} »', { name: KINDS[k].names[Math.max(h.age(), KINDS[k].minAge)] });
   const arch = (s: string) => fmt(s, { harbor: kname('harbor'), post: kname('tradepost'), isle: h.allyIsle(), a: AGES[3].reqGold ?? 0, b: AGES[4].reqGold ?? 0, c: AGES[5].reqGold ?? 0 });
@@ -239,20 +251,35 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Chapter
   ];
 
   const hell: Step[] = [
+    // (le 🎯 à l'écran, ou sa flèche au bord quand la cible est hors de vue ; sinon l'objectif de la frise)
     step('hellGoal', E.goal, {
       check: () => [tuto.clicked('goal')],
-      anchor: () => bar('goal') ?? q('#troopBar .tgoal'),
+      anchor: () => q('#hellGoal.show .hgPin') ?? bar('goal') ?? q('#troopBar .tgoal'),
     }),
     step('hellPick', E.pick, {
       check: () => [h.selected() > 0],
       anchor: () => q('#troopBar .tall') ?? q('#troopBar .tcard') ?? bar('garrison'),
       note: () => (q('#troopBar .tcard') ? '' : E.pick.none),
     }),
-    // (la bulle se tient à l'écart : la cible doit rester libre sous le curseur)
+    // (la bulle se tient à l'écart : le sol et la cible doivent rester libres sous le curseur)
+    step('hellMove', E.move, {
+      begin: () => (order = h.lastOrder()),
+      check: () => { const o = h.lastOrder(); return [!!o && o !== order && o.kind === 'move']; },
+      anchor: () => null,
+      note: () => (h.selected() ? '' : E.pick.text),
+    }),
+    // (le 🎯 montré : un ordre dessus, ou un clic droit armé d'attaque)
     step('hellAttack', E.attack, {
       begin: () => (order = h.lastOrder()),
-      check: () => [!!h.lastOrder() && h.lastOrder() !== order],
+      check: () => { const o = h.lastOrder(); return [!!o && o !== order && o.kind === 'attack']; },
       anchor: () => null,
+      note: () => (h.selected() ? '' : E.pick.text),
+    }),
+    step('hellRetreat', E.retreat, {
+      begin: () => (retreats = h.retreats()),
+      check: () => [h.retreats() > retreats],
+      anchor: () => null,
+      note: () => (h.selected() ? '' : E.pick.text),
     }),
     // (le camp offert à l'arrivée : la vue y est déjà, la bulle montre l'onglet Bâtir)
     step('hellCamp', E.camp, { read: true, check: () => [], anchor: () => tab('build') ?? q('#troopBar [data-a="build:camp"]') }),

@@ -126,7 +126,9 @@ export class Command {
     return ids.length;
   }
   hold(h: Hell) { h.order(this.ids(), { kind: 'hold' }); this.armed = null; return this.selected.size; }
-  retreat(h: Hell) { h.order(this.ids(), { kind: 'retreat' }); this.armed = null; return this.selected.size; }
+  /** replis ordonnés (le tutoriel des Enfers attend le premier) */
+  retreats = 0;
+  retreat(h: Hell) { h.order(this.ids(), { kind: 'retreat' }); this.armed = null; if (this.selected.size) this.retreats++; return this.selected.size; }
 
   /**
    * L'ordre du clic droit (ou de l'appui long) en un point : sur un ennemi, l'attaquer ; ailleurs, s'y rendre (en combattant si

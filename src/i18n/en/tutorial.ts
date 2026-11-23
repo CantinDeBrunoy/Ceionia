@@ -89,16 +89,16 @@ registerDict('tutorial', {
 
 
   'Les Enfers': 'Hell',
-  'La cible': 'The target',
-  'Le 🎯 marque le prochain bastion à abattre : un avant-poste, puis la forteresse de la zone.': 'The 🎯 marks the next stronghold to destroy: an outpost, then the zone’s fortress.',
+  'Où attaquer': 'Where to attack',
+  'Le 🎯 montre où attaquer, un avant-poste puis la forteresse : l’objectif en haut y centre la vue.': 'The 🎯 shows where to attack, an outpost then the fortress: the objective at the top centres the view on it.',
   'Centrer la vue sur la cible': 'Center the view on the target',
   'Vos troupes': 'Your troops',
-  'Choisissez des troupes : une carte en bas, ou « Tous ».': 'Pick troops: a card at the bottom, or “All”.',
+  'Cliquez sur une troupe, glissez un cadre autour d’elles, ou prenez « Tous ».': 'Click a troop, drag a box around them, or take “All”.',
   'Choisir des troupes': 'Pick troops',
   'Aucune troupe ici : recrutez-en dans « Recruter », à la caserne avancée.': 'No troops here: recruit some in “Recruit”, at the forward barracks.',
   'À l’attaque': 'Attack!',
   'Faites un clic droit sur la cible 🎯 : vos troupes y marchent et l’attaquent.': 'Right-click the 🎯 target: your troops march there and attack it.',
-  'Donner un ordre d’un clic droit': 'Give an order with a right-click',
+  'Attaquer d’un clic droit': 'Attack with a right-click',
   'Le retour': 'Heading back',
   '« Village », ou un clic sur le portail, vous ramène au village, mais vos troupes restent ici.': '“Village”, or a click on the portal, takes you back to the village, but your troops stay here.',
 
@@ -224,4 +224,10 @@ registerDict('tutorial', {
   'D’autres troupes se recrutent ici, dans « Recruter » : elles sortent de la caserne avancée, près du camp.': 'More troops are recruited here, in “Recruit”: they come out of the forward barracks, near the camp.',
   'Le camp de base': 'The base camp',
   'Votre camp est là, au Seuil : vos troupes s’y soignent, et « Bâtir » pose d’autres bâtiments autour.': 'Your camp is here, at the Threshold: your troops heal there, and “Build” places other buildings around it.',
+  'Se déplacer': 'Moving',
+  'Faites un clic droit sur le sol : les troupes choisies y marchent, en formation.': 'Right-click on the ground: the selected troops march there, in formation.',
+  'Déplacer les troupes d’un clic droit': 'Move the troops with a right-click',
+  'Revenir au camp': 'Back to camp',
+  'La touche R replie les troupes choisies au camp, sans combattre : elles s’y soignent.': 'The R key pulls the selected troops back to camp, without fighting: they heal there.',
+  'Se replier avec R': 'Fall back with R',
 });

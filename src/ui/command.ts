@@ -627,6 +627,25 @@ export class CommandUI implements ToolInput {
     return this.units().filter((u) => { const p = t.screen(u.x, u.z); return !!p && p[0] >= 0 && p[1] >= 0 && p[0] <= c.clientWidth && p[1] <= c.clientHeight; });
   }
 
+  /**
+   * Le bâtiment démoniaque visé quand le point (pixels du canevas) tombe sur le 🎯 de l'objectif (sur la cible, ou au bord de
+   * la zone libre quand elle est cachée sous le haut de l'écran) ; null sinon. Le tutoriel des Enfers dit « clic droit sur la cible 🎯 » : v. le 24 nov. 2026, le clic sur le
+   * marqueur donnait une marche dix cases avant la cible
+   */
+  private goalHit(x: number, y: number): number | null {
+    const g = this.goal, el = this.goalEl, t = this.theater;
+    if (!t || t.kind !== 'hell' || !g || g.x === undefined || g.z === undefined || !el.classList.contains('show')) return null;
+    const r = el.querySelector('.hgPin')!.getBoundingClientRect(), c = this.host.canvas.getBoundingClientRect(), px = x + c.left, py = y + c.top;
+    if (px < r.left - 10 || px > r.right + 10 || py < r.top - 10 || py > r.bottom + 14) return null;
+    let best: number | null = null, bd = 4;
+    for (const b of t.sim.buildings.values()) {
+      if (b.side !== 'hell' || b.down || b.hp <= 0) continue;
+      const d = Math.hypot(b.site.x - g.x, b.site.z - g.z);
+      if (d < bd) { bd = d; best = b.id; }
+    }
+    return best;
+  }
+
   private orderAt(x: number, y: number) {
     const t = this.theater;
     if (!t) return;
@@ -634,7 +653,9 @@ export class CommandUI implements ToolInput {
     if (!p || !this.cmd.selected.size) return;
     // un ordre sur le portail : les troupes choisies le passent (elles marchent jusqu'à lui, puis disparaissent de l'autre côté)
     if (!this.cmd.armed && t.atPortal?.(p[0], p[1]) && this.canCross()) { this.crossPortal(); return; }
-    const r = this.cmd.orderAt(t.sim, p[0], p[1]);
+    // un ordre sur le 🎯 : on attaque la cible (le marqueur flotte au-dessus d'elle, le clic tombait au sol bien avant)
+    const aim = this.goalHit(x, y);
+    const r = aim !== null ? (this.cmd.attack(t.sim, aim) ? 'attack' : null) : this.cmd.orderAt(t.sim, p[0], p[1]);
     if (r) {
       t.layer.mark = { ...this.cmd.lastOrder!, t: 0 };
       this.host.click();
