@@ -108,7 +108,11 @@ describe('prix des bâtiments selon la difficulté', () => {
     w.wood = 3; w.stone = 50;
     const c = priceIn(w, 'house', 0)!;
     expect(canPay(w, c)).toBe(false);
-    expect(shortLabel(w, c)).toBe(`Il faut ${c.wood} bois et ${c.stone} pierre (vous avez 3 bois et 50 pierre)`);
+    expect(shortLabel(w, c)).toBe(`Il manque ${c.wood - 3} bois`);
+    // les deux matériaux à court : chacun ce qui en manque
+    w.stone = 0;
+    expect(shortLabel(w, c)).toBe(`Il manque ${c.wood - 3} bois et ${c.stone} pierre`);
+    w.stone = 50;
     w.wood = 100;
     expect(canPay(w, c)).toBe(true);
     pay(w, c);

@@ -10,7 +10,9 @@ const homeFor = () => 62 * (Math.min(N, 192) / 48) * 0.8;
 /** Au village, la vue peut descendre jusqu'à l'horizontale (regarder le paysage à hauteur d'homme) */
 export const SURFACE_MIN_PITCH = 0;
 
-/** largeur de la bande du bord de l'écran qui fait défiler la vue (contrôles à la souris) */
+/** Bornes du réglage de sensibilité de la vue (`CameraRig.sens`) */
+export const CAM_SENS = { min: 0.4, max: 2.5 };
+/** largeur de la bande du bord de l'écran qui fait défiler la vue (réglage « Bord de l'écran », allumé par défaut) */
 export const EDGE_PX = 14;
 /** temps (s) passé dans la bande du bord avant que la vue défile : la souris qui ne fait qu'y passer ne la déplace pas */
 export const EDGE_DELAY = 0.3;
@@ -73,6 +75,12 @@ export class CameraRig {
    */
   letterKeys = true;
   edgeScroll = false;
+  /**
+   * Sensibilité de la vue (réglage du joueur, `CAM_SENS` : 0,4 à 2,5 ; 1 par défaut) : multiplie la rotation au clic droit, le
+   * défilement au clavier et au bord de l'écran, la rotation au clavier et le zoom de la molette. Le glissé de la vue suit
+   * toujours le curseur
+   */
+  sens = 1;
   dragPan: (() => boolean) | null = null;
   /** la souris sur le canevas, sans bouton appuyé (le défilement au bord) ; null : ailleurs (sur l'interface, hors de la page) */
   private edgeAt: { x: number; y: number } | null = null;
@@ -91,7 +99,7 @@ export class CameraRig {
     window.addEventListener('pointermove', (e) => this.onMove(e));
     window.addEventListener('pointerup', (e) => this.onUp(e));
     window.addEventListener('pointercancel', (e) => this.onUp(e, true));
-    el.addEventListener('wheel', (e) => { e.preventDefault(); const r = this.el.getBoundingClientRect(); this.zoomAt(Math.exp(e.deltaY * 0.0012), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    el.addEventListener('wheel', (e) => { e.preventDefault(); const r = this.el.getBoundingClientRect(); this.zoomAt(Math.exp(e.deltaY * 0.0012 * this.sens), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
     // touches physiques (e.code) : ZQSD + A/E en AZERTY, WASD + Q/E en QWERTY, sans rien régler ; rien avec Ctrl (Ctrl+Z)
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -182,8 +190,8 @@ export class CameraRig {
     this.last = { x: i.x, y: i.y };
     if (this.rightAt) this.rightAt.moved += Math.abs(dx) + Math.abs(dy);
     if (this.mode === 'rotate') {
-      this.goal.yaw -= dx * 0.006;
-      this.goal.pitch = clamp(this.goal.pitch + dy * 0.005, this.minPitch, 1.5);
+      this.goal.yaw -= dx * 0.006 * this.sens;
+      this.goal.pitch = clamp(this.goal.pitch + dy * 0.005 * this.sens, this.minPitch, 1.5);
     } else if (this.mode === 'pan') this.panScreen(dx, dy);
     else if (this.mode === 'tool') this.handler?.move(i);
   }
@@ -311,7 +319,7 @@ export class CameraRig {
   update(dt: number, groundY: (x: number, z: number) => number) {
     const k = this.keys;
     if (this.letGo.size) { const now = performance.now(); for (const [c, t] of this.letGo) if (now >= t) { k.delete(c); this.letGo.delete(c); } }
-    const sp = this.goal.dist * 0.7 * dt;
+    const sp = this.goal.dist * 0.7 * dt * this.sens;
     let fx = 0, fz = 0;
     const L = this.letterKeys;
     if ((L && k.has('KeyW')) || k.has('ArrowUp')) fz -= 1;
@@ -335,8 +343,8 @@ export class CameraRig {
       this.goal.z += (-fx * s + fz * c) * sp * 0.6;
       this.clampGoal();
     }
-    if (L && k.has('KeyQ')) this.goal.yaw += dt * 1.4;
-    if (L && k.has('KeyE')) this.goal.yaw -= dt * 1.4;
+    if (L && k.has('KeyQ')) this.goal.yaw += dt * 1.4 * this.sens;
+    if (L && k.has('KeyE')) this.goal.yaw -= dt * 1.4 * this.sens;
     // inclinaison au clavier : Page haut / Page bas
     if (k.has('PageUp')) this.goal.pitch = clamp(this.goal.pitch + dt * 1.0, this.minPitch, 1.5);
     if (k.has('PageDown')) this.goal.pitch = clamp(this.goal.pitch - dt * 1.0, this.minPitch, 1.5);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'fs';
-import { MUSIC, AGE_OPENERS, AudioEngine, soundSettings } from '../src/audio/audio';
+import { MUSIC, AGE_OPENERS, AudioEngine, soundSettings, TRACK_TRIM, trackEnd } from '../src/audio/audio';
 
 describe('musique allumée par défaut', () => {
   it('le moteur démarre musique et sons allumés', () => {
@@ -48,5 +48,20 @@ describe('musique enregistrée', () => {
     expect(soundSettings({ musicVol: 0.2, sfxVol: 0.1, ambVol: 0.1 })).toMatchObject({ musicVol: 0.5, sfxVol: 0.5, ambVol: 0.5 });
     expect(soundSettings({ musicVol: 0.3, sfxVol: 0.8, ambVol: 0.6, volV: 2 })).toMatchObject({ musicVol: 0.3, sfxVol: 0.8, ambVol: 0.6 });
     expect(soundSettings({})).toMatchObject({ musicVol: 0.5, sfxVol: 0.5, ambVol: 0.5 });
+  });
+});
+
+describe('la Toccata (« Il était une fois l’homme ») plus douce et coupée à la moitié', () => {
+  it('plus bas que les autres morceaux, et coupée en fondu à la moitié', () => {
+    expect(MUSIC.age3).toContain('industriel-toccata');
+    expect(TRACK_TRIM['industriel-toccata'].gain).toBeLessThan(1);
+    // 8:41 : elle s'efface à partir de 4:20, plus lentement qu'un enchaînement ordinaire
+    const e = trackEnd('industriel-toccata', 521);
+    expect(e.at).toBeCloseTo(260.5, 1);
+    expect(e.fade).toBeGreaterThan(4);
+  });
+  it('les autres morceaux vont jusqu’au bout, au niveau habituel', () => {
+    expect(trackEnd('industriel-gymnopedie', 187)).toEqual({ at: 187, fade: 4 });
+    expect(TRACK_TRIM['industriel-gymnopedie']).toBeUndefined();
   });
 });

@@ -64,7 +64,7 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 | `age2` | `medieval-exploration` | « Medieval: Exploration » (3:56) | RandomMind, OpenGameArt | CC0 |
 | `age2` | `medieval-auberge` | « Medieval: The Old Tower Inn » (1:46) | RandomMind, OpenGameArt | CC0 |
 | `age2` | `medieval-conteur` | « Teller of the Tales » (3:32) | Kevin MacLeod | CC BY 4.0 |
-| `age3` | `industriel-toccata` | « Toccata and Fugue in D Minor » de Jean-Sébastien Bach (8:41), **joué en premier quand le village entre à l'Industriel** (`AGE_OPENERS`, demande de l'auteur, 17 nov. 2026 : clin d'œil à « Il était une fois l'homme ») | Kevin MacLeod | CC BY 4.0 |
+| `age3` | `industriel-toccata` | « Toccata and Fugue in D Minor » de Jean-Sébastien Bach (8:41), **joué en premier quand le village entre à l'Industriel** (`AGE_OPENERS`, demande de l'auteur, 17 nov. 2026 : clin d'œil à « Il était une fois l'homme »). **Plus bas et coupé à la moitié** (`TRACK_TRIM` : gain × 0,6, coupe à 0,5, en fondu de `CUT_FADE` = 9 s, puis le morceau suivant ; retour de joueur, 22 nov. 2026 : trop fort et trop long) | Kevin MacLeod | CC BY 4.0 |
 | `age3` | `industriel-gymnopedie` | « Gymnopedie No 1 » d'Erik Satie (3:07) | Kevin MacLeod | CC BY 4.0 |
 | `age3` | `industriel-morialta` | « Danse Morialta » (3:56) | Kevin MacLeod | CC BY 4.0 |
 | `age3` | `industriel-gymnopedie-3` | « Gymnopedie No 3 » d'Erik Satie (2:25) | Kevin MacLeod | CC BY 4.0 |
@@ -113,6 +113,7 @@ Cités dans la page Crédits (`showCredits`). Cris de la faune sauvage : toutes 
 - `soundsOf` lit `Building.age` (âge du **modèle** affiché), pas l'âge du village : un bâtiment qui n'a pas encore évolué garde son son.
 
 ## Pour modifier
+- **Baisser ou raccourcir un morceau** : une entrée dans `TRACK_TRIM` (`audio.ts`) : `gain` multiplie `TRACK_GAIN`, `cut` est la part du morceau où il s'efface et passe au suivant (`trackEnd`) ; le fichier ne change pas. Test : `tests/musique.test.ts`.
 - **Ajouter un bruitage** : une sorte dans `SpotKind`, sa ligne dans `SPOT_DEFS` (force, portée, moment), son bâtiment dans `soundsOf`, sa voix dans `VOICES` (`voices.ts`) ; le test « toutes les sortes ont une voix » vérifie l'accord. Mettre à jour la table ci-dessus.
 - **Vérifier sans écouter** : `__game.audio.debugSpots()` liste les voix (sorte, force, gain courant, panoramique, en fondu). Pour mesurer le signal : brancher un `AnalyserNode` sur `__game.audio.voices.get(sorte).out`.
 - **Régler un volume** : `loud` dans `SPOT_DEFS` pour la portée relative ; `gain` de la voix (`VOICES`) pour son niveau. Les gains ont été calés hors temps réel (`OfflineAudioContext`, 12 s de chaque voix) : la fenêtre de 0,1 s la plus forte entre 0,02 et 0,06 en valeur efficace, comme une cascade proche (0,033) ; le torrent est à 0,011.

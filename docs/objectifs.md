@@ -14,7 +14,7 @@ Entre deux passages d'âge, le joueur a toujours trois petits objectifs en cours
 - Quatre façons de mesurer (`Measure`) :
   - `state` : un état du village (habitants, bâtiments, part des maisons protégées, briques en réserve, expéditions réussies). Un bâtiment amélioré compte pour son genre d'origine (`lineOf`).
   - `streak` : une condition tenue plusieurs jours de suite (nourriture et eau, tous les besoins). La série part du jour où la condition devient vraie pendant que l'objectif est en cours, et repart de zéro si elle casse.
-  - `winter` : l'hiver vu pendant que l'objectif est en cours, puis le printemps (« Passer votre premier hiver »).
+  - `winter` : l'hiver vu pendant que l'objectif est en cours, puis le printemps (« Passer votre premier hiver »). L'hiver éteint par le joueur (Paramètres › Saisons jouées, `GoalCtx.noWinter`) : il ne se propose pas.
   - `event` : un événement compté à partir du moment où l'objectif est en cours (`base`) : expédition réussie sans blessé (`safeExp`, sans les pourparlers), expédition légendaire réussie (`legend`, `isLegendary`). Il en faut une de plus qu'à son arrivée.
 - Récompenses (`reward`) : bois et pierre ajoutés directement ; minerai et bien-être passent par `applyEffects` (le bien-être est un bonus temporaire de `world.exp.temp`, comme ceux des expéditions). Le cosmodrome n'en a pas : c'est la fin.
 - Atteint : un son de fête (`sfxFeast`), un message (`notice`) « Objectif atteint : … » avec la félicitation et la récompense, et la pastille dorée « Bravo ! » pendant `GOAL_WIN_MS` = 5 s.
@@ -28,7 +28,7 @@ Entre deux passages d'âge, le joueur a toujours trois petits objectifs en cours
 | Préhistoire | Loger 12 habitants (+25 pierre) ; Nourrir et abreuver tout le village 3 jours de suite (+30 bois) ; Réussir une première expédition (+15 pierre, bien-être +1 pendant 4 j) ; Passer votre premier hiver (+30 bois, bien-être +2 pendant 4 j) ; 3 torches (+20 bois) ; Un enclos (+20 bois) |
 | Antiquité | Loger 24 habitants (+40 pierre) ; Une expédition sans blessé (+30 pierre) ; Thermes, théâtre ou arène (bien-être +2) ; 6 braseros (+30 bois) ; Tous les besoins comblés 2 jours de suite (+40 bois) |
 | Médiéval | Loger 45 habitants (+60 pierre) ; Ouvrir une mine (+40 bois) ; Une taverne (bien-être +2) ; Protéger la moitié des maisons (+40 pierre) ; Un port (+40 pierre) ; Une expédition légendaire (bien-être +3 pendant 6 j) |
-| Industriel | Loger 80 habitants (+80 pierre) ; Une première gare (+60 bois) ; 20 briques en réserve (+5 minerai) ; Stade, terrain de football ou fête foraine (bien-être +2) ; Protéger 80 % des maisons (+60 pierre) ; Une expédition sans blessé (+8 minerai) |
+| Industriel | Loger 80 habitants (+80 pierre) ; Une première gare (+60 bois) ; 20 briques en réserve (+5 minerai) ; Stade d’athlétisme, terrain de football ou fête foraine (bien-être +2) ; Protéger 80 % des maisons (+60 pierre) ; Une expédition sans blessé (+8 minerai) |
 | Moderne | Loger 130 habitants (+100 pierre) ; Aéroport ou héliport (+80 bois) ; Zoo ou parc aquatique (bien-être +3) ; Protéger toutes les maisons (+80 pierre) ; Tous les besoins comblés 3 jours de suite (+10 minerai) |
 | Futuriste | Loger 200 habitants (+120 pierre) ; Une arcologie (+100 bois) ; Deux fermes verticales (+80 pierre) ; Une centrale à fusion (bien-être +3) ; Le cosmodrome (rien) |
 

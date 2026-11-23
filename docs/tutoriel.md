@@ -32,7 +32,11 @@ de l'allié. Ils ne se montrent qu'une fois.
   5. `food` « La production » : séchoir, bûcheron et pierrier, dans la même étape (une tâche chacun)
   6. `road` : prendre l'outil Route et tracer une route
   7. `time` : pause et vitesse
-  8. `ages` : ouvrir les conditions de l'âge suivant (à lire)
+  8. `ages` « Les âges » : ouvrir les conditions de l'âge suivant (`#agePanel`), puis cliquer une expédition de la liste
+      (l'anneau entoure la première ligne `[data-m]` pas encore remplie) : son clic ouvre la fenêtre des expéditions sur sa
+      carte, où l'étape suivante reprend. Elle était « à lire » : un « OK » la passait sans ouvrir la liste, et les joueurs
+      ne passaient plus par ce menu (retour de joueur, 22 nov. 2026). Ouverte une fois, la liste compte même refermée
+      (`base.agesOpen`).
   9. `gear` « L'équipement » (à lire) : ouvrir l'onglet Équipement des expéditions et fabriquer la pièce de la mission
       que montre l'étape suivante (`tutoGear` : contre le premier danger de « La grande cueillette » en forêt, une lance à la
       Préhistoire) ; l'équipe emporte le meilleur de la réserve. Sans pièce possible, n'importe quelle pièce compte.
@@ -55,6 +59,11 @@ de l'allié. Ils ne se montrent qu'une fois.
   au premier lancement (`host.controls`, voir [interface.md](interface.md)) : au clavier, les lettres de la disposition choisie
   (`layoutKeys` : Z Q S D et A / E en AZERTY, W A S D et Q / E en QWERTY) ; à la souris, la phrase du bord de l'écran et du
   glissé (`camera.mouse`). `viewKeys` (lettres lues de `getLayoutMap`) reste pour les tests. Au doigt, la phrase tactile seule.
+- **Les fenêtres des expéditions pendant la bulle** (`hudTheme.css`, `body:has(#tuto:not([hidden]))`, écrans de 1 200 px et
+  plus) : elles se rangent à gauche et laissent à la bulle (390 px) la colonne de droite, mais prennent tout le reste de
+  l'écran (`calc(100vw - 440px)`, jusqu'à 1 500 px de large et 1 000 de haut ; la fenêtre de départ jusqu'à 1 180 px).
+  Plafonnées à 1 100 px, elles restaient toutes petites sur un grand écran, une bande vide entre elles et la bulle (retour
+  de joueur, 22 nov. 2026). La liste des missions passe sur une colonne jusqu'à 1 360 px.
 - **Fin** : « Terminer » à la dernière étape. Le temps encore en pause repart à vitesse ×1. Le tutoriel reste dans les réglages (« Recommencer »).
 - **Chapitre « Affronter les démons »** (`pve`) : **plus lancé** depuis le passage direct (22 nov. 2026, décision de l'auteur :
   le choix « Les Enfers » joue la cinématique et mène tout droit aux Enfers, voir [enfers.md](enfers.md)). Le code reste

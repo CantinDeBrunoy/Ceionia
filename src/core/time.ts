@@ -14,6 +14,11 @@ export class GameTime {
   speed = 1;
   paused = false;
   days = 0;
+  /**
+   * Les saisons éteintes par le joueur (Paramètres › Temps et météo) : l'horloge les saute, et le décor passe directement
+   * d'une saison allumée à la suivante. Une seule allumée : elle dure toujours. Aucune : toutes reviennent (`isOn`)
+   */
+  off: boolean[] = [false, false, false, false];
 
   /** Retourne le dt de jeu */
   update(dt: number): number {
@@ -29,8 +34,31 @@ export class GameTime {
     if (this.hour >= 24) { const d = Math.floor(this.hour / 24); this.days += d; this.hour -= d * 24; if (!(this.hour >= 0 && this.hour < 24)) this.hour = 0; }
     this.seasonT += g / this.seasonLen;
     if (this.seasonT >= 4) { this.seasonT %= 4; if (!Number.isFinite(this.seasonT)) this.seasonT = 0; }
+    this.skipOff();
     return g;
   }
+
+  /** La saison `i` a lieu (aucune allumée : toutes ont lieu, la partie ne se fige pas sans saison) */
+  isOn(i: number) { return !this.off[i] || this.off.every(Boolean); }
+  /** La prochaine saison allumée après `i` (elle-même si c'est la seule) */
+  nextOn(i: number) { for (let k = 1; k <= 4; k++) { const j = (i + k) % 4; if (this.isOn(j)) return j; } return i; }
+  /** La dernière saison allumée avant `i` */
+  prevOn(i: number) { for (let k = 1; k <= 4; k++) { const j = (i + 4 - k) % 4; if (this.isOn(j)) return j; } return i; }
+
+  /** Entré dans une saison éteinte : au début de la prochaine allumée (la seule allumée recommence à son début) */
+  skipOff() {
+    const s = Math.floor(this.seasonT) % 4;
+    if (this.isOn(s)) return;
+    this.seasonT = this.nextOn(s) + Math.min(this.frac, 0.05);
+  }
+
+  /** Éteint ou rallume des saisons (indices 0 printemps … 3 hiver) ; la saison en cours, éteinte, passe aussitôt */
+  setOff(list: readonly number[]) {
+    this.off = [0, 1, 2, 3].map((i) => list.includes(i));
+    this.skipOff();
+  }
+  /** Les saisons éteintes, pour la sauvegarde */
+  offList() { return [0, 1, 2, 3].filter((i) => this.off[i]); }
 
   get season() { return Math.floor(this.seasonT) % 4; }
   get frac() { return this.seasonT - Math.floor(this.seasonT); }
@@ -41,9 +69,12 @@ export class GameTime {
    * montrait l'automne en « Été » et la neige en « Automne »)
    */
   mix(): { a: number; b: number; t: number } {
-    const s = (this.seasonT + 4 - BLEND / 2) % 4, a = Math.floor(s);
-    const f = clamp((s - a - (1 - BLEND)) / BLEND, 0, 1);
-    return { a, b: (a + 1) % 4, t: f * f * (3 - 2 * f) };
+    const s = (this.seasonT + 4 - BLEND / 2) % 4, a0 = Math.floor(s);
+    const f = clamp((s - a0 - (1 - BLEND)) / BLEND, 0, 1);
+    // des saisons éteintes : le décor va d'une saison allumée à la prochaine allumée ; juste après un saut, la fin de la
+    // transition se joue depuis la dernière allumée. Une seule allumée : elle va vers elle-même, rien ne bouge
+    const a = this.isOn(a0) ? a0 : this.prevOn(a0);
+    return { a, b: this.nextOn(a), t: f * f * (3 - 2 * f) };
   }
 
   setSeason(i: number) { this.seasonT = i + 0.3; }

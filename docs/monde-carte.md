@@ -31,7 +31,7 @@ Index d'une case : `ci(x, z) = z * N + x` ; d'un sommet : `vi(x, z) = z * (N + 1
 | `lake`, `lakeLevel` | `Uint8Array`, `Float32Array` | lacs, calculés par `Streams` (voir [eau-rivieres.md](eau-rivieres.md)) |
 | `waterDist` | `Uint8Array` | distance à l'eau en cases (0 = eau, plafonnée à 12 puis 255) |
 | `basalt`, `ash` | `Float32Array`, `Uint8Array` | coulées de lave refroidies (voir [outils-terrain.md](outils-terrain.md)) |
-| `oil` | `Uint8Array` | gisements de pétrole |
+| `oil` | `Uint8Array` | gisements de pétrole (au sol, un violet sombre et des taches de brut, `OIL_SOIL` / `OIL_TAR` de `terrainView.ts`, avec les flaques d'`oilSeeps.ts` ; violets aussi sur la mini-carte, même sous les arbres. Brun sombre jusqu'au 22 nov. 2026 : on ne les trouvait pas) |
 | `grazed`, `bloom` | `Float32Array` | vie sauvage, non sauvegardée |
 
 Le champ `World.n` vaut `N` à la construction. `N` et `VS` sont des `let` exportés : `setMapSize(n)` les change et doit être appelé **avant** de construire `World`, les vues, la caméra (`main.ts` le fait au démarrage, avec la taille de la sauvegarde pour une partie reprise, puis `syncChunks()` de `vegetation.ts`). `genHeights(carte, graine, gen, n)` prend le côté en paramètre (`newWorld` passe `N`). Valeur par défaut `N = 96` : sans `setMapSize(192)`, un test échoue de façon obscure.

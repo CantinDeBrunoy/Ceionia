@@ -33,7 +33,25 @@ export interface AgeProgress {
   next: number;
   ratio: number;
   /** chaque condition ; `kind` : le bâtiment demandé (nommé comme dans la barre de construction) */
-  items: { label: string; have: number; need: number; kind?: KindId; /** titre de l'expédition demandée (le libellé la nomme) */ mission?: string }[];
+  items: AgeItem[];
+}
+
+/** Une condition d'âge ; `kind` : le bâtiment demandé (nommé comme dans la barre de construction) */
+export interface AgeItem {
+  label: string; have: number; need: number; kind?: KindId;
+  /** titre de l'expédition demandée (le libellé la nomme) */ mission?: string;
+  /** son identifiant (le clic y mène : le titre traduit ne la retrouvait pas en anglais) */ missionId?: string;
+}
+
+/** Où mène un clic sur une condition d'âge : un bâtiment à prendre en main, une expédition, ou une fiche */
+export type AgeGo = { kind: KindId } | { mission: string } | { req: 'ore' | 'brick' | 'gold' | 'pop' | 'choice' | 'conflict' | 'rail' };
+
+/** Le geste d'une condition d'âge, d'après ses champs (plus d'après son libellé affiché, qui change avec la langue) */
+export function ageGo(i: AgeItem): AgeGo {
+  if (i.kind) return { kind: i.kind };
+  if (i.missionId) return { mission: i.missionId };
+  const l = i.label;
+  return { req: l === CHOICE_LABEL ? 'choice' : l === CONFLICT_LABEL ? 'conflict' : l === GOLD_LABEL ? 'gold' : l === 'minerai' ? 'ore' : l.startsWith('briques') ? 'brick' : l === RAIL_FIRST || l === RAIL_LINKED ? 'rail' : 'pop' };
 }
 
 /** Les deux conditions du chemin de fer, en fin d'âge industriel (leur libellé commence par « chemin de fer ») */
@@ -299,7 +317,7 @@ export class Sim {
     const gold = goldNeed(n, archipelagoOn(w), goldSince(w));
     if (gold) items.push({ label: GOLD_LABEL, have: w.unlimited ? gold : Math.floor(w.gold), need: gold });
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
-    for (const m of mandatoriesFor(this.age)) items.push({ label: `expédition « ${m.title} »`, mission: m.title, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
+    for (const m of mandatoriesFor(this.age)) items.push({ label: `expédition « ${m.title} »`, mission: m.title, missionId: m.id, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
     // (l'île du portail, l'invasion et les Enfers sont facultatifs : rien d'eux ne conditionne le passage d'âge)
     // le grand choix (les Enfers, le monde, ou ni l'un ni l'autre) : obligatoire pour passer au Médiéval ; sa carte s'ouvre
     // quand le reste est rempli (« Ni l'un ni l'autre » compte), voir `sim/crossroads.ts`

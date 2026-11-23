@@ -92,6 +92,8 @@ export class MiniMap {
         else if (w.road[k]) c = [214, 204, 180];
         else if (w.isWet(x, z)) { const d = Math.min(1, Math.max(0, -h / 2.5)); c = [128 - 50 * d, 190 - 45 * d, 222 - 25 * d]; }
         else if (h < 0.3) c = [236, 220, 172];
+        // les gisements de pétrole, du violet du sol imbibé, même sous les arbres : on les cherchait sans les voir
+        else if (w.oil[k]) c = [120, 60, 160];
         else if (v === VEG_FOREST) c = w.biome[k] === BIOME_TAIGA ? [62, 110, 80] : w.biome[k] === BIOME_TROPICAL ? [46, 140, 70] : [78, 142, 70];
         else if (v === VEG_FIELD) c = [226, 196, 96];
         else if (v === VEG_GARDEN) c = [130, 196, 110];

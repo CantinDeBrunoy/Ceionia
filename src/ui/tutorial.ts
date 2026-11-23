@@ -82,8 +82,8 @@ export const TUTO_TEXT = {
     },
     ages: {
       title: 'Les âges',
-      text: 'Cliquez sur le panneau en haut à gauche pour voir ce qu’il faut pour passer à l’âge suivant.',
-      tasks: ['Ouvrir les conditions de l’âge suivant'],
+      text: 'Le panneau en haut à gauche liste ce qu’il faut pour l’âge suivant : un clic sur une ligne y mène.',
+      tasks: ['Ouvrir les conditions de l’âge suivant', 'Cliquer une expédition de la liste'],
     },
     gear: {
       title: 'L’équipement',
@@ -397,7 +397,7 @@ export class Tutorial {
   /** l'outil Route a été pris pendant cette étape */
   private roadTool = false;
   /** état au début de l'étape */
-  private base: { view?: { x: number; z: number; yaw: number; dist: number }; kinds?: Record<string, number>; roads?: number; paused?: boolean; speed?: number } = {};
+  private base: { view?: { x: number; z: number; yaw: number; dist: number }; kinds?: Record<string, number>; roads?: number; paused?: boolean; speed?: number; agesOpen?: number } = {};
   /** choix d'expédition déjà amenés sous les yeux */
   private shown = new WeakSet<Element>();
 
@@ -461,11 +461,20 @@ export class Tutorial {
         check: () => [h.time.paused !== this.base.paused, h.time.speed !== this.base.speed],
       },
       {
-        // une fois ouvert, la bulle se met à côté de la liste des conditions
-        id: 'ages', read: true,
-        anchor: () => (q('#agePanel')!.classList.contains('open') ? q('#ageReq') : q('#agePanel')),
+        // le panneau des conditions, puis une expédition obligatoire de sa liste : son clic ouvre la fenêtre des expéditions,
+        // où l'étape suivante (l'équipement) reprend. L'étape était « à lire » : un « OK » la passait sans jamais ouvrir la
+        // liste, et les joueurs ne savaient pas qu'elle mène à tout ce qui manque (retour de joueur, 22 nov. 2026)
+        id: 'ages',
+        anchor: () => {
+          if (!q('#agePanel')!.classList.contains('open')) return q('#agePanel');
+          return q('#ageReq [data-m]:not(.ok)') ?? q('#ageReq [data-m]') ?? q('#ageReq');
+        },
         bare: (a) => a.id === 'ageReq',
-        check: () => [q('#agePanel')!.classList.contains('open')],
+        check: () => {
+          const open = q('#agePanel')!.classList.contains('open');
+          if (open) this.base.agesOpen = 1;
+          return [open || !!this.base.agesOpen, !!q('.expModal')];
+        },
       },
       {
         // le bouton de la boussole, puis l'onglet Équipement de la fenêtre, puis la pièce qui protège l'équipe de « La grande

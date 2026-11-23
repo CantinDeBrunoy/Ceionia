@@ -579,7 +579,7 @@ registerDict('goals', {
   'Loger 80 habitants': 'House 80 villagers', 'Une vraie ville industrielle.': 'A true industrial town.',
   'Une première gare': 'A first station', 'Le train arrive en gare !': 'The train pulls into the station!',
   '20 briques en réserve': '20 bricks in store', 'La briqueterie tourne à plein.': 'The brickworks is running at full steam.',
-  'Un stade, un terrain de football ou une fête foraine': 'A stadium, a football pitch or a funfair', 'La ville s’amuse !': 'The town is having fun!',
+  'Un stade d’athlétisme, un terrain de football ou une fête foraine': 'An athletics stadium, a football pitch or a funfair', 'La ville s’amuse !': 'The town is having fun!',
   'Protéger 80 % des maisons': 'Protect 80% of the homes', 'La ville est bien gardée.': 'The town is well guarded.',
   // Moderne
   'Loger 130 habitants': 'House 130 residents', 'Une grande ville moderne.': 'A big modern city.',
@@ -603,4 +603,15 @@ registerDict('goals', {
   'Soleil': 'Sun', 'Arbre': 'Tree', 'Épis': 'Wheat', 'Étoile': 'Star', 'Vagues': 'Waves', 'Couronne': 'Crown',
   'Droit': 'Straight', 'À queue d’aronde': 'Swallowtail', 'En flamme': 'Pennant',
   'Les Enfers : vos troupes et votre base, de l’autre côté du portail': 'Hell: your troops and your base, on the other side of the portal',
+  // la carte d'un équipement survolé : la consommation du village (needUse)
+  'À loger : {n} habitants': 'To house: {n} residents',
+  'Consommation du village : {n} de nourriture': 'Village consumption: {n} food',
+  'Consommation du village : {n} d’eau': 'Village consumption: {n} water',
+  'À employer : {n} habitants': 'To employ: {n} residents',
+  'Demande du village : {n} de bien-être': 'Village demand: {n} well-being',
+  'Consommation du village : {n} de soins': 'Village consumption: {n} health care',
+  'Personne n’en demande encore': 'Nobody needs it yet',
+  'Comblé : {cap} pour {use}': 'Covered: {cap} for {use}',
+  'Il en manque {n}': '{n} short',
+  'avec celui-ci : {n}': 'with this one: {n}',
 });

@@ -87,6 +87,19 @@ const MUSIC_FADE = 4;
  * de la musique générée en valeur efficace (0,014 contre 0,011 au volume par défaut), un son continu contre des notes éparses
  */
 const TRACK_GAIN = 0.55;
+/**
+ * Réglages d'un morceau : `gain` multiplie `TRACK_GAIN`, `cut` est la part du morceau où il s'efface (en `CUT_FADE`
+ * secondes) et où le suivant prend le relais. La Toccata (8:41, « Il était une fois l'homme ») était trop forte et trop
+ * longue : plus bas, et coupée à la moitié (retour de joueur, décision de l'auteur du 22 nov. 2026)
+ */
+export const TRACK_TRIM: Record<string, { gain?: number; cut?: number }> = { 'industriel-toccata': { gain: 0.6, cut: 0.5 } };
+/** durée du fondu d'un morceau coupé avant sa fin (s) : plus lent que l'enchaînement d'une fin de morceau */
+const CUT_FADE = 9;
+/** Où un morceau s'arrête (s) et en combien de secondes il s'efface, d'après sa durée et `TRACK_TRIM` */
+export function trackEnd(name: string, duration: number): { at: number; fade: number } {
+  const cut = TRACK_TRIM[name]?.cut;
+  return cut !== undefined && cut < 1 ? { at: duration * cut, fade: CUT_FADE } : { at: duration, fade: MUSIC_FADE };
+}
 
 /**
  * Niveau réel de chaque bus pour une réglette à fond (1). Le 15 nov. 2026, l'auteur trouvait tout trop fort et jouait avec
@@ -344,15 +357,17 @@ export class AudioEngine {
     src.connect(g); g.connect(this.musicG);
     const t: Track = { key, name, el, src, g, next: false, dropped: false };
     this.track = t;
-    el.addEventListener('playing', () => { if (this.track === t) g.gain.setTargetAtTime(TRACK_GAIN, ctx.currentTime, MUSIC_FADE / 4); });
-    const relay = () => {
+    const level = TRACK_GAIN * (TRACK_TRIM[name]?.gain ?? 1);
+    el.addEventListener('playing', () => { if (this.track === t) g.gain.setTargetAtTime(level, ctx.currentTime, MUSIC_FADE / 4); });
+    const relay = (fade = MUSIC_FADE) => {
       if (this.track !== t || t.next) return;
       t.next = true;
-      this.fadeOut(t);
+      this.fadeOut(t, fade);
       this.playTrack(key);
     };
-    el.addEventListener('timeupdate', () => { if (el.duration - el.currentTime < MUSIC_FADE) relay(); });
-    el.addEventListener('ended', relay);
+    // (un morceau coupé avant sa fin, `TRACK_TRIM` : il s'efface plus lentement, à partir de son point de coupe)
+    el.addEventListener('timeupdate', () => { const e = trackEnd(name, el.duration); if (e.at - el.currentTime < e.fade) relay(e.fade); });
+    el.addEventListener('ended', () => relay());
     el.addEventListener('error', () => {
       if (t.dropped) return;
       this.missing.add(name);
@@ -361,11 +376,11 @@ export class AudioEngine {
     el.play().catch(() => { /* lecture refusée sans geste : on réessaie au prochain réglage */ });
   }
 
-  private fadeOut(t: Track | null) {
+  private fadeOut(t: Track | null, fade = MUSIC_FADE) {
     if (!t || !this.ctx) return;
     t.g.gain.cancelScheduledValues(this.ctx.currentTime);
-    t.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, MUSIC_FADE / 4);
-    setTimeout(() => this.drop(t), MUSIC_FADE * 1000 + 300);
+    t.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, fade / 4);
+    setTimeout(() => this.drop(t), fade * 1000 + 300);
   }
 
   private drop(t: Track) {

@@ -1373,8 +1373,8 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   #dockRow > #dockRight, #troopBar .tfoot > .tcorner { grid-column: 4; justify-self: end; }
 }
 
-/* ---------- la barre du bas repliable (retour de l'auteur, 15 nov. 2026) : une petite languette à flèche sur le bord haut du
-   panneau des modes replie les rayons et les vignettes (`body.dockMin`) ; restent les modes, les outils, la vue et la
+/* ---------- la barre du bas repliable (retour de l'auteur, 15 nov. 2026) : une petite languette à flèche (à droite, sur la
+   mini-carte, depuis le 22 nov. 2026 ; avant sur le panneau des modes) replie les rayons et les vignettes (`body.dockMin`) ; restent les modes, les outils, la vue et la
    mini-carte. Au téléphone, la languette se pose au milieu du bord haut de la barre, et « ⋯ » reste là. Ce que le tutoriel
    désigne (`.tHi`) garde la barre ouverte ---------- */
 #dock #dockSide { position: relative; }
@@ -1384,6 +1384,10 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 #bFold svg { display: block; margin-top: 1px; }
 @media (min-width: 861px) {
   body.dockMin #dock #dockMain:not(:has(.tHi)) { display: none; }
+  /* à droite, sur le bord haut de la mini-carte (`UI.placeFold` y range la languette) : à gauche, sur les modes, on ne la
+     comprenait pas (retour de joueurs, 22 nov. 2026) */
+  #dock #dockRight { position: relative; }
+  #dockRight > #bFold { left: auto; right: 26px; }
 }
 @media (max-width: 860px) {
   #bFold { top: -19px; height: 19px; width: 52px; left: calc(50% - 26px); }
@@ -1492,13 +1496,15 @@ body.dockMin #dock > #homeBack { margin-bottom: 26px; }
   #ui > .overlay > .cePop.settings .setPane { max-height: calc(100dvh - 250px); min-height: 300px; }
 }
 /* la bulle du tutoriel ouverte (étapes « L'équipement » et « Les expéditions », chapitres) : les fenêtres des expéditions se
-   rangent à gauche et lui laissent la colonne de droite, au lieu qu'elle couvre une carte de mission ou une approche */
+   rangent à gauche et lui laissent la colonne de droite (390 px et ses marges), au lieu qu'elle couvre une carte de mission
+   ou une approche. Elles prennent tout le reste de l'écran : plafonnées à 1 100 px et réduites de 470 px, elles restaient
+   toutes petites sur un grand écran, une bande vide entre elles et la bulle (retour de joueur, 22 nov. 2026) */
 @media (min-width: 1200px) {
-  body:has(#tuto:not([hidden])) .overlay > .modal.expModal { max-width: min(1100px, calc(100vw - 470px)); margin-left: 36px; margin-right: auto; }
-  body:has(#tuto:not([hidden])) .overlay > .modal.sendModal { max-width: min(1040px, calc(100vw - 470px)); margin-left: 36px; margin-right: auto; }
+  body:has(#tuto:not([hidden])) .overlay > .modal.expModal { width: calc(100vw - 440px); max-width: 1500px; height: min(1000px, 94vh); margin-left: 16px; margin-right: auto; }
+  body:has(#tuto:not([hidden])) .overlay > .modal.sendModal { max-width: min(1180px, calc(100vw - 440px)); margin-left: 16px; margin-right: auto; }
 }
 /* (plus étroite, la liste des missions passe sur une colonne, comme sous 1 180 px) */
-@media (min-width: 1200px) and (max-width: 1640px) {
+@media (min-width: 1200px) and (max-width: 1360px) {
   body:has(#tuto:not([hidden])) .expModal .missions { grid-template-columns: minmax(0, 1fr); }
 }
 /* ---------- Six rayons de construction (le rayon Décorations s'est ajouté) : sur un écran d'ordinateur moyen, les onglets se
@@ -1580,3 +1586,39 @@ button.round.off:hover { opacity: 0.85; }
 /* fiche d'un habitant : sa maison et son lieu de travail se cliquent (la vue y va), comme des liens */
 #selCard .stat .golink { min-height: 0; padding: 0; margin: 0; border: none; background: none; box-shadow: none; border-radius: 0; font: inherit; font-weight: 700; color: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted rgba(110, 80, 40, 0.45); text-underline-offset: 3px; }
 #selCard .stat .golink:hover { color: #8A5A12; text-decoration: underline solid; background: none; }
+
+/* ---------- La carte d'un équipement survolé (eau, santé…) : la consommation du village sur une jauge à la couleur du besoin
+   (`needUse`), et des pastilles teintées pareil. Elle ne disait que « +18 eau », grise (retour de joueur, 22 nov. 2026) ---------- */
+#info .n-water { --nc: #2F86D6; --ns: #E2F0FC; }
+#info .n-food { --nc: #D7892A; --ns: #FCEFD9; }
+#info .n-health { --nc: #2E9A5E; --ns: #E0F4E8; }
+#info .n-joy { --nc: #D9A21B; --ns: #FDF3D2; }
+#info .n-jobs { --nc: #8A6440; --ns: #F3E8DB; }
+#info .n-housing { --nc: #C0663A; --ns: #FAE6DB; }
+#info .effs .eff.give { background: var(--ns); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nc) 45%, transparent); color: color-mix(in srgb, var(--nc) 75%, #2a1c0c); font-weight: 800; border: 0; }
+#info .effs .eff.give svg { color: var(--nc); }
+#info .xneed { margin: 8px 0 0; padding: 7px 10px 8px; border-radius: 12px; background: linear-gradient(180deg, #FFFDF8, var(--ns)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nc) 30%, transparent); }
+#info .xneed .xnh { display: flex; align-items: center; gap: 6px; color: var(--nc); }
+#info .xneed .xnh b { color: #3A2A18; font-size: 12.5px; font-weight: 800; }
+#info .xneed .xbar { position: relative; height: 8px; margin: 6px 0 5px; border-radius: 999px; background: rgba(90, 60, 20, 0.12); overflow: hidden; }
+#info .xneed .xbar i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px; background: var(--nc); }
+#info .xneed .xbar i.add { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--nc) 55%, #fff) 0 4px, color-mix(in srgb, var(--nc) 35%, #fff) 4px 8px); border-radius: 0 999px 999px 0; }
+#info .xneed .xbar u { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #3A2A18; text-decoration: none; }
+#info .xneed small { display: block; color: #5A4630; font-size: 11.5px; }
+#info .xneed.short small { color: #A33A1E; font-weight: 700; }
+
+/* ---------- L'âge de chaque bâtiment dans le menu de construction : une petite pastille à son image (`ageMk`), à gauche sous
+   la taille, aux couleurs des âges (terre, marbre, vert, brique, verre, néon) ; celle de l'âge du village bordée d'or.
+   Après un passage d'âge, on distinguait mal les bâtiments de chaque époque (retour de joueurs, 22 nov. 2026) ---------- */
+#items .ageMk { position: absolute; left: 6px; top: 5px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-style: normal; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 1px 3px rgba(60, 40, 20, 0.25); }
+#items .ageMk .pic { width: 14px; height: 14px; }
+#items button.tile.big .ageMk { top: 18px; }
+#items .ageMk.a0 { background: linear-gradient(140deg, #fbe7c4, #e0a96a); }
+#items .ageMk.a1 { background: linear-gradient(140deg, #fdf7ea, #e2cfa2); }
+#items .ageMk.a2 { background: linear-gradient(140deg, #d6f7c9, #7fd4a6); }
+#items .ageMk.a3 { background: linear-gradient(140deg, #f6d8cc, #d09a84); }
+#items .ageMk.a4 { background: linear-gradient(140deg, #dceefe, #9cc6f0); }
+#items .ageMk.a5 { background: linear-gradient(140deg, #ecdcff, #b596f3); }
+#items .ageMk.now { box-shadow: 0 0 0 1.5px #E9B949, 0 0 6px rgba(233, 185, 73, 0.7); }
+#items button.tile.locked .ageMk { filter: grayscale(0.4); opacity: 0.85; }
+@media (max-width: 1180px) { #items .ageMk { width: 17px; height: 17px; left: 4px; top: 3px; } #items .ageMk .pic { width: 12px; height: 12px; } #items button.tile.big .ageMk { top: 14px; } }

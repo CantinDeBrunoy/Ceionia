@@ -27,6 +27,8 @@ export interface GoalCtx {
   missions: readonly string[];
   /** ressources illimitées (bac à sable, ou réglage « Ressources » en Facile) : pas de récompense, pas d'objectif de stock */
   unlimited?: boolean;
+  /** l'hiver éteint par le joueur (Paramètres › Saisons jouées) : « Passer votre premier hiver » ne se propose pas */
+  noWinter?: boolean;
 }
 
 export interface GoalReward { wood?: number; stone?: number; ore?: number; /** bien-être en plus, pendant quelques jours */ joy?: { n: number; days: number } }
@@ -97,7 +99,7 @@ export const GOALS: GoalDef[] = [
   { id: 'i-pop80', age: 3, pic: 'logement', kinds: ['house'], text: 'Loger 80 habitants', praise: 'Une vraie ville industrielle.', measure: { t: 'state', f: pop(80) }, reward: { stone: 80 } },
   { id: 'i-station', age: 3, pic: 'train', kinds: ['station'], text: 'Une première gare', praise: 'Le train arrive en gare !', measure: { t: 'state', f: build(['station']) }, reward: { wood: 60 } },
   { id: 'i-brick', age: 3, pic: 'briques', kinds: ['brickworks'], stock: true, text: '20 briques en réserve', praise: 'La briqueterie tourne à plein.', measure: { t: 'state', f: (c) => [Math.floor(c.brick), 20] }, reward: { ore: 5 } },
-  { id: 'i-sport', age: 3, pic: 'bienetre', kinds: ['stadium', 'football', 'funfair'], text: 'Un stade, un terrain de football ou une fête foraine', praise: 'La ville s’amuse !', measure: { t: 'state', f: build(['stadium', 'football', 'funfair']) }, reward: { joy: { n: 2, days: 4 } } },
+  { id: 'i-sport', age: 3, pic: 'bienetre', kinds: ['stadium', 'football', 'funfair'], text: 'Un stade d’athlétisme, un terrain de football ou une fête foraine', praise: 'La ville s’amuse !', measure: { t: 'state', f: build(['stadium', 'football', 'funfair']) }, reward: { joy: { n: 2, days: 4 } } },
   { id: 'i-sec', age: 3, pic: 'securite', kinds: ['fire', 'police'], text: 'Protéger 80 % des maisons', praise: 'La ville est bien gardée.', measure: { t: 'state', f: sec(80) }, reward: { stone: 60 } },
   { id: 'i-safe', age: 3, pic: 'boussole', exp: true, text: 'Réussir une expédition sans blessé', praise: 'Tout le monde est rentré sain et sauf.', measure: { t: 'event', ev: 'safeExp' }, reward: { ore: 8 } },
   // ---- Moderne
@@ -175,7 +177,7 @@ export function activeGoals(s: GoalState, c: GoalCtx): GoalDef[] {
   const out: GoalDef[] = [];
   for (const g of GOALS) {
     if (out.length >= GOALS_SHOWN) break;
-    if (g.age !== c.age || s.done.includes(g.id) || waiting(g, c) || (g.stock && c.unlimited)) continue;
+    if (g.age !== c.age || s.done.includes(g.id) || waiting(g, c) || (g.stock && c.unlimited) || (g.measure.t === 'winter' && c.noWinter)) continue;
     out.push(g);
   }
   return out;

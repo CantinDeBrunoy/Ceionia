@@ -54,6 +54,7 @@
 
 ## Pièges et invariants
 - Les enregistrements `Record<KindId, …>` (`KINDS`, `KIND_SUB`, `KIND_LABEL`, `KIND_ICON`) sont exhaustifs : TypeScript refuse un genre oublié. `KIND_ORDER`, `ZONED`, `UNLOCK_NOTE` (`ui.ts`), `GREW` (`world.ts`), `BRICK_PRICE`, `YIELD` et `YARD` (`render/roads.ts`) sont partiels : un oubli passe sans erreur.
+- Renommer un bâtiment ne touche que ses `names` (et leur anglais, `KIND_LABEL` au pluriel, les textes qui le citent), jamais son `KindId` : ainsi `stadium`, « Stade » devenu « Stade d’athlétisme » le 22 nov. 2026 (on le confondait avec le stade de football).
 - Un identifiant de genre est écrit dans la sauvegarde (`[kind, x, z, rot, auto, age, small?]`) : ne jamais renommer un `KindId` ; un genre inconnu est ignoré au chargement (`World.fromJSON`). Voir [sauvegarde.md](sauvegarde.md).
 - Ne pas changer `size` d'un genre existant sans entrée de migration (`OLD_SIZE`, `GREW`) : les anciennes emprises se chevaucheraient.
 - `acropolis`/`forum`/`senate` ont des noms pour les âges 2 à 5 alors qu'on ne les bâtit qu'à l'âge 1 : c'est voulu (ils évoluent), ne pas les « nettoyer ».

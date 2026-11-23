@@ -101,8 +101,19 @@ export const haveLabel = (w: World, c: Cost) => c.brick
   ? tr(Math.floor(w.brick) > 1 ? '{wood} bois, {stone} pierre et {brick} briques' : '{wood} bois, {stone} pierre et {brick} brique', { wood: Math.floor(w.wood), stone: Math.floor(w.stone), brick: Math.floor(w.brick) })
   : tr('{wood} bois et {stone} pierre', { wood: Math.floor(w.wood), stone: Math.floor(w.stone) });
 
-/** Ce qui manque pour payer, à dire au joueur */
-export const shortLabel = (w: World, c: Cost) => tr('Il faut {cost} (vous avez {have})', { cost: costLabel(c), have: haveLabel(w, c) });
+/** Ce qui manque de chaque matériau pour payer ce prix (rien : 0), arrondi au-dessus (9,6 bois pour 10 : il en manque 1) */
+export const missingOf = (w: World, c: Cost): Cost => {
+  const gap = (need: number, have: number) => Math.max(0, Math.ceil(need - have - 1e-9));
+  const m: Cost = { wood: gap(c.wood, w.wood), stone: gap(c.stone, w.stone) };
+  if (c.brick) m.brick = gap(c.brick, w.brick);
+  return m;
+};
+
+/**
+ * Ce qui manque pour payer, à dire au joueur : seulement le matériau qui manque (« Il manque 12 briques »), plus tout le prix
+ * et toute la réserve (« Il faut 40 bois, 30 pierre et 20 briques (vous avez…) » : retour de joueurs, 22 nov. 2026)
+ */
+export const shortLabel = (w: World, c: Cost) => tr('Il manque {cost}', { cost: costLabel(missingOf(w, c)) });
 
 /** Production par jour d'un bâtiment, selon son âge */
 export const YIELD: Partial<Record<KindId, Partial<Record<Resource, number[]>>>> = {

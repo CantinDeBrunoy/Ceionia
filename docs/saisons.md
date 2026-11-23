@@ -1,7 +1,7 @@
 # Saisons
 
 > Fichiers : `src/render/seasonConfig.ts` (les quatre fiches, palette de départ, proportions des essences), `src/render/season.ts` (`SeasonState`, `computeSeason`, `seasonOf`), `src/render/seasonShaders.ts` (`addPalette`, `addCover`, `pickPalette`), `src/core/time.ts` (`GameTime.mix`), et les vues qui lisent l'état : `vegetation.ts`, `terrainView.ts`, `streams.ts`, `env.ts`, `atmosphere.ts`, `life.ts`, `gardens.ts`.
-> Tests : `tests/saisons.test.ts`, `tests/neigeRoutes.test.ts`, `tests/glaceBiomes.test.ts`.
+> Tests : `tests/saisons.test.ts`, `tests/saisonsChoisies.test.ts`, `tests/neigeRoutes.test.ts`, `tests/glaceBiomes.test.ts`.
 > Voir aussi : [vegetation-biomes.md](vegetation-biomes.md), [eau-rivieres.md](eau-rivieres.md), [ciel-meteo.md](ciel-meteo.md), [chargement-performances.md](chargement-performances.md)
 
 ## En bref
@@ -15,6 +15,14 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
 - La neige ne tient que la première moitié de l'hiver (fonte de `seasonT` 3,5 à 3,9) ; la glace suit la neige (`iceNow`).
 - Rien ne gèle au désert ni sous les tropiques, ni à moins de 4 cases d'eux : un fond de canyon vert au milieu du désert reste liquide.
 - Désert et tropiques gardent leurs buissons (couche `shrubDry`) et leurs fleurs propres ; les palettes ne s'appliquent qu'aux biomes à saisons.
+
+### Saisons jouées (réglage du joueur, 22 nov. 2026)
+- Paramètres › Temps et météo › « Saisons jouées » : chaque saison s'éteint ou se rallume (un joueur qui n'aime que l'été ne joue qu'en été). La dernière allumée ne s'éteint pas (« Gardez au moins une saison. »). Les boutons « Saison et heure » des saisons éteintes sont grisés.
+- `GameTime.off` (quatre booléens) ; `setOff(liste)`, `offList()`, sauvés dans les réglages (`seasonsOff`, liste d'indices ; absent : aucune, `readSeasonsOff` écarte le reste).
+- `GameTime.update` › `skipOff` : entré dans une saison éteinte, `seasonT` passe au début de la prochaine allumée (`nextOn`, en gardant au plus 0,05 de l'avance). Une seule allumée : elle recommence à son début, sans fin.
+- `GameTime.mix` : le décor va d'une saison allumée (`a`) à la prochaine allumée (`b = nextOn(a)`) ; juste après un saut, la fin de la transition part de la dernière allumée (`prevOn`). Une seule allumée : `a = b`, rien ne bouge.
+- L'hiver éteint : l'objectif « Passer votre premier hiver » ne se propose pas (`GoalCtx.noWinter`, voir [objectifs.md](objectifs.md)), il serait resté bloqué.
+- **Aucune saison allumée** (sauvegarde trafiquée, ou plus tard un autre chemin) : `isOn` les dit toutes allumées, l'année tourne comme avant. Test : `tests/saisonsChoisies.test.ts`.
 
 ## Fonctionnement dans le code
 
