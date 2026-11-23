@@ -337,6 +337,13 @@ const RES_PIC: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 
 const resPic = (r: Resource, size: number) => RES_PIC[r].length > 2 ? hudPic(RES_PIC[r], size) : pic(RES_PIC[r], size);
 /** La barre du haut tient sur une ligne dès cette largeur d'écran (voir `UI.fitHud` et `style.css`) */
 const ONE_LINE_MIN = 1100;
+/**
+ * L'écran allégé (version B des maquettes `.claude/maquettes-hud/ecran-allege/`, choisie par l'auteur le 23 nov. 2026) : sur un
+ * écran d'ordinateur, tout le haut sur une barre de 46 px, les équipes dans une pastille, le conseil et les messages à une seule
+ * place, les vignettes de construction repliées tant qu'aucun outil n'est en main. `body.allege`, voir `hudAllege.css`
+ */
+const ALLEGE = `(min-width: ${ONE_LINE_MIN}px) and (min-height: 521px)`;
+const allege = () => document.body.classList.contains('allege');
 /** marge de sécurité de la barre du haut sur une ligne (arrondis, bordures des pilules) */
 const FIT_SLACK = 8;
 /** durée de la pastille dorée d'un objectif atteint */
@@ -677,7 +684,7 @@ export class UI {
         </div>
         <div id="needsPanel">
           <div id="resPanel" class="panel hudPill"><button class="resNav" id="resPrev" title="${tr('Ressources précédentes')}" aria-label="${tr('Ressources précédentes')}">${ic('chevLeft', 16, 2.4)}</button><div id="resView"><div id="res"></div></div><button class="resNav" id="resNext" title="${tr('Ressources suivantes')}" aria-label="${tr('Ressources suivantes')}">${ic('chevRight', 16, 2.4)}</button><span class="hsep"></span><button class="pop" id="pop" title="${tr('État des habitants')}" aria-label="${tr('État des habitants')}" aria-expanded="false"></button></div>
-          <div id="needsBox" class="panel hudPill"><button class="resNav" id="needPrev" title="${tr('Besoins précédents')}" aria-label="${tr('Besoins précédents')}">${ic('chevLeft', 16, 2.4)}</button><div id="needView"><div id="needs"></div></div><button class="resNav" id="needNext" title="${tr('Besoins suivants')}" aria-label="${tr('Besoins suivants')}">${ic('chevRight', 16, 2.4)}</button></div>
+          <div id="needsBox" class="panel hudPill"><button id="needsOk" type="button" aria-expanded="false"></button><button class="resNav" id="needPrev" title="${tr('Besoins précédents')}" aria-label="${tr('Besoins précédents')}">${ic('chevLeft', 16, 2.4)}</button><div id="needView"><div id="needs"></div></div><button class="resNav" id="needNext" title="${tr('Besoins suivants')}" aria-label="${tr('Besoins suivants')}">${ic('chevRight', 16, 2.4)}</button></div>
           <div id="goalBox" class="panel hudPill" hidden></div>
         </div>
         <div id="hudR">
@@ -695,7 +702,7 @@ export class UI {
           </nav>
         </div>
       </header>
-      <div id="expList"><button id="helpBtn" type="button" aria-pressed="false"></button><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
+      <div id="expList"><button id="helpBtn" type="button" aria-pressed="false"></button><button id="expPill" type="button" aria-expanded="false" hidden></button><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="bUp" title="${tr('Remonter à la surface (U)')}">${ic('up', 18)} ${tr('Remonter')}</button>
@@ -771,6 +778,16 @@ export class UI {
     }, { passive: false });
     // chaque besoin : son picto 3D, le pourcentage comblé et sa jauge (le nom reste en infobulle, et sous la jauge si la place le permet)
     $('#needs').innerHTML = [...NEEDS, SECURITY_NEED].map((n) => `<div class="need" id="n-${n.k}"><b>${hudPic(NEED_PIC[n.k], 26)}</b><em class="pv"></em><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('');
+    // l'écran allégé, dès 1 100 px de large (en dessous, la barre du haut passe sur deux lignes comme avant)
+    const mq = matchMedia(ALLEGE), lighten = () => { document.body.classList.toggle('allege', mq.matches); this.fitKey = ''; this.placeDock(); };
+    mq.addEventListener('change', () => { lighten(); this.update(); });
+    document.body.classList.toggle('allege', mq.matches);
+    // les besoins, dans l'écran allégé : seuls ceux qui manquent, ou un mot quand tout va bien ; ce bouton déplie la liste entière
+    $('#needsOk').onclick = () => {
+      const on = $('#needsBox').classList.toggle('all');
+      $('#needsOk').setAttribute('aria-expanded', String(on));
+      this.fitKey = ''; this.host.audio.sfxClick(); this.update();
+    };
     // fiche des habitants : un clic sur le compteur l'ouvre, un clic ailleurs la ferme
     const census = document.createElement('div');
     census.id = 'census';
@@ -864,7 +881,11 @@ export class UI {
     document.addEventListener('pointerdown', (e) => {
       const t = e.target as HTMLElement;
       if (!census.hidden && !census.contains(t) && !t.closest('#pop')) this.closeCensus();
+      // (la liste entière des besoins, dépliée dans l'écran allégé, se replie d'un clic ailleurs)
+      if ($('#needsBox').classList.contains('all') && !t.closest('#needsBox, #needInfo')) { $('#needsBox').classList.remove('all'); $('#needsOk').setAttribute('aria-expanded', 'false'); this.fitKey = ''; }
       if ((this.needOpen || this.resOpen) && !needInfo.contains(t) && !t.closest('.need, .res') && !(this.host.tools.coverage.active && t.tagName === 'CANVAS')) this.closeNeed();
+      // (écran allégé : un clic sur la carte sans outil en main replie les vignettes)
+      if (allege() && this.dockOpen && t.tagName === 'CANVAS' && this.host.tools.tool === 'none') { this.dockOpen = false; this.syncFold(); }
       // la liste des conditions d'âge se replie dès qu'on clique ailleurs
       if (!t.closest('#agePanel') && $('#agePanel').classList.contains('open')) { $('#agePanel').classList.remove('open'); this.update(); }
     });
@@ -915,6 +936,12 @@ export class UI {
     };
     $('#bSettings').onclick = () => this.openSettings();
     $('#bExp').onclick = () => this.openExpeditions();
+    // l'écran allégé : les équipes en route tiennent dans une pastille, un clic déplie leurs cartes (et les replie)
+    $('#expPill').onclick = () => {
+      const on = $('#expList').classList.toggle('open');
+      $('#expPill').setAttribute('aria-expanded', String(on));
+      this.host.audio.sfxClick();
+    };
     $('#bPeoples').onclick = () => { this.host.audio.sfxClick(); this.openPeoples(); };
     $('#bHell').onclick = () => { this.host.audio.sfxClick(); this.host.goHell?.(); };
     $('#bPhoto').onclick = () => host.setPhoto(true);
@@ -1004,7 +1031,8 @@ export class UI {
     // la petite flèche qui replie la barre du bas (état retenu d'une partie à l'autre)
     $('#bFold').onclick = () => { this.setDockMin(!document.body.classList.contains('dockMin')); host.audio.sfxClick(); };
     matchMedia(FOLD_SIDE).addEventListener('change', () => this.placeFold());
-    { let min = false; try { min = localStorage.getItem(DOCK_MIN_KEY) === '1'; } catch { /* sans stockage */ } this.setDockMin(min); }
+    // (l'état retenu ne vaut que hors de l'écran allégé, où les vignettes suivent l'outil en main : `placeDock`)
+    this.placeDock();
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
@@ -1046,9 +1074,19 @@ export class UI {
   // ---------------- Barre du bas (façon Anno 1800) ----------------
   /**
    * Replie (ou rouvre) la barre du bas : les rayons et les vignettes disparaissent, restent les modes, les outils, la vue et la
-   * mini-carte. La petite flèche `#bFold` le fait aussi ; le choix est retenu pour ce joueur (`ceionia.basReplie`)
+   * mini-carte. La petite flèche `#bFold` le fait aussi ; le choix est retenu pour ce joueur (`ceionia.basReplie`).
+   * Dans l'écran allégé, c'est le vœu du joueur (`dockOpen`) : la barre suit aussi l'outil en main et le tutoriel (`syncFold`),
+   * et rien n'est retenu
    */
   setDockMin(on: boolean) {
+    this.dockOpen = !on;
+    if (allege()) { this.syncFold(); return; }
+    this.foldDock(on);
+    try { localStorage.setItem(DOCK_MIN_KEY, on ? '1' : '0'); } catch { /* sans stockage */ }
+  }
+
+  /** Replie ou rouvre la barre à l'écran, sans rien retenir */
+  private foldDock(on: boolean) {
     document.body.classList.toggle('dockMin', on);
     this.placeFold();
     const b = $('#bFold'), t = tr(on ? 'Déplier la barre de construction' : 'Replier la barre de construction');
@@ -1056,8 +1094,40 @@ export class UI {
     b.title = t;
     b.setAttribute('aria-label', t);
     b.setAttribute('aria-expanded', String(!on));
-    try { localStorage.setItem(DOCK_MIN_KEY, on ? '1' : '0'); } catch { /* sans stockage */ }
     requestAnimationFrame(() => { this.placeCards(); this.refreshArrows(); });
+  }
+
+  /**
+   * L'écran allégé : les vignettes de construction restent repliées tant qu'aucun outil n'est en main. Elles s'ouvrent d'un clic
+   * sur un mode ou un rayon (`dockOpen`), avec un outil en main, une recherche, pendant le tutoriel (choix de l'auteur, 23 nov.
+   * 2026 : dépliées pendant le tutoriel, repliées ensuite) et au passage d'un âge (pour montrer les nouveaux bâtiments). Un outil
+   * lâché, un clic sur la carte sans outil, ou un second clic sur le rayon ouvert les replient
+   */
+  private dockOpen = false;
+  private foldTool: ToolId = 'none';
+  private syncFold() {
+    if (!allege()) return;
+    const tl = this.host.tools, held = tl.tool !== 'none';
+    if (this.foldTool !== 'none' && !held) this.dockOpen = false;
+    this.foldTool = tl.tool;
+    const open = held || this.dockOpen || !!this.tutorial?.active || !!this.query.trim() || document.activeElement?.id === 'itSearch';
+    if (document.body.classList.contains('dockMin') === open) this.foldDock(!open);
+  }
+
+  /**
+   * L'écran allégé met les modes et les outils sur la même bande que les rayons (`#dockTop`) ; ailleurs, ils reviennent dans
+   * leur panneau de gauche (`#dockSide`). Refait quand on passe d'un écran à l'autre
+   */
+  private placeDock() {
+    const top = $('#dockTop'), side = $('#dockSide'), modes = $('#modes'), ql = $('#quickL'), qr = $('#quickR');
+    if (allege()) {
+      if (modes.parentElement !== top) { top.prepend(modes); top.insertBefore(ql, $('#bMore')); top.insertBefore(qr, $('#bMore')); }
+      this.syncFold();
+    } else {
+      if (modes.parentElement !== side) side.append(modes, ql, qr);
+      let min = false; try { min = localStorage.getItem(DOCK_MIN_KEY) === '1'; } catch { /* sans stockage */ }
+      this.foldDock(min);
+    }
   }
 
   /**
@@ -1143,16 +1213,20 @@ export class UI {
       : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 20)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
     sub.classList.toggle('searching', !!query);
     // un sous-menu du Paysage : l'outil en main d'un autre sous-menu est lâché (sinon refreshTools ramènerait le sien)
-    sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = () => {
+    // (écran allégé : un clic du joueur sur le sous-menu ou le rayon déjà ouvert replie les vignettes, un autre les ouvre)
+    const unfold = (again: boolean, ev: MouseEvent) => { if (allege() && ev.isTrusted) { this.dockOpen = !(again && !document.body.classList.contains('dockMin')); this.syncFold(); } };
+    sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = (ev) => {
+      unfold(b.dataset.l === this.land, ev);
       this.land = b.dataset.l as LandSub;
       this.clearSearch();
       const lt = landOfTool(this.host.tools.tool);
       if (lt && lt !== this.land) this.host.tools.setTool('none');
       this.renderItems(); this.host.audio.sfxClick();
     }));
-    sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
+    sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = (ev) => {
       const why = b.dataset.c !== KINDS.gather.cat ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
+      unfold(b.dataset.c === this.cat && !this.query.trim(), ev);
       this.cat = b.dataset.c as BuildCat;
       this.clearSearch();
       // le bâtiment en main est d'un autre rayon : on le lâche, sinon refreshTools ramènerait son rayon
@@ -1798,7 +1872,10 @@ export class UI {
     const one = innerWidth >= ONE_LINE_MIN, rv = $('#resView'), nv = $('#needView'), box = $('#goalBox');
     const nRes = rv.querySelectorAll('.res').length, nNeed = nv.querySelectorAll('.need').length;
     // (la largeur des stocks change avec leurs chiffres : 9 → 10 → 100)
-    const key = `${innerWidth}|${nRes}|${nNeed}|${box.hidden}|${document.body.className}|${[...rv.children[0]?.children ?? []].map((e) => (e as HTMLElement).offsetWidth).join()}|${$('#pop').offsetWidth}|${$('#hudR').offsetWidth}`;
+    // (l'écran allégé ne montre que les besoins qui manquent, sans fenêtre qui défile : la pilule entière compte, sa largeur entre
+    // dans la clé)
+    const lite = allege();
+    const key = `${innerWidth}|${nRes}|${nNeed}|${box.hidden}|${document.body.className}|${[...rv.children[0]?.children ?? []].map((e) => (e as HTMLElement).offsetWidth).join()}|${$('#pop').offsetWidth}|${$('#hudR').offsetWidth}|${lite ? $('#needsBox').offsetWidth : ''}`;
     if (key === this.fitKey) return;
     this.fitKey = key;
     // (le défilement est gardé : le joueur qui regardait l'or le voit encore après)
@@ -1814,7 +1891,7 @@ export class UI {
     // (les cases n'ont pas toutes la même largeur : une fenêtre de n cases prend la largeur des n plus larges, pour en montrer n
     // entières d'où que parte le défilement ; un bout de la suivante qui dépasserait est masqué, voir `hidePeek`)
     const top = (q: NodeListOf<HTMLElement>) => [...q].map((e) => e.offsetWidth + 2).sort((a, b) => b - a);
-    const resWs = top(rv.querySelectorAll<HTMLElement>('.res')), needWs = top(nv.querySelectorAll<HTMLElement>('.need'));
+    const resWs = top(rv.querySelectorAll<HTMLElement>('.res')), needWs = lite ? [] : top(nv.querySelectorAll<HTMLElement>('.need'));
     const span = (ws: number[], n: number) => ws.slice(0, n).reduce((a, b) => a + b, 0);
     // ce que chaque pilule prend en dehors de sa fenêtre (marges, séparateur, habitants), les flèches à part : mesuré pièce par
     // pièce (la pilule elle-même peut être rétrécie par la place qui manque)
@@ -1829,17 +1906,17 @@ export class UI {
       }
       return w;
     };
-    const chromeR = chrome(rp, rv), chromeN = chrome(nb, nv);
+    const chromeR = chrome(rp, rv), chromeN = lite ? nb.offsetWidth : chrome(nb, nv), nN = lite ? 0 : nNeed;
     const fitIn = (goalW: number) => {
       const free = hud.clientWidth - $('#hudL').offsetWidth - $('#hudR').offsetWidth - 3 * gap - (goalW ? goalW + gap : 0) - chromeR - chromeN - FIT_SLACK;
-      const cost = (r: number, n: number) => span(resWs, r) + span(needWs, n) + (r < nRes ? navW : 0) + (n < nNeed ? navW : 0);
-      let r = Math.min(2, nRes), n = Math.min(2, nNeed);
+      const cost = (r: number, n: number) => span(resWs, r) + span(needWs, n) + (r < nRes ? navW : 0) + (n < nN ? navW : 0);
+      let r = Math.min(2, nRes), n = Math.min(2, nN);
       if (cost(r, n) > free) return null;
       // une ressource, puis un besoin, tant qu'il reste de la place
       for (let grew = true; grew;) {
         grew = false;
         if (r < nRes && cost(r + 1, n) <= free) { r++; grew = true; }
-        if (n < nNeed && cost(r, n + 1) <= free) { n++; grew = true; }
+        if (n < nN && cost(r, n + 1) <= free) { n++; grew = true; }
       }
       return [r, n];
     };
@@ -1848,9 +1925,9 @@ export class UI {
     // et enfin qu'une ressource
     if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth); }
     if (!fit && !box.hidden) { box.classList.add('mini'); fit = fitIn(box.offsetWidth); }
-    let [r, n] = fit ?? [Math.min(2, nRes), 1];
+    let [r, n] = fit ?? [Math.min(2, nRes), Math.min(1, nN)];
     const apply = () => {
-      for (const [v, w] of [[rv, span(resWs, r) - 2], [nv, span(needWs, n) - 2]] as const) { v.style.maxWidth = 'none'; v.style.minWidth = '0'; v.style.width = `${w}px`; v.style.flexShrink = '0'; }
+      for (const [v, w] of (lite ? [[rv, span(resWs, r) - 2]] : [[rv, span(resWs, r) - 2], [nv, span(needWs, n) - 2]]) as [HTMLElement, number][]) { v.style.maxWidth = 'none'; v.style.minWidth = '0'; v.style.width = `${w}px`; v.style.flexShrink = '0'; }
       this.syncResNav(); this.syncNeedNav();
     };
     apply();
@@ -1963,6 +2040,8 @@ export class UI {
   refreshTools() {
     this.renderSelection();
     const tl = this.host.tools;
+    // (l'écran allégé : un outil pris déplie les vignettes, un outil lâché les replie)
+    this.syncFold();
     this.root.querySelectorAll<HTMLButtonElement>('#dock button[data-tool], #items button[data-kind]').forEach((b) => {
       const on = b.dataset.tool ? b.dataset.tool === tl.tool : tl.tool === 'build' && b.dataset.kind === tl.kind;
       // le bâtiment pris en main (depuis un message, un raccourci) défile jusque dans la rangée visible
@@ -2095,7 +2174,8 @@ export class UI {
   private tickNotifs() {
     const now = performance.now();
     // une bannière à l'écran : un seul message en plus, pas deux
-    this.notifs.max = window.matchMedia('(max-width: 600px)').matches || this.banners.showing() ? 1 : 2;
+    // (l'écran allégé : une seule place pour le conseil et les messages, un message à la fois)
+    this.notifs.max = window.matchMedia('(max-width: 600px)').matches || this.banners.showing() || allege() ? 1 : 2;
     const open = !!this.root.querySelector('.overlay');
     this.notifs.setBlocked(open, now);
     this.notifs.tick(now, this.toastHover);
@@ -2132,6 +2212,8 @@ export class UI {
         el.querySelector('span')!.textContent = lead ? lead[1] : txt; el.dataset.v = txt;
       }
     }
+    // un message à l'écran passe devant le conseil du moment, qui revient après lui (écran allégé : ils ont la même place)
+    document.body.classList.toggle('toastOn', q.visible.length > 0);
     $('#bellBadge').textContent = q.unread ? String(Math.min(q.unread, 99)) : '';
     $('#bBell').classList.toggle('new', q.unread > 0);
     if (!$('#notifPanel').hidden) this.renderNotifPanel();
@@ -2186,10 +2268,12 @@ export class UI {
     this.renderRailEdit();
     this.renderCursorHint();
     if (this.waitNotes.size) this.dropDecided();
-    if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
+    // (un nouvel âge : l'écran allégé déplie les vignettes, pour montrer les nouveaux bâtiments)
+    if (sim.age !== this.lastAge) { if (this.lastAge >= 0) this.dockOpen = true; this.lastAge = sim.age; this.renderItems(); }
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
     else if (!this.press && this.tilesNow() !== this.tilesKey) this.renderItems(true);
     this.markFirst();
+    this.syncFold();
     // (et quand les stocks bougent, une fiche qui dit « vous avez 15 bois » : elle restait à l'ancien compte, testeuse v6)
     if (this.host.tools.placeWhy !== this.infoWhy || this.host.tools.placeStage !== this.infoStage || this.haveNow() !== this.infoHave) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
@@ -2243,9 +2327,13 @@ export class UI {
       const g = ageGo(i);
       return 'kind' in g ? ` data-kind="${g.kind}" title="${sim.whereOf(g.kind)} ${tr('— cliquer pour le bâtir')}"` : 'mission' in g ? ` data-m="${g.mission}" title="${tr('Cliquer pour voir l’expédition')}"` : ` data-req="${g.req}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`;
     };
+    // (en tête, pour l'écran allégé dont la barre ne garde que l'âge et sa jauge : le nom de l'île, le pourcentage, les
+    // conditions remplies ; caché sinon, la carte du village le dit déjà)
+    const isle = this.host.world.isleName.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const reqHead = `<div class="rqHead"><b>${isle}</b><em>${ap ? `${pctText(pct)} · ${tr('{met}/{n} conditions', { met, n: ap.items.length })}` : ''}</em></div>`;
     const reqHtml = sbReq ?? (ap
-      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${goAttr(i)}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
-      : this.endRoad());
+      ? `${reqHead}<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${goAttr(i)}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      : reqHead + this.endRoad());
     // réécrite seulement si elle change, et pas sous le doigt : la liste refaite quatre fois par seconde entre l'appui et le
     // relâchement perdait le clic (le nœud appuyé n'existait plus), qui repliait alors la liste sans rien ouvrir
     const reqBox = $('#ageReq');
@@ -2258,6 +2346,21 @@ export class UI {
       el.classList.toggle('warn', !need.ok && !housing);
       el.classList.toggle('full', !need.ok && housing);
       el.setAttribute('aria-label', housing ? tr('{need} : {pop} habitants pour {cap} places', { need: tr(n.label), pop: Math.floor(sim.pop), cap: need.cap }) : tr('{need} : {cap} pour un besoin de {demand}', { need: tr(n.label), cap: num(need.cap), demand: num(need.demand) }));
+    }
+    // l'écran allégé : un mot quand tout va bien (« Besoins ✓ »), sinon seuls les besoins qui manquent ; le bouton déplie la
+    // liste entière (la sécurité, simple indicateur, n'y paraît qu'alors)
+    {
+      // (un village plein n'est pas en manque : il attend des places pour grandir, comme le dit le conseil, bleu et non orange)
+      const miss = NEEDS.filter((n) => n.k !== 'housing' && !sim[n.k].ok).length, ok = $('#needsOk');
+      const v = `${miss}|${getLang()}`;
+      if (ok.dataset.v !== v) {
+        ok.dataset.v = v;
+        ok.innerHTML = miss ? ic('chevDown', 15, 2.4) : `<i class="dot"></i><span>${tr('Besoins')}</span><b class="okv">${ic('check', 11, 3)}</b>`;
+        const t = tr(miss ? 'Voir tous les besoins' : 'Tous les besoins sont comblés : voir le détail');
+        ok.title = t; ok.setAttribute('aria-label', t);
+        $('#needsBox').classList.toggle('allOk', !miss);
+        this.fitKey = '';
+      }
     }
     this.renderGoals();
     this.fitHud();
@@ -2280,7 +2383,8 @@ export class UI {
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
     // le picto de la saison (la lune la nuit), l'heure, la saison et le jour de la partie
     const night = hh >= 21 || hh < 6, sp = hudPic(night ? 'nuit' : SEASON_PIC[time.season], 38);
-    const clock = `${sp}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${tr('{season}, jour {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small></span>`;
+    // (deux écritures du jour : l'écran allégé, sur une ligne, prend la courte, « Printemps · j. 23 »)
+    const clock = `${sp}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small class="dl">${tr('{season}, jour {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small><small class="ds">${tr('{season} · j. {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small></span>`;
     // le contenu ne change que si l'heure, la saison ou la météo changent (on évite de recréer les icônes à chaque mise à jour)
     if ($('#clock').dataset.v !== clock) { $('#clock').innerHTML = clock; $('#clock').dataset.v = clock; }
     this.syncPause();
@@ -2595,7 +2699,7 @@ export class UI {
     const h = this.host, ex = h.expeditions, list = $('#expList');
     // juste sous la barre du haut, quelle que soit sa hauteur (elle passe sur plusieurs lignes sur un téléphone)
     // (le bas des panneaux du haut, sans la colonne de gauche qui descend avec le conseil et les messages)
-    const hudB = Math.round(Math.max(...['#agePanel', '#resPanel', '#needsBox', '#goalBox', '#hudR'].map((q) => $(q).getBoundingClientRect().bottom)));
+    const hudB = Math.round(Math.max(...['#agePanel', '#resPanel', '#needsBox', '#goalBox', '#hudR', '#ageGo:not([hidden])'].map((q) => this.root.querySelector(q)?.getBoundingClientRect().bottom ?? 0)));
     // les cartes des équipes : à gauche, sous la barre du haut ; la liste des conditions d'âge
     // dépliée : elles passent dessous au lieu d'être cachées
     const req = $('#agePanel').classList.contains('open') ? $('#ageReq').getBoundingClientRect().bottom : 0;
@@ -2678,6 +2782,18 @@ export class UI {
       $('.cam', card).classList.toggle('active', h.incidentCam === i.key);
     }
     for (const [key, card] of this.incCards) if (!liveI.has(key)) { card.remove(); this.incCards.delete(key); }
+    // la pastille de l'écran allégé : « 2 en route · ⚠ 1 décision » (cachée sans équipe dehors)
+    const pill = $<HTMLButtonElement>('#expPill'), nDec = ex.active.filter((a) => a.wait).length;
+    const ph = ex.active.length ? `${ic('compass', 15, 2.2)}<span>${tr('{n} en route', { n: ex.active.length })}</span>${nDec ? `<i class="sep">·</i>${pic('⚠', 16)}<span class="dec">${tr(nDec > 1 ? '{n} décisions' : '{n} décision', { n: nDec })}</span>` : ''}<b class="chev">${ic('chevDown', 13, 2.6)}</b>|${getLang()}` : '';
+    if (pill.dataset.v !== ph) {
+      pill.dataset.v = ph;
+      pill.innerHTML = ph.slice(0, ph.lastIndexOf('|'));
+      pill.hidden = !ex.active.length;
+      pill.classList.toggle('ask', !!nDec);
+      const t = tr('Les équipes en route : cliquer pour voir leurs cartes');
+      pill.title = t; pill.setAttribute('aria-label', t);
+      if (!ex.active.length) { list.classList.remove('open'); pill.setAttribute('aria-expanded', 'false'); }
+    }
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
     $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
@@ -3389,6 +3505,7 @@ export class UI {
         <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
         <p class="hint">${tr('Une flèche dorée flotte au-dessus des bâtiments qu’on peut améliorer et dont on a de quoi payer l’amélioration.')}</p>
         <div class="row"><label>${tr('Objectifs')}</label><button id="gGoals" class="${h.hideGoals ? '' : 'active'}">${tr(h.hideGoals ? 'Masqués' : 'Affichés')}</button></div>
+        <div class="row"><label title="${tr('Le conseil du moment, au milieu sous la barre du haut : ce qu’il faut bâtir ensuite')}">${tr('Conseils du moment')}</label><button id="gHelp" class="${this.help ? 'active' : ''}">${tr(this.help ? 'Affichés' : 'Masqués')}</button></div>
         <p class="hint">${tr('Trois petits objectifs à la fois dans la barre du haut, chacun avec une récompense.')}</p>
         <div class="row"><label>${tr('Ressources')}</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? tr(h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
         <p class="hint">${tr('Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.')}</p>
@@ -3543,6 +3660,12 @@ export class UI {
       h.setIntroOff(!h.introOff);
       q('#gIntro').textContent = tr(h.introOff ? 'Désactivée' : 'Activée');
       q('#gIntro').classList.toggle('active', !h.introOff);
+    };
+    // (les aides : la pastille « Aides » de la colonne de gauche n'est plus dans l'écran allégé, l'interrupteur est ici)
+    q('#gHelp').onclick = () => {
+      this.setHelp(!this.help);
+      q('#gHelp').textContent = tr(this.help ? 'Affichés' : 'Masqués');
+      q('#gHelp').classList.toggle('active', this.help);
     };
     q('#gGoals').onclick = () => {
       h.setHideGoals(!h.hideGoals);

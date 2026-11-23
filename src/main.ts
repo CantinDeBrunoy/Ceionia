@@ -1,5 +1,6 @@
 import './style.css';
 import './hudTheme.css';
+import './hudAllege.css';
 import './i18n/en';
 import { onLangChange, tr, nplural, getLang } from './i18n';
 import * as THREE from 'three';
@@ -1489,12 +1490,24 @@ class Game implements UIHost {
     if (!this.rivalBattle && raidDue(d, w.exp.clock) && w.exp.clock >= d.camp.raid + RAID_GRACE * this.time.dayLen) { if (this.diploChoice.visible) this.diploChoice.hide(); this.holdCamp(); }
     // (un récit d'expédition en attente, sa cinématique de trophée : ils passent avant les cartes)
     if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine || this.reportsDue.size || this.lateReports.length || this.trophyStage.playing) return;
+    // (au chargement d'une partie, plus de grande carte : ce qui attendait déjà dans la sauvegarde se dit en un message qui y
+    // mène ; écran allégé, retour de joueurs du 23 nov. 2026. Les cartes reviennent pour ce qui arrive en cours de partie)
+    const quiet = this.diploLoad;
+    this.diploLoad = false;
     if (allyPending(w)) this.diploChoice.showAlly();
     else if (d.cine) this.playPeace();
     // une sortie rivale sur le camp : sa carte, une fois par sortie
-    else if (raidDue(d, w.exp.clock) && this.raidShown !== d.camp.raid) { this.raidShown = d.camp.raid; this.popups.taken(); this.diploChoice.showRaid(this.frontName(d.camp.held.at(-1) ?? null)); }
+    else if (raidDue(d, w.exp.clock) && this.raidShown !== d.camp.raid) {
+      this.raidShown = d.camp.raid;
+      if (quiet) this.ui.toast(tr('⚔️ {rival} font une sortie contre notre camp de la plage. Cliquez ici pour répondre.', { rival: cap(peopleName(rivalOf(d.ally!))) }), () => this.openDiploChoice(), 'danger');
+      else { this.popups.taken(); this.diploChoice.showRaid(this.frontName(d.camp.held.at(-1) ?? null)); }
+    }
     // (les éclaireurs revenus : la carte « Lancer l'assaut », une fois par session ; la bataille ne part plus d'elle-même)
-    else if (d.battle === 'ready' && !d.camp.held.length && battleReady(d, w.exp.clock) && !this.battleShown) { this.battleShown = true; this.popups.taken(); this.diploChoice.showBattle(); }
+    else if (d.battle === 'ready' && !d.camp.held.length && battleReady(d, w.exp.clock) && !this.battleShown) {
+      this.battleShown = true;
+      if (quiet) this.ui.toast(tr('⚔️ Les éclaireurs sont de retour : nos troupes sont prêtes à débarquer. Cliquez ici.'), () => this.openDiploChoice(), 'action');
+      else { this.popups.taken(); this.diploChoice.showBattle(); }
+    }
     else if (d.battle === 'lost' && battleReady(d, w.exp.clock) && !this.retrySaid) { this.retrySaid = true; this.ui.toast(tr('⚔️ Nos troupes se sont refaites : la bataille peut reprendre. Cliquez ici.'), () => this.openDiploChoice(), 'action'); }
     else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone(), this.pathShown)) {
       this.pathShown = d.asked = true;
@@ -1502,6 +1515,7 @@ class Game implements UIHost {
       // un message qui dit quoi faire, et la carte viendra une fois le port et le comptoir bâtis (une fois par session)
       const why = endgameWhy(w, this.sim.age);
       if (why) { this.pathShown = false; if (!this.pathTold) { this.pathTold = true; this.ui.toast(tr('⚖️ Dernière étape vers l’Industriel : le conflit des deux îles. {why}', { why }), () => this.goAlly(), 'action'); } }
+      else if (quiet) this.ui.toast(tr('⚖️ Le conflit des deux îles attend votre choix : la paix ou la guerre. Cliquez ici.'), () => this.openDiploChoice(), 'action');
       else { this.popups.taken(); this.diploChoice.showPath(); }
     }
   }
@@ -1525,6 +1539,13 @@ class Game implements UIHost {
   private pathTold = false;
   /** La carte « Lancer l'assaut » s'est ouverte d'elle-même dans cette session */
   private battleShown = false;
+  /**
+   * Le premier passage au calme de la diplomatie, après le chargement : ce qui attendait déjà dans la sauvegarde (les éclaireurs
+   * revenus, une sortie rivale, le dénouement) se dit par un message, pas par une grande carte (`stepDiplo`)
+   */
+  private diploLoad = true;
+  /** Même chose pour la carte du grand choix (`stepCrossroads`) */
+  private crossLoad = true;
 
   /** Les conditions du passage à l'âge suivant sont toutes remplies, sauf peut-être le conflit des deux îles */
   private othersDone() {
@@ -1854,7 +1875,14 @@ class Game implements UIHost {
     if (this.crossroadsWanted && this.portalCalm > 3 && this.popups.open) { this.crossroadsWanted = false; this.popups.taken(); this.worldChoice.show(); return; }
     if (this.crossroadsAsked || this.portalCalm <= 3 || !this.popups.open || this.tutorial.active) return;
     const ap = this.sim.ageProgress(), others = !!ap && ap.items.every((i) => i.label === CHOICE_LABEL || i.have >= i.need);
-    if (crossroadsDue(w, this.sim.age, hell, world, others)) { this.crossroadsAsked = true; this.popups.taken(); this.worldChoice.show(); }
+    // (dû dès le chargement : un message qui mène à la carte, pas la carte elle-même, voir `diploLoad`)
+    const quiet = this.crossLoad;
+    this.crossLoad = false;
+    if (crossroadsDue(w, this.sim.age, hell, world, others)) {
+      this.crossroadsAsked = true;
+      if (quiet) this.ui.toast(tr('🧭 Le grand choix vous attend. Cliquez ici pour le faire.'), () => this.openCrossroads(), 'action');
+      else { this.popups.taken(); this.worldChoice.show(); }
+    }
   }
   /** la carte du grand choix s'est déjà ouverte d'elle-même dans cette session (fermée sans choix, elle ne revient pas seule) */
   private crossroadsAsked = false;

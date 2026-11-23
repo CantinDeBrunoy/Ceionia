@@ -1,0 +1,216 @@
+/* ---------- L'écran allégé (version B des maquettes `.claude/maquettes-hud/ecran-allege/`, choisie par l'auteur le 23 nov. 2026) ----------
+   Des joueurs trouvaient qu'il y avait beaucoup trop de choses à l'écran : en milieu de partie, en 1366 × 768, l'interface en
+   couvrait près d'un tiers. Sur un écran d'ordinateur (`body.allege`, posé par `UI` dès 1 100 px de large et 521 px de haut) :
+   tout le haut tient sur une barre de 46 px, les équipes d'expédition se résument en une pastille, le conseil et les messages
+   prennent une seule place au milieu, et les vignettes de construction restent repliées tant qu'aucun outil n'est en main.
+   Chargé après `hudTheme.css`, dont il reprend les sélecteurs (précédés de `body.allege` pour passer devant). Plus étroit, rien
+   ne change. Voir docs/interface.md, « Écran allégé » */
+
+/* (hors de l'écran allégé, les pièces qui lui sont propres restent cachées) */
+#needsOk, #ageReq .rqHead, #clock small.ds { display: none; }
+
+/* ---------- la barre du haut : une seule bande crème de 46 px, ses blocs séparés par un filet doré ---------- */
+body.allege #hud {
+  top: max(8px, env(safe-area-inset-top)); left: 10px; right: 10px; height: 46px; box-sizing: border-box; align-items: center; gap: 0;
+  padding: 0 5px 0 6px; border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
+  pointer-events: auto;
+}
+body.allege #hud .panel { background: none; border: none; box-shadow: none; border-radius: 0; }
+body.allege #hud .hudPill { min-height: 0; height: 34px; padding: 0 8px; }
+/* le filet entre deux blocs */
+body.allege #needsPanel > .panel, body.allege #hudR #timePanel, body.allege #hudR #menuBtns { border-left: 1.5px solid rgba(190, 145, 75, 0.38) !important; }
+
+/* l'âge : son logo, son nom, ▾ et une jauge fine ; le nom de l'île, le pourcentage et « Vers … » passent dans la liste qu'ouvre
+   un clic (`.rqHead`) */
+body.allege #hudL { align-self: stretch; display: flex; align-items: center; }
+body.allege #agePanel {
+  display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto; grid-template-areas: 'logo name chev' 'logo gauge gauge';
+  align-items: center; column-gap: 7px; row-gap: 2px; width: auto; height: 38px; padding: 0 10px 0 2px; border-radius: 13px;
+}
+body.allege #agePanel:hover { background: rgba(255, 236, 190, 0.45); }
+body.allege #agePanel .vCard, body.allege #agePanel .vText { display: contents; }
+body.allege #agePanel .vLogo { grid-area: logo; width: 32px; height: 32px; }
+body.allege #agePanel .vLogo img.pic { width: 30px; height: 30px; }
+body.allege #agePanel .ageTop { grid-area: chev; align-self: end; }
+body.allege #agePanel .vName, body.allege #agePct, body.allege #ageNext, body.allege #agePanel .ageLine .dot { display: none; }
+body.allege #agePanel .ageLine { grid-area: name; margin: 0; align-self: end; }
+body.allege #agePanel .ageLine b { font-family: var(--hSerif); font-weight: 800; font-size: 17px; line-height: 1.05; color: var(--hInk); letter-spacing: -0.01em; font-variation-settings: 'SOFT' 30, 'opsz' 48; }
+body.allege #agePanel .ageGauge { grid-area: gauge; align-self: start; height: 5px; margin: 0; border: none; }
+/* tout est réuni : le bouton du passage pend sous la barre (sa place y manque) */
+body.allege #ageGo { position: absolute; top: calc(100% + 10px); left: 0; width: max-content; min-height: 32px; margin: 0; padding: 0 14px; }
+body.allege #ageReq { top: calc(100% + 12px); }
+body.allege #ageReq .rqHead { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid rgba(190, 145, 75, 0.3); }
+body.allege #ageReq .rqHead b { display: block; margin: 0; font-family: var(--hSerif); font-size: 18px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.allege #ageReq .rqHead em { margin-left: auto; white-space: nowrap; font-size: 12px; }
+
+/* au milieu, calés à gauche après l'âge : les stocks, les habitants, les besoins, l'objectif */
+body.allege #needsPanel { flex: 1 1 auto; justify-content: flex-start; align-items: center; gap: 0; }
+/* les stocks : le nombre seul (la production du jour est dans la fiche, au survol) */
+body.allege #res .res { gap: 5px; padding: 2px 5px; border-radius: 10px; }
+body.allege #res .res img.pic { width: 24px; height: 24px; }
+body.allege #res .rate { display: none; }
+body.allege .rv b, body.allege .pn b { font-size: 18px; }
+body.allege #resPanel .hsep { margin: 6px 4px; }
+/* les habitants : le nombre, et seulement le souci pressant s'il y en a un (plus « habitants » ni « = stable ») */
+body.allege #resPanel button.pop { gap: 5px; padding: 2px 5px; border-radius: 10px; }
+body.allege #resPanel button.pop img.pic { width: 24px; height: 24px; }
+body.allege .pn { flex-direction: row; align-items: baseline; gap: 6px; }
+body.allege .pn small:not(.alert) { display: none; }
+body.allege .pn small.alert { font-size: 11.5px; }
+
+/* les besoins : seuls ceux qui manquent, en pastilles rosées (picto et pourcentage) ; tout va bien : « Besoins ✓ » (le logement
+   plein n'est pas un manque : il attend des places, le conseil le dit) */
+body.allege #needsBox { position: relative; gap: 4px; }
+body.allege #needsOk {
+  display: inline-flex; order: 2; align-items: center; gap: 6px; min-width: 0; min-height: 0; height: 28px; padding: 0 6px; border: none;
+  border-radius: 999px; background: transparent; box-shadow: none; color: var(--hInk2); font-size: 13.5px; font-weight: 600;
+}
+body.allege #needsOk:hover, body.allege #needsBox.all #needsOk { background: rgba(255, 236, 190, 0.55); color: var(--hInk); }
+body.allege #needsBox.allOk #needsOk { order: 0; color: var(--hInk); padding: 0 8px 0 6px; }
+body.allege #needsOk .dot { width: 9px; height: 9px; border-radius: 50%; background: #3d9a3e; box-shadow: 0 0 0 2px rgba(61, 154, 62, 0.2); }
+body.allege #needsOk .okv { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; color: #fff; background: #3d9a3e; }
+body.allege #needsBox .resNav { display: none !important; }
+body.allege #needView { order: 1; overflow: visible; }
+body.allege #needs { gap: 4px; }
+body.allege #needs .need { flex-direction: row; gap: 4px; width: auto; height: 28px; padding: 0 9px 0 6px; border-radius: 999px; }
+body.allege #needs .need > span { display: none; }
+body.allege #needs .need img.pic { width: 20px; height: 20px; }
+body.allege #needs .need .pv { order: 0; font-size: 13.5px; }
+body.allege #needs .need.warn { background: linear-gradient(180deg, rgba(252, 215, 205, 0.95), rgba(252, 228, 218, 0.8)); }
+body.allege #needsBox:not(.all) #needs .need:not(.warn) { display: none; }
+body.allege #needsBox.allOk:not(.all) #needView { display: none; }
+/* la liste entière, dépliée sous la barre : les sept besoins, avec leur nom */
+body.allege #needsBox.all #needView {
+  position: absolute; top: calc(100% + 12px); left: 0; z-index: 6; padding: 8px 10px; border-radius: 16px;
+  background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
+}
+body.allege #needsBox.all #needs .need { flex-direction: column; gap: 1px; width: 58px; height: auto; padding: 4px 0 3px; border-radius: 10px; }
+body.allege #needsBox.all #needs .need > span { display: block; }
+body.allege #needsBox.all #needs .need img.pic { width: 26px; height: 26px; }
+body.allege #needsBox.all #needs .need .pv { order: 3; }
+
+/* l'objectif du moment, sur une ligne : picto, texte, compte (la récompense est dans l'info-bulle et le message de félicitation) */
+body.allege #goalBox { width: auto; max-width: 250px; gap: 7px; padding: 0 8px; }
+body.allege #goalBox .gi { width: 26px; height: 26px; }
+body.allege #goalBox .gi img.pic { width: 20px; height: 20px; }
+body.allege #goalBox .gt { flex-direction: row; align-items: center; gap: 7px; }
+body.allege #goalBox .g1 { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 700; }
+body.allege #goalBox .g2 { flex: none; }
+body.allege #goalBox .gb, body.allege #goalBox .gr { display: none; }
+body.allege #goalBox .gp { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.allege #goalBox .gd { gap: 3px; }
+body.allege #goalBox .gd i { width: 5px; height: 5px; }
+body.allege #goalBox.compact { max-width: 180px; }
+body.allege #goalBox.mini { max-width: 130px; }
+
+/* à droite : l'heure sur une ligne (« 11:00 Printemps · j. 23 »), pause et vitesse, puis les boutons ronds en 34 px */
+body.allege #hudR { gap: 0; }
+body.allege #timePanel, body.allege #menuBtns { gap: 5px; padding: 0 6px; }
+body.allege #hudR #timePanel { border-left: none !important; }
+body.allege #menuBtns { padding-right: 0; }
+body.allege #clock { gap: 7px; min-height: 0; height: 34px; padding: 0 4px; }
+body.allege #clock img.pic { width: 24px; height: 24px; }
+body.allege #clock .time { flex-direction: row; align-items: baseline; gap: 7px; font-size: 18px; min-width: 0; }
+body.allege #clock small.dl { display: none; }
+body.allege #clock small.ds { display: flex; font-size: 12px; color: var(--hInk2); }
+body.allege #hud button.round { width: 34px; height: 34px; }
+body.allege #hud button.round svg.ic { width: 18px; height: 18px; }
+/* la vitesse : sa pastille seulement quand elle passe ×1 (le bouton doré le dit déjà) */
+body.allege #bSpeed:not(.on) small { display: none; }
+body.allege #bSpeed small, body.allege #expBadge:not(:empty) { bottom: -9px !important; font-size: 9.5px; }
+body.allege #bellBadge:not(:empty) { top: -7px; right: -6px; }
+
+/* sous la barre, au milieu : le conseil (et les messages, au même endroit) */
+body.allege #hudNotes { top: calc(var(--hudB, 56px) + 8px); max-width: min(620px, calc(100vw - 560px)); }
+body.allege #msg { min-height: 34px; padding: 3px 12px 3px 5px; border-radius: 999px; font-size: 13px; }
+body.allege #msg .mi { width: 26px; height: 26px; }
+body.allege #msg .mi img.pic { width: 18px; height: 18px; }
+
+/* ---------- la colonne de gauche : les équipes dans une pastille, plus d'interrupteur « Aides » (il est dans Paramètres › Partie) ---------- */
+#expPill { display: none; }
+body.allege #helpBtn { display: none !important; }
+body.allege #expPill:not([hidden]) {
+  display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; min-width: 0; min-height: 0; height: 34px; padding: 0 10px 0 12px;
+  border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--hInk); pointer-events: auto;
+  background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
+}
+body.allege #expPill:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+body.allege #expPill .sep { font-style: normal; color: var(--hInk2); }
+body.allege #expPill img.pic { width: 16px; height: 16px; }
+body.allege #expPill .chev { display: grid; place-items: center; margin-left: 2px; color: var(--hInk2); transition: transform 0.15s; }
+body.allege #expList.open #expPill .chev { transform: rotate(180deg); }
+/* une décision attend : le liseré orangé des cartes qui attendent */
+body.allege #expPill.ask { box-shadow: 0 0 0 2px #e8a33a, var(--hShadow); }
+body.allege #expPill.ask .dec { color: #a8600c; }
+/* les cartes des équipes, seulement la pastille ouverte (les incidents, eux, restent : ils pressent) */
+body.allege #expList:not(.open) .expCard:not(.incident) { display: none; }
+
+/* ---------- le conseil et les messages à une seule place : au milieu, sous la barre ; un message passe devant le conseil, qui
+   revient quand il s'efface (un seul message à la fois, `UI.tickNotifs`) ---------- */
+body.allege #toasts {
+  position: fixed; top: calc(var(--hudB, 56px) + 8px); left: 50%; transform: translateX(-50%); z-index: 3; align-items: center;
+  max-width: min(620px, calc(100vw - 560px));
+}
+body.allege.toastOn #hudNotes { visibility: hidden; }
+body.allege #toasts .toast {
+  min-height: 34px; padding: 3px 12px 3px 5px; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1.25;
+  background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+body.allege #toasts .toast > .pic { width: 26px; height: 26px; padding: 4px; background: #FFF6E2; }
+body.allege #toasts .toast.danger { color: #8f1d24; background: linear-gradient(180deg, #FFF1EC, #FCE0D8); }
+body.allege #toasts .toast.act:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+
+/* ---------- la barre du bas : une seule bande de 46 px (les modes, les rayons, la loupe et les outils, que `UI.placeDock` range
+   dans `#dockTop`), les vignettes dessous, repliées tant qu'aucun outil n'est en main (`UI.syncFold`) ; à droite, la mini-carte de
+   124 px et ses deux boutons ---------- */
+body.allege #dock > #dockRow { grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr); gap: 10px; justify-content: stretch; }
+body.allege #dock #dockSide, body.allege #bFold { display: none; }
+body.allege #dock #dockMain { grid-column: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; padding: 0; background: none; border: none; box-shadow: none; overflow: visible; }
+body.allege #dockRow > #dockRight { grid-column: 3; justify-self: end; gap: 8px; }
+/* la bande */
+body.allege #dock #dockTop {
+  position: static; display: flex; align-items: center; justify-content: flex-start; gap: 4px; box-sizing: border-box; height: 46px; padding: 0 7px;
+  border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
+}
+body.allege #dockTop #modes { display: flex; flex-direction: row; gap: 4px; padding-right: 6px; border-right: 1.5px solid rgba(190, 145, 75, 0.38); }
+body.allege #dock #dockTop #modes button { flex: none; width: auto; height: 32px; padding: 0 11px 0 8px; gap: 7px; border-radius: 10px; font-size: 13.5px; }
+body.allege #dock #dockTop #modes button:not(.active) { background: transparent; border-color: transparent; box-shadow: none; }
+body.allege #dock #dockTop #modes button:not(.active):hover { background: rgba(255, 236, 190, 0.55); }
+body.allege #dock #dockTop #modes button b, body.allege #dock #dockTop #modes button b .pic { width: 20px; height: 20px; }
+body.allege #dock #subcats { flex: 0 1 auto; gap: 2px; align-items: center; padding: 0 2px; overflow: visible; }
+body.allege #dock #subcats button {
+  height: 32px; padding: 0 10px 0 7px; gap: 6px; border: 1.5px solid transparent; border-radius: 10px; font-size: 13.5px;
+  background: transparent; box-shadow: none;
+}
+body.allege #dock #subcats button:hover:not(.on) { background: rgba(255, 236, 190, 0.55); }
+body.allege #dock #subcats button.on { border: 1.5px solid var(--hGold); border-radius: 10px; background: var(--hGoldFill); box-shadow: var(--hGoldShadow); }
+/* repliée, aucun rayon n'est « ouvert » : l'onglet du rayon courant reste marqué, sans l'or plein */
+body.allege.dockMin #dock #subcats button.on:not(.tHi):not(.first) { background: rgba(255, 236, 190, 0.45); border-color: transparent; box-shadow: none; }
+body.allege #dock #subcats button b .pic, body.allege #dock #subcats button b img { width: 19px; height: 19px; }
+body.allege #dock #dockSearch { height: 32px; margin-left: 2px; padding: 0 8px; align-self: center; border: 1.5px solid transparent; border-radius: 10px; background: transparent; }
+body.allege #dock #dockSearch:hover { background: rgba(255, 236, 190, 0.55); }
+body.allege #dock #dockSearch.on { border-color: var(--hGold); background: var(--hGoldFill); }
+body.allege #dockTop .quick { display: flex; gap: 3px; padding: 0; border: none; }
+body.allege #dockTop #quickL { padding-left: 6px; border-left: 1.5px solid rgba(190, 145, 75, 0.38); }
+body.allege #dock #dockTop .quick button { width: 32px; height: 32px; border-radius: 9px; }
+body.allege #dock #dockTop .quick button svg { width: 16px; height: 16px; }
+/* (rétablir et tourner n'ont leur bouton que quand ils servent : le reste du temps, ils étaient grisés) */
+body.allege #dockTop #quickR button:disabled:not(#bUndo) { display: none; }
+/* les vignettes, sous la bande, dans leur propre panneau */
+body.allege #dock #itemsWrap { align-self: stretch; padding: 5px 4px; border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); }
+body.allege.dockMin #dock #dockMain { display: flex; }
+body.allege.dockMin #dock #dockMain:not(:has(#itemsWrap .tHi)) #itemsWrap { display: none; }
+body.allege #dock #dockBottom { bottom: calc(100% + 10px); }
+/* la mini-carte de 124 px, ses deux boutons de vue à côté */
+body.allege #dock #miniMap, body.allege #dock #dockRight #miniMap { width: 124px; height: 124px; padding: 4px; border-radius: 18px; }
+body.allege #miniMap canvas { border-radius: 14px; }
+body.allege #miniMap .mmN { top: 7px; right: 7px; width: 19px; height: 19px; font-size: 9px; }
+body.allege #dock #viewBtns { gap: 6px; padding: 0; }
+body.allege #dock #viewBtns button.round { width: 38px; height: 38px; }
+body.allege #dock #viewBtns button.round svg { width: 17px; height: 17px; }
+body.allege #dock > #homeBack { margin-bottom: 14px; }
+/* plus étroit : seul le rayon ouvert garde son nom (les autres, leur image et leur info-bulle) */
+@media (max-width: 1299px) {
+  body.allege #dock #subcats button:not(.on) .cl { display: none; }
+  body.allege #dock #subcats button:not(.on) { padding: 0 7px; }
+}

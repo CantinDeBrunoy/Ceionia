@@ -17,6 +17,7 @@ registerDict('ui', {
   'Dissiper le brouillard': 'Clear the fog',
   // ---- HUD : horloge, habitants, carrousel des vignettes
   '{season}, jour {n}': '{season}, day {n}',
+  '{season} · j. {n}': '{season} · d. {n}',
   'Depuis hier': 'Since yesterday', 'stable': 'steady',
   'Précédents': 'Previous', 'Suivants': 'Next',
   // ---- mode Paysage : ses sous-menus et leurs groupes
@@ -44,6 +45,7 @@ registerDict('ui', {
   // ---- barre du haut : âge
   'Vers {age}': 'Towards {age}',
   '{met}/{n} conditions ▾': '{met}/{n} conditions ▾',
+  '{met}/{n} conditions': '{met}/{n} conditions',
   'Dernier âge atteint': 'Final age reached',
   'Dernier âge atteint : profitez de votre village !': 'Final age reached: enjoy your village!',
   'Passer à : {age}': 'Advance to: {age}',
@@ -450,6 +452,10 @@ registerDict('ui', {
   "⚔️ La ville envoie du renfort à son avant-poste.": "⚔️ The city sends reinforcements to its outpost.",
   "⚔️ Nos troupes se sont refaites : la bataille peut reprendre. Cliquez ici.": "⚔️ Our troops have recovered: the battle can resume. Click here.",
   "⚔️ {rival} préparent une sortie contre notre camp de la plage.": "⚔️ {rival} are preparing a sortie against our beach camp.",
+  '⚔️ {rival} font une sortie contre notre camp de la plage. Cliquez ici pour répondre.': '⚔️ {rival} are making a sortie against our beach camp. Click here to respond.',
+  '⚔️ Les éclaireurs sont de retour : nos troupes sont prêtes à débarquer. Cliquez ici.': '⚔️ The scouts are back: our troops are ready to land. Click here.',
+  '⚖️ Le conflit des deux îles attend votre choix : la paix ou la guerre. Cliquez ici.': '⚖️ The conflict between the two islands awaits your choice: peace or war. Click here.',
+  '🧭 Le grand choix vous attend. Cliquez ici pour le faire.': '🧭 The great choice awaits you. Click here to make it.',
   "🔥 La sortie rivale fond sur le camp ({n}/2).": "🔥 The rival sortie bears down on the camp ({n}/2).",
   "🔥 Le camp brûle : défendez-le !": "🔥 The camp is burning: defend it!",
   "🔥 Le camp n’a pas tenu : nous perdons {what}. Cliquez ici.": "🔥 The camp did not hold: we lose {what}. Click here.",
@@ -624,10 +630,14 @@ registerDict('ui', {
 /** Les petits objectifs de la barre du haut (`sim/goals.ts`, pastille `#goalBox`) */
 registerDict('goals', {
   'Besoins précédents': 'Previous needs', 'Besoins suivants': 'Next needs',
+  'Besoins': 'Needs', 'Voir tous les besoins': 'See all needs', 'Tous les besoins sont comblés : voir le détail': 'All needs are met: see the details',
   'Objectif atteint : {goal}.': 'Goal reached: {goal}.', 'Bravo !': 'Well done!',
   '{n} j': '{n} d', '+{n} bois': '+{n} wood', '+{n} pierre': '+{n} stone', '+{n} minerai': '+{n} ore',
   'bien-être +{n} pendant {d} jours': 'well-being +{n} for {d} days', 'Récompense : {r}': 'Reward: {r}',
   'Objectifs': 'Goals', 'Masqués': 'Hidden', 'Affichés': 'Shown',
+  'Conseils du moment': 'Tips', 'Le conseil du moment, au milieu sous la barre du haut : ce qu’il faut bâtir ensuite': 'The current tip, in the middle under the top bar: what to build next',
+  '{n} décision': '{n} decision', '{n} décisions': '{n} decisions',
+  'Les équipes en route : cliquer pour voir leurs cartes': 'Teams out on a mission: click to see their cards',
   'Trois petits objectifs à la fois dans la barre du haut, chacun avec une récompense.': 'Three small goals at a time in the top bar, each with a reward.',
   // Préhistoire
   'Loger 12 habitants': 'House 12 villagers', 'Le camp s’agrandit !': 'The camp is growing!',
