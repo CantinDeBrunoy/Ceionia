@@ -53,6 +53,32 @@ export function readBlason(v: unknown): Blason {
   return { a, b, e: pick(o.e, EMBLEMS, DEFAULT_BLASON.e), s: pick(o.s, SHAPES, DEFAULT_BLASON.s) };
 }
 
+/**
+ * Le nom de l'île du joueur, choisi avec son blason (retour de joueurs, décision de l'auteur du 22 nov. 2026 : « affiché en
+ * jeu »). Il remplace le titre du jeu en haut à gauche. Une ancienne partie, ou un joueur qui n'y touche pas : `DEFAULT_ISLE`
+ */
+export const DEFAULT_ISLE = 'Ceionia';
+/** Longueur maximale du nom (il tient dans la carte du village, en haut à gauche) */
+export const ISLE_MAX = 22;
+/** Des noms à tirer au hasard (« Au hasard » de la fenêtre du blason) : des noms propres, non traduits */
+export const ISLE_NAMES = [
+  'Aubrelune', 'Brumeval', 'Clairmer', 'Ombrecime', 'Solmarée', 'Pierrelune', 'Galéane', 'Ventebrume', 'Hautepierre', 'Mirevague',
+  'Ardéline', 'Belcime', 'Roche-Aurore', 'Verdane', 'Port-Écume', 'Lunerive', 'Orvane', 'Sablemont', 'Bois-Doré', 'Valmarine',
+];
+
+/** Relit ou nettoie un nom d'île : sans caractères de contrôle ni chevrons, espaces resserrés, `ISLE_MAX` au plus ; vide : le nom par défaut */
+export function readIsleName(v: unknown): string {
+  if (typeof v !== 'string') return DEFAULT_ISLE;
+  const n = v.replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, ISLE_MAX).trim();
+  return n || DEFAULT_ISLE;
+}
+
+/** Un nom d'île au hasard, autre que `avoid` */
+export function randomIsleName(rnd = Math.random, avoid = ''): string {
+  const pool = ISLE_NAMES.filter((n) => n !== avoid);
+  return pool[Math.floor(rnd() * pool.length) % pool.length];
+}
+
 /** Un tirage au hasard (bouton « Au hasard » de la fenêtre) */
 export function randomBlason(rnd = Math.random): Blason {
   const at = <T>(l: readonly T[]) => l[Math.floor(rnd() * l.length) % l.length];

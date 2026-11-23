@@ -13,6 +13,7 @@ import { makeFolk, folkStep, Folk, FolkPose } from './folk';
 import { makeDraftHorse, rideStep, Rider } from './riders';
 import { fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 import { guardReach } from '../sim/legacy';
+import { UNAIDED_WAIT } from '../sim/mishaps';
 
 /** Portée des secours (cases) : celle de la caserne pour les incendies, la même pour l'hôpital et la police */
 const RANGE = 14;
@@ -553,6 +554,10 @@ export class Emergencies {
   private timers: Record<Service | 'blaze', number> = { fire: 0, health: 140, police: 220, blaze: 400 };
   private time = 0;
   private age = -1;
+  /** malaises et cambriolages loin de tout poste : personne ne vient (`t` : secondes de jeu écoulées) */
+  private lone: { service: 'health' | 'police'; b: Building; t: number }[] = [];
+  /** un malaise ou un cambriolage est resté sans secours (donné par le jeu : il en applique les conséquences et le dit) */
+  onUnaided: ((service: 'health' | 'police', b: Building) => void) | null = null;
 
   constructor(private world: World, private fires: Fires, private avoid: Set<number>) {
     this.group.add(this.water.mesh);
@@ -560,7 +565,15 @@ export class Emergencies {
 
   /** Les interventions de l'ambulance et de la police en cours, pour leurs cartes : où est le véhicule, ce qu'il fait, l'avancement */
   incidents(): { key: string; icon: string; title: string; status: string; progress: number; x: number; z: number }[] {
-    return this.units.filter((u) => u.service !== 'fire' && u.target && (u.state === 'go' || u.state === 'work')).map((u) => {
+    const lone = this.lone.map((l) => {
+      const health = l.service === 'health', s = sizeOf(l.b), left = Math.max(0, Math.ceil(UNAIDED_WAIT - l.t));
+      return {
+        key: `lone:${l.service}:${l.b.id}`, icon: health ? '🚑' : '🚓', title: tr(health ? 'Malaise sans secours' : 'Cambriolage sans police'),
+        status: tr(health ? 'Aucun hôpital à portée : il faut des soins ({n} s)' : 'Aucun poste de police à portée : le voleur file ({n} s)', { n: left }),
+        progress: Math.min(1, l.t / UNAIDED_WAIT), x: l.b.x + s / 2, z: l.b.z + s / 2,
+      };
+    });
+    return [...lone, ...this.units.filter((u) => u.service !== 'fire' && u.target && (u.state === 'go' || u.state === 'work')).map((u) => {
       const health = u.service === 'health', go = u.state === 'go' || !u.crew, st = u.crew?.stage ?? 0;
       const progress = go ? 0.35 * (u.path.length ? u.i / u.path.length : 0) : 0.35 + 0.65 * Math.min(1, st / 4);
       const status = tr(health
@@ -568,7 +581,7 @@ export class Emergencies {
         : go ? 'La police accourt' : st < 1 ? 'Les agents frappent à la porte' : st < 2 ? 'Le cambrioleur s’enfuit par la rue !' : st < 3 ? 'Rattrapé : il lève les mains' : 'On l’emmène au poste');
       const p = u.crew?.thief && st >= 1 ? u.crew.thief : null;
       return { key: `unit:${u.service}:${u.target!.id}`, icon: health ? '🚑' : '🚓', title: tr(health ? 'Un habitant a fait un malaise' : 'Cambriolage'), status, progress, x: p ? p.x : u.x, z: p ? p.z : u.z };
-    });
+    })];
   }
 
   /** Arrosage du feu de ce bâtiment par les pompiers : secondes d'eau déjà jetée, 0 en route, null sans camion */
@@ -866,6 +879,12 @@ export class Emergencies {
   }
 
   /** Le plus proche poste du service (à l'âge industriel au moins), à portée de la cible */
+  /** Un poste du service à portée de la cible, quels que soient son âge et sa taille (la règle du jeu, comme `Fires`) */
+  private covered(service: Service, target: Building) {
+    for (const o of this.world.buildings.values()) if (o.kind === HOME[service] && reaches(o, target, RANGE, guardReach(this.world))) return true;
+    return false;
+  }
+
   private stationFor(service: Service, target: Building) {
     let best: Building | null = null, bd = Infinity;
     for (const o of this.world.buildings.values()) {
@@ -951,11 +970,30 @@ export class Emergencies {
       this.timers[sv] = sv === 'health' ? 120 + Math.random() * 160 : sv === 'police' ? 160 + Math.random() * 200 : 300 + Math.random() * 300;
       const service: Service = sv === 'blaze' ? 'fire' : sv;
       if (this.units.some((u) => u.service === service && u.state !== 'patrol')) continue;
-      const near = houses.filter((h) => !!this.stationFor(service, h));
-      if (!near.length) continue;
-      const h = near[Math.floor(Math.random() * near.length)];
-      if (sv === 'blaze') { this.ignite?.(h); continue; }
-      if (this.dispatch(service, this.stationFor(service, h)!, h)) this.news.push(tr(service === 'health' ? '🚑 Un habitant a fait un malaise : l’ambulance arrive' : '🚓 Cambriolage signalé : la police arrive'));
+      if (sv === 'blaze') {
+        const near = houses.filter((h) => !!this.stationFor(service, h));
+        if (near.length) this.ignite?.(near[Math.floor(Math.random() * near.length)]);
+        continue;
+      }
+      // malaise ou cambriolage, chez n'importe quel habitant : un poste à portée envoie les secours ; loin de tout poste,
+      // personne ne vient, et sans un poste bâti à temps le malheur frappe (voir `sim/mishaps.ts`)
+      const h = houses[Math.floor(Math.random() * houses.length)], st = this.stationFor(service, h);
+      if (st) { if (this.dispatch(service, st, h)) this.news.push(tr(service === 'health' ? '🚑 Un habitant a fait un malaise : l’ambulance arrive' : '🚓 Cambriolage signalé : la police arrive')); continue; }
+      // (un poste à portée, trop petit pour avoir un véhicule : il s'en charge sans qu'on le voie, comme avant)
+      if (this.covered(service, h) || w.sandbox || this.lone.some((l) => l.service === service)) continue;
+      this.lone.push({ service: sv, b: h, t: 0 });
+      this.news.push(tr(service === 'health' ? '🤒 Un habitant a fait un malaise, et aucun hôpital n’est à portée : personne ne vient le soigner' : '🕵️ Cambriolage signalé, et aucun poste de police n’est à portée : personne ne vient'));
+    }
+    // les appels restés sans secours : un poste bâti à portée arrive à temps ; sinon, au bout de `UNAIDED_WAIT`, le malheur frappe
+    for (const l of [...this.lone]) {
+      l.t += dt;
+      const gone = !w.buildings.has(l.b.id), st = gone ? null : this.stationFor(l.service, l.b);
+      if (gone || st || this.covered(l.service, l.b)) {
+        this.lone.splice(this.lone.indexOf(l), 1);
+        if (st && this.dispatch(l.service, st, l.b)) this.news.push(tr(l.service === 'health' ? '🚑 Un hôpital à portée : l’ambulance arrive à temps' : '🚓 Un poste de police à portée : les agents arrivent à temps'));
+        continue;
+      }
+      if (l.t >= UNAIDED_WAIT) { this.lone.splice(this.lone.indexOf(l), 1); this.onUnaided?.(l.service, l.b); }
     }
     // à l'époque moderne, la voiture de patrouille fait sa ronde
     if (age >= 4) for (const st of w.buildings.values()) {

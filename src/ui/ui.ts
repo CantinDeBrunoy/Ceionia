@@ -19,7 +19,7 @@ import { matches } from './search';
 import { readSlot, SaveData, savedAgo, Quality } from '../save/save';
 import { helpOn, setHelpOn } from './warTips';
 import { MAPS, newSeed } from '../world/mapgen';
-import { Expeditions, Report, ActiveExpedition, nextTeamAt } from '../sim/expeditions';
+import { Expeditions, Report, ActiveExpedition } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
@@ -141,6 +141,8 @@ export interface UIHost {
   setSeasonsOff(list: number[]): void;
   /** le blason du village (couleurs des drapeaux et des troupes) ; voir `sim/blason.ts` */
   setBlason(b: Blason): void;
+  /** le nom de l'île du joueur, choisi avec le blason (affiché en haut à gauche) */
+  setIsleName(n: string): void;
   /** effets de la météo affichés (pluie, neige, brouillard), et les couper ou les rendre */
   readonly weatherFx: { rain: boolean; snow: boolean; fog: boolean };
   setWeatherFx(k: 'rain' | 'snow' | 'fog', on: boolean): void;
@@ -2191,6 +2193,17 @@ export class UI {
     // (et quand les stocks bougent, une fiche qui dit « vous avez 15 bois » : elle restait à l'ancien compte, testeuse v6)
     if (this.host.tools.placeWhy !== this.infoWhy || this.host.tools.placeStage !== this.infoStage || this.haveNow() !== this.infoHave) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
+    // le nom de l'île du joueur (choisi avec le blason), à la place du titre du jeu
+    const vName = $('.vName');
+    if (vName.textContent !== this.host.world.isleName) { vName.textContent = this.host.world.isleName; vName.title = tr('L’île de {name}', { name: this.host.world.isleName }); delete vName.dataset.fit; }
+    // un nom long prend une lettre plus petite (jusqu'à 14 px), puis des points de suspension ; mesuré une fois la carte visible
+    // (une fenêtre ouverte par-dessus la cache, ou la police pas encore chargée : on attend)
+    if (vName.dataset.fit === undefined && vName.clientWidth > 0 && (document.fonts?.status ?? 'loaded') === 'loaded') {
+      vName.dataset.fit = '1';
+      vName.style.fontSize = '';
+      let px = parseFloat(getComputedStyle(vName).fontSize) || 24;
+      while (vName.scrollWidth > vName.clientWidth && px > 14) { px -= 1; vName.style.fontSize = `${px}px`; }
+    }
     // le logo de la carte du village change avec l'âge (picto et teinte du fond)
     const logo = $('#vLogo');
     if (logo.dataset.a !== String(sim.age)) {
@@ -2695,8 +2708,11 @@ export class UI {
     const ways = h.ways?.() ?? { hell: 'none' as WayState, world: 'none' as WayState };
     const waysOn = waysTabShown(h.world, ways.hell, ways.world);
     if (tab === 'ways' && !waysOn) tab = 'missions';
-    const at = nextTeamAt(max);
-    const next = at !== null ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: at, pop }) : tr('Équipes au maximum');
+    // l'équipe suivante : à 20 habitants, avec la maison des explorateurs (dès le Médiéval), puis à 80 habitants
+    const nx = ex.nextTeam();
+    const next = nx === 'house'
+      ? (age >= KINDS.explorers.minAge ? tr('Équipe en plus avec une maison des explorateurs') : tr('Équipe en plus avec une maison des explorateurs, au Médiéval'))
+      : nx ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: nx.pop, pop }) : tr('Équipes au maximum');
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${pic(a.m.icon, 18)} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
     const rank = (m: Mission) => (ex.done(m) ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);
@@ -2767,7 +2783,7 @@ export class UI {
         ${blasonPickerHtml()}
       </section>`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
     // l'onglet Blason : chaque clic change le blason du village (sauvé, tout le jeu se teint aussitôt)
-    bindBlasonPicker($('[data-sec="blason"]', ov), h.world.blason, (b) => h.setBlason(b));
+    bindBlasonPicker($('[data-sec="blason"]', ov), h.world.blason, (b) => h.setBlason(b), { name: h.world.isleName, change: (n) => h.setIsleName(n) });
     $('.expModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, age))}.webp)`);
 
     // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section
@@ -3399,8 +3415,8 @@ export class UI {
     // le blason : le village se teint pendant qu'on choisit, la croix rend l'ancien
     q('#gBlason').onclick = () => {
       h.audio.sfxClick();
-      void chooseBlason(this.root, h.world.blason, false, (b) => setTeamBlason(b)).then((b: Blason | null) => {
-        if (b) h.setBlason(b);
+      void chooseBlason(this.root, h.world.blason, false, (b) => setTeamBlason(b), h.world.isleName).then((b) => {
+        if (b) { h.setBlason(b.blason); h.setIsleName(b.isle); }
         q('.setFlag').innerHTML = flagSvg(h.world.blason, 66);
       });
     };

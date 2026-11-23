@@ -2358,6 +2358,9 @@ body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsB
 #ui > .overlay > .cePop .blShape button { min-height: 38px; padding: 0 14px; font-size: 14px; }
 .blasonPick .hint { text-align: center; margin: 10px 0 14px; }
 @media (max-width: 640px) { .blasonPick .blWrap { grid-template-columns: 1fr; } .blasonPick .blShow { flex-direction: row; } }
+/* le nom de l'île, en tête des choix (fenêtre du blason et onglet Blason des expéditions) */
+.blPick .blIsle input { width: min(320px, 100%); box-sizing: border-box; min-height: 36px; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(160, 120, 70, 0.35); background: #fffdf8; color: #3a2a14; font: 700 16px var(--hSerif, 'Fraunces', Georgia, serif); box-shadow: inset 0 1px 3px rgba(120, 85, 50, 0.12); }
+.blPick .blIsle input:focus { outline: none; border-color: rgba(227, 154, 47, 0.85); box-shadow: 0 0 0 3px rgba(240, 180, 69, 0.28); }
 /* le petit drapeau du blason dans Paramètres › Partie */
 .setPane .setFlag { display: inline-flex; margin-right: 6px; }
 .setPane .setFlag svg { display: block; filter: drop-shadow(0 1px 2px rgba(80, 55, 30, 0.25)); }

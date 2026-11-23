@@ -10,7 +10,7 @@ import { KINDS, KindId, UPGRADES, Building } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { sculpt, brushOnBuilding } from '../src/world/terraform';
 import { GameTime } from '../src/core/time';
-import { Expeditions, Report, partyLimit, nextTeamAt } from '../src/sim/expeditions';
+import { Expeditions, Report, partyLimit, nextTeam } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { Railway } from '../src/sim/railway';
 import { EVENTS } from '../src/sim/events';
@@ -912,8 +912,14 @@ describe('expéditions', () => {
   });
 
   it('plus le village est peuplé, plus il mène d’expéditions de front', () => {
-    expect([0, 19, 20, 49, 50, 79, 80, 500].map(partyLimit)).toEqual([1, 1, 2, 2, 3, 3, 4, 4]);
-    expect([1, 2, 3, 4].map(nextTeamAt)).toEqual([20, 50, 80, null]);
+    expect([0, 19, 20, 49, 50, 79, 80, 500].map((n) => partyLimit(n))).toEqual([1, 1, 2, 2, 2, 2, 3, 3]);
+    // la maison des explorateurs ouvre une équipe de plus, quatre au plus
+    expect([0, 20, 79, 80].map((n) => partyLimit(n, true))).toEqual([2, 3, 3, 4]);
+    expect(nextTeam(10, false)).toEqual({ pop: 20 });
+    expect(nextTeam(30, false)).toBe('house');
+    expect(nextTeam(85, false)).toBe('house');
+    expect(nextTeam(30, true)).toEqual({ pop: 80 });
+    expect(nextTeam(80, true)).toBeNull();
     const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 0, false);
@@ -931,6 +937,14 @@ describe('expéditions', () => {
     const second = ex.start(b, 0);
     expect(second).not.toBeNull();
     expect(ex.active.map((e) => e.id)).toEqual([1, 2]);
+    // la troisième vient de la maison des explorateurs
+    const c3 = MISSIONS.filter((q) => q.age === 0)[2];
+    expect(ex.slots()).toBe(2);
+    expect(ex.why(c3, c3.choices[0])).toMatch(/maison des explorateurs/);
+    const [hx, hz] = flatLand(w);
+    w.place('explorers', hx, hz, 0, true, 2, false);
+    expect(ex.slots()).toBe(3);
+    expect(ex.why(c3, c3.choices[0]) ?? '').not.toMatch(/équipes sont en route/);
     // une école rend les choix plus sûrs
     const risk = ex.riskOf(a.choices[2]);
     const [sx, sz] = flatLand(w);

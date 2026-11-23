@@ -107,6 +107,8 @@ export const GOALS: GoalDef[] = [
   { id: 'o-air', age: 4, kinds: ['airport', 'heliport'], text: 'Un aéroport ou un héliport', praise: 'La ville prend son envol.', measure: { t: 'state', f: build(['airport', 'heliport']) }, reward: { wood: 80 } },
   { id: 'o-fun', age: 4, pic: 'bienetre', kinds: ['zoo', 'waterpark'], text: 'Un zoo ou un parc aquatique', praise: 'Une sortie pour toute la famille !', measure: { t: 'state', f: build(['zoo', 'waterpark']) }, reward: { joy: { n: 3, days: 4 } } },
   { id: 'o-sec', age: 4, pic: 'securite', kinds: ['fire', 'police'], text: 'Protéger toutes les maisons', praise: 'Pas une maison sans secours.', measure: { t: 'state', f: sec(100) }, reward: { stone: 80 } },
+  { id: 'o-race', age: 4, kinds: ['racetrack'], text: 'Un circuit automobile', praise: 'Les moteurs rugissent, la foule aussi !', measure: { t: 'state', f: build(['racetrack']) }, reward: { joy: { n: 3, days: 4 } } },
+  { id: 'o-power', age: 4, kinds: ['powerplant'], text: 'Une centrale électrique', praise: 'La ville ne manquera plus de courant.', measure: { t: 'state', f: build(['powerplant']) }, reward: { stone: 80 } },
   { id: 'o-all', age: 4, pic: 'content', text: 'Tous les besoins comblés 3 jours de suite', praise: 'Une ville où il fait bon vivre.', measure: { t: 'streak', days: 3, f: allOk }, reward: { ore: 10 } },
   // ---- Futuriste
   { id: 'f-pop200', age: 5, pic: 'logement', kinds: ['house'], text: 'Loger 200 habitants', praise: 'Une métropole du futur.', measure: { t: 'state', f: pop(200) }, reward: { stone: 120 } },

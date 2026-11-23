@@ -280,10 +280,11 @@ const destName = (c: Choice) => tr(c.sea ? 'la mer' : DEST_NAME[c.dest]);
 export const PORTAL_SAIL = 2.2, PORTAL_RETURN = 0.17;
 const FALLBACK: Record<DestKind, DestKind | null> = { cave: 'mountain', mountain: 'far', river: 'plain', forest: 'plain', far: 'plain', plain: null, spaceport: null };
 /**
- * Une équipe de plus à 20, 50 et 80 habitants, quatre au plus. La deuxième venait à 30 : les testeurs l'attendaient
- * trop longtemps (v6, 19 nov. 2026) ; les suivantes gardent leur écart de 30
+ * Une équipe de plus à 20 et 80 habitants, et une avec la maison des explorateurs : quatre au plus. La deuxième venait à 30 :
+ * les testeurs l'attendaient trop longtemps (v6, 19 nov. 2026). La troisième venait à 50 habitants : c'est désormais la maison
+ * des explorateurs qui l'ouvre (décision de l'auteur, 22 nov. 2026 : « un bâtiment qui ouvre une 3e équipe »)
  */
-const TEAM_AT = [20, 50, 80], MAX_TEAMS = TEAM_AT.length + 1;
+const TEAM_AT = [20, 80], MAX_TEAMS = TEAM_AT.length + 2;
 /** Sans réponse du joueur, l'équipe tranche d'elle-même au bout de ce temps (secondes de jeu) */
 const AUTO_DECIDE = 90;
 /** Une équipe encore en chemin au bout de ce temps (secondes de jeu) se met au travail là où elle est : elle est bloquée */
@@ -303,10 +304,18 @@ export const MAX_CRAFT = 10;
 /** Une côte ouverte : la mer commence à cette distance au plus (cases), tout droit depuis la case (voir `openSea`) */
 export const OPEN_SEA_SHORE = 2;
 
-/** Nombre d'expéditions que le village peut mener de front, selon sa population */
-export const partyLimit = (pop: number) => 1 + TEAM_AT.filter((n) => pop >= n).length;
-/** Population où vient l'équipe suivante quand le village en a `max` (null : au maximum) */
-export const nextTeamAt = (max: number): number | null => TEAM_AT[max - 1] ?? null;
+/** Nombre d'expéditions que le village peut mener de front, selon sa population et sa maison des explorateurs */
+export const partyLimit = (pop: number, house = false) => 1 + TEAM_AT.filter((n) => pop >= n).length + (house ? 1 : 0);
+/**
+ * Ce qui ouvrira l'équipe suivante : une population (`pop`), la maison des explorateurs (`house`), ou rien (au maximum).
+ * D'abord les 20 habitants, puis la maison, puis les 80 habitants
+ */
+export type NextTeam = { pop: number } | 'house' | null;
+export function nextTeam(pop: number, house: boolean): NextTeam {
+  if (pop < TEAM_AT[0]) return { pop: TEAM_AT[0] };
+  if (!house) return 'house';
+  return pop < TEAM_AT[1] ? { pop: TEAM_AT[1] } : null;
+}
 
 /**
  * Expéditions : chaque équipe enrôlée part aussitôt en file vers sa destination, y travaille, revient au cœur du village ;
@@ -356,7 +365,9 @@ export class Expeditions {
   done(m: Mission) { return this.world.exp.done.includes(m.id); }
   running(m: Mission) { return this.active.some((a) => a.m.id === m.id); }
   /** équipes que le village peut envoyer à la fois */
-  slots() { return partyLimit(this.pop()); }
+  slots() { return partyLimit(this.pop(), this.has('explorers')); }
+  /** Ce qui ouvrira l'équipe suivante (voir `nextTeam`) */
+  nextTeam() { return nextTeam(this.pop(), this.has('explorers')); }
   /** Le village en a-t-il un, déjà bâti, ou amélioré depuis (une gare devenue gare centrale compte encore comme une gare) ? */
   has(kind: string) {
     const line: string[] = KINDS[kind as KindId] ? lineOf(kind as KindId) : [kind];
@@ -461,9 +472,12 @@ export class Expeditions {
     if (miss.length) return tr('Il faut d’abord {list}.', { list: miss.join(', ') });
     const max = this.slots();
     if (this.active.length >= max) {
-      return max < MAX_TEAMS
-        ? tr('Toutes les équipes sont en route ({n}/{max}) : à {pop} habitants, le village pourra en envoyer une de plus.', { n: this.active.length, max, pop: nextTeamAt(max) ?? 0 })
-        : tr('Toutes les équipes sont en route ({n}/{max}).', { n: max, max });
+      const nx = max < MAX_TEAMS ? this.nextTeam() : null;
+      return nx === 'house'
+        ? tr('Toutes les équipes sont en route ({n}/{max}). Une maison des explorateurs en ouvrira une de plus.', { n: this.active.length, max })
+        : nx
+          ? tr('Toutes les équipes sont en route ({n}/{max}) : à {pop} habitants, le village pourra en envoyer une de plus.', { n: this.active.length, max, pop: nx.pop })
+          : tr('Toutes les équipes sont en route ({n}/{max}).', { n: max, max });
     }
     if (!this.base()) return tr('Il faut d’abord un village : une maison au moins.');
     const free = this.agents.available();

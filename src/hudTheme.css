@@ -36,6 +36,8 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 #agePanel { border-radius: var(--hR); }
 .vLogo, .vLogo.age0, .vLogo.age1, .vLogo.age2, .vLogo.age3, .vLogo.age4, .vLogo.age5 { background: none; box-shadow: none; }
 .vName { font-family: var(--hSerif); font-weight: 800; font-size: 24px; letter-spacing: -0.01em; font-variation-settings: 'SOFT' 30, 'opsz' 48; }
+/* le nom de l'île (choisi avec le blason, 22 lettres au plus) : un nom long se termine en points de suspension */
+.vName { display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .ageLine { font-weight: 600; color: var(--hInk2); }
 .ageLine .dot { background: #3d9a3e; }
 .ageGauge { height: 9px; border-radius: 6px; background: #FFFAF0; box-shadow: inset 0 1px 2px rgba(120, 80, 30, 0.14); border: 1px solid rgba(215, 175, 110, 0.7); }

@@ -1,7 +1,7 @@
 import { tr } from '../i18n';
 import {
   Blason, BlasonColor, BLASON_COLORS, COLOR_KEYS, COLOR_NAME, EMBLEMS, EMBLEM_NAME, EMBLEM_PATH, EMBLEM_HOLE, SHAPES, SHAPE_NAME,
-  emblemSvg, flagSvg, hex, randomBlason,
+  emblemSvg, flagSvg, hex, randomBlason, ISLE_MAX, randomIsleName, readIsleName,
 } from '../sim/blason';
 import { ic } from './icons';
 import { menuPop } from './ui';
@@ -43,6 +43,7 @@ export function blasonPickerHtml() {
   return `<div class="blWrap">
         <div class="blShow"><div class="blFlag"></div><div class="blMan"></div></div>
         <div class="blPick">
+          <h4><label for="blIsleIn">${tr('Nom de l’île')}</label></h4><div class="blRow blIsle"><input id="blIsleIn" type="text" data-isle maxlength="${ISLE_MAX}" spellcheck="false" autocomplete="off"></div>
           <h4>${tr('Couleur du champ')}</h4><div class="blRow">${COLOR_KEYS.map((k) => swatch('a', k)).join('')}</div>
           <h4>${tr('Couleur de l’emblème')}</h4><div class="blRow">${COLOR_KEYS.map((k) => swatch('b', k)).join('')}</div>
           <h4>${tr('Emblème')}</h4><div class="blRow blEmb">${EMBLEMS.map((e) => `<button type="button" data-e="${e}" title="${tr(EMBLEM_NAME[e])}" aria-label="${tr(EMBLEM_NAME[e])}">${emblemSvg(e, 'currentColor', 30, 'transparent')}</button>`).join('')}</div>
@@ -55,8 +56,18 @@ export function blasonPickerHtml() {
  * Branche le choix rendu par `blasonPickerHtml` dans `el` (et son bouton `[data-rand]` « Au hasard » s'il y en a un) : chaque
  * clic redessine l'aperçu et appelle `change` avec le nouveau blason. Rend de quoi relire le blason en cours
  */
-export function bindBlasonPicker(el: HTMLElement, cur: Blason, change: (b: Blason) => void) {
+export function bindBlasonPicker(el: HTMLElement, cur: Blason, change: (b: Blason) => void, isle?: { name: string; change: (n: string) => void }) {
   const bl: Blason = { ...cur };
+  // le nom de l'île : retenu à chaque frappe (nettoyé : `readIsleName`), dit à `isle.change` quand il change vraiment
+  const field = el.querySelector<HTMLInputElement>('[data-isle]');
+  let name = readIsleName(isle?.name);
+  if (field) {
+    field.value = name;
+    field.oninput = () => { const n = readIsleName(field.value); if (n !== name) { name = n; isle?.change(n); } };
+    field.onblur = () => { field.value = name; };
+    // (les touches du jeu ne doivent pas partir pendant qu'on tape le nom)
+    field.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') field.blur(); };
+  }
   const draw = (tell = true) => {
     el.querySelectorAll<HTMLButtonElement>('[data-a]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.a === bl.a)));
     el.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.b === bl.b)); b.disabled = b.dataset.b === bl.a; });
@@ -76,28 +87,32 @@ export function bindBlasonPicker(el: HTMLElement, cur: Blason, change: (b: Blaso
   el.querySelectorAll<HTMLButtonElement>('[data-e]').forEach((b) => (b.onclick = () => { bl.e = b.dataset.e as Blason['e']; draw(); }));
   el.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => (b.onclick = () => { bl.s = b.dataset.s as Blason['s']; draw(); }));
   const rand = el.querySelector<HTMLButtonElement>('[data-rand]');
-  if (rand) rand.onclick = () => { Object.assign(bl, randomBlason()); draw(); };
+  if (rand) rand.onclick = () => {
+    Object.assign(bl, randomBlason());
+    if (field) { name = randomIsleName(Math.random, name); field.value = name; isle?.change(name); }
+    draw();
+  };
   draw(false);
   return () => ({ ...bl });
 }
 
 /**
- * Le choix du blason du village dans sa fenêtre : deux couleurs, un emblème, la forme du drapeau, avec l'aperçu du drapeau et
- * d'un soldat. `preview` est appelé à chaque changement (le village se teint aussitôt) ; à la fermeture, la promesse rend le
- * blason choisi, ou null si le joueur renonce (« Plus tard » au premier lancement, la croix ensuite : `preview` est alors
+ * Le choix du blason du village dans sa fenêtre : le nom de l'île, deux couleurs, un emblème, la forme du drapeau, avec
+ * l'aperçu du drapeau et d'un soldat. `preview` est appelé à chaque changement (le village se teint aussitôt) ; à la fermeture, la promesse rend le
+ * blason choisi et le nom de l'île, ou null si le joueur renonce (« Plus tard » au premier lancement, la croix ensuite : `preview` est alors
  * rappelé avec le blason de départ)
  */
-export function chooseBlason(root: HTMLElement, cur: Blason, first = false, preview?: (b: Blason) => void): Promise<Blason | null> {
+export function chooseBlason(root: HTMLElement, cur: Blason, first = false, preview?: (b: Blason) => void, isle = ''): Promise<{ blason: Blason; isle: string } | null> {
   return new Promise((resolve) => {
-    let done: Blason | null = null;
+    let done: { blason: Blason; isle: string } | null = null, name = readIsleName(isle);
     const { ov, close } = menuPop(root, 'blasonPick', 'options', tr('Le blason du village'), `${blasonPickerHtml()}
-      <p class="hint">${tr('Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs. Vous pourrez le changer dans l’onglet Blason des expéditions.')}</p>
+      <p class="hint">${tr('Il flotte sur vos tours, vos navires et vos bannières. Le nom de l’île s’affiche en haut à gauche. Tout se change dans l’onglet Blason des expéditions.')}</p>
       <div class="popFoot"><button type="button" data-rand>${ic('dice', 16, 2)}${tr('Au hasard')}</button>${first ? `<button type="button" data-later>${tr('Plus tard')}</button>` : ''}<button type="button" data-r="1">${ic('check', 15, 2.2)}${tr('Valider')}</button></div>`,
     () => { if (!done) preview?.(cur); resolve(done); }, tr('Ses couleurs flottent sur vos drapeaux et habillent vos troupes.'));
     ov.style.zIndex = '40';
-    const now = bindBlasonPicker(ov, cur, (b) => preview?.(b));
+    const now = bindBlasonPicker(ov, cur, (b) => preview?.(b), { name, change: (n) => { name = n; } });
     const later = ov.querySelector('[data-later]') as HTMLButtonElement | null;
     if (later) later.onclick = () => close();
-    (ov.querySelector('[data-r="1"]') as HTMLButtonElement).onclick = () => { done = now(); close(); };
+    (ov.querySelector('[data-r="1"]') as HTMLButtonElement).onclick = () => { done = { blason: now(), isle: name }; close(); };
   });
 }

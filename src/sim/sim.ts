@@ -1,4 +1,5 @@
 import { tr } from '../i18n';
+import { ailing } from './mishaps';
 import { Coverage, computeCoverage } from './coverage';
 import { World, N } from '../world/world';
 import { WISH_JOY, WISH_JOY_MAX } from './wishes';
@@ -63,9 +64,9 @@ export const GOLD_LABEL = 'or (comptoir des voisins)';
  * Bâtiments que demande l'âge `n`, par genre : en Facile, autant qu'il en faut au village ; en Normal, ce qu'il en faut
  * de plus que n'en demandaient déjà les âges d'avant (un genre qu'ils demandaient déjà autant n'est plus demandé)
  */
-export function reqKindsOf(n: number, d: Difficulty, late = false): Partial<Record<KindId, number>> {
-  // (`late` : ceux de la fin de l'âge, après ses expéditions)
-  const req = late ? AGES[n].reqLate ?? {} : AGES[n].reqKinds;
+export function reqKindsOf(n: number, d: Difficulty, late = false, modern = true): Partial<Record<KindId, number>> {
+  // (`late` : ceux de la fin de l'âge, après ses expéditions ; sans `modern`, pas d'étapes de l'époque moderne)
+  const req = late ? (n === FUTURE_AGE && !modern ? {} : AGES[n].reqLate ?? {}) : AGES[n].reqKinds;
   if (!rulesOf(d).newOnly) return req;
   const out: Partial<Record<KindId, number>> = {};
   for (const [k, c] of Object.entries(req) as [KindId, number][]) {
@@ -74,6 +75,14 @@ export function reqKindsOf(n: number, d: Difficulty, late = false): Partial<Reco
   }
   return out;
 }
+
+/** L'âge futuriste : ses étapes de fin d'époque moderne (`reqLate` : aéroport, circuit automobile, centrale électrique) */
+export const FUTURE_AGE = 5;
+/**
+ * Une sauvegarde d'avant les étapes de l'époque moderne (`modernSteps` null) : déjà à l'époque moderne ou au-delà, elle
+ * en est dispensée (elle ne doit pas se retrouver retenue) ; plus tôt, elle les aura comme une partie neuve
+ */
+export const modernStepsFor = (saved: boolean | null, age: number) => saved ?? age < FUTURE_AGE - 1;
 
 /** Combien de bâtiments de ce genre les âges d'avant `n` ont déjà demandés (ceux-là ne comptent plus, en Normal) */
 export function usedBefore(k: KindId, n: number): number {
@@ -116,6 +125,7 @@ export class Sim {
   private baseWater = 0;
   private baseJobs = 0;
   private baseJoy = 0;
+  private baseHealth = 0;
   private grow = 0;
   /** secondes de jeu pendant lesquelles le village se remet d'un manque (en Normal, il grandit alors plus lentement) */
   recovering = 0;
@@ -208,7 +218,8 @@ export class Sim {
     this.water.cap = W;
     this.jobs.cap = J;
     this.joy.cap = Jy;
-    this.health.cap = He;
+    this.baseHealth = He;
+    this.health.cap = Math.max(0, He - ailing(this.world));
   }
 
   private evaluate() {
@@ -223,6 +234,8 @@ export class Sim {
     this.jobs.cap = down(this.baseJobs + needBonus(e, 'jobs'));
     // (et les envies d'habitants comblées : un petit plus, plafonné)
     this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY));
+    // (les malades restés sans soins pèsent sur les soins un temps, voir `sim/mishaps.ts`)
+    this.health.cap = Math.max(0, this.baseHealth - ailing(this.world));
     this.housing.demand = p;
     this.food.demand = up((n + 1) * rulesOf(this.world.difficulty).foodK);
     this.water.demand = n + 1;
@@ -247,6 +260,7 @@ export class Sim {
     if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: tr('Sécurité (pompiers et police)'), n: this.coverage.both, v: this.coverage.joy });
     if (k === 'joy' && this.world.wishesMet) rows.push({ label: tr('Envies d’habitants comblées'), n: this.world.wishesMet, v: Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) });
     if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts où l’on se promène'), n: L.forests, v: L.forests * 0.08 });
+    if (k === 'health') { const a = ailing(this.world); if (a) rows.push({ label: tr('Malades restés sans soins'), n: 0, v: -a }); }
     if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: tr(b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)'), n: 0, v: b }); }
     rows.sort((a, b) => b.v - a.v);
     const kind = ({ housing: 'house', food: 'farm', water: 'well', jobs: 'workshop', joy: 'gather', health: 'health' } as Record<NeedId, KindId>)[k];
@@ -284,6 +298,14 @@ export class Sim {
     return d.names[Math.max(this.age, d.minAge)];
   }
 
+  /** Un habitant de moins (un malade resté sans soins qui ne s'en est pas remis) ; faux si le village est trop petit pour ça */
+  loseOne(min: number) {
+    if (this.pop < min) return false;
+    this.pop -= 1;
+    this.evaluate();
+    return true;
+  }
+
   /** Combien le village en a, en comptant ceux qui s'en sont améliorés (une gare devenue gare centrale reste une gare) */
   built(k: KindId) { return lineOf(k).reduce((n, x) => n + (this.counts[x] ?? 0), 0); }
 
@@ -302,7 +324,7 @@ export class Sim {
     // nouvel âge) ne font pas avancer vers le suivant ; ceux bâtis en avance, avant que le jeu ne les demande, comptent déjà
     const fresh = rulesOf(w.difficulty).newOnly && this.age > 0;
     const kinds = (late: boolean) => {
-      for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty, late)) as [KindId, number][]) {
+      for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty, late, w.modernSteps !== false)) as [KindId, number][]) {
         const line = lineOf(k), sum = (r: Record<string, number>) => line.reduce((n, x) => n + (r[x] ?? 0), 0);
         const used = fresh ? Math.min(sum(w.ageBase), usedBefore(k, n)) : 0;
         const have = Math.max(0, sum(this.counts) - used);
@@ -532,6 +554,8 @@ export class Sim {
     const e = this.world.exp;
     e.clock += dt;
     if (e.temp.length && e.temp.some((t) => t.until <= e.clock)) e.temp = e.temp.filter((t) => t.until > e.clock);
+    const ills = this.world.ills;
+    if (ills.length && ills.some((i) => i.until <= e.clock)) this.world.ills = ills.filter((i) => i.until > e.clock);
     // la pluie humidifie les sols ; ils sèchent vite l'été, lentement au printemps et en automne, pas l'hiver
     if (dt > 0) {
       if (this.rain > 0.3) this.moisture = Math.min(1, this.moisture + dt * 0.05 * this.rain);

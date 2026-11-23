@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { World } from '../src/world/world';
-import { DEFAULT_BLASON, readBlason, randomBlason, COLOR_KEYS, EMBLEMS, SHAPES, BLASON_COLORS } from '../src/sim/blason';
+import { DEFAULT_BLASON, readBlason, randomBlason, COLOR_KEYS, EMBLEMS, SHAPES, BLASON_COLORS, DEFAULT_ISLE, ISLE_MAX, ISLE_NAMES, readIsleName, randomIsleName } from '../src/sim/blason';
 import { team, TEAM_A, TEAM_B, TEAM_FLAG, TEAM_BANNER, TEAM_EMBLEM, teamColors, isTeam } from '../src/render/teamPaint';
 import { Parts } from '../src/render/parts';
 
@@ -47,6 +47,32 @@ describe('blason du village', () => {
     w3.fromJSON(w.toJSON());
     expect(w3.blason).toEqual(w.blason);
     expect(w3.blasonSeen).toBe(false);
+  });
+
+  it('le nom de l’île : nettoyé, borné, par défaut s’il est vide ; une ancienne partie prend le nom par défaut', () => {
+    expect(readIsleName(undefined)).toBe(DEFAULT_ISLE);
+    expect(readIsleName(42)).toBe(DEFAULT_ISLE);
+    expect(readIsleName('   ')).toBe(DEFAULT_ISLE);
+    expect(readIsleName('  Port   Écume ')).toBe('Port Écume');
+    expect(readIsleName('<b>Île</b>')).toBe('bÎle/b');
+    expect(readIsleName('ab')).toBe('ab');
+    expect(readIsleName('x'.repeat(60)).length).toBe(ISLE_MAX);
+    // le tirage au hasard : un nom de la liste, jamais celui qu'on a déjà
+    for (const r of [0, 0.3, 0.99]) { const n = randomIsleName(() => r, ISLE_NAMES[0]); expect(ISLE_NAMES).toContain(n); expect(n).not.toBe(ISLE_NAMES[0]); }
+    for (const n of ISLE_NAMES) expect(readIsleName(n)).toBe(n);
+    // sauvegarde : écrit seulement s'il change ; absent, le nom par défaut
+    const w = new World();
+    expect(w.isleName).toBe(DEFAULT_ISLE);
+    expect((w.toJSON() as Record<string, unknown>).isleName).toBeUndefined();
+    w.isleName = 'Brumeval';
+    const back = new World();
+    back.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(back.isleName).toBe('Brumeval');
+    const old = JSON.parse(JSON.stringify(w.toJSON()));
+    delete old.isleName;
+    const legacy = new World();
+    legacy.fromJSON(old);
+    expect(legacy.isleName).toBe(DEFAULT_ISLE);
   });
 });
 

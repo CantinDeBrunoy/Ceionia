@@ -15,7 +15,11 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   // les décorations : haie, clôture, parterre de fleurs, banc, statue, pavés, fontaine (et le lampadaire, plus haut)
   | 'hedge' | 'fence' | 'flowerbed' | 'bench' | 'statue' | 'paving' | 'fountain'
   // la mare (expédition « Les grands bancs ») et le bassin à coraux (« Le récif »)
-  | 'pond' | 'coralpool';
+  | 'pond' | 'coralpool'
+  // la maison des explorateurs (une équipe d'expédition de plus)
+  | 'explorers'
+  // l'époque moderne : le circuit automobile et la centrale électrique (étapes vers l'âge futuriste)
+  | 'racetrack' | 'powerplant';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'deco' | 'war';
@@ -165,6 +169,20 @@ export const KINDS: Record<KindId, KindDef> = {
     food: [0, 0, 0, 0, 14, 28], jobs: [0, 0, 0, 0, 8, 12], joy: [0, 0, 0, 0, 1, 3],
     perk: 'À poser près de la mer (à 5 cases de l’eau au plus). Les poissons et algues d’élevage nourrissent le village, et l’éolienne tourne dans le vent du large.',
   },
+  racetrack: {
+    id: 'racetrack', size: 3, minAge: 4, icon: '🏁', cat: 'life',
+    names: ['', '', '', '', 'Circuit automobile', 'Circuit antigravité'],
+    desc: 'Une piste en anneau, ses vibreurs et ses murs de pneus, la tribune, les stands et la tour de contrôle : les bolides tournent sans relâche sous les vivats.',
+    joy: [0, 0, 0, 0, 14, 16], jobs: [0, 0, 0, 0, 6, 8],
+    perk: 'Grand bâtiment de 3 × 3 cases. Les voitures de course tournent sur la piste, la foule remplit la tribune et le vainqueur monte sur le podium. Avec l’aéroport et la centrale électrique, une des étapes de l’époque moderne vers l’âge futuriste.',
+  },
+  powerplant: {
+    id: 'powerplant', size: 3, minAge: 4, icon: '⚡', cat: 'prod',
+    names: ['', '', '', '', 'Centrale électrique', 'Centrale à hydrogène'],
+    desc: 'La salle des turbines, ses hautes cheminées et sa tour de refroidissement qui fume, le poste de transformation et les lignes qui partent vers la ville.',
+    jobs: [0, 0, 0, 0, 18, 22],
+    perk: 'Grand bâtiment de 3 × 3 cases. Avec l’aéroport et le circuit automobile, une des étapes de l’époque moderne vers l’âge futuriste.',
+  },
   airport: {
     id: 'airport', size: 4, minAge: 4, icon: '✈️', cat: 'service',
     names: ['', '', '', '', 'Aéroport', 'Aéroport hypersonique'],
@@ -274,6 +292,13 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [0, 0, 0, 0, 8, 10], jobs: [0, 0, 0, 0, 3, 4],
     perk: 'Débloqué par l’expédition « La pluie d’étoiles ». Les expéditions sont plus sûres (risque −15 %).',
     reqMission: 'stars',
+  },
+  explorers: {
+    id: 'explorers', size: 2, minAge: 2, icon: '🧭', cat: 'service',
+    names: ['', '', 'Maison des explorateurs', 'Société de géographie', 'Club des explorateurs', 'Base des explorateurs'],
+    desc: 'Cartes, globe, malles et trophées de voyage : les explorateurs du village s’y retrouvent et y préparent leurs départs.',
+    joy: [0, 0, 2, 3, 4, 5], jobs: [0, 0, 2, 3, 4, 5],
+    perk: 'Une équipe d’expédition de plus : le village peut en envoyer une de plus à la fois. Une seule maison suffit, une deuxième n’ajoute rien.',
   },
   tavern: {
     id: 'tavern', size: 1, minAge: 2, icon: '🍺', cat: 'life',
@@ -612,7 +637,7 @@ export const isLinear = (k: KindId) => k === 'hedge' || k === 'fence';
 /** Plafond du bien-être que donnent toutes les décorations ensemble (le lampadaire, plus ancien, compte à part) */
 export const DECOR_JOY_MAX = 3;
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'powerplant', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'explorers', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'racetrack', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -640,13 +665,13 @@ export const KIND_SUB: Record<KindId, string> = {
   hedge: 'jardin', fence: 'jardin', flowerbed: 'jardin', paving: 'mobilier', bench: 'mobilier', statue: 'ornements', fountain: 'ornements', pond: 'jardin', coralpool: 'ornements',
   farm: 'nourriture', vfarm: 'nourriture', pen: 'nourriture', stable: 'nourriture', apiary: 'nourriture', pier: 'nourriture', fishmarket: 'nourriture', offshore: 'nourriture',
   lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
-  workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie', tradepost: 'industrie', shipyard: 'industrie',
-  health: 'sante', school: 'savoir', observatory: 'savoir', lab: 'savoir', research: 'savoir',
+  workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', powerplant: 'industrie', fusion: 'industrie', harbor: 'industrie', tradepost: 'industrie', shipyard: 'industrie',
+  health: 'sante', school: 'savoir', observatory: 'savoir', explorers: 'savoir', lab: 'savoir', research: 'savoir',
   police: 'securite', fire: 'securite', senate: 'securite', watchtower: 'defense', barracks: 'defense', wall: 'remparts', gate: 'remparts', lighthouse: 'securite',
   station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
-  waterpark: 'detente', funfair: 'detente', circus: 'detente', arena: 'detente', zoo: 'detente', alpine: 'detente', aerodrome: 'detente',
+  waterpark: 'detente', funfair: 'detente', racetrack: 'detente', circus: 'detente', arena: 'detente', zoo: 'detente', alpine: 'detente', aerodrome: 'detente',
   temple: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments', concord: 'monuments', triumph: 'monuments', embassy: 'monuments',
 };
 
@@ -674,7 +699,7 @@ export const AGES: AgeDef[] = [
   { name: 'Médiéval', tagline: 'Colombages, églises et châteaux', reqPop: 30, reqKinds: { house: 8, temple: 1, workshop: 2, gather: 1 } },
   { name: 'Industriel', tagline: 'Briques, cheminées et gares', reqPop: 60, reqKinds: { house: 12, temple: 1, mill: 1, quarry: 1, landmark: 1, gather: 2, health: 1 }, reqOre: 12, reqGold: 20 },
   { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2, school: 1 }, reqOre: 30, reqGold: 50, reqLate: { refinery: 1, oilwell: 2 }, reqRail: true },
-  { name: 'Futuriste', tagline: 'Arcologies, maglev et fusées', reqPop: 180, reqKinds: { house: 24, workshop: 3, school: 2, lab: 1, health: 1, gather: 4 }, reqOre: 50, reqBrick: 80, reqGold: 100 },
+  { name: 'Futuriste', tagline: 'Arcologies, maglev et fusées', reqPop: 180, reqKinds: { house: 24, workshop: 3, school: 2, lab: 1, health: 1, gather: 4 }, reqOre: 50, reqBrick: 80, reqGold: 100, reqLate: { airport: 1, racetrack: 1, powerplant: 1 } },
 ];
 
 /**
@@ -702,6 +727,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   shipyard: 'chantiers navals', lighthouse: 'phares', fishmarket: 'halles aux poissons', offshore: 'fermes marines',
   concord: 'monuments de la concorde', tradepost: 'comptoirs', triumph: 'monuments de la victoire', embassy: 'ambassades',
   hedge: 'haies', fence: 'clôtures', flowerbed: 'parterres de fleurs', bench: 'bancs', statue: 'statues', paving: 'pavés', fountain: 'fontaines', pond: 'mares', coralpool: 'bassins à coraux',
+  explorers: 'maisons des explorateurs', racetrack: 'circuits automobiles', powerplant: 'centrales électriques',
 };
 
 /**

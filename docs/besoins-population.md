@@ -20,7 +20,7 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 | Eau `water` | bâtiments + maisons au bord de l'eau + bonus | `n + 1` | `cap >= demand` |
 | Travail `jobs` | bâtiments + `floor(champs/2)` + bonus | `up(n × 0,5)` si `n >= 6`, sinon 0 | `cap >= demand` |
 | Bien-être `joy` | bâtiments + forêts + sécurité + bonus | `pop × 0,3` si `pop >= 6`, sinon 0 | `cap >= demand` (pas d'arrondi) |
-| Santé `health` | somme des `health` | `up(n × 0,2)` si `n >= 15`, sinon 0 | `cap >= demand` |
+| Santé `health` | somme des `health`, moins les malades restés sans soins (`ailing`, voir [incidents.md](incidents.md)) | `up(n × 0,2)` si `n >= 15`, sinon 0 | `cap >= demand` |
 
 - `foodK` vient de `difficulty.ts` : 1 en Facile et Bac à sable, 1,25 en Normal. Le « +1 » de nourriture et d'eau est une part de réserve pour le village.
 - Les valeurs par bâtiment sont des tableaux indexés par âge dans `KINDS` (`catalog.ts`). Un bâtiment compte avec **son** `b.age` (l'âge de son modèle), pas avec l'âge du village. Les tableaux plus courts que `AGES` sont prolongés par leur dernière valeur (boucle en bas de `catalog.ts`).

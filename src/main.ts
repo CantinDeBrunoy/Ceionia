@@ -37,7 +37,8 @@ import { computeSeason, makeSeasonState } from './render/season';
 import { CameraRig, SURFACE_MIN_PITCH, PointerInfo, ToolInput, CAM_SENS } from './core/camera';
 import { GameTime } from './core/time';
 import { SurfaceGate } from './core/surface';
-import { Sim } from './sim/sim';
+import { Sim, modernStepsFor } from './sim/sim';
+import { sickToll, theftToll, applySick, applyTheft, sickNews, theftNews, DEATH_MIN_POP } from './sim/mishaps';
 import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
 import { Patrols, PATROL_MAX } from './sim/patrols';
@@ -59,7 +60,7 @@ import { AudioEngine, soundSettings, VOL_V } from './audio/audio';
 import { UI, showMenu, UIHost, chooseControls } from './ui/ui';
 import { chooseBlason } from './ui/blason';
 import { setTeamBlason } from './render/teamPaint';
-import { Blason } from './sim/blason';
+import { Blason, readIsleName } from './sim/blason';
 import { Controls, loadControls, saveControls, guessLayout } from './core/controls';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
@@ -532,6 +533,8 @@ class Game implements UIHost {
         // (une partie agrandie avant le 21 nov. 2026 : sa côte, abîmée près du bord de l'ancienne carte, est réparée une fois)
         w.fromJSON(repairCoast(save.world, save.map, save.seed));
         this.sim.age = save.age; this.sim.pop = save.pop;
+        // (une partie d'avant les étapes de l'époque moderne, déjà à cette époque : elle en est dispensée)
+        w.modernSteps = modernStepsFor(w.modernSteps, this.sim.age);
         readClock(this.time, save);
         addDefaultDecor(w, save.seed);
       } catch (e) {
@@ -670,6 +673,19 @@ class Game implements UIHost {
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
     this.emergencies.ignite = (b) => ignite(b);
+    // un malaise ou un cambriolage loin de tout poste, resté sans secours : ses conséquences, mesurées selon la difficulté
+    this.emergencies.onUnaided = (sv) => {
+      const w = this.world;
+      if (sv === 'health') {
+        const toll = sickToll(w), died = toll.dies && this.sim.loseOne(DEATH_MIN_POP);
+        if (!died) applySick(w, toll, this.time.dayLen);
+        if (died || toll.n) this.ui.toast(sickNews(toll, died), undefined, 'danger');
+      } else {
+        const loot = theftToll(w);
+        applyTheft(w, loot);
+        this.ui.toast(theftNews(loot), undefined, 'danger');
+      }
+    };
     // (une fois sur deux seulement : les incendies restent des événements)
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
     // (les digues et tranchées de l'expédition « Le village sous le volcan » détournent la lave : plus d'incendie)
@@ -2176,6 +2192,8 @@ class Game implements UIHost {
   setSeasonsOff(list: number[]) { this.time.setOff(readSeasonsOff(list)); this.applySettings(); }
   /** Change le blason du village : tout le jeu se teint à l'image suivante, la partie le garde */
   setBlason(b: Blason) { this.world.blason = { ...b }; this.world.blasonSeen = true; setTeamBlason(b); }
+  /** Change le nom de l'île (affiché en haut à gauche), nettoyé ; la partie le garde */
+  setIsleName(n: string) { this.world.isleName = readIsleName(n); }
   /**
    * Partie neuve : après le choix des contrôles, la fenêtre du blason (facultative, « Plus tard »). Elle ne revient pas
    * d'elle-même ; le blason se change dans Paramètres › Partie
@@ -2184,10 +2202,10 @@ class Game implements UIHost {
     if (this.world.blasonSeen) return;
     const was = this.time.paused;
     this.time.paused = true;
-    const b = await chooseBlason(this.ui.root, this.world.blason, true, (x) => setTeamBlason(x));
+    const b = await chooseBlason(this.ui.root, this.world.blason, true, (x) => setTeamBlason(x), this.world.isleName);
     this.time.paused = was;
     this.world.blasonSeen = true;
-    if (b) this.setBlason(b);
+    if (b) { this.setBlason(b.blason); this.setIsleName(b.isle); }
   }
   private applyControls() {
     const mouse = this.controls.mode === 'mouse';
