@@ -14,6 +14,7 @@ import { allyLand, awayWhy, tradepostWhy } from '../sim/allyLand';
 import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Blason, DEFAULT_BLASON, readBlason } from '../sim/blason';
+import { readIlls } from '../sim/mishaps';
 import { Crossing, crossingMap, nearestOnDeck, DECK_CLEAR, waterLevel } from './crossings';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
@@ -415,6 +416,8 @@ export class World {
    * selon l'âge (`Game`, voir `modernStepsFor`)
    */
   modernSteps: boolean | null = true;
+  /** malades restés sans soins : soins en moins jusqu'à l'horloge des expéditions (`until`), voir `sim/mishaps.ts` */
+  ills: { n: number; until: number }[] = [];
   /** la côte de l'île principale est sûre (agrandie après le 21 nov. 2026, ou réparée par `repairCoast`, voir `expand.ts`) */
   coast = 0;
   /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
@@ -1890,6 +1893,7 @@ export class World {
       ...(this.exploredAt !== null ? { exploredAt: this.exploredAt } : {}),
       ...(this.coast ? { coast: 1 } : {}),
       ...(this.modernSteps !== null ? { modern: this.modernSteps ? 1 : 0 } : {}),
+      ...(this.ills.length ? { ills: this.ills.filter((i) => i.until > this.exp.clock) } : {}),
       ...(this.isles && this.mainGen !== GEN_VAR ? { mainGen: this.mainGen } : {}),
       ...(this.reveal ? { reveal: 1 } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
@@ -2040,6 +2044,7 @@ export class World {
     this.exploredAt = Number.isInteger(d.exploredAt) && this.isles ? d.exploredAt : null;
     this.coast = d.coast === 1 ? 1 : 0;
     this.modernSteps = d.modern === 1 ? true : d.modern === 0 ? false : null;
+    this.ills = readIlls(d.ills);
     this.mainGen = this.isles && [GEN_FIXED, 2, 5].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);

@@ -38,6 +38,7 @@ import { CameraRig, SURFACE_MIN_PITCH, PointerInfo, ToolInput } from './core/cam
 import { GameTime } from './core/time';
 import { SurfaceGate } from './core/surface';
 import { Sim, modernStepsFor } from './sim/sim';
+import { sickToll, theftToll, applySick, applyTheft, sickNews, theftNews, DEATH_MIN_POP } from './sim/mishaps';
 import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
 import { Patrols, PATROL_MAX } from './sim/patrols';
@@ -625,6 +626,19 @@ class Game implements UIHost {
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
     this.emergencies.ignite = (b) => ignite(b);
+    // un malaise ou un cambriolage loin de tout poste, resté sans secours : ses conséquences, mesurées selon la difficulté
+    this.emergencies.onUnaided = (sv) => {
+      const w = this.world;
+      if (sv === 'health') {
+        const toll = sickToll(w), died = toll.dies && this.sim.loseOne(DEATH_MIN_POP);
+        if (!died) applySick(w, toll, this.time.dayLen);
+        if (died || toll.n) this.ui.toast(sickNews(toll, died), undefined, 'danger');
+      } else {
+        const loot = theftToll(w);
+        applyTheft(w, loot);
+        this.ui.toast(theftNews(loot), undefined, 'danger');
+      }
+    };
     // (une fois sur deux seulement : les incendies restent des événements)
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
     // (les digues et tranchées de l'expédition « Le village sous le volcan » détournent la lave : plus d'incendie)
