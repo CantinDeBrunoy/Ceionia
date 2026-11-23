@@ -2,6 +2,7 @@ import { tr } from '../i18n';
 import { hudPic } from './pics';
 import type { People } from '../world/archipelago';
 import { DiploState, Path, isleName, peopleName, rivalOf, talkRisk, TALK_RISK, type Intel } from '../sim/diplomacy';
+import type { Road } from '../sim/diploRoad';
 
 /**
  * Les cartes de la diplomatie de l'archipel, dans le style de la carte du choix du portail (parchemin bordé d'or, titre en
@@ -16,11 +17,13 @@ import { DiploState, Path, isleName, peopleName, rivalOf, talkRisk, TALK_RISK, t
  */
 export class DiploChoice {
   private el: HTMLElement;
-  private mode: 'ally' | 'path' | 'tactic' | 'battle' = 'ally';
+  private mode: 'ally' | 'path' | 'tactic' | 'battle' | 'road' | 'raid' = 'ally';
+  /** la sortie en cours : ce qui serait reperdu si le camp tombait */
+  private stake = '';
   /** le choix tactique en cours de la bataille (1 : les remparts ; 2 : l'assaut final) */
   private step: 1 | 2 = 1;
 
-  constructor(root: HTMLElement, private host: { diplo(): DiploState; why?(): string | null; click(): void; ally(p: People): void; path(p: Path): void; tactic?(c: string): void; battle?(): void }) {
+  constructor(root: HTMLElement, private host: { diplo(): DiploState; why?(): string | null; click(): void; ally(p: People): void; path(p: Path): void; tactic?(c: string): void; battle?(): void; road?(): Road | null; mission?(id: string): void; hold?(): void }) {
     this.el = document.createElement('div');
     this.el.id = 'diploChoice';
     this.el.className = 'panel';
@@ -32,6 +35,9 @@ export class DiploChoice {
       const a = b.dataset.a!;
       this.hide();
       if (b.dataset.tac) this.host.tactic?.(b.dataset.tac);
+      else if (a === 'mission' && b.dataset.id) this.host.mission?.(b.dataset.id);
+      else if (a === 'change') this.showPath();
+      else if (a === 'hold') this.host.hold?.();
       else if (a === 'orient' || a === 'asie') this.host.ally(a);
       else if (a === 'peace' || a === 'war') this.host.path(a);
       else if (a === 'battle') this.host.battle?.();
@@ -50,6 +56,16 @@ export class DiploChoice {
    * seule à leur retour, et l'on ne comprenait pas ce qui arrivait (demande de l'auteur, 17 nov. 2026)
    */
   showBattle() { this.mode = 'battle'; this.render(); this.el.style.display = ''; }
+  /**
+   * La feuille de route de la voie prise (retour de joueurs, 22 nov. 2026 : « perdu » après le choix) : les étapes qui
+   * déclenchent la suite, dans l'ordre, et les visites facultatives sur les îles qui la préparent. Rien à montrer : rien ne s'ouvre
+   */
+  showRoad() { if (!this.host.road?.()) return false; this.mode = 'road'; this.render(); this.el.style.display = ''; return true; }
+  /**
+   * Une sortie rivale fond sur le camp de la plage (la campagne de l'île rivale) : la défendre soi-même, ou laisser la
+   * garnison tenir seule (le combat se règle sans nous, avec une partie du corps). `stake` : ce qui serait reperdu
+   */
+  showRaid(stake: string) { this.mode = 'raid'; this.stake = stake; this.render(); this.el.style.display = ''; }
   /** Un choix tactique de la bataille de l'archipel (le jeu est en pause tant qu'il attend) */
   showTactic(step: 1 | 2) { this.mode = 'tactic'; this.step = step; this.render(); this.el.style.display = ''; }
 
@@ -88,12 +104,25 @@ export class DiploChoice {
         <p class="pcSub">${tr('La côte de {isle} est reconnue. Nos troupes et celles de {ally} sont prêtes à débarquer.', { isle: isleName(rival), ally: peopleName(ally) })}</p>
         ${learnt ? `<ul class="dcIntel">${learnt}</ul>` : ''}
         <div class="pcBtns dcCol">
-          ${choice('battle', 'pcGo', hudPic('militaire', 34), tr('Lancer l’assaut'), tr('le débarquement, puis la plage, le port, les remparts et le palais'))}
+          ${choice('battle', 'pcGo', hudPic('militaire', 34), tr('Débarquer'), tr('prendre la plage, y poser un camp, puis le port, la tour et la ville'))}
           ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('préparer encore le village : la bataille attendra'))}
         </div>
-        <small class="pcNote">${tr('Pour lancer l’assaut plus tard : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
+        <small class="pcNote">${tr('Pour débarquer plus tard : le bouton des Peuples, ou la condition « le conflit des deux îles ».')}</small>`;
       return;
     }
+    if (this.mode === 'raid') {
+      const ally = d.ally ?? 'orient', rival = rivalOf(ally);
+      this.el.innerHTML = `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rival, 64)}</div>
+        <h4>${tr('Le camp est attaqué !')}</h4>
+        <p class="pcSub">${tr('{rival} font une sortie contre notre camp de la plage.', { rival: cap(peopleName(rival)) })}</p>
+        <div class="pcBtns dcCol">
+          ${choice('battle', 'pcGo', hudPic('militaire', 34), tr('Défendre le camp'), tr('tout notre corps, à vos ordres'))}
+          ${choice('hold', 'pcNo', hudPic('sablier', 34), tr('Laisser la garnison tenir'), tr('le combat se règle seul, avec une partie du corps'))}
+        </div>
+        <small class="pcNote">${tr('Si le camp tombe, nous perdrons {what}.', { what: this.stake })}</small>`;
+      return;
+    }
+    if (this.mode === 'road') { const r = this.host.road?.(); if (r) { this.el.innerHTML = roadHtml(r); return; } }
     const ally = d.ally ?? 'orient', rival = rivalOf(ally), why = this.host.why?.() ?? null;
     this.el.innerHTML = `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rival, 64)}</div>
       <h4>${tr('Le conflit des deux îles')}</h4>
@@ -109,6 +138,31 @@ export class DiploChoice {
   }
 
   hide() { this.el.style.display = 'none'; }
+}
+
+/**
+ * La feuille de route (voir `sim/diploRoad.ts`) : « La suite », les étapes numérotées (celle du moment en bouton d'or), puis
+ * « Pour se préparer », les visites facultatives sur les îles en petites tuiles (ce qu'elles rapportent pour cette voie)
+ */
+export function roadHtml(r: Road) {
+  const war = r.path === 'war';
+  const step = (s: Road['steps'][number], i: number) => {
+    const go = s.state === 'now' && s.go !== 'wait', mark = s.state === 'done' ? '✓' : String(i + 1);
+    const body = `<i class="dcNum">${mark}</i><em class="dcIco" aria-hidden="true">${s.icon}</em><span><b>${s.title}</b><small>${s.sub}</small></span>`;
+    if (!go) return `<div class="dcStep ${s.state}">${body}</div>`;
+    return s.go === 'battle' ? `<button data-a="battle" class="dcStep now pcGo">${body}</button>` : `<button data-a="mission" data-id="${s.id}" class="dcStep now pcGo">${body}</button>`;
+  };
+  const prep = r.prep.map((p) => `<button data-a="mission" data-id="${p.id}" class="dcPrepIt${p.done ? ' done' : ''}"${p.done ? ' disabled' : ''}><em aria-hidden="true">${p.done ? '✓' : p.icon}</em><span><b>${p.title}</b><small>${p.running ? tr('en route') : p.gain}</small></span></button>`).join('');
+  return `<div class="dcCrests">${crest(r.ally, 56)}<span class="dcVs">${war ? '⚔' : '🕊'}</span>${crest(r.rival, 56)}</div>
+    <h4>${war ? tr('La voie de la guerre') : tr('La voie de la paix')}</h4>
+    <p class="pcSub">${war ? tr('Avec {ally}, contre {rival}.', { ally: peopleName(r.ally), rival: peopleName(r.rival) }) : tr('Réconcilier {ally} et {rival}.', { ally: peopleName(r.ally), rival: peopleName(r.rival) })}</p>
+    ${r.alert ? `<button data-a="battle" class="dcAlert pcGo"><em aria-hidden="true">🔥</em><span><b>${r.alert}</b><small>${tr('Défendre le camp')}</small></span></button>` : ''}
+    <h5 class="dcH">${tr('La suite')}</h5>
+    <div class="dcSteps">${r.steps.map(step).join('')}</div>
+    ${r.notes.length ? `<p class="dcNotes">${r.notes.join('<br>')}</p>` : ''}
+    ${prep ? `<h5 class="dcH">${tr('Pour se préparer')} <small>${tr('facultatif')}</small></h5><div class="dcPrep">${prep}</div>` : ''}
+    <div class="dcFoot">${r.canChange ? `<button data-a="change" class="dcLink">${tr('Changer de voie')}</button>` : ''}<button data-a="later" class="dcLink">${tr('Fermer')}</button></div>
+    <small class="pcNote">${tr('Pour revoir cette fenêtre : le bouton des Peuples, en haut.')}</small>`;
 }
 
 /** Les avantages des expéditions des îles pour la bataille, une ligne chacun (vide : aucun) */

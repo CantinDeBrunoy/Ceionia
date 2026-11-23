@@ -3,6 +3,7 @@ import type { People, RivalIsle } from '../world/archipelago';
 import type { KindId } from '../build/catalog';
 import { tr } from '../i18n';
 import { archipelagoOn } from '../world/expand';
+import { newCamp, readCamp, type CampState } from './campaign';
 
 /**
  * La diplomatie de l'archipel (voir `docs/diplomatie.md`) : les deux peuples des îles rivales, l'allié qu'on choisit parmi eux
@@ -49,6 +50,8 @@ export interface DiploState {
    * des chances pour la paix
    */
   boons: Boons;
+  /** guerre : la campagne de l'île rivale, après les éclaireurs (ce qu'on tient, le corps, les sorties ; voir `sim/campaign.ts`) */
+  camp: CampState;
 }
 
 /**
@@ -103,7 +106,7 @@ export function isleOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: strin
   return when === 'ally' || w.diplo.conflict === 'open';
 }
 
-export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [], boons: noBoons() });
+export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [], boons: noBoons(), camp: newCamp() });
 
 const PEOPLES: People[] = ['orient', 'asie'];
 const PATHS: Path[] = ['peace', 'war'];
@@ -130,6 +133,8 @@ export function readDiplo(d: any): DiploState {
   s.intel = Array.isArray(d.intel) ? INTELS.filter((x) => d.intel.includes(x)) : [];
   // (les avantages des expéditions des îles : nouveaux le 20 nov. 2026, à zéro dans les anciennes parties)
   for (const k of BOON_KINDS) { const v = Math.round(+d.boons?.[k] || 0); s.boons[k] = Math.max(k === 'peace' ? PEACE_MIN : 0, Math.min(BOON_MAX[k], v)); }
+  // (la campagne de l'île rivale : nouvelle le 23 nov. 2026 ; une ancienne partie aux éclaireurs revenus reprend au débarquement)
+  s.camp = readCamp(d.camp);
   return s;
 }
 
