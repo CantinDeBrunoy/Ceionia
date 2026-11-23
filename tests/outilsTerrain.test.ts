@@ -207,7 +207,8 @@ describe('faille au pinceau', () => {
     expect(Math.abs(w.hAt(x + 0.5, z + 4.5) - y0)).toBeLessThan(0.6);
     // un décor : ni bâtiment ni route ; une entrée pour les expéditions (et le monde souterrain)
     expect(w.canPlace('house', x, z)).toBe('Une grotte ou une faille est ici');
-    expect(w.canRoad(x, z)).toBe(false);
+    // (une route la franchit en pont, depuis le 22 nov. 2026)
+    expect(w.canRoad(x, z)).toBe(true);
     expect(w.entranceAt(x + 0.5, z + 0.5)).toBeGreaterThanOrEqual(0);
     expect(w.outpostEntrance(x - 1, z + 2, 1)).toBeGreaterThanOrEqual(0);
     expect(w.riftEntrances().length).toBeGreaterThanOrEqual(1);

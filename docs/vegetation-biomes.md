@@ -83,7 +83,7 @@ Par case de terre (`cellAvg ≥ 0.12`), bruit `Simplex(seed+99)` :
 - Berges (`VegView.bank`) : roseaux à fleur d'eau (pas au milieu d'une rivière, pas sur une case défrichée), touffes en haut de la grève, quelques fleurs ; ni au désert, ni au marais (il a les siens), ni sur l'île contaminée.
 - Facteur de neige par biome : une seule table, `BIOME_SNOW = [1, 1, 0.15, 0.2, 1]` (`world.ts`), lue par le sol, les toits et les routes (`SNOWY`, `terrainView.ts`) comme par les plantes et les rochers (`snowy(b)`, `vegetation.ts`). La taïga retient autant de neige que le tempéré (avant, les plantes de taïga en prenaient 1,2 : un peu plus blanches que le sol).
 - Lacs gelés et torrents figés : voir [eau-rivieres.md](eau-rivieres.md).
-- Station de ski (`alpine.ts`) : les skieurs chaussent des skis si la neige dépasse 0,35 ou si le sommet du site est au-dessus de `SNOW_LINE[0]` ; la pose exige un sommet d'au moins `ALPINE_PEAK` à `ALPINE_REACH` cases (`World.bigPeakNear`).
+- Station de ski (`alpine.ts`) : les skieurs chaussent des skis si la neige dépasse 0,35 ou si le sommet du site est au-dessus de `SNOW_LINE[0]` ; la pose se fait au pied de la montagne, avec un sommet d'au moins `ALPINE_PEAK` à `ALPINE_REACH` cases (`World.bigPeakNear`, voir [placement-construction.md](placement-construction.md)).
 
 ## Liens avec les autres systèmes
 - [monde-carte.md](monde-carte.md) : `veg`, `biome`, génération.

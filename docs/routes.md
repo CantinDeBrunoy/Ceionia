@@ -1,14 +1,14 @@
 # Routes
 
 > Fichiers : `src/build/freeRoad.ts` (route libre, A*), `src/build/autoroads.ts` (chemins d'accès automatiques), `src/build/tools.ts` (outil Route, mode ligne), `src/world/world.ts` (`canRoad`, `setRoad`, `addCurve`, `curveCells`), `src/world/curves.ts` (courbes, rastérisation), `src/world/crossings.ts` (ponts), `src/render/roads.ts` (`RoadView`, tout le dessin), `src/sim/agents.ts` (`sidewalkAt`), `src/render/traffic.ts` (voie des véhicules)
-> Tests : `tests/routeLigne.test.ts`, `tests/autoroads.test.ts`, `tests/curves.test.ts`, `tests/franchissements.test.ts`, `tests/trottoirs.test.ts`, `tests/neigeRoutes.test.ts`, `tests/rivage.test.ts`
+> Tests : `tests/lacets.test.ts`, `tests/routeLigne.test.ts`, `tests/autoroads.test.ts`, `tests/curves.test.ts`, `tests/franchissements.test.ts`, `tests/trottoirs.test.ts`, `tests/neigeRoutes.test.ts`, `tests/rivage.test.ts`
 > Voir aussi : [placement-construction.md](placement-construction.md), [eau-rivieres.md](eau-rivieres.md), [habitants.md](habitants.md), [trafic.md](trafic.md), [chemin-de-fer.md](chemin-de-fer.md), [remparts.md](remparts.md)
 
 ## En bref
 Une route est une case de `World.road` (0 ou 1). Le joueur en trace de deux façons (ligne case par case, ou courbe de A à B) ; le jeu en trace seul entre un bâtiment neuf et le réseau. Les routes ne coûtent rien. Habitants, charrettes et secours ne circulent que sur ces cases. Le dessin (`RoadView`) regarde les cases voisines et les courbes pour produire chaussée, trottoirs, places, ronds-points, ponts et lanternes, avec un revêtement qui change avec l'âge.
 
 ## Règles du jeu
-**Poser une case** (`World.canRoad`) : pas sur un bâtiment ni sur une grotte ou une faille ; sur l'eau, un pont est permis sur un lac et sur la mer jusqu'à `cellAvg > -1,7` (pas au large) ; sur terre, pente de la case `cellSlope < 1,3`. Une route efface la végétation de la case (`setRoad`).
+**Poser une case** (`World.canRoad`) : pas sur un bâtiment ni sur une grotte ; sur une faille, toujours (un pont, depuis le 22 nov. 2026) ; sur l'eau, un pont est permis sur un lac et sur la mer jusqu'à `cellAvg > -1,7` (pas au large) ; sur terre, pente de la case `cellSlope < ROAD_SLOPE` (1,3) ; une route libre monte en lacets jusqu'à `SWITCH_SLOPE` (3), `canRoad(x, z, steep = true)`. Une route efface la végétation de la case (`setRoad`).
 
 **Route en ligne** (mode « Ligne ») : on glisse, une case posée par case traversée (Bresenham, 200 cases au plus par événement, `applyRoad` → `strokeRoad`, `src/build/roadLine.ts`). Chaque case refusée est sautée en silence. Deux règles depuis le 19 nov. 2026 (l'auteur trouvait une route tracée à la main « bizarre », large et bosselée) :
 - un pas en diagonale passe d'abord par une case de côté (la plus proche du trait) : deux cases qui ne se touchent que par un coin se dessinaient en deux morceaux ;
@@ -18,8 +18,9 @@ Une diagonale en mode « Ligne » est donc un escalier ; le mode « Libre » tra
 **Route libre** (mode « Libre », mode par défaut, `roadMode = 'free'`) : un clic au point A, un clic au point B, ou un glissé de A à B (relâcher à plus de 12 px de l'appui). Un ruban vert (rouge si refusé) montre la courbe prévue, avec une flèche au bout. Un clic sur A, ou Échap, oublie A. Une fois la route posée, l'outil est quitté (`setTool('none')`). R, l'outil étant déjà en main, bascule entre les deux modes (`main.ts`).
 - Longueur : `FREE_MAX = 80` cases à vol d'oiseau (« Trop loin »).
 - Refus avec message (`RoadPlan.why`) : « Hors de la carte. », « On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde. » (A ou B non posable), « Pas de passage : des bâtiments, l'eau profonde ou des pentes trop raides barrent le chemin. ».
-- Le chemin contourne bâtiments, pentes et champs ; il ne franchit l'eau que si l'on ne peut pas faire autrement.
+- Le chemin contourne bâtiments, pentes et champs ; il jette un pont sur l'eau ou une faille dès que c'est nettement plus court que le détour (22 nov. 2026, retour de joueur : « le jeu propose souvent un détour quand je veux un pont »).
 - Un clic de départ sur une route existante est permis ; la nouvelle route la croise ou la rejoint.
+- **Lacets** (22 nov. 2026, retour de joueur : « routes sur une colline trop raide : impossible ») : sur une pente entre 1,3 et 3, la route libre monte en lacets au lieu d'échouer : de longues écharpes en biais à pente douce, reliées par des épingles. La route en ligne et les routes automatiques gardent la limite de 1,3. Une case au-delà de 3 (une paroi) reste refusée.
 
 **Routes automatiques** (réglage `autoRoads`, vrai par défaut, dans les réglages ; `Game.setAutoRoads`) : à la pose d'un bâtiment, `autoRoad` trace un seul chemin de sa porte jusqu'au réseau (ou, sans réseau encore, jusqu'à la porte du bâtiment le plus proche : le tout premier bâtiment n'a rien à relier). Le réseau et les portes sont ceux de **son île** (`sameLand` : l'île principale, ou celle de l'allié, voir [diplomatie.md](diplomatie.md)) : sur l'île de l'allié, le réseau du village, de l'autre côté de la mer, ne compte pas ; le premier bâtiment y attend le suivant (le comptoir posé près du port s'y relie).
 - Rien si la porte donne déjà sur une route, rien pour `lamp`, `gather`, `wall`, `gate` (`hasDoor`).
@@ -30,17 +31,17 @@ Une diagonale en mode « Ligne » est donc un escalier ; le mode « Libre » tra
 
 **Démolir une route** : outil Démolir, une case ou un disque ; voir [placement-construction.md](placement-construction.md). Le relief qui rend une case impraticable après sculpture la retire (`World.sanitize`).
 
-**Ponts** : il n'y a pas d'outil pont. Une route posée sur de l'eau devient un pont à l'affichage et pour la simulation. `crossings.ts` détecte les franchissements une seule fois (cases mouillées, plus les une ou deux cases sèches prises entre deux bras, `MAX_DRY_GAP = 4`) et fixe le profil du tablier (`DECK_CLEAR = 0,24` au-dessus de l'eau). Détail : [eau-rivieres.md](eau-rivieres.md).
+**Ponts** : il n'y a pas d'outil pont. Une route posée sur de l'eau ou sur une faille devient un pont à l'affichage et pour la simulation (sur une faille, un tablier à plat d'un rebord à l'autre). Les tracés (libre, automatique) traitent la faille comme l'eau (`World.isGap`). `crossings.ts` détecte les franchissements une seule fois (cases mouillées, plus les une ou deux cases sèches prises entre deux bras, `MAX_DRY_GAP = 4`) et fixe le profil du tablier (`DECK_CLEAR = 0,24` au-dessus de l'eau). Détail : [eau-rivieres.md](eau-rivieres.md).
 
 **Trottoirs et voies** : les piétons ne marchent sur le trottoir (`SIDEWALK = 0,37` de l'axe) qu'à partir de l'âge 3 (`sidewalkAt`) et pas sur un pont ; les véhicules roulent à droite, à `LANE = 0,15` de l'axe (`render/traffic.ts`).
 
 ## Fonctionnement dans le code
 **Route libre** (`planRoad(w, ax, az, bx, bz)`) :
 1. cases de A et B en centres ; A* en 8-voisinage dans la boîte de A et B élargie de `MARGIN = 14` ;
-2. coût d'une case (`cost`) : `1 + pente × 2,5`, forêt +1,5, rochers +1, champ +4, eau +8 (hors pont existant), route existante +1,5 (on croise, on ne longe pas), voisin d'un bâtiment +0,6 ; infini si `!canRoad` ;
-3. coûts de passage : saut de hauteur supérieur à `STEP_H = 0,75` refusé hors de l'eau, diagonale refusée entre deux obstacles, ou en rognant le coin d'une case d'eau, nouveau franchissement +12 ;
-4. tirage en lignes droites (jusqu'à 12 cases, `fits(…, cheap = true)`) puis adoucissement de Chaikin à 3, 2, 1 puis 0 passes : la courbe la plus douce qui reste praticable, qui ne frôle aucun bâtiment (`BAND = 0,22`) et qui ne mouille pas plus de cases que le chemin cherché.
-5. Résultat : `{ pts, cells, why }`. `World.addCurve(pts)` arrondit les points au centième, pose les cases (`rasterize` + `setRoad`) et enregistre la courbe dans `World.curves` (`{ id, pts }`).
+2. coût d'une case (`cost`) : `1 + pente × 2,5`, forêt +1,5, rochers +1, champ +4, route existante +1,5 ; une case d'eau ou de faille (`isGap`) vaut `GAP = 2` (deux cases de terre plate, avant : +8), 2,5 sur un pont déjà posé (on croise, on ne longe pas), voisin d'un bâtiment +0,6 ; infini si `!canRoad` ;
+3. coûts de passage : saut de hauteur supérieur à `STEP_H = 0,75` refusé hors de l'eau ; sur une case raide (`cellSlope ≥ ROAD_SLOPE`), un pas ne monte pas plus de `LACET_GRADE = 0,5` par case de long. D'une case à sa voisine on monterait de toute la pente : près des cases raides, l'A* essaie aussi des **pas longs** en biais (`LONG` : tous les (dx, dz) premiers entre eux de 3 à `LACET_REACH = 5` cases, `longStep` ; un pas de 2 sur 1 monte déjà trop et ne faisait que des zigzags serrés), refusés s'ils montent trop en moyenne, ont un ressaut (pente sur une case de long au-delà de `LACET_LOCAL = 0,7`, mesurée tous les demi-cases sur le relief de jeu), touchent l'eau, une route ou une case impraticable, ou longent le pas précédent loin du virage (les deux branches d'une épingle se fondaient en une tache). Une épingle (pas long qui repart à plus de 120° du précédent) coûte `HAIRPIN = 6` : peu de lacets, de longues branches. Le chemin le moins cher fait alors des lacets de lui-même. Près d'un cratère ou d'une paroi, il peut ne pas y en avoir (« Pas de passage »). L'A* a une liste fermée, ne cherche de pas long que depuis une case raide ou voisine d'une (somme cumulée des cases raides de la zone) et saute un pas long qui ne peut rien améliorer (`dist ≤ dc + longueur`) : 10 ms en plaine, 15 à 30 ms en montagne sur la carte de 384 ; diagonale refusée entre deux obstacles, ou en rognant le coin d'une case d'eau ou de faille, nouveau franchissement `CROSS = 3` (avant : +12) ;
+4. tirage en lignes droites (jusqu'à 12 cases d'angle, `fits(…, cheap = true)`) puis adoucissement de Chaikin à 3, 2, 1 puis 0 passes : la courbe la plus douce qui reste praticable, qui ne frôle aucun bâtiment (`BAND = 0,22`) et qui ne mouille pas plus de cases que le chemin cherché ; sur une pente raide, `fits` refuse aussi une courbe qui monte de plus de `LACET_CURVE = 0,75` sur une case de long (mesurée le long de la courbe : un Chaikin qui couperait une épingle).
+5. Résultat : `{ pts, cells, why }`. `World.addCurve(pts)` arrondit les points au centième, pose les cases (`rasterize` + `setRoad(…, steep = true)`) et enregistre la courbe dans `World.curves` (`{ id, pts }`).
 
 **Courbes** (`curves.ts`) : `sampleCurve` (pas de `CURVE_STEP = 0,1`), `rasterize` (cases voisines par un côté ; en diagonale, ajoute la case la plus proche de la ligne), `chaikin`. Pour la simulation, une courbe n'est qu'une suite de cases ordinaires ; seule la vue la dessine courbe. `World.curveCells()` met en cache les cases de toutes les courbes (même celles dont la route a été démolie) ; `curveAt(k)` ne répond que si la case est encore une route.
 
@@ -65,6 +66,7 @@ Une diagonale en mode « Ligne » est donc un escalier ; le mode « Libre » tra
 
 ## Pièges et invariants
 - Les courbes survivent à la démolition de leurs cases (`curveCells` garde tout). Si le joueur démolit une route libre puis repose une case de route à la main au même endroit, la vue la dessine comme un morceau de l'ancienne courbe (`curveAt` répond de nouveau). À vérifier à l'écran ; la sauvegarde élimine les courbes mortes.
+- Une route en lacets garde ses cases raides tant que leur pente reste sous `SWITCH_SLOPE` : `World.sanitize` les teste avec `canRoad(…, true)`. Une ancienne partie n'en a pas (toutes ses routes sont sous 1,3).
 - `planRoad` et la pose peuvent diverger : le plan est fait sur l'état du monde au moment de l'aperçu (clé `w.version|w.visVersion`), la pose recalcule (`freeLay` rappelle `planRoad`). Ne pas poser le résultat d'un aperçu ancien.
 - `autoRoad` est exécuté par `tryPlace`, pas par `World.place` : un bâtiment posé par un test ou par un déplacement logique n'a pas de chemin.
 - Un déplacement efface l'ancien chemin d'accès (`unlayAccess`, appelé par `pickUp`) : `autoRoad` retient en mémoire les cases qu'il a posées pour chaque bâtiment (pas dans la sauvegarde) ; on les retire en partant du bout, tant qu'elles finissent en cul-de-sac et ne bordent aucun bâtiment. Une route du joueur, un chemin rejoint depuis par un voisin, ou un chemin d'une partie rechargée restent.
@@ -75,6 +77,6 @@ Une diagonale en mode « Ligne » est donc un escalier ; le mode « Libre » tra
 
 ## Pour modifier
 - **Changer l'allure du chemin automatique** : constantes en tête de `autoroads.ts` ; vérifier `tests/autoroads.test.ts`.
-- **Changer la route libre** : `cost`, `STEP_H`, `BAND`, nombre de passes de Chaikin dans `freeRoad.ts` ; le ruban d'aperçu est dans `ToolController.freePreview`.
+- **Changer la route libre** : `cost`, `STEP_H`, `BAND`, nombre de passes de Chaikin dans `freeRoad.ts` ; le ruban d'aperçu est dans `ToolController.freePreview` (au-dessus d'une faille, il passe au niveau du rebord, comme le futur pont, au lieu de plonger au fond du ravin).
 - **Nouveau revêtement par âge** : tableaux de couleurs en tête de `roads.ts` (un élément par âge de 0 à 4) et `uStyle` dans le shader.
 - **Nouveau décor de rue** : dans `build()` de `roads.ts`, un pas du générateur (les pas gardent chacun quelques ms).

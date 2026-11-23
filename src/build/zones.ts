@@ -15,7 +15,7 @@ export const ZONED: Partial<Record<KindId, string>> = {
   fishmarket: 'il faut de l’eau (mer ou lac) à moins de 5 cases',
   offshore: 'il faut de l’eau (mer ou lac) à moins de 5 cases',
   mine: 'il faut une montagne',
-  alpine: 'il faut une grosse montagne',
+  alpine: 'il faut le pied d’une grosse montagne',
   quarry: 'il faut des rochers ou une montagne',
   lumber: 'il faut une forêt',
   oilwell: 'il faut un gisement de pétrole (les taches sombres)',
@@ -145,54 +145,72 @@ export class ZoneHighlight {
     this.edgeMat.opacity = 0.55 + 0.4 * p;
   }
 
-  /** Une tuile par case, posée sur le relief affiché (quatre petits carreaux : il a deux sous-sommets par case) ; le liseré suit le bord des zones */
+  /** Une tuile par case de la zone, posée sur le relief affiché ; le liseré suit le bord des zones */
   private build(cells: Uint8Array) {
-    const w = this.getWorld();
-    // au-dessus de l'eau (le quai du port mord dessus), au ras du sol ailleurs
-    const y = (x: number, z: number, k: number) => Math.max(w.hAt(x, z), w.lake[k] ? w.lakeLevel[k] : SEA) + 0.05;
-    const on = (x: number, z: number) => x >= 0 && z >= 0 && x < N && z < N && cells[z * N + x] === 1;
-    let n = 0, e = 0;
-    for (let k = 0; k < cells.length; k++) if (cells[k]) {
-      n++;
-      const x = k % N, z = Math.floor(k / N);
-      e += +!on(x - 1, z) + +!on(x + 1, z) + +!on(x, z - 1) + +!on(x, z + 1);
-    }
-    const pos = new Float32Array(n * 9 * 3), idx = new Uint32Array(n * 24), line = new Float32Array(e * 4 * 3);
-    let v = 0, t = 0, l = 0;
-    const seg = (x0: number, z0: number, x1: number, z1: number, k: number) => {
-      // deux traits par côté de case, par le milieu : il épouse le relief
-      const xm = (x0 + x1) / 2, zm = (z0 + z1) / 2;
-      for (const [ax, az, bx, bz] of [[x0, z0, xm, zm], [xm, zm, x1, z1]]) {
-        line.set([ax, y(ax, az, k) + 0.02, az, bx, y(bx, bz, k) + 0.02, bz], l); l += 6;
-      }
-    };
-    for (let k = 0; k < cells.length; k++) {
-      if (!cells[k]) continue;
-      const cx = k % N, cz = Math.floor(k / N);
-      const base = v;
-      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) {
-        const x = cx + i / 2, z = cz + j / 2;
-        pos[v * 3] = x; pos[v * 3 + 1] = y(x, z, k); pos[v * 3 + 2] = z;
-        v++;
-      }
-      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
-        const a = base + j * 3 + i, b = a + 1, c = a + 3, d = a + 4;
-        idx.set([a, c, b, b, c, d], t); t += 6;
-      }
-      if (!on(cx - 1, cz)) seg(cx, cz, cx, cz + 1, k);
-      if (!on(cx + 1, cz)) seg(cx + 1, cz, cx + 1, cz + 1, k);
-      if (!on(cx, cz - 1)) seg(cx, cz, cx + 1, cz, k);
-      if (!on(cx, cz + 1)) seg(cx, cz + 1, cx + 1, cz + 1, k);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    const t = drapeTiles(this.getWorld(), 0, 0, N - 1, N - 1, (x, z) => cells[z * N + x] === 1);
+    t.inner.dispose();
     this.mesh.geometry.dispose();
-    this.mesh.geometry = g;
-    const lg = new THREE.BufferGeometry();
-    lg.setAttribute('position', new THREE.BufferAttribute(line, 3));
+    this.mesh.geometry = t.tiles;
     this.edge.geometry.dispose();
-    this.edge.geometry = lg;
-    this.mesh.visible = n > 0;
+    this.edge.geometry = t.edge;
+    this.mesh.visible = t.n > 0;
   }
+}
+
+/**
+ * Les cases de (x0, z0) à (x1, z1) où `on` est vrai, en tuiles posées sur le relief affiché (quatre petits carreaux : il a
+ * deux sous-sommets par case), et le liseré qui suit le bord de la zone. Sert aux emplacements et à la portée d'un bâtiment.
+ * `grid` : aussi les côtés entre deux cases de la zone (`inner`), pour qu'on compte les cases
+ */
+export function drapeTiles(w: World, x0: number, z0: number, x1: number, z1: number, inside: (x: number, z: number) => boolean, grid = false) {
+  x0 = Math.max(0, x0); z0 = Math.max(0, z0); x1 = Math.min(N - 1, x1); z1 = Math.min(N - 1, z1);
+  // au-dessus de l'eau (le quai du port mord dessus), au ras du sol ailleurs
+  const y = (x: number, z: number, k: number) => Math.max(w.hAt(x, z), w.lake[k] ? w.lakeLevel[k] : SEA) + 0.05;
+  const on = (x: number, z: number) => x >= x0 && z >= z0 && x <= x1 && z <= z1 && inside(x, z);
+  const list: number[] = [];
+  let e = 0, g = 0;
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) if (inside(x, z)) {
+    list.push(z * N + x);
+    e += +!on(x - 1, z) + +!on(x + 1, z) + +!on(x, z - 1) + +!on(x, z + 1);
+    if (grid) g += +on(x + 1, z) + +on(x, z + 1);
+  }
+  const n = list.length;
+  const pos = new Float32Array(n * 9 * 3), idx = new Uint32Array(n * 24), line = new Float32Array(e * 4 * 3), mesh = new Float32Array(g * 4 * 3);
+  let v = 0, t = 0, l = 0, m = 0;
+  const seg = (ax0: number, az0: number, ax1: number, az1: number, k: number, out = line) => {
+    // deux traits par côté de case, par le milieu : il épouse le relief
+    const xm = (ax0 + ax1) / 2, zm = (az0 + az1) / 2;
+    for (const [ax, az, bx, bz] of [[ax0, az0, xm, zm], [xm, zm, ax1, az1]]) {
+      const at = out === line ? l : m;
+      out.set([ax, y(ax, az, k) + 0.02, az, bx, y(bx, bz, k) + 0.02, bz], at);
+      if (out === line) l += 6; else m += 6;
+    }
+  };
+  for (const k of list) {
+    const cx = k % N, cz = Math.floor(k / N);
+    const base = v;
+    for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) {
+      const x = cx + i / 2, z = cz + j / 2;
+      pos[v * 3] = x; pos[v * 3 + 1] = y(x, z, k); pos[v * 3 + 2] = z;
+      v++;
+    }
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+      const a = base + j * 3 + i, b = a + 1, c = a + 3, d = a + 4;
+      idx.set([a, c, b, b, c, d], t); t += 6;
+    }
+    if (!on(cx - 1, cz)) seg(cx, cz, cx, cz + 1, k);
+    if (!on(cx + 1, cz)) seg(cx + 1, cz, cx + 1, cz + 1, k);
+    if (!on(cx, cz - 1)) seg(cx, cz, cx + 1, cz, k);
+    if (!on(cx, cz + 1)) seg(cx, cz + 1, cx + 1, cz + 1, k);
+    if (grid && on(cx + 1, cz)) seg(cx + 1, cz, cx + 1, cz + 1, k, mesh);
+    if (grid && on(cx, cz + 1)) seg(cx, cz + 1, cx + 1, cz + 1, k, mesh);
+  }
+  const tiles = new THREE.BufferGeometry();
+  tiles.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  tiles.setIndex(new THREE.BufferAttribute(idx, 1));
+  const edge = new THREE.BufferGeometry();
+  edge.setAttribute('position', new THREE.BufferAttribute(line, 3));
+  const inner = new THREE.BufferGeometry();
+  inner.setAttribute('position', new THREE.BufferAttribute(mesh, 3));
+  return { tiles, edge, inner, n };
 }

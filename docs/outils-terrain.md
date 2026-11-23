@@ -99,7 +99,7 @@ Suréchantillonnage `VR = 2`, trois passes de flou binomial ; le flou s'estompe 
 `raiseCaveKnolls` (buttes des grottes). C'est ce relief que lisent `hAt`, les arbres, la lave, l'eau.
 
 ### Failles (`World.rift`)
-- `rift[k] = 1` sur chaque case de ravin ; `decor[k] = VEG_FISSURE` (pas de bâtiment, de route, d'arbre). Le relief de jeu ne
+- `rift[k] = 1` sur chaque case de ravin ; `decor[k] = VEG_FISSURE` (pas de bâtiment ni d'arbre ; une route y passe en pont, voir [eau-rivieres.md](eau-rivieres.md)). Le relief de jeu ne
   change pas.
 - `carveRavines` : chaque sous-sommet au cœur d'un ravin descend selon `riftInner` (sa distance à la plus proche case qui
   n'est pas un ravin, jusqu'à 3) : paroi sur 0,6 case, fond de 2,4 à 3,8 (bruit doux). `ravine[i]` (0 … 1) sert aux teintes

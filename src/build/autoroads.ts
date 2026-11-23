@@ -52,7 +52,7 @@ export function autoRoad(w: World, b: Building): number {
     // ne passe jamais sur l'eau (pas de pont qui longe le quai)
     const ring = ringCells(w, b);
     if (ring.some((k) => w.road[k])) return 0;
-    const ok = (k: number) => w.canRoad(k % N, Math.floor(k / N)) && !w.isWet(k % N, Math.floor(k / N));
+    const ok = (k: number) => w.canRoad(k % N, Math.floor(k / N)) && !w.isGap(k % N, Math.floor(k / N));
     const back = doors(w, b, doorSide(b.kind, b.rot)).filter(ok);
     starts = back.length ? back : ring.filter(ok);
   } else {
@@ -228,7 +228,7 @@ function cheapest(w: World, starts: number[], goal: (k: number) => boolean, max:
     const last = !isStart.has(c) && DIRS.some(([dx, dz]) => w.inCells(x + dx, z + dz) && goal(w.ci(x + dx, z + dz)));
     for (let nd = 0; nd < 4; nd++) {
       const nx = x + DIRS[nd][0], nz = z + DIRS[nd][1];
-      if (nx < lx || nx > hx || nz < lz || nz > hz || (noWater && w.isWet(nx, nz))) continue;
+      if (nx < lx || nx > hx || nz < lz || nz > hz || (noWater && w.isGap(nx, nz))) continue;
       const n = nz * N + nx, isGoal = goal(n);
       if (last && !isGoal) continue;
       let step = 0;
@@ -238,7 +238,7 @@ function cheapest(w: World, starts: number[], goal: (k: number) => boolean, max:
         step = price(n) + extra;
       }
       // un nouveau franchissement d'eau coûte très cher : on préfère rejoindre la route de son côté de l'eau, ou en réutiliser un pont
-      if (!isGoal && w.isWet(nx, nz) && !w.isWet(x, z)) step += CROSS;
+      if (!isGoal && w.isGap(nx, nz) && !w.isGap(x, z)) step += CROSS;
       if (nd !== d) step += TURN;
       const ns = loc(n) * 4 + nd, nv = dist[st] + step;
       if (nv < dist[ns]) { dist[ns] = nv; prev[ns] = st; steps[ns] = steps[st] + 1; heap.push(nv, ns); }
@@ -263,7 +263,7 @@ function cost(w: World, k: number, spoil: (x: number, z: number) => number) {
   if (v === VEG_FOREST) c += 0.8;
   else if (v === VEG_ROCKS) c += 0.8;
   else if (v === VEG_FIELD || v === VEG_GARDEN) c += 6;
-  if (w.isWet(x, z)) c += WET;
+  if (w.isGap(x, z)) c += WET;
   return c + spoil(x, z);
 }
 

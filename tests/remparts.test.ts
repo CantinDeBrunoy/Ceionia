@@ -133,6 +133,22 @@ describe('remparts : le tracé libre', () => {
     expect(traceRampart(w, [0.5, 0.5], [RAMPART_MAX + 10.5, 0.5]).why).toMatch(/Trop long/);
   });
 
+  it('la palissade (clôture) et la haie se tracent de A à B comme le mur, en escalier, sans reposer ce qui est là', () => {
+    const { w, sx, sz } = setup();
+    const t = traceRampart(w, [sx - 2 + 0.5, sz + 0.5], [sx + 1.5, sz + 2.5], 'fence');
+    expect(t.cells.length).toBe(6);
+    for (let i = 1; i < t.cells.length; i++) expect(Math.abs(t.cells[i][0] - t.cells[i - 1][0]) + Math.abs(t.cells[i][1] - t.cells[i - 1][1])).toBe(1);
+    expect(layRampart(w, t, 0)).toEqual({ built: 6, skipped: 0, short: false });
+    for (const [x, z] of t.cells) expect(w.buildingAt(Math.floor(x), Math.floor(z))?.kind).toBe('fence');
+    // repasser dessus ne repose rien ; une haie à travers saute les clôtures
+    expect(layRampart(w, traceRampart(w, [sx - 2 + 0.5, sz + 0.5], [sx - 0.5, sz + 0.5], 'fence'), 0).built).toBe(0);
+    const h = traceRampart(w, [sx - 2 + 0.5, sz - 1.5], [sx - 2 + 0.5, sz + 3.5], 'hedge');
+    expect(layRampart(w, h, 0)).toEqual({ built: 5, skipped: 1, short: false });
+    // une clôture seule court dans le sens du tracé
+    layRampart(w, traceRampart(w, [sx + 4.5, sz - 2.5], [sx + 4.5, sz - 2.5], 'fence'), 0);
+    expect(w.buildingAt(sx + 4, sz - 3)?.kind).toBe('fence');
+  });
+
   it('en Normal, chaque pan se paie ; sans bois, le tracé s’arrête net', () => {
     const { w, sx, sz } = setup();
     w.difficulty = 'normal';

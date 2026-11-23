@@ -146,8 +146,9 @@ registerDict('gear', {
   'Une route est déjà ici': 'There is already a road here',
   'Trop proche de l’eau : reculez sur la terre ferme': 'Too close to the water: move back onto dry land',
   'Une mine ne se creuse que dans la montagne': 'A mine can only be dug in the mountains',
-  'Un club alpin ne se pose que dans la montagne': 'An alpine club can only be placed in the mountains',
-  'Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline': 'A ski resort goes at the foot of a big mountain, not on a mere hill',
+  'Le club alpin se pose au pied de la montagne, pas sur ses pentes : le télésiège monte de là': 'The alpine club goes at the foot of the mountain, not on its slopes: the chairlift rises from there',
+  'Le club alpin se pose au pied d’une montagne : ses pentes doivent commencer à {n} cases au plus': 'The alpine club goes at the foot of a mountain: its slopes must start {n} cells away at most',
+  'Au pied d’une grosse montagne, pas d’une simple colline : un sommet doit se dresser à {n} cases au plus': 'At the foot of a big mountain, not a mere hill: a summit must rise {n} cells away at most',
   'Terrain trop pentu': 'Ground too steep',
 
   // ---- lieux, saisons, île du portail ----

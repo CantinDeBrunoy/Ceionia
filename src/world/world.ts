@@ -40,8 +40,17 @@ export const MIN_H = -2.4;
 export const TREE_LINE = 5.8;
 /** Altitude à partir de laquelle on est dans la montagne (mines, carrières) */
 export const MOUNTAIN_H = 2.4;
-/** Station de ski : un sommet d'au moins ALPINE_PEAK à moins de ALPINE_REACH cases */
-export const ALPINE_PEAK = 5.2, ALPINE_REACH = 7;
+/**
+ * Club alpin : au pied d'une grosse montagne (retour de joueur, 22 nov. 2026 : le télésiège monte de là). Son emprise reste
+ * sous `MOUNTAIN_H`, le flanc de la montagne commence à `ALPINE_FOOT` cases au plus, et un sommet d'au moins `ALPINE_PEAK`
+ * se dresse à `ALPINE_REACH` cases au plus de son centre (le télésiège cherche le sommet à dix cases)
+ */
+export const ALPINE_PEAK = 5.2, ALPINE_REACH = 8, ALPINE_FOOT = 3;
+/**
+ * Pente d'une case (`cellSlope`) au-delà de laquelle on n'y pose pas de route case par case ; une route libre y monte en
+ * lacets jusqu'à `SWITCH_SLOPE` (au-delà : une paroi)
+ */
+export const ROAD_SLOPE = 1.3, SWITCH_SLOPE = 3;
 export const SNOW_LINE: [number, number] = [7, 8.2];
 /** Relief affiché : VR sous-sommets par case, lissé (la grille de jeu reste N×N) */
 export const VR = 2;
@@ -1233,6 +1242,9 @@ export class World {
     return this.lake[this.ci(cx, cz)] === 1 || this.cellAvg(cx, cz) < 0.08 || this.cellMin(cx, cz) <= -0.15;
   }
 
+  /** Une case qu'une route ne franchit qu'en pont : l'eau, ou le vide d'une faille */
+  isGap(cx: number, cz: number) { return this.rift[this.ci(cx, cz)] === 1 || this.isWet(cx, cz); }
+
   /**
    * Hauteur du tablier d'un pont de chemin de fer posé sur une case d'eau, ou null si la case est sèche : au-dessus de l'eau
    * de `DECK_CLEAR`, comme les ponts des routes (`crossings.ts`)
@@ -1310,6 +1322,14 @@ export class World {
     return false;
   }
 
+  /** Le flanc d'une montagne (une case à `MOUNTAIN_H` ou plus) à `reach` cases au plus de l'emprise s × s en (x, z) */
+  mountainNear(x: number, z: number, s: number, reach: number): boolean {
+    for (let cz = z - reach; cz < z + s + reach; cz++)
+      for (let cx = x - reach; cx < x + s + reach; cx++)
+        if (this.inCells(cx, cz) && this.cellAvg(cx, cz) >= MOUNTAIN_H) return true;
+    return false;
+  }
+
   /** Une grosse montagne (sommet d'au moins ALPINE_PEAK) à moins de ALPINE_REACH cases */
   bigPeakNear(cx: number, cz: number): boolean {
     for (let z = Math.floor(cz - ALPINE_REACH); z <= Math.ceil(cz + ALPINE_REACH); z++)
@@ -1360,9 +1380,12 @@ export class World {
     // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
     const high = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
     if (kind === 'mine' && !high) return tr('Une mine ne se creuse que dans la montagne');
-    if (kind === 'alpine' && !high) return tr('Un club alpin ne se pose que dans la montagne');
-    // une station de ski : au pied d'une grosse montagne, pas d'une simple colline
-    if (kind === 'alpine' && !this.bigPeakNear(x + s / 2, z + s / 2)) return tr('Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline');
+    // le club alpin : au pied d'une grosse montagne, jamais sur ses pentes (le télésiège monte de là jusqu'au sommet)
+    if (kind === 'alpine') {
+      if (high) return tr('Le club alpin se pose au pied de la montagne, pas sur ses pentes : le télésiège monte de là');
+      if (!this.mountainNear(x, z, s, ALPINE_FOOT)) return tr('Le club alpin se pose au pied d’une montagne : ses pentes doivent commencer à {n} cases au plus', { n: ALPINE_FOOT });
+      if (!this.bigPeakNear(x + s / 2, z + s / 2)) return tr('Au pied d’une grosse montagne, pas d’une simple colline : un sommet doit se dresser à {n} cases au plus', { n: ALPINE_REACH });
+    }
     if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return tr('À poser en lisière ou dans une forêt');
     if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return tr('À poser près des rochers ou dans la montagne (des rochers se posent avec Paysage › Nature › Rochers)');
     // le puits de pétrole se fore sur un gisement
@@ -1654,21 +1677,25 @@ export class World {
     for (const l of this.listeners) l.onRemove(b);
   }
 
-  canRoad(cx: number, cz: number) {
+  /** `steep` : une route en lacets (tracé libre), qui monte des pentes jusqu'à `SWITCH_SLOPE` */
+  canRoad(cx: number, cz: number, steep = false) {
     // (archipel : pas de route hors de son île et de celle de l'allié ; aucun pont ne les relie, les ports suffisent)
     if (!this.inCells(cx, cz) || !this.playable(cx, cz)) return false;
     const k = this.ci(cx, cz);
-    if (this.occ[k] || this.decor[k]) return false;
+    if (this.occ[k]) return false;
+    // au-dessus d'une faille : un pont, d'un rebord à l'autre (voir `crossings.ts`)
+    if (this.rift[k]) return true;
+    if (this.decor[k]) return false;
     // sur l'eau : un pont, sauf au large
     if (this.isWet(cx, cz)) return this.lake[k] === 1 || this.cellAvg(cx, cz) > -1.7;
-    return this.cellSlope(cx, cz) < 1.3;
+    return this.cellSlope(cx, cz) < (steep ? SWITCH_SLOPE : ROAD_SLOPE);
   }
 
-  setRoad(cx: number, cz: number, on: boolean): boolean {
+  setRoad(cx: number, cz: number, on: boolean, steep = false): boolean {
     if (!this.inCells(cx, cz)) return false;
     const k = this.ci(cx, cz);
     if (on) {
-      if (this.road[k] || !this.canRoad(cx, cz)) return false;
+      if (this.road[k] || !this.canRoad(cx, cz, steep)) return false;
       this.road[k] = 1;
       this.veg[k] = 0;
       this.vegDirty = true;
@@ -1689,7 +1716,8 @@ export class World {
   addCurve(pts: number[]): number {
     const line = roundPts(pts);
     let n = 0;
-    for (const k of rasterize(line, N)) if (this.setRoad(k % N, Math.floor(k / N), true)) n++;
+    // (une route libre peut monter en lacets sur une pente raide : voir `freeRoad.ts`)
+    for (const k of rasterize(line, N)) if (this.setRoad(k % N, Math.floor(k / N), true, true)) n++;
     this.curves.push({ id: Math.max(0, ...this.curves.map((c) => c.id)) + 1, pts: line });
     this.curveMap = null;
     this.roadsDirty = true;
@@ -1794,7 +1822,8 @@ export class World {
         if (this.veg[k] && !this.vegFits(this.veg[k], this.cellAvg(cx, cz), this.cellSlope(cx, cz), false)) { this.veg[k] = 0; this.vegDirty = true; }
         // un ravin noyé (creusé sous l'eau avec l'outil Eau) disparaît
         if (this.rift[k] && this.cellAvg(cx, cz) < 0.1) { this.rift[k] = 0; this.decor[k] = 0; this.vegDirty = true; }
-        if (this.road[k] && !this.canRoad(cx, cz)) { this.road[k] = 0; this.roadsDirty = true; }
+        // (une route en lacets reste tant que la pente ne dépasse pas celle des lacets)
+        if (this.road[k] && !this.canRoad(cx, cz, true)) { this.road[k] = 0; this.roadsDirty = true; }
       }
     this.version++;
   }

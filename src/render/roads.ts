@@ -1152,9 +1152,10 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         if (S[i + 1] >= sa && S[i] <= sb) for (; nextPile < run + seg; nextPile += isWood ? 0.8 : 1.4) {
           if (small || nextPile > sb - 0.5) continue;
           const t = (nextPile - run) / seg, x = p[0] + (q[0] - p[0]) * t, z = p[2] + (q[2] - p[2]) * t, y = p[1] + (q[1] - p[1]) * t;
-          const g = w.hAt(x, z);
+          const g = w.hAt(x, z), px = Math.floor(x), pz = Math.floor(z);
           if (y - dth - g < 0.25) continue;
-          const foot = Math.max(y - 1.8, g - 0.05);
+          // (au-dessus d'une faille, les piles descendent jusqu'au fond du ravin)
+          const foot = w.inCells(px, pz) && w.rift[w.ci(px, pz)] ? g - 0.05 : Math.max(y - 1.8, g - 0.05);
           if (isModern) {
             obox(x, z, -uz, ux, isFut ? 0.07 : dhw * 0.5, isFut ? 0.04 : 0.05, foot, y - dth - 0.04, pile);
             obox(x, z, -uz, ux, dhw * 0.96, 0.07, y - dth - 0.04, y - dth, pile);
