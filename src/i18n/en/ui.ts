@@ -636,7 +636,7 @@ registerDict('goals', {
   'bien-être +{n} pendant {d} jours': 'well-being +{n} for {d} days', 'Récompense : {r}': 'Reward: {r}',
   'Objectifs': 'Goals', 'Masqués': 'Hidden', 'Affichés': 'Shown',
   'Conseils du moment': 'Tips', 'Le conseil du moment, au milieu sous la barre du haut : ce qu’il faut bâtir ensuite': 'The current tip, in the middle under the top bar: what to build next',
-  '{n} en route': '{n} out', '{n} décision': '{n} decision', '{n} décisions': '{n} decisions',
+  '{n} décision': '{n} decision', '{n} décisions': '{n} decisions',
   'Les équipes en route : cliquer pour voir leurs cartes': 'Teams out on a mission: click to see their cards',
   'Trois petits objectifs à la fois dans la barre du haut, chacun avec une récompense.': 'Three small goals at a time in the top bar, each with a reward.',
   // Préhistoire
