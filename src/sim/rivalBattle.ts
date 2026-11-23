@@ -7,6 +7,7 @@ import { BALANCE_EASY, BALANCE_NORMAL, powerOf } from './hellBalance';
 import { troopStats, TroopKind } from './army';
 import { defenseK } from './isleBattle';
 import type { Intel, Boons } from './diplomacy';
+import { CORPS } from './campaign';
 
 /**
  * La bataille de l'archipel (la voie de la guerre, au Médiéval), « façon gouffre de Helm » (demande de l'auteur) : épique
@@ -19,9 +20,41 @@ import type { Intel, Boons } from './diplomacy';
  * commande ses troupes ; l'allié est piloté par l'ordinateur ; sans ordre, nos troupes marchent sur l'objectif en cours
  */
 
-/** Les objectifs, dans l'ordre : la plage, le port (hors les murs, au bout de la route de la porte), les remparts, le palais */
-export type BattleGoal = 'plage' | 'port' | 'remparts' | 'palais';
+/**
+ * Les objectifs, dans l'ordre : la plage, le port (hors les murs, au bout de la route de la porte), les remparts, le palais.
+ * La campagne de l'île rivale (voir `sim/campaign.ts`) en ajoute deux : la tour du rempart (un avant-poste qui tire, hors les
+ * murs) et le camp de la plage (à tenir contre une sortie rivale)
+ */
+export type BattleGoal = 'plage' | 'port' | 'tour' | 'remparts' | 'palais' | 'camp';
 export const GOALS: BattleGoal[] = ['plage', 'port', 'remparts', 'palais'];
+/**
+ * Les batailles de la campagne : la bataille d'un seul tenant (`full`, celle d'avant la campagne : les essais, le bac à sable),
+ * le débarquement, chaque avant-poste, la défense du camp, l'assaut final. Chacune joue ses objectifs dans l'ordre
+ */
+export type BattleKind = 'full' | 'landing' | 'port' | 'tour' | 'defend' | 'assault';
+export const PLANS: Record<BattleKind, BattleGoal[]> = {
+  full: GOALS, landing: ['plage'], port: ['port'], tour: ['tour'], defend: ['camp'], assault: ['remparts', 'palais'],
+};
+/** Les garnisons des avant-postes, quand on les prend un à un (soldats, archers) ; la tour a en plus son bâtiment, qui tire */
+export const OUTPOST = { port: [12, 8], tour: [8, 9] } as const satisfies Record<string, readonly [number, number]>;
+/**
+ * Un avant-poste attaqué appelle la ville : `OUTPOST_HELP` (soldats, archers) sortent de la porte à chaque temps de `OUTPOST_HELP_T` (s). La
+ * tour a `TOWER_HP` fois la vie d'une tour de garde. L'allié n'envoie qu'un détachement (`OUTPOST_ALLIES`, plus les renforts
+ * gagnés sur les îles) : la vraie bataille de l'allié, c'est l'assaut
+ */
+export const OUTPOST_HELP: [number, number] = [5, 3], OUTPOST_HELP_T = [25, 60], TOWER_HP = 6;
+export const OUTPOST_ALLIES: [number, number] = [3, 2];
+/** La tour prise, les remparts perdent ces archers à l'assaut final */
+export const TOUR_CUT = 2;
+/**
+ * Une sortie rivale contre le camp (soldats, archers), en `RAID_WAVES` vagues espacées de `RAID_GAP` s ; plus forte de
+ * `RAID_GROW` soldats à chaque sortie et à chaque avant-poste tenu (au plus `RAID_MAX` hommes par vague). La garde alliée
+ * du camp (`CAMP_ALLIES`) se bat avec nous
+ */
+export const RAID: [number, number] = [5, 3], RAID_WAVES = 2, RAID_GAP = 25, RAID_GROW = 2, RAID_MAX = 14;
+export const CAMP_ALLIES: [number, number] = [2, 2];
+/** La vie du camp de la plage dans la défense (× celle du camp des Enfers) : abattu, la défense est perdue */
+export const CAMP_HP = 1.6;
 /** Un objectif est pris quand ses défenseurs sont tombés et qu'une de nos troupes (ou de l'allié) est à moins de `TAKE_R` cases */
 export const TAKE_R = 4;
 /** Marge autour de la ville (cases) */
@@ -210,7 +243,7 @@ export class RivalMap implements CombatMap {
  * Les effectifs (demande de l'auteur : 25 contre 25 contre 45, renforts compris) : nos 25 (15 chevaliers ou soldats, 10
  * archers) ; l'allié 25 (10 au débarquement, 15 en renfort au moment de bascule) ; l'ennemi 45, réparti par groupe
  */
-export const OURS: [number, number] = [15, 10];
+export const OURS: [number, number] = CORPS;
 export const ALLY_FIRST: [number, number] = [6, 4];
 export const ALLY_RELIEF: [number, number] = [9, 6];
 /** Les groupes ennemis (soldats, archers) ; le chef s'ajoute au palais (45 en tout) */
@@ -267,7 +300,7 @@ export type BattleNews =
   | { type: 'choice'; step: 1 | 2 }
   | { type: 'boat'; n: number } | { type: 'allyLands' }
   | { type: 'counter' } | { type: 'wave'; n: number } | { type: 'relief' } | { type: 'gate' } | { type: 'breach' }
-  | { type: 'bombard' } | { type: 'cry' } | { type: 'surrender' }
+  | { type: 'bombard' } | { type: 'cry' } | { type: 'surrender' } | { type: 'tower' } | { type: 'raid'; n: number } | { type: 'campHit' }
   | { type: 'end'; outcome: BattleOutcome };
 
 /**
@@ -311,8 +344,15 @@ export const FOE_TOTAL = Object.entries(FOES).reduce((n, [k, [s, a]]) => n + (s 
 export class RivalBattle {
   map: RivalMap;
   sim: Hell;
-  /** l'objectif en cours (indice dans `GOALS`) ; 4 : tous pris */
+  /** les objectifs de cette bataille, dans l'ordre (`PLANS`) */
+  readonly plan: BattleGoal[];
+  /** l'objectif en cours (indice dans `plan`) ; au-delà : tous pris */
   goal = 0;
+  /** la tour du rempart (avant-poste qui tire) ; le camp de la plage (à tenir) */
+  tower: HellBuilding | null = null;
+  camp: HellBuilding | null = null;
+  /** sorties : vagues envoyées */
+  private raidsSent = 0;
   outcome: BattleOutcome | null = null;
   /** les groupes ennemis (vivants ou morts), par nom */
   foes = new Map<string, number[]>();
@@ -343,7 +383,7 @@ export class RivalBattle {
   private allyFirst = 0;
   readonly people: People;
   readonly ally: People;
-  private plan: TownPlan;
+  private town: TownPlan;
   /** où se tient chaque objectif (coordonnées de la bataille) */
   goalAt: Record<BattleGoal, [number, number]>;
   /** où mouille la flotte alliée (au large du port) ; devant la porte, dehors (d'où sort la contre-attaque) */
@@ -369,14 +409,27 @@ export class RivalBattle {
    * `boons` : les avantages des expéditions des îles (voir `Boons`) : troupes alliées de plus à la première vague, nos
    * soldats de plus (une barque de plus), ennemis en moins (`foeGroups`)
    */
-  constructor(world: World, rival: People, readonly age: number, easy = false, troops: TroopKind[] = armyOf(age), readonly intel: Intel[] = [], readonly boons: Boons = { allies: 0, ours: 0, foes: 0, peace: 0 }) {
+  /**
+   * `kind` : la bataille de la campagne (`PLANS`) ; `held` : les avant-postes déjà pris (ils affaiblissent l'assaut) ; `raid` :
+   * la force d'une sortie contre le camp (le nombre de sorties déjà faites plus les avant-postes tenus)
+   */
+  readonly kind: BattleKind;
+  private readonly held: BattleGoal[];
+  private readonly raidLevel: number;
+  private readonly easy: boolean;
+  constructor(world: World, rival: People, readonly age: number, easy = false, troops: TroopKind[] = armyOf(age), readonly intel: Intel[] = [], readonly boons: Boons = { allies: 0, ours: 0, foes: 0, peace: 0 }, opts: { kind?: BattleKind; held?: BattleGoal[]; raid?: number } = {}) {
+    this.kind = opts.kind ?? 'full';
+    this.plan = PLANS[this.kind];
+    this.held = opts.held ?? [];
+    this.raidLevel = Math.max(0, opts.raid ?? 0);
+    this.easy = easy;
     this.sizes = foeGroups(boons.foes);
     const ex = Math.max(0, Math.floor(boons.allies));
     this.allyFirstWave = [ALLY_FIRST[0] + Math.ceil(ex / 2), ALLY_FIRST[1] + Math.floor(ex / 2)];
     troops = [...troops, ...Array(Math.max(0, Math.floor(boons.ours))).fill(age >= 2 ? 'knight' : 'soldier')];
     const plan = townPlans(world).find((p) => p.people === rival);
     if (!plan) throw new Error('pas de ville rivale');
-    this.plan = plan;
+    this.town = plan;
     this.people = rival;
     this.ally = rival === 'orient' ? 'asie' : 'orient';
     this.map = new RivalMap(world, plan);
@@ -390,23 +443,55 @@ export class RivalBattle {
     const out = this.map.distances(this.map.nearestWalkable(beach[0], beach[1], 8)), snapOut = (q: [number, number]) => this.map.snap(q, out);
     this.reach = reach; this.reachOut = out;
     const inside = snap(this.toward(gate, this.map.local([plan.x, plan.z]), 2.2));
-    this.goalAt = { plage: snapOut(this.inland(pts.plage, 5)), port: snapOut(this.map.local(pts.port)), remparts: inside, palais: snap(this.map.local(pts.palais)) };
+    const plageAt = snapOut(this.inland(pts.plage, 5));
+    // (la tour du rempart : le sommet des remparts le plus proche de la plage, hors de la porte ; on la prend du dehors)
+    const corner = pts.remparts.map((q) => this.map.local(q)).filter((q) => Math.hypot(q[0] - gate[0], q[1] - gate[1]) > 5)
+      .sort((a, b) => Math.hypot(a[0] - beach[0], a[1] - beach[1]) - Math.hypot(b[0] - beach[0], b[1] - beach[1]))[0] ?? gate;
+    this.goalAt = { plage: plageAt, port: snapOut(this.map.local(pts.port)), tour: snapOut(this.toward(corner, beach, 2.4)), remparts: inside, palais: snap(this.map.local(pts.palais)), camp: plageAt };
     this.outside = snapOut(this.toward(gate, beach, 2.5));
     this.sea = this.toward(this.map.local(pts.port), this.map.local([plan.x, plan.z]), -6);
-    // nos troupes débarquent en trois barques (la première tout de suite) ; l'allié les suit (sa première vague)
+    const has = (g: BattleGoal) => this.plan.includes(g);
+    // nos troupes : en trois barques (la première tout de suite) pour un débarquement ; sinon toutes au camp de la plage
     this.beach = beach;
     this.boats = troops.slice();
-    this.landBoat();
+    if (has('plage')) this.landBoat();
+    else { this.boatN = BOATS.length; const all = this.boats.splice(0); all.forEach((k, i) => this.army.push(this.landUnit(k, troopStats(k, this.age), plageAt, i).id)); }
     this.sim.rally = beach;
+    // l'allié : sa première vague suit notre débarquement ; depuis le camp, elle est là d'emblée (la garde du camp, à la défense)
+    const outpost = this.kind === 'port' || this.kind === 'tour';
+    if (!has('plage')) {
+      this.allyLanded = true;
+      const extra = this.allyFirstWave[0] + this.allyFirstWave[1] - ALLY_FIRST[0] - ALLY_FIRST[1];
+      this.landAllies(has('camp') ? CAMP_ALLIES : outpost ? [OUTPOST_ALLIES[0] + Math.ceil(extra / 2), OUTPOST_ALLIES[1] + Math.floor(extra / 2)] : this.allyFirstWave, plageAt);
+    }
     // la porte principale : un bâtiment au combat, qui bouche le passage tant qu'il tient
     const melee = troopStats(age >= 2 ? 'knight' : 'soldier', age), gateHp = GATE_T * GATE_MEN * (melee.dmg / melee.cooldown) * (intel.includes('scoutGate') ? WEAK_GATE_K : 1);
-    this.gate = this.sim.addPlayerBuilding('gate', gate[0], gate[1], 1.1, 1, gateHp / 300);
-    this.gate.side = 'hell';
+    if (has('remparts')) {
+      this.gate = this.sim.addPlayerBuilding('gate', gate[0], gate[1], 1.1, 1, gateHp / 300);
+      this.gate.side = 'hell';
+    }
     // les défenseurs : la plage (un peu en retrait), le port, les remparts (derrière la porte), le palais et le chef
     const sz = this.sizes, beachFoes: [number, number] = intel.includes('scoutBeach') ? [Math.max(1, sz.plage[0] - 2), Math.max(0, sz.plage[1] - 1)] : [...sz.plage];
-    this.post('plage', beachFoes, this.goalAt.plage, true);
-    this.post('port', sz.port, this.goalAt.port, true);
-    this.post('remparts', sz.remparts, inside);
+    if (has('plage')) this.post('plage', beachFoes, this.goalAt.plage, true);
+    if (has('port')) this.post('port', this.kind === 'port' ? OUTPOST.port : sz.port, this.goalAt.port, true);
+    // la tour du rempart : ses archers et la tour elle-même, qui tire (comme l'avant-poste d'une zone des Enfers)
+    if (has('tour')) {
+      this.post('tour', OUTPOST.tour, this.goalAt.tour, true);
+      const [tx, tz] = this.goalAt.tour;
+      this.tower = this.sim.addPlayerBuilding('watchtower', tx, tz, 0.8, 1, TOWER_HP);
+      this.tower.side = 'hell';
+    }
+    // (la tour prise : des archers en moins sur les remparts)
+    const walls: [number, number] = this.held.includes('tour') ? [sz.remparts[0], Math.max(0, sz.remparts[1] - TOUR_CUT)] : [...sz.remparts];
+    if (has('remparts')) this.post('remparts', walls, inside);
+    // le camp de la plage, à tenir : la sortie rivale vient de la porte (`moments`)
+    if (has('camp')) {
+      const [cx, cz] = this.map.freeNear(plageAt[0], plageAt[1], 4);
+      this.camp = this.sim.addPlayerBuilding('camp', cx, cz, 1.2, 1, CAMP_HP);
+    }
+    // l'assaut final : comment prendre les remparts se choisit d'emblée (la plage et le port sont déjà à nous)
+    if (this.kind === 'assault') { this.waiting = 1; this.news.push({ type: 'choice', step: 1 }); }
+    if (!has('palais')) return;
     this.post('palais', sz.palais, this.goalAt.palais);
     const cs = foeOf('soldier', age), ck = intel.includes('scoutChief') ? 0.75 : 1;
     const [cx, cz] = this.spot(this.goalAt.palais[0], this.goalAt.palais[1]);
@@ -423,7 +508,7 @@ export class RivalBattle {
   }
   /** Un point à quelques cases de la mer vers l'intérieur (vers le centre de la ville) */
   private inland(q: [number, number], d: number): [number, number] {
-    return this.toward(this.map.local(q), this.map.local([this.plan.x, this.plan.z]), d);
+    return this.toward(this.map.local(q), this.map.local([this.town.x, this.town.z]), d);
   }
   /** la plage ; nos troupes encore en mer (les barques suivantes), la barque suivante, la première vague de l'allié */
   private beach: [number, number] = [0, 0];
@@ -475,8 +560,8 @@ export class RivalBattle {
     return [...Array(s).fill(0).map(() => ({ kind: 'soldier' as const, stats: melee })), ...Array(a).fill(0).map(() => ({ kind: 'archer' as const, stats: arch }))];
   }
 
-  /** L'objectif en cours (null : la ville est prise) */
-  get current(): BattleGoal | null { return GOALS[this.goal] ?? null; }
+  /** L'objectif en cours (null : tous pris) */
+  get current(): BattleGoal | null { return this.plan[this.goal] ?? null; }
   /** Nos troupes encore debout */
   troops(): HellUnit[] { return this.alive(this.army); }
   /** Les troupes alliées encore debout */
@@ -485,9 +570,9 @@ export class RivalBattle {
   enemies(name?: string): HellUnit[] { return name ? this.alive(this.foes.get(name) ?? []) : this.sim.alive('hell'); }
   /** Les défenseurs encore debout d'un objectif (avec ses renforts) */
   defenders(g: BattleGoal): HellUnit[] {
-    const groups: Record<BattleGoal, string[]> = { plage: ['plage', 'contre'], port: ['port'], remparts: ['remparts', 'vague'], palais: ['palais'] };
+    const groups: Record<BattleGoal, string[]> = { plage: ['plage', 'contre'], port: ['port'], tour: ['tour'], remparts: ['remparts', 'vague'], palais: ['palais'], camp: ['raid'] };
     // (un défenseur qu'on ne peut pas atteindre, coincé par le relief, ne retient pas l'objectif)
-    const r = g === 'plage' || g === 'port' ? this.reachOut : this.reach;
+    const r = g === 'plage' || g === 'port' || g === 'tour' || g === 'camp' ? this.reachOut : this.reach;
     return groups[g].flatMap((n) => this.enemies(n)).filter((u) => !r.length || r[this.map.cell(u.x, u.z)] >= 0);
   }
   private alive(ids: number[]) { return ids.map((id) => this.sim.units.get(id)).filter((u): u is HellUnit => !!u && u.hp > 0); }
@@ -496,7 +581,7 @@ export class RivalBattle {
   choose(c: Tactic1 | Tactic2) {
     if (this.waiting === 1 && (TACTICS1 as string[]).includes(c)) {
       this.tactic1 = c as Tactic1;
-      if (c === 'climb') { this.map.breach(this.plan, this.map.local(this.plan.points.port)); this.news.push({ type: 'breach' }); }
+      if (c === 'climb') { this.map.breach(this.town, this.map.local(this.town.points.port)); this.news.push({ type: 'breach' }); }
       if (c === 'ram' && this.gate) { this.gate.hp = Math.round(this.gate.hp * RAM_K); }
       if (c === 'bombard') { this.hold = BOMBARD_T; this.shotT = 0; this.news.push({ type: 'bombard' }); }
     } else if (this.waiting === 2 && (TACTICS2 as string[]).includes(c)) {
@@ -522,18 +607,23 @@ export class RivalBattle {
     this.moments(dt);
     // en tenue (bombardement, regroupement) : on tient la plage ou le port, sans avancer
     if (g && this.hold <= 0) {
-      const target = g === 'remparts' && this.gate && !this.gate.down && this.tactic1 !== 'climb' ? null : this.goalAt[g];
-      const [gx, gz] = target ?? [this.gate!.site.x, this.gate!.site.z];
+      const wall = g === 'remparts' && this.gate && !this.gate.down && this.tactic1 !== 'climb' ? this.gate : g === 'tour' && this.tower && !this.tower.down ? this.tower : null;
+      // (la défense du camp : on marche sur l'assaillant le plus proche du camp ; sans cela, des tireurs abattaient le camp de loin)
+      const raider = g === 'camp' ? this.enemies('raid').sort((p, q) => this.fromCamp(p) - this.fromCamp(q))[0] : undefined;
+      const target = wall ? null : raider ? [raider.x, raider.z] as [number, number] : this.goalAt[g];
+      const [gx, gz] = target ?? [wall!.site.x, wall!.site.z];
       const go = (us: HellUnit[]) => {
         const idle = us.filter((u) => !u.order && u.target === null);
         if (!idle.length) return;
         // (la porte : les fantassins la frappent ; les tireurs, eux, répondent aux défenseurs des remparts en marchant sur elle ;
         // sinon on marche sur le point en combattant ce qu'on croise)
-        if (!target && this.gate) {
+        if (wall) {
           const archer = (u: HellUnit) => u.kind === 'archer' || u.kind === 'ally:archer';
           const melee = idle.filter((u) => !archer(u)), shoot = idle.filter(archer);
-          if (melee.length) this.sim.order(melee.map((u) => u.id), { kind: 'attack', target: this.gate.id, x: gx, z: gz });
-          if (shoot.length) this.sim.order(shoot.map((u) => u.id), { kind: 'attack', x: this.outside[0], z: this.outside[1] });
+          // (la tour : les archers tirent sur elle et sur ses gardes, à portée ; la porte : sur les défenseurs des remparts)
+          const [sx, sz] = wall === this.tower ? [gx, gz] : this.outside;
+          if (melee.length) this.sim.order(melee.map((u) => u.id), { kind: 'attack', target: wall.id, x: gx, z: gz });
+          if (shoot.length) this.sim.order(shoot.map((u) => u.id), { kind: 'attack', x: sx, z: sz });
         } else this.sim.order(idle.map((u) => u.id), { kind: 'attack', x: gx, z: gz });
       };
       go(this.allied());
@@ -541,17 +631,27 @@ export class RivalBattle {
     }
     this.sim.step(dt);
     if (this.gate && this.gate.down && !this.gateSaid) { this.gateSaid = true; this.news.push({ type: 'gate' }); }
-    // l'objectif : ses défenseurs tombés, et l'un des nôtres (ou de l'allié) sur place
-    if (g && !this.defenders(g).length && (g !== 'plage' || this.countered)) {
+    if (this.tower && this.tower.down && !this.towerSaid) { this.towerSaid = true; this.news.push({ type: 'tower' }); }
+    if (this.camp && !this.camp.down && this.camp.hp < this.camp.maxHp * 0.5 && !this.campSaid) { this.campSaid = true; this.news.push({ type: 'campHit' }); }
+    // le camp abattu : la défense est perdue
+    if (this.camp?.down) { this.end('lost'); return; }
+    // l'objectif : ses défenseurs tombés, et l'un des nôtres (ou de l'allié) sur place ; la tour abattue ; la sortie toute venue
+    const help = this.kind !== 'port' && this.kind !== 'tour' || this.helped >= OUTPOST_HELP_T.length;
+    const ready = help && (g === 'plage' ? this.countered : g === 'tour' ? !!this.tower?.down : g === 'camp' ? this.raidsSent >= RAID_WAVES : true);
+    if (g && ready && !this.defenders(g).length) {
       const [gx, gz] = this.goalAt[g], near = [...this.troops(), ...this.allied()].some((u) => Math.hypot(u.x - gx, u.z - gz) < TAKE_R);
-      if (near || (g === 'remparts' && this.gate?.down)) this.take(g, auto);
+      if (near || g === 'camp' || (g === 'remparts' && this.gate?.down)) this.take(g, auto);
     }
     if (this.outcome) return;
     // (perdue seulement quand plus personne ne tient, ni nous ni l'allié, et que plus rien n'est à débarquer)
-    const landing = this.boats.length > 0 || !this.allyLanded || (!this.relief && this.current !== 'plage');
+    const landing = this.boats.length > 0 || !this.allyLanded || (!this.relief && this.plan.includes('remparts') && this.current !== 'plage');
     if ((!this.troops().length && !this.allied().length && !landing) || this.t >= BATTLE_LIMIT) this.end('lost');
   }
   private gateSaid = false;
+  /** l'avant-poste a appelé la ville à l'aide */
+  private helped = 0;
+  private towerSaid = false;
+  private campSaid = false;
 
   /** Un objectif pris : le suivant, et les choix tactiques entre les phases */
   private take(g: BattleGoal, auto: boolean) {
@@ -559,7 +659,7 @@ export class RivalBattle {
     this.phaseT = 0;
     this.news.push({ type: 'goal', goal: g, next: this.current });
     if (!this.current) { this.end('won'); return; }
-    if (g === 'plage') { this.waiting = 1; this.news.push({ type: 'choice', step: 1 }); }
+    if (g === 'plage' && this.plan.includes('remparts')) { this.waiting = 1; this.news.push({ type: 'choice', step: 1 }); }
     else if (g === 'remparts') { this.waiting = 2; this.news.push({ type: 'choice', step: 2 }); }
     // l'objectif suivant : tout le monde y marche (le joueur peut commander les siens autrement)
     const [nx, nz] = this.goalAt[this.current];
@@ -579,6 +679,18 @@ export class RivalBattle {
       this.charge('contre', this.sizes.contre, this.outside);
       this.news.push({ type: 'counter' });
     }
+    // l'avant-poste attaqué appelle la ville : du renfort sort de la porte
+    if ((this.kind === 'port' || this.kind === 'tour') && g === this.kind && this.helped < OUTPOST_HELP_T.length && this.t >= OUTPOST_HELP_T[this.helped]) {
+      this.helped++;
+      this.charge(g, OUTPOST_HELP, this.outside);
+      this.news.push({ type: 'counter' });
+    }
+    // la sortie rivale contre le camp : des vagues qui sortent de la porte (plus fortes à chaque sortie, à chaque avant-poste tenu)
+    if (g === 'camp' && this.raidsSent < RAID_WAVES && this.t >= this.raidsSent * RAID_GAP) {
+      this.raidsSent++;
+      this.charge('raid', raidWave(this.raidLevel, this.easy), this.outside);
+      this.news.push({ type: 'raid', n: this.raidsSent });
+    }
     // les vagues de renfort : du palais vers les remparts, pendant leur assaut (plus tard si les éclaireurs ont compté la relève)
     const late = this.intel.includes('scoutGarrison') ? 25 : 0;
     if (g === 'remparts' && this.wavesSent < WAVES && this.phaseT >= late + WAVE_AT[this.wavesSent]) {
@@ -588,9 +700,9 @@ export class RivalBattle {
     }
     // le renfort allié : au moment de bascule (au plus tard `RELIEF_T` s dans l'assaut des remparts, ou quand nos forces fondent)
     const landed = this.army.length + this.allies.length, standing = this.troops().length + this.allied().length;
-    if (!this.relief && g && g !== 'plage' && ((g === 'remparts' && this.phaseT >= RELIEF_T) || standing < landed * 0.5 || g === 'palais')) {
+    if (!this.relief && g && this.plan.includes('remparts') && g !== 'plage' && ((g === 'remparts' && this.phaseT >= RELIEF_T) || standing < landed * 0.5 || g === 'palais')) {
       this.relief = true;
-      this.landAllies(ALLY_RELIEF, this.map.local(this.plan.points.plage));
+      this.landAllies(ALLY_RELIEF, this.map.local(this.town.points.plage));
       this.news.push({ type: 'relief' });
     }
     // le bombardement de la flotte alliée : des boulets depuis le large sur la porte et ses défenseurs
@@ -621,7 +733,7 @@ export class RivalBattle {
       // la reddition : les derniers défenseurs déposent les armes (ils quittent la bataille)
       for (const u of this.enemies()) this.sim.units.delete(u.id);
       this.news.push({ type: 'surrender' });
-      this.goal = GOALS.length - 1;
+      this.goal = this.plan.length - 1;
       this.take('palais', true);
     }
   }
@@ -632,4 +744,18 @@ export class RivalBattle {
   toWorld(x: number, z: number): [number, number] { return [x + this.map.ox, z + this.map.oz]; }
   /** Où mouille la flotte alliée (coordonnées de la bataille : le salut de la victoire en part) */
   get fleet(): [number, number] { return this.sea; }
+
+  private fromCamp(u: HellUnit) { const [cx, cz] = this.goalAt.camp; return Math.hypot(u.x - cx, u.z - cz); }
+
+  /** Nos troupes debout à la fin : fantassins, archers (le corps expéditionnaire en garde ce qui reste) */
+  survivors(): [number, number] {
+    const up = this.troops();
+    return [up.filter((u) => u.kind !== 'archer').length, up.filter((u) => u.kind === 'archer').length];
+  }
+}
+
+/** Une vague d'une sortie contre le camp (soldats, archers) : `level` sorties faites et avant-postes tenus la grossissent */
+export function raidWave(level: number, easy = false): [number, number] {
+  const s = Math.min(RAID_MAX - RAID[1], RAID[0] + RAID_GROW * level);
+  return easy ? [Math.max(2, s - 2), Math.max(1, RAID[1] - 1)] : [s, RAID[1]];
 }

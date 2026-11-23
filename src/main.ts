@@ -180,7 +180,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Le nom d'un objectif de la bataille de l'archipel */
 /** Sur place, une scène qui file plus vite que ceci (cases par seconde) est suivie sans lissage */
 const FOLLOW_FAST = 2;
-const goalName = (g: BattleGoal) => ({ plage: tr('la plage'), remparts: tr('les remparts'), port: tr('le port'), palais: tr('le palais') })[g];
+const goalName = (g: BattleGoal) => ({ plage: tr('la plage'), remparts: tr('les remparts'), port: tr('le port'), palais: tr('le palais'), tour: tr('la tour du rempart'), camp: tr('le camp') })[g];
 
 /** Les récits d'expédition gardés le temps du rechargement de la traversée (`sessionStorage`) */
 const LATE_REPORTS = 'village-lowpoly:late-reports';
