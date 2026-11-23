@@ -1,11 +1,11 @@
 # Blason du village
 
-> Fichiers : `src/sim/blason.ts` (teintes, emblèmes, formes, défaut, lecture, tirage, dessins SVG), `src/render/teamPaint.ts` (sentinelles, shader, texture de l'emblème), `src/render/parts.ts` (`Parts.add` écrit les sentinelles), `src/render/battleUnits.ts` (`paint` des Enfers, de même), `src/ui/blason.ts` (la fenêtre de choix), `src/ui/ui.ts` (ligne de Paramètres › Partie), `src/main.ts` (`Game.setBlason`, `askBlason`), `src/world/world.ts` (champs sauvés)
+> Fichiers : `src/sim/blason.ts` (teintes, emblèmes, formes, défaut, lecture, tirage, dessins SVG), `src/render/teamPaint.ts` (sentinelles, shader, texture de l'emblème), `src/render/parts.ts` (`Parts.add` écrit les sentinelles), `src/render/battleUnits.ts` (`paint` des Enfers, de même), `src/ui/blason.ts` (la fenêtre de choix), `src/ui/ui.ts` (ligne de Paramètres › Partie), `src/main.ts` (`Game.setBlason`, `setIsleName`, `askBlason`), `src/world/world.ts` (champs sauvés), `src/hudTheme.css` (`.vName`)
 > Tests : `tests/blason.test.ts`
 > Voir aussi : [rendu-modeles.md](rendu-modeles.md), [armee-combat.md](armee-combat.md), [interface.md](interface.md), [sauvegarde.md](sauvegarde.md), [diplomatie.md](diplomatie.md) (les blasons des deux peuples rivaux)
 
 ## En bref
-Le village du joueur a **un seul drapeau** : deux couleurs (le champ, l'emblème), un emblème et une forme. Il flotte sur tous ses bâtiments, ses navires et sa base des Enfers, et ses troupes en portent les couleurs (tabards, boucliers, panaches, capes, caparaçons). Le joueur le choisit au début d'une partie neuve (facultatif) et le change quand il veut dans l'onglet « Blason » de la fenêtre des expéditions (ou dans Paramètres › Partie) : tout le jeu se teint à l'image suivante, sans rien recharger.
+Le village du joueur a **un seul drapeau** : deux couleurs (le champ, l'emblème), un emblème et une forme. Il flotte sur tous ses bâtiments, ses navires et sa base des Enfers, et ses troupes en portent les couleurs (tabards, boucliers, panaches, capes, caparaçons). Avec lui, le joueur nomme **son île** : le nom s'affiche en haut à gauche, à la place du titre du jeu. Le joueur choisit les deux au début d'une partie neuve (facultatif) et le change quand il veut dans l'onglet « Blason » de la fenêtre des expéditions (ou dans Paramètres › Partie) : tout le jeu se teint à l'image suivante, sans rien recharger.
 
 ## Règles du jeu
 - Teintes (`BLASON_COLORS`) : azur, bleu nuit, pourpre, bordeaux, gueules (rouge), sinople (vert), ocre, or, argent, sable (noir). **Ni turquoise ni rouge laqué** : ce sont les couleurs des Sablais et des Jadéens (test).
@@ -14,6 +14,13 @@ Le village du joueur a **un seul drapeau** : deux couleurs (le champ, l'emblème
 - Défaut (`DEFAULT_BLASON`) : azur et or à la montagne, droit (les sommets du titre du jeu).
 - Les deux couleurs sont toujours différentes (la fenêtre échange les deux si on choisit la même ; `readBlason` corrige une sauvegarde qui les aurait égales).
 - Le métal reste métal : casques, cuirasses, bords et ombilics d'or ne changent pas. Restent aussi à leurs couleurs : la croix rouge des hôpitaux, le drapeau rouge du chef de gare, les enseignes, les pavillons de signaux, les couleurs des jouteurs et des équipes, le cirque, la fête foraine, le carnaval, les fanions des équipes d'expédition (une couleur par équipe), les navires et soldats des peuples rivaux.
+
+### Le nom de l'île
+- Retour de joueurs (« afficher le nom de l'île »), décision de l'auteur du 22 nov. 2026 : « choisi par le joueur en même temps que son blason, affiché en jeu ».
+- Champ « Nom de l'île » en tête des choix (`blasonPickerHtml`, `[data-isle]`), dans la fenêtre comme dans l'onglet Blason. Chaque frappe le nettoie (`readIsleName` : sans caractères de contrôle ni chevrons, espaces resserrés, `ISLE_MAX` = 22 lettres au plus ; vide : le nom par défaut). Dans l'onglet, il est changé et sauvé aussitôt (`Game.setIsleName`) ; dans la fenêtre, à « Valider » (`chooseBlason` rend `{ blason, isle }`). Les touches tapées ne partent pas au jeu (`stopPropagation`), Entrée quitte le champ.
+- « Au hasard » tire aussi un nom (`randomIsleName`, liste `ISLE_NAMES` de vingt noms propres, jamais le nom en cours ; ils ne se traduisent pas).
+- Affichage : `.vName` de la carte du village, en haut à gauche (`UI.update`), avec l'infobulle « L'île de … ». Un nom long prend une lettre plus petite, jusqu'à 14 px, puis des points de suspension (le cadre fait 140 px).
+- Défaut et anciennes parties : `DEFAULT_ISLE` = « Ceionia », le titre qu'affichait déjà la carte : rien ne change pour qui n'y touche pas.
 
 ## Fonctionnement dans le code
 
@@ -40,7 +47,7 @@ Une pièce « au blason » reçoit au lieu d'une couleur un nombre négatif :
 - Partie neuve : `askBlason` après `askControls` (dans `start`), seulement si `world.blasonSeen` est faux ; « Plus tard » ou la croix le passent à vrai.
 - Onglet « Blason » de la fenêtre des expéditions (`openExpeditions('blason')`) : le même choix, en place (`blasonPickerHtml` rend le corps, `bindBlasonPicker` le branche ; la fenêtre les reprend aussi). Chaque clic appelle `Game.setBlason` : pas de « Valider », le blason est changé et sauvé aussitôt. Tient en 1280 × 720 sans défiler.
 - Paramètres › Partie : la ligne « Blason du village » (petit drapeau, « Changer le blason »), qui ouvre la fenêtre.
-- Sauvegarde : `world.blason` (`{ a, b, e, s }`, toujours écrit) et `blasonSeen` (1 si vu). Absent (ancienne partie) : le blason par défaut, et la fenêtre ne s'ouvre pas d'elle-même.
+- Sauvegarde : `world.blason` (`{ a, b, e, s }`, toujours écrit), `blasonSeen` (1 si vu) et `isleName` (écrit s'il n'est pas « Ceionia »). Absent (ancienne partie) : le blason par défaut, et la fenêtre ne s'ouvre pas d'elle-même.
 
 ## Pièges et invariants
 - **Ne jamais calculer sur une sentinelle** (`new THREE.Color(TEAM_A)`, `lerp`, `multiplyScalar`) : elle n'est pas une couleur. `dark` de `soldiers.ts` et `riders.ts` passe par `teamShade` ; une autre aide qui assombrit doit faire de même.
@@ -54,4 +61,5 @@ Une pièce « au blason » reçoit au lieu d'une couleur un nombre négatif :
 ## Pour modifier
 **Mettre une pièce au blason** : passer `TEAM_A` / `TEAM_B` (ou `team(TEAM_A, 0.8)`) pour un tissu, `TEAM_FLAG` / `TEAM_BANNER` / `TEAM_EMBLEM` pour une toile ou un écu (une seule boîte, l'emblème au milieu) ; importer depuis `./teamPaint` ; vérifier le matériau.
 **Ajouter un emblème** : un tracé dans le carré de 100 (`EMBLEM_PATH`, éventuellement une ouverture dans `EMBLEM_HOLE`), son nom dans `EMBLEMS` et `EMBLEM_NAME`, la traduction (`src/i18n/en/ui.ts`).
+**Ajouter un nom d'île au tirage** : `ISLE_NAMES` (22 lettres au plus, test `tests/blason.test.ts`).
 **Ajouter une teinte** : `BLASON_COLORS` et `COLOR_NAME` (ni turquoise ni laque rouge), la traduction.

@@ -60,7 +60,7 @@ import { AudioEngine, soundSettings, VOL_V } from './audio/audio';
 import { UI, showMenu, UIHost, chooseControls } from './ui/ui';
 import { chooseBlason } from './ui/blason';
 import { setTeamBlason } from './render/teamPaint';
-import { Blason } from './sim/blason';
+import { Blason, readIsleName } from './sim/blason';
 import { Controls, loadControls, saveControls, guessLayout } from './core/controls';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
@@ -2048,6 +2048,8 @@ class Game implements UIHost {
   setControls(c: Controls) { this.controls = c; saveControls(c); this.applyControls(); }
   /** Change le blason du village : tout le jeu se teint à l'image suivante, la partie le garde */
   setBlason(b: Blason) { this.world.blason = { ...b }; this.world.blasonSeen = true; setTeamBlason(b); }
+  /** Change le nom de l'île (affiché en haut à gauche), nettoyé ; la partie le garde */
+  setIsleName(n: string) { this.world.isleName = readIsleName(n); }
   /**
    * Partie neuve : après le choix des contrôles, la fenêtre du blason (facultative, « Plus tard »). Elle ne revient pas
    * d'elle-même ; le blason se change dans Paramètres › Partie
@@ -2056,10 +2058,10 @@ class Game implements UIHost {
     if (this.world.blasonSeen) return;
     const was = this.time.paused;
     this.time.paused = true;
-    const b = await chooseBlason(this.ui.root, this.world.blason, true, (x) => setTeamBlason(x));
+    const b = await chooseBlason(this.ui.root, this.world.blason, true, (x) => setTeamBlason(x), this.world.isleName);
     this.time.paused = was;
     this.world.blasonSeen = true;
-    if (b) this.setBlason(b);
+    if (b) { this.setBlason(b.blason); this.setIsleName(b.isle); }
   }
   private applyControls() {
     const mouse = this.controls.mode === 'mouse';

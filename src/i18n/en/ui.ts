@@ -600,6 +600,8 @@ registerDict('goals', {
   'Couleur du champ': 'Field colour', 'Couleur de l’emblème': 'Emblem colour', 'Emblème': 'Emblem', 'Forme du drapeau': 'Flag shape',
   'Blason': 'Coat of arms', 'Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs.': 'It flies on your towers, ships and banners, and your troops wear its colours.',
   'Il flotte sur vos tours, vos navires et vos bannières, et vos troupes en portent les couleurs. Vous pourrez le changer dans l’onglet Blason des expéditions.': 'It flies on your towers, ships and banners, and your troops wear its colours. You can change it later in the Coat of arms tab of the expeditions.',
+  'Il flotte sur vos tours, vos navires et vos bannières. Le nom de l’île s’affiche en haut à gauche. Tout se change dans l’onglet Blason des expéditions.': 'It flies on your towers, ships and banners. The island’s name is shown at the top left. Everything can be changed in the Coat of arms tab of the expeditions.',
+  'Nom de l’île': 'Island name', 'L’île de {name}': 'The island of {name}',
   'Au hasard': 'Random', 'Plus tard': 'Later', 'Blason du village': 'Village coat of arms', 'Drapeau': 'Flag', 'Changer le blason': 'Change the coat of arms',
   'Azur': 'Azure', 'Bleu nuit': 'Midnight blue', 'Pourpre': 'Purple', 'Bordeaux': 'Burgundy', 'Gueules': 'Red', 'Sinople': 'Green', 'Ocre': 'Ochre', 'Argent': 'Silver', 'Sable': 'Black',
   'Soleil': 'Sun', 'Arbre': 'Tree', 'Épis': 'Wheat', 'Étoile': 'Star', 'Vagues': 'Waves', 'Couronne': 'Crown',
