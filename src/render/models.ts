@@ -11,6 +11,7 @@ import { decal, fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 import { defTower, defBarracks, type DefKit } from './defenses';
 import { circus, type CircusKit } from './circus';
 import { arena, type ArenaKit } from './arena';
+import { explorersHouse } from './explorers';
 import { rampartWall, rampartGate } from './ramparts';
 import { rod, shipHull } from './models/orientShips';
 
@@ -13635,6 +13636,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'zoo': zooBig(p, 5); return true;
     case 'circus': sink(0.012); circus(p, 5, CIRCUS_KIT); return true;
     case 'arena': sink(0.012); arena(p, 5, ARENA_KIT); return true;
+    case 'explorers': sink(0.012); explorersHouse(p, 5, ARENA_KIT); return true;
     case 'watchtower': defTower(p, 5, DEF_KIT); return true;
     case 'barracks': defBarracks(p, 5, DEF_KIT); return true;
     case 'wall': rampartWall(p, 5, o.mask ?? 0, DEF_KIT); return true;
@@ -14561,6 +14563,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'zoo': zooBig(p, Math.max(4, age)); break;
     case 'circus': sink(0.012); circus(p, Math.max(2, age), CIRCUS_KIT); break;
     case 'arena': sink(0.012); arena(p, Math.max(1, age), ARENA_KIT); break;
+    case 'explorers': sink(0.012); explorersHouse(p, Math.max(2, age), ARENA_KIT); break;
     case 'theater': theater(p, Math.max(1, age)); break;
     case 'acropolis': acropolis(p, age); break;
     case 'forum': forum(p, Math.max(1, age)); break;

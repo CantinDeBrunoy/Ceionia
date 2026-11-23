@@ -15,7 +15,9 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   // les décorations : haie, clôture, parterre de fleurs, banc, statue, pavés, fontaine (et le lampadaire, plus haut)
   | 'hedge' | 'fence' | 'flowerbed' | 'bench' | 'statue' | 'paving' | 'fountain'
   // la mare (expédition « Les grands bancs ») et le bassin à coraux (« Le récif »)
-  | 'pond' | 'coralpool';
+  | 'pond' | 'coralpool'
+  // la maison des explorateurs (une équipe d'expédition de plus)
+  | 'explorers';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'deco' | 'war';
@@ -274,6 +276,13 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [0, 0, 0, 0, 8, 10], jobs: [0, 0, 0, 0, 3, 4],
     perk: 'Débloqué par l’expédition « La pluie d’étoiles ». Les expéditions sont plus sûres (risque −15 %).',
     reqMission: 'stars',
+  },
+  explorers: {
+    id: 'explorers', size: 2, minAge: 2, icon: '🧭', cat: 'service',
+    names: ['', '', 'Maison des explorateurs', 'Société de géographie', 'Club des explorateurs', 'Base des explorateurs'],
+    desc: 'Cartes, globe, malles et trophées de voyage : les explorateurs du village s’y retrouvent et y préparent leurs départs.',
+    joy: [0, 0, 2, 3, 4, 5], jobs: [0, 0, 2, 3, 4, 5],
+    perk: 'Une équipe d’expédition de plus : le village peut en envoyer une de plus à la fois. Une seule maison suffit, une deuxième n’ajoute rien.',
   },
   tavern: {
     id: 'tavern', size: 1, minAge: 2, icon: '🍺', cat: 'life',
@@ -611,7 +620,7 @@ export const isLinear = (k: KindId) => k === 'hedge' || k === 'fence';
 /** Plafond du bien-être que donnent toutes les décorations ensemble (le lampadaire, plus ancien, compte à part) */
 export const DECOR_JOY_MAX = 3;
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'explorers', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -640,7 +649,7 @@ export const KIND_SUB: Record<KindId, string> = {
   farm: 'nourriture', vfarm: 'nourriture', pen: 'nourriture', stable: 'nourriture', apiary: 'nourriture', pier: 'nourriture', fishmarket: 'nourriture', offshore: 'nourriture',
   lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
   workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie', tradepost: 'industrie', shipyard: 'industrie',
-  health: 'sante', school: 'savoir', observatory: 'savoir', lab: 'savoir', research: 'savoir',
+  health: 'sante', school: 'savoir', observatory: 'savoir', explorers: 'savoir', lab: 'savoir', research: 'savoir',
   police: 'securite', fire: 'securite', senate: 'securite', watchtower: 'defense', barracks: 'defense', wall: 'remparts', gate: 'remparts', lighthouse: 'securite',
   station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
   gather: 'parcs',
@@ -701,6 +710,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   shipyard: 'chantiers navals', lighthouse: 'phares', fishmarket: 'halles aux poissons', offshore: 'fermes marines',
   concord: 'monuments de la concorde', tradepost: 'comptoirs', triumph: 'monuments de la victoire', embassy: 'ambassades',
   hedge: 'haies', fence: 'clôtures', flowerbed: 'parterres de fleurs', bench: 'bancs', statue: 'statues', paving: 'pavés', fountain: 'fontaines', pond: 'mares', coralpool: 'bassins à coraux',
+  explorers: 'maisons des explorateurs',
 };
 
 /**

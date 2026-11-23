@@ -48,6 +48,7 @@ registerDict('expeditions', {
   'Il faut d’abord {list}.': 'First you need to: {list}.',
   'Toutes les équipes sont en route ({n}/{max}) : à {pop} habitants, le village pourra en envoyer une de plus.': 'All teams are out ({n}/{max}): at {pop} inhabitants, the village will be able to send one more.',
   'Toutes les équipes sont en route ({n}/{max}).': 'All teams are out ({n}/{max}).',
+  'Toutes les équipes sont en route ({n}/{max}). Une maison des explorateurs en ouvrira une de plus.': 'All teams are out ({n}/{max}). An explorers’ house will open one more.',
   'Il faut d’abord un village : une maison au moins.': 'You need a village first: at least one house.',
   'Il faut {n} habitants disponibles ({free} pour l’instant).': 'You need {n} available inhabitants ({free} for now).',
   'Aucune haute mer atteignable : aucune côte à portée du village ne s’ouvre sur le large, et le monstre ne quitte pas la haute mer.': 'No open sea within reach: no coast near the village opens onto the open water, and the monster never leaves the deep sea.',
@@ -80,6 +81,8 @@ registerDict('expeditions', {
 
   // ---- interface des expéditions : fenêtre, cartes de missions, fenêtre d'envoi
   'Équipe en plus à {n} habitants (vous : {pop})': 'Extra team at {n} inhabitants (you: {pop})',
+  'Équipe en plus avec une maison des explorateurs': 'Extra team with an explorers’ house',
+  'Équipe en plus avec une maison des explorateurs, au Médiéval': 'Extra team with an explorers’ house, in the Middle Ages',
   'Équipes au maximum': 'Maximum number of teams',
   'Obligatoire': 'Mandatory',
   'Légendaire': 'Legendary',
