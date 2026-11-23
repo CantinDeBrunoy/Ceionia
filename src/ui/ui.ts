@@ -98,7 +98,7 @@ export interface UIHost {
   openCrossroads?(): void;
   /** la diplomatie de l'archipel : la ligne du conflit des deux îles (rayon Vie) et sa carte */
   diploLine?(): { text: string; button: string } | null;
-  openDiploChoice?(): void;
+  openDiploChoice?(change?: boolean): void;
   /** la vue va sur l'île du portail (pour y bâtir) */
   goIsle?(): void;
   /** la vue va sur l'île de l'allié, là où l'on peut bâtir (le comptoir, le port) */
@@ -1342,6 +1342,7 @@ export class UI {
       h.audio.sfxClick();
       close();
       if (g.go === 'ally' || g.go === 'path') h.openDiploChoice?.();
+      else if (g.go === 'change') h.openDiploChoice?.(true);
       else if (g.go === 'mission' && g.mission) this.gotoMission(g.mission);
       else if (g.go === 'trade') this.openRes('gold');
       else if (g.go === 'post') { h.goAlly?.(); this.pick('tradepost'); }

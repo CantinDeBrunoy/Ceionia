@@ -17,11 +17,12 @@ export type Mood = 0 | 1 | 2 | 3 | 4;
 export const MOOD_NAMES = ['Hostile', 'Méfiant', 'Neutre', 'Amical', 'Fraternel'] as const;
 
 /**
- * Ce que mène chaque geste : `ally` la carte du choix de l'allié, `path` la carte de la paix ou de la guerre (ou la bataille,
- * `Game.openDiploChoice`), `mission` une expédition (`mission`), `trade` la fiche du comptoir, `post` bâtir le comptoir chez
+ * Ce que mène chaque geste : `ally` la carte du choix de l'allié, `path` la carte de la paix ou de la guerre, ou, la voie
+ * prise, sa feuille de route (ou la bataille, `Game.openDiploChoice`), `change` la carte de la paix ou de la guerre pour
+ * changer de voie, `mission` une expédition (`mission`), `trade` la fiche du comptoir, `post` bâtir le comptoir chez
  * l'allié, `visit` la vue sur une île
  */
-export type GestureGo = 'ally' | 'path' | 'mission' | 'trade' | 'post' | 'visit';
+export type GestureGo = 'ally' | 'path' | 'change' | 'mission' | 'trade' | 'post' | 'visit';
 export interface Gesture {
   id: 'ally' | 'trade' | 'visit' | 'scouts' | 'peace' | 'war' | 'isles';
   label: string;
@@ -154,13 +155,14 @@ function rivalCard(w: Pick<World, 'isles' | 'diplo' | 'exp'>, c: PeoplesCtx, p: 
     war = { id: 'war', label: tr('À la bataille'), on: true, go: 'path', why: d.battle === 'lost' ? tr('Nos troupes se refont chez notre allié') : tr('Nos troupes sont prêtes à débarquer') };
     scouts = { id: 'scouts', label: tr('Envoyer des éclaireurs'), on: false, done: true, why: tr('Leur côte est reconnue') };
   } else if (d.path === 'war') {
-    peace = { id: 'peace', label: tr('Faire la paix plutôt'), on: true, go: 'path', why: tr('Changer de voie : deux pourparlers, {r} % d’échec chacun', { r: Math.round(talkRisk(d) * 100) }) };
-    war = { id: 'war', label: tr('Faire la guerre'), on: false, done: true, why: tr('Choisi : envoyez d’abord des éclaireurs') };
+    peace = { id: 'peace', label: tr('Faire la paix plutôt'), on: true, go: 'change', why: tr('Changer de voie : deux pourparlers, {r} % d’échec chacun', { r: Math.round(talkRisk(d) * 100) }) };
+    // (la voie prise : le geste rouvre sa feuille de route, les étapes et comment s'y préparer)
+    war = { id: 'war', label: tr('La suite de la guerre'), on: true, go: 'path', why: tr('Les étapes, et comment s’y préparer') };
     scouts = { id: 'scouts', label: tr('Envoyer des éclaireurs'), on: true, go: 'mission', mission: WAR_MISSION, why: tr('Reconnaître leur côte avant la bataille') };
   } else if (d.path === 'peace') {
     const next = PEACE_CHAIN.find((id) => !done(id)) ?? PEACE_MISSION;
-    peace = { id: 'peace', label: tr('Poursuivre la paix'), on: true, go: 'mission', mission: next, why: next === PEACE_MISSION ? tr('L’ambassade de la paix') : tr('Les émissaires, puis l’ambassade') };
-    war = { id: 'war', label: tr('Faire la guerre plutôt'), on: true, go: 'path', why: tr('Changer de voie : une bataille, butin et tribut') };
+    peace = { id: 'peace', label: tr('Poursuivre la paix'), on: true, go: 'path', mission: next, why: next === PEACE_MISSION ? tr('L’ambassade de la paix') : tr('Les émissaires, puis l’ambassade') };
+    war = { id: 'war', label: tr('Faire la guerre plutôt'), on: true, go: 'change', why: tr('Changer de voie : une bataille, butin et tribut') };
     scouts = { id: 'scouts', label: tr('Envoyer des éclaireurs'), on: false, why: tr('Sur la voie de la guerre') };
   } else {
     peace = { id: 'peace', label: tr('Faire la paix'), on: true, go: 'path', why: tr('Deux pourparlers, {r} % d’échec chacun', { r: Math.round(talkRisk(d) * 100) }) };

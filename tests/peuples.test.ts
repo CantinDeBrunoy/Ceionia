@@ -64,6 +64,9 @@ describe('le panneau Peuples', () => {
     let rival = peoplesView(w, ctx()).cards[1];
     expect(rival.mood).toBe(0);
     expect(g(rival.gestures, 'scouts')).toMatchObject({ on: true, go: 'mission', mission: WAR_MISSION });
+    // (la voie prise : la guerre rouvre sa feuille de route, la paix sert à changer de voie)
+    expect(g(rival.gestures, 'war')).toMatchObject({ on: true, label: 'La suite de la guerre', go: 'path' });
+    expect(g(rival.gestures, 'peace')).toMatchObject({ on: true, go: 'change' });
     applyDiplo(w.diplo, 'landing');
     rival = peoplesView(w, ctx()).cards[1];
     expect(g(rival.gestures, 'war')).toMatchObject({ on: true, label: 'À la bataille', go: 'path' });
@@ -78,7 +81,8 @@ describe('le panneau Peuples', () => {
     const w = world();
     chooseAlly(w.diplo, 'orient');
     choosePath(w.diplo, 'peace');
-    expect(g(peoplesView(w, ctx()).cards[1].gestures, 'peace')).toMatchObject({ go: 'mission', mission: 'envoys' });
+    expect(g(peoplesView(w, ctx()).cards[1].gestures, 'peace')).toMatchObject({ go: 'path', mission: 'envoys' });
+    expect(g(peoplesView(w, ctx()).cards[1].gestures, 'war')).toMatchObject({ go: 'change' });
     w.exp.done.push('envoys');
     applyDiplo(w.diplo, 'post');
     const rival = peoplesView(w, ctx()).cards[1];

@@ -119,8 +119,9 @@ import { canExpand, expandWorld, repairCoast } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
 import type { ConflictWay } from './ui/ways';
-import { bindPostReady, pathDue, ENDGAME_AGE, CONFLICT_LABEL, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_MISSION, PEACE_MISSION, PEACE_CHAIN, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
+import { bindPostReady, pathDue, ENDGAME_AGE, CONFLICT_LABEL, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
 import { RivalBattle, BattleGoal } from './sim/rivalBattle';
+import { roadView } from './sim/diploRoad';
 import type { People } from './world/archipelago';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, openSlot, setAside, exportAside, clockOf, readClock, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -694,6 +695,7 @@ class Game implements UIHost {
     });
     this.diploChoice = new DiploChoice(uiRoot, {
       diplo: () => this.world.diplo, why: () => endgameWhy(this.world, this.sim.age), click: () => audio.sfxClick(), battle: () => { this.startRivalBattle(); },
+      road: () => this.road(), mission: (id) => this.ui.gotoMission(id),
       ally: (p) => {
         if (!chooseAlly(this.world.diplo, p)) return;
         this.ui.banner(tr('Une alliance !'), tr('{people} sont nos alliés', { people: peopleName(p).replace(/^./, (c) => c.toUpperCase()) }));
@@ -1441,7 +1443,7 @@ class Game implements UIHost {
     if (d.path === 'war' && d.battle !== 'none') return { ally: d.ally, badge: 'free', button: tr('À la bataille') };
     const why = endgameWhy(w, this.sim.age);
     if (why) return { ally: d.ally, badge: 'wait', note: why };
-    return { ally: d.ally, badge: 'free', button: d.path ? tr('Changer de voie') : tr('Choisir la paix ou la guerre') };
+    return { ally: d.ally, badge: 'free', button: d.path ? tr('Voir la suite') : tr('Choisir la paix ou la guerre') };
   }
 
   // ---------- La paix : la cinématique ----------
@@ -1624,10 +1626,13 @@ class Game implements UIHost {
   /** La voie du dénouement : la paix ouvre l'ambassade (puis la cinématique), la guerre l'expédition militaire (puis la bataille) */
   private choosePath(p: 'peace' | 'war') {
     if (!choosePath(this.world.diplo, p)) return;
-    if (p === 'peace') { const next = PEACE_CHAIN.find((id) => !this.world.exp.done.includes(id)) ?? PEACE_MISSION; this.ui.toast(tr('🕊️ La voie de la paix : deux pourparlers vous attendent (menu Expéditions).'), () => this.ui.gotoMission(next)); }
-    else this.ui.toast(tr('⚔️ La guerre aux côtés de notre allié : envoyez d’abord des éclaireurs reconnaître la côte rivale (menu Expéditions).'), () => this.ui.gotoMission(WAR_MISSION));
+    // la feuille de route de la voie prise : ce qui la prépare, ce qui la déclenche (on était « perdu » après le choix)
     this.ui.update(); this.saveNow();
+    this.diploChoice.showRoad();
   }
+
+  /** La feuille de route de la voie prise (voir `sim/diploRoad.ts`), null sans voie ou le conflit réglé */
+  road() { return roadView(this.world, { running: (id) => this.expeditions.active.some((e) => e.m.id === id), dayLen: this.time.dayLen }); }
 
   /** La ligne en tête du rayon Vie, à l'âge industriel : le conflit des deux îles, à régler (ou la voie à changer) */
   diploLine() {
@@ -1635,16 +1640,18 @@ class Game implements UIHost {
     const p = this.world.diplo.path;
     const now = p === 'peace' ? tr('la paix') : p === 'war' ? tr('la guerre') : null;
     // (la bataille engagée : on ne change plus de voie, le bouton y mène)
-    const button = this.world.diplo.battle !== 'none' ? tr('À la bataille') : now ? tr('Changer…') : tr('Choisir…');
+    const button = this.world.diplo.battle !== 'none' ? tr('À la bataille') : now ? tr('La suite…') : tr('Choisir…');
     return { text: now ? tr('⚖️ Le conflit des deux îles : {path}', { path: now }) : tr('⚖️ Le conflit des deux îles'), button };
   }
   /**
    * La carte de la diplomatie (condition du panneau des âges, conseil, ligne du rayon Vie) : l'allié d'abord, s'il manque ;
    * la bataille, si elle est prête ; sinon la carte du dénouement, ou ce qui l'empêche encore
    */
-  openDiploChoice() {
+  openDiploChoice(change = false) {
     const w = this.world, d = w.diplo;
     if (allyPending(w)) { this.diploChoice.showAlly(); return; }
+    // (la voie prise : sa feuille de route, sauf pour en changer)
+    if (!change && d.path && d.battle !== 'ready' && this.diploChoice.showRoad()) return;
     if (d.path === 'war' && d.battle !== 'none') {
       if (battleReady(d, w.exp.clock)) { if (d.battle === 'ready') this.diploChoice.showBattle(); else this.startRivalBattle(); }
       else this.ui.toast(tr('Nos troupes se refont chez notre allié : la bataille reprendra dans {n} jours.', { n: Math.max(1, Math.ceil((d.retry - w.exp.clock) / this.time.dayLen)) }));
