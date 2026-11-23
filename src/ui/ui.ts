@@ -884,6 +884,8 @@ export class UI {
       // (la liste entière des besoins, dépliée dans l'écran allégé, se replie d'un clic ailleurs)
       if ($('#needsBox').classList.contains('all') && !t.closest('#needsBox, #needInfo')) { $('#needsBox').classList.remove('all'); $('#needsOk').setAttribute('aria-expanded', 'false'); this.fitKey = ''; }
       if ((this.needOpen || this.resOpen) && !needInfo.contains(t) && !t.closest('.need, .res') && !(this.host.tools.coverage.active && t.tagName === 'CANVAS')) this.closeNeed();
+      // (écran allégé : un clic sur la carte sans outil en main replie les vignettes)
+      if (allege() && this.dockOpen && t.tagName === 'CANVAS' && this.host.tools.tool === 'none') { this.dockOpen = false; this.syncFold(); }
       // la liste des conditions d'âge se replie dès qu'on clique ailleurs
       if (!t.closest('#agePanel') && $('#agePanel').classList.contains('open')) { $('#agePanel').classList.remove('open'); this.update(); }
     });
@@ -1029,7 +1031,8 @@ export class UI {
     // la petite flèche qui replie la barre du bas (état retenu d'une partie à l'autre)
     $('#bFold').onclick = () => { this.setDockMin(!document.body.classList.contains('dockMin')); host.audio.sfxClick(); };
     matchMedia(FOLD_SIDE).addEventListener('change', () => this.placeFold());
-    { let min = false; try { min = localStorage.getItem(DOCK_MIN_KEY) === '1'; } catch { /* sans stockage */ } this.setDockMin(min); }
+    // (l'état retenu ne vaut que hors de l'écran allégé, où les vignettes suivent l'outil en main : `placeDock`)
+    this.placeDock();
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
@@ -1071,9 +1074,19 @@ export class UI {
   // ---------------- Barre du bas (façon Anno 1800) ----------------
   /**
    * Replie (ou rouvre) la barre du bas : les rayons et les vignettes disparaissent, restent les modes, les outils, la vue et la
-   * mini-carte. La petite flèche `#bFold` le fait aussi ; le choix est retenu pour ce joueur (`ceionia.basReplie`)
+   * mini-carte. La petite flèche `#bFold` le fait aussi ; le choix est retenu pour ce joueur (`ceionia.basReplie`).
+   * Dans l'écran allégé, c'est le vœu du joueur (`dockOpen`) : la barre suit aussi l'outil en main et le tutoriel (`syncFold`),
+   * et rien n'est retenu
    */
   setDockMin(on: boolean) {
+    this.dockOpen = !on;
+    if (allege()) { this.syncFold(); return; }
+    this.foldDock(on);
+    try { localStorage.setItem(DOCK_MIN_KEY, on ? '1' : '0'); } catch { /* sans stockage */ }
+  }
+
+  /** Replie ou rouvre la barre à l'écran, sans rien retenir */
+  private foldDock(on: boolean) {
     document.body.classList.toggle('dockMin', on);
     this.placeFold();
     const b = $('#bFold'), t = tr(on ? 'Déplier la barre de construction' : 'Replier la barre de construction');
@@ -1081,17 +1094,46 @@ export class UI {
     b.title = t;
     b.setAttribute('aria-label', t);
     b.setAttribute('aria-expanded', String(!on));
-    try { localStorage.setItem(DOCK_MIN_KEY, on ? '1' : '0'); } catch { /* sans stockage */ }
     requestAnimationFrame(() => { this.placeCards(); this.refreshArrows(); });
+  }
+
+  /**
+   * L'écran allégé : les vignettes de construction restent repliées tant qu'aucun outil n'est en main. Elles s'ouvrent d'un clic
+   * sur un mode ou un rayon (`dockOpen`), avec un outil en main, une recherche, pendant le tutoriel (choix de l'auteur, 23 nov.
+   * 2026 : dépliées pendant le tutoriel, repliées ensuite) et au passage d'un âge (pour montrer les nouveaux bâtiments). Un outil
+   * lâché, un clic sur la carte sans outil, ou un second clic sur le rayon ouvert les replient
+   */
+  private dockOpen = false;
+  private foldTool: ToolId = 'none';
+  private syncFold() {
+    if (!allege()) return;
+    const tl = this.host.tools, held = tl.tool !== 'none';
+    if (this.foldTool !== 'none' && !held) this.dockOpen = false;
+    this.foldTool = tl.tool;
+    const open = held || this.dockOpen || !!this.tutorial?.active || !!this.query.trim() || document.activeElement?.id === 'itSearch';
+    if (document.body.classList.contains('dockMin') === open) this.foldDock(!open);
+  }
+
+  /**
+   * L'écran allégé met les modes et les outils sur la même bande que les rayons (`#dockTop`) ; ailleurs, ils reviennent dans
+   * leur panneau de gauche (`#dockSide`). Refait quand on passe d'un écran à l'autre
+   */
+  private placeDock() {
+    const top = $('#dockTop'), side = $('#dockSide'), modes = $('#modes'), ql = $('#quickL'), qr = $('#quickR');
+    if (allege()) {
+      if (modes.parentElement !== top) { top.prepend(modes); top.insertBefore(ql, $('#bMore')); top.insertBefore(qr, $('#bMore')); }
+      this.syncFold();
+    } else {
+      if (modes.parentElement !== side) side.append(modes, ql, qr);
+      let min = false; try { min = localStorage.getItem(DOCK_MIN_KEY) === '1'; } catch { /* sans stockage */ }
+      this.foldDock(min);
+    }
   }
 
   /**
    * La languette qui replie la barre : à droite, sur le bord haut de la mini-carte (à gauche, sur les modes, on ne la
    * comprenait pas : retour de joueurs, 22 nov. 2026) ; au téléphone, où la colonne de droite se cache, au milieu de la barre
    */
-  /** La barre du bas de l'écran allégé (voir l'étape de la bande du bas) */
-  private placeDock() { /* rien encore */ }
-
   private placeFold() {
     const b = $('#bFold'), home = matchMedia(FOLD_SIDE).matches ? $('#dockSide') : $('#dockRight');
     if (b.parentElement !== home) home.prepend(b);
@@ -1171,16 +1213,20 @@ export class UI {
       : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 20)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
     sub.classList.toggle('searching', !!query);
     // un sous-menu du Paysage : l'outil en main d'un autre sous-menu est lâché (sinon refreshTools ramènerait le sien)
-    sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = () => {
+    // (écran allégé : un clic du joueur sur le sous-menu ou le rayon déjà ouvert replie les vignettes, un autre les ouvre)
+    const unfold = (again: boolean, ev: MouseEvent) => { if (allege() && ev.isTrusted) { this.dockOpen = !(again && !document.body.classList.contains('dockMin')); this.syncFold(); } };
+    sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = (ev) => {
+      unfold(b.dataset.l === this.land, ev);
       this.land = b.dataset.l as LandSub;
       this.clearSearch();
       const lt = landOfTool(this.host.tools.tool);
       if (lt && lt !== this.land) this.host.tools.setTool('none');
       this.renderItems(); this.host.audio.sfxClick();
     }));
-    sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
+    sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = (ev) => {
       const why = b.dataset.c !== KINDS.gather.cat ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
+      unfold(b.dataset.c === this.cat && !this.query.trim(), ev);
       this.cat = b.dataset.c as BuildCat;
       this.clearSearch();
       // le bâtiment en main est d'un autre rayon : on le lâche, sinon refreshTools ramènerait son rayon
@@ -1994,6 +2040,8 @@ export class UI {
   refreshTools() {
     this.renderSelection();
     const tl = this.host.tools;
+    // (l'écran allégé : un outil pris déplie les vignettes, un outil lâché les replie)
+    this.syncFold();
     this.root.querySelectorAll<HTMLButtonElement>('#dock button[data-tool], #items button[data-kind]').forEach((b) => {
       const on = b.dataset.tool ? b.dataset.tool === tl.tool : tl.tool === 'build' && b.dataset.kind === tl.kind;
       // le bâtiment pris en main (depuis un message, un raccourci) défile jusque dans la rangée visible
@@ -2220,10 +2268,12 @@ export class UI {
     this.renderRailEdit();
     this.renderCursorHint();
     if (this.waitNotes.size) this.dropDecided();
-    if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
+    // (un nouvel âge : l'écran allégé déplie les vignettes, pour montrer les nouveaux bâtiments)
+    if (sim.age !== this.lastAge) { if (this.lastAge >= 0) this.dockOpen = true; this.lastAge = sim.age; this.renderItems(); }
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
     else if (!this.press && this.tilesNow() !== this.tilesKey) this.renderItems(true);
     this.markFirst();
+    this.syncFold();
     // (et quand les stocks bougent, une fiche qui dit « vous avez 15 bois » : elle restait à l'ancien compte, testeuse v6)
     if (this.host.tools.placeWhy !== this.infoWhy || this.host.tools.placeStage !== this.infoStage || this.haveNow() !== this.infoHave) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;

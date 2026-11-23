@@ -64,6 +64,11 @@ de l'allié. Ils ne se montrent qu'une fois.
   l'écran (`calc(100vw - 440px)`, jusqu'à 1 500 px de large et 1 000 de haut ; la fenêtre de départ jusqu'à 1 180 px).
   Plafonnées à 1 100 px, elles restaient toutes petites sur un grand écran, une bande vide entre elles et la bulle (retour
   de joueur, 22 nov. 2026). La liste des missions passe sur une colonne jusqu'à 1 360 px.
+- **La barre du bas pendant le tutoriel** : dans l'écran allégé (dès 1 100 px de large, voir [interface.md](interface.md)), les
+  vignettes de construction se replient tant qu'aucun outil n'est en main, sauf pendant que la bulle guide (`tutorial.active`,
+  lu par `UI.syncFold`) : la suite principale et les chapitres trouvent toujours rayons et vignettes ouverts. Les ancres ne
+  changent pas : `#modes`, `#quickL` et `#quickR` passent sur la même bande que les rayons (`#dockTop`), avec leurs
+  identifiants. Une vignette montrée (`.tHi`) garde le panneau ouvert.
 - **Fin** : « Terminer » à la dernière étape. Le temps encore en pause repart à vitesse ×1. Le tutoriel reste dans les réglages (« Recommencer »).
 - **Chapitre « Affronter les démons »** (`pve`) : **plus lancé** depuis le passage direct (22 nov. 2026, décision de l'auteur :
   le choix « Les Enfers » joue la cinématique et mène tout droit aux Enfers, voir [enfers.md](enfers.md)). Le code reste

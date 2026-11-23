@@ -159,3 +159,58 @@ body.allege #toasts .toast {
 body.allege #toasts .toast > .pic { width: 26px; height: 26px; padding: 4px; background: #FFF6E2; }
 body.allege #toasts .toast.danger { color: #8f1d24; background: linear-gradient(180deg, #FFF1EC, #FCE0D8); }
 body.allege #toasts .toast.act:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+
+/* ---------- la barre du bas : une seule bande de 46 px (les modes, les rayons, la loupe et les outils, que `UI.placeDock` range
+   dans `#dockTop`), les vignettes dessous, repliées tant qu'aucun outil n'est en main (`UI.syncFold`) ; à droite, la mini-carte de
+   124 px et ses deux boutons ---------- */
+body.allege #dock > #dockRow { grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr); gap: 10px; justify-content: stretch; }
+body.allege #dock #dockSide, body.allege #bFold { display: none; }
+body.allege #dock #dockMain { grid-column: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; padding: 0; background: none; border: none; box-shadow: none; overflow: visible; }
+body.allege #dockRow > #dockRight { grid-column: 3; justify-self: end; gap: 8px; }
+/* la bande */
+body.allege #dock #dockTop {
+  position: static; display: flex; align-items: center; justify-content: flex-start; gap: 4px; box-sizing: border-box; height: 46px; padding: 0 7px;
+  border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
+}
+body.allege #dockTop #modes { display: flex; flex-direction: row; gap: 4px; padding-right: 6px; border-right: 1.5px solid rgba(190, 145, 75, 0.38); }
+body.allege #dock #dockTop #modes button { flex: none; width: auto; height: 32px; padding: 0 11px 0 8px; gap: 7px; border-radius: 10px; font-size: 13.5px; }
+body.allege #dock #dockTop #modes button:not(.active) { background: transparent; border-color: transparent; box-shadow: none; }
+body.allege #dock #dockTop #modes button:not(.active):hover { background: rgba(255, 236, 190, 0.55); }
+body.allege #dock #dockTop #modes button b, body.allege #dock #dockTop #modes button b .pic { width: 20px; height: 20px; }
+body.allege #dock #subcats { flex: 0 1 auto; gap: 2px; align-items: center; padding: 0 2px; overflow: visible; }
+body.allege #dock #subcats button {
+  height: 32px; padding: 0 10px 0 7px; gap: 6px; border: 1.5px solid transparent; border-radius: 10px; font-size: 13.5px;
+  background: transparent; box-shadow: none;
+}
+body.allege #dock #subcats button:hover:not(.on) { background: rgba(255, 236, 190, 0.55); }
+body.allege #dock #subcats button.on { border: 1.5px solid var(--hGold); border-radius: 10px; background: var(--hGoldFill); box-shadow: var(--hGoldShadow); }
+/* repliée, aucun rayon n'est « ouvert » : l'onglet du rayon courant reste marqué, sans l'or plein */
+body.allege.dockMin #dock #subcats button.on:not(.tHi):not(.first) { background: rgba(255, 236, 190, 0.45); border-color: transparent; box-shadow: none; }
+body.allege #dock #subcats button b .pic, body.allege #dock #subcats button b img { width: 19px; height: 19px; }
+body.allege #dock #dockSearch { height: 32px; margin-left: 2px; padding: 0 8px; align-self: center; border: 1.5px solid transparent; border-radius: 10px; background: transparent; }
+body.allege #dock #dockSearch:hover { background: rgba(255, 236, 190, 0.55); }
+body.allege #dock #dockSearch.on { border-color: var(--hGold); background: var(--hGoldFill); }
+body.allege #dockTop .quick { display: flex; gap: 3px; padding: 0; border: none; }
+body.allege #dockTop #quickL { padding-left: 6px; border-left: 1.5px solid rgba(190, 145, 75, 0.38); }
+body.allege #dock #dockTop .quick button { width: 32px; height: 32px; border-radius: 9px; }
+body.allege #dock #dockTop .quick button svg { width: 16px; height: 16px; }
+/* (rétablir et tourner n'ont leur bouton que quand ils servent : le reste du temps, ils étaient grisés) */
+body.allege #dockTop #quickR button:disabled:not(#bUndo) { display: none; }
+/* les vignettes, sous la bande, dans leur propre panneau */
+body.allege #dock #itemsWrap { align-self: stretch; padding: 5px 4px; border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); }
+body.allege.dockMin #dock #dockMain { display: flex; }
+body.allege.dockMin #dock #dockMain:not(:has(#itemsWrap .tHi)) #itemsWrap { display: none; }
+body.allege #dock #dockBottom { bottom: calc(100% + 10px); }
+/* la mini-carte de 124 px, ses deux boutons de vue à côté */
+body.allege #dock #miniMap, body.allege #dock #dockRight #miniMap { width: 124px; height: 124px; padding: 4px; border-radius: 18px; }
+body.allege #miniMap canvas { border-radius: 14px; }
+body.allege #miniMap .mmN { top: 7px; right: 7px; width: 19px; height: 19px; font-size: 9px; }
+body.allege #dock #viewBtns { gap: 6px; padding: 0; }
+body.allege #dock #viewBtns button.round { width: 38px; height: 38px; }
+body.allege #dock #viewBtns button.round svg { width: 17px; height: 17px; }
+body.allege #dock > #homeBack { margin-bottom: 14px; }
+/* plus étroit : seul le rayon ouvert garde son nom (les autres, leur image et leur info-bulle) */
+@media (max-width: 1299px) {
+  body.allege #dock #subcats button:not(.on) .cl { display: none; }
+  body.allege #dock #subcats button:not(.on) { padding: 0 7px; }
+}
