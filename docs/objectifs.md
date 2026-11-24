@@ -44,7 +44,7 @@ Picto (`hudPic` ou celui du bâtiment), texte (deux lignes au plus), jauge et co
 - `UI.renderGoals` (dans `update`) redessine la pastille seulement si son HTML change (`goalKey`).
 
 ## Liens avec les autres systèmes
-- Les conditions d'âge restent la seule porte vers l'âge suivant ([ages.md](ages.md)) ; certains objectifs les recoupent (loger 12 habitants), d'autres sont de simples à-côtés.
+- Les conditions d'âge restent la seule porte vers l'âge suivant ([ages.md](ages.md)) ; certains objectifs les recoupent (loger 12 habitants), d'autres sont de simples à-côtés. Les chapitres du conflit des deux îles (archipel, du Médiéval au Moderne, voir [diplomatie.md](diplomatie.md)) sont des conditions d'âge, pas des objectifs : ils n'ont pas de pastille, leur suite se lit dans la feuille de route.
 - Tutoriel : pas d'objectifs pendant la suite principale ([tutoriel.md](tutoriel.md)).
 - Barre du haut sur une ligne : voir [interface.md](interface.md) (`fitHud`).
 
