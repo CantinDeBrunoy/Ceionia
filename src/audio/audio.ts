@@ -882,6 +882,53 @@ export class AudioEngine {
     this.tone(70, t, 0.4, 'sine', 0.22 * k, this.sfxG, 0, 0.004);
     for (let i = 0; i < 6; i++) this.burst(t + 0.25 + Math.random() * 0.7, 0.05, 4200, 0.07 * k);
   }
+  /** Le sifflet de l'arbitre : un trille aigu, bref (une faute, une remise en jeu) ou long, en trois coups (début, mi-temps, fin) */
+  sfxWhistle(long: boolean) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime;
+    const beats = long ? [[0, 0.22], [0.3, 0.22], [0.6, 0.7]] : [[0, 0.3]];
+    for (const [at, dur] of beats) {
+      const t = t0 + at, o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 2900;
+      const vib = ctx.createOscillator(); vib.frequency.value = 38;
+      const vg = ctx.createGain(); vg.gain.value = 140; vib.connect(vg); vg.connect(o.frequency);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07, t + 0.02); g.gain.setValueAtTime(0.07, t + dur - 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(this.sfxG);
+      o.start(t); vib.start(t); o.stop(t + dur + 0.02); vib.stop(t + dur + 0.02);
+    }
+  }
+  /** Un coup de pied dans le ballon (force 0 … 1) : un choc sourd et bref */
+  sfxKick(k: number) {
+    if (!this.ctx || k < 0.05) return;
+    const t = this.ctx.currentTime;
+    this.tone(110 + k * 40, t, 0.09, 'sine', 0.12 * k, this.sfxG, 0, 0.002);
+    this.burst(t, 0.05, 900, 0.06 * k);
+  }
+  /** La clameur de la foule (force 0 … 1) : un souffle de voix qui monte et retombe, plus long quand elle exulte */
+  sfxCrowd(k: number) {
+    if (!this.ctx || k < 0.05) return;
+    const ctx = this.ctx, t = ctx.currentTime, dur = 1.2 + k * 2.6;
+    for (const [f, q] of [[520, 1.2], [900, 1.6], [1500, 2]] as const) {
+      const src = ctx.createBufferSource(); src.buffer = this.noise; src.loop = true;
+      const flt = ctx.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.value = f; flt.Q.value = q;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.16 * k, t + 0.25); g.gain.setValueAtTime(0.16 * k, t + dur * 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(flt); flt.connect(g); g.connect(this.sfxG);
+      src.start(t, Math.random() * 2); src.stop(t + dur + 0.1);
+    }
+  }
+  /** Une fusée de feu d'artifice qui monte en sifflant */
+  sfxRocket() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(900 + Math.random() * 300, t); o.frequency.exponentialRampToValueAtTime(2600 + Math.random() * 600, t + 1.1);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.03, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    o.connect(g); g.connect(this.sfxG);
+    o.start(t); o.stop(t + 1.25);
+    this.burst(t, 0.9, 3000, 0.04);
+  }
   /** Combat : choc de lames (tintement métallique), coup de feu (détonation sèche), morsure (grognement bref) */
   sfxClash(kind: 'blade' | 'shot' | 'bite') {
     if (!this.ctx) return;

@@ -9650,9 +9650,8 @@ function stadiumFoot(p: Parts, age: number) {
     p.box(0.012, 0.012, 0.19, sx * hx, y0 + 0.08, 0, C.white); p.box(0.05, 0.07, 0.19, sx * (hx + 0.03), y0 + 0.01, 0, 0xdfe4ea);
   }
   for (const [x, z] of [[-hx, -hz], [hx, -hz], [-hx, hz], [hx, hz]]) { p.cyl(0.003, 0.003, 0.08, 4, x, y0, z, C.white); sway([x, y0 + 0.08, z], [0, 1, 0], 0.5, 1.3).box(0.026, 0.02, 0.003, 0.014, 0, 0, 0xf2c23a); }
-  [[-0.3, -0.1, 0xd84a3e], [-0.42, 0.2, 0xd84a3e], [-0.12, 0.25, 0xd84a3e], [0.22, 0.0, 0x3a6ab8], [0.38, 0.22, 0x3a6ab8], [0.08, -0.22, 0x3a6ab8], [-0.58, 0.03, 0x2a2a2e], [0.58, 0.03, 0x4fa860]]
-    .forEach(([x, z, c], i) => athlete(p, x, z, c, i < 3 ? Math.PI / 2 : -Math.PI / 2));
-  p.sphere(0.016, 0.04, y0 + 0.03, 0.1, C.white, 1);
+  // (pelouse vide : les joueurs n'y entrent que pour un match, lancé de la fiche du stade, voir render/shows/football.ts ;
+  // des joueurs figés s'y seraient mêlés aux joueurs animés)
 
   // les gradins : marches pleines, sièges en bandes, spectateurs en points colorés ; chaque secteur se lève à son tour (la ola)
   const palette = old ? [0xd84a3e, 0xe8c07a, 0x3a6ab8, 0xf4f2ee, 0x6a8a52] : [0x3a6ab8, 0xf4f2ee, 0xd84a3e, 0x3a6ab8, 0xf2c23a, 0x2a4a8a];

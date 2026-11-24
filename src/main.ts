@@ -29,6 +29,7 @@ import { Helis } from './render/helis';
 import { Airships } from './render/airships';
 import { Fairground } from './render/fairground';
 import { ZooView } from './render/zoo';
+import { ShowDirector } from './shows';
 import { AlpineView } from './render/alpine';
 import { Emergencies } from './render/emergency';
 import { Transports } from './render/transports';
@@ -298,6 +299,8 @@ class Game implements UIHost {
   airships: Airships;
   fairground: Fairground;
   zoo: ZooView;
+  /** les gestes des bâtiments : le match, le feu d'artifice, la course (voir shows.ts) */
+  shows: ShowDirector;
   alpine: AlpineView;
   emergencies: Emergencies;
   transports: Transports;
@@ -621,6 +624,15 @@ class Game implements UIHost {
     this.airships = new Airships(w);
     this.fairground = new Fairground(w, this.buildings);
     this.zoo = new ZooView(w, this.buildings);
+    this.shows = new ShowDirector({
+      world: w, agents: this.agents, buildings: this.buildings, audio, camera: this.cam.camera, sim: this.sim,
+      dayLen: () => this.time.dayLen,
+      raining: () => this.env.rainK > 0.6,
+      away: () => this.mode !== 'surface' || this.isleCmd,
+      toast: (m, act) => this.ui.toast(m, act),
+      banner: (t, sub) => this.ui.banner(t, sub),
+      goTo: (x, z, d) => { this.follow(null); this.cam.goTo(x, z, d); },
+    });
     this.alpine = new AlpineView(w, this.buildings);
     this.emergencies = new Emergencies(w, this.fires, this.roads.islands);
     this.fires.responder = this.emergencies;
@@ -3147,6 +3159,7 @@ class Game implements UIHost {
     // (un aller sans retour, les éclaireurs : pas de fête, l'équipe n'est pas rentrée)
     for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.c.oneWay && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
     this.fest.update(dt);
+    this.shows.update(gdt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe
     const followed = this.following === null ? null : this.expeditions.active.find((e) => e.id === this.following);
