@@ -945,6 +945,42 @@ export class AudioEngine {
       this.burst(t, 0.08, 700, 0.07);
     }
   }
+  /**
+   * Le chœur du temple : une phrase lente, quatre accords tenus (voix douces, un peu de vibrato, attaque lente), `step` choisit
+   * la phrase (on en change d'une fois à l'autre)
+   */
+  sfxChant(step = 0) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime;
+    const phrases = [[[0, 4, 7], [-3, 0, 4], [-5, 2, 7], [0, 4, 7]], [[0, 3, 7], [-2, 2, 5], [-4, 0, 3], [-5, 2, 7]], [[0, 4, 9], [2, 5, 9], [-1, 2, 7], [0, 4, 7]]];
+    phrases[((step % 3) + 3) % 3].forEach((ch, i) => {
+      for (const iv of ch) {
+        const t = t0 + i * 0.85, o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = mtof(57 + iv);
+        const vib = ctx.createOscillator(); vib.frequency.value = 5 + Math.random();
+        const vg = ctx.createGain(); vg.gain.value = 2.5; vib.connect(vg); vg.connect(o.frequency);
+        const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.045, t + 0.3); g.gain.setValueAtTime(0.045, t + 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.15);
+        o.connect(f); f.connect(g); g.connect(this.sfxG);
+        o.start(t); vib.start(t); o.stop(t + 1.2); vib.stop(t + 1.2);
+      }
+    });
+  }
+  /** Une cloche (le temple bénit, le théâtre ouvre ses portes) : un coup clair qui résonne */
+  sfxBell(k = 1) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (const [r, v] of [[1, 0.1], [2.76, 0.05], [5.4, 0.025]] as const) this.tone(392 * r, t, 2.6 / r, 'sine', v * k, this.sfxG, 0, 0.003);
+  }
+  /** Des applaudissements (force 0 … 1) : des claquements serrés qui montent puis s'éteignent */
+  sfxApplause(k: number) {
+    if (!this.ctx || k < 0.05) return;
+    const t = this.ctx.currentTime, n = Math.round(30 + k * 60), dur = 1.6 + k * 2;
+    for (let i = 0; i < n; i++) {
+      const at = Math.random() * dur, fade = 1 - Math.max(0, at - dur * 0.6) / (dur * 0.4);
+      this.burst(t + at, 0.025, 1800 + Math.random() * 2200, 0.05 * k * fade);
+    }
+  }
   /** Fête autour du feu : tambours et petite ritournelle de flûte */
   sfxFeast() {
     if (!this.ctx) return;

@@ -4,10 +4,16 @@ import { Sim } from '../src/sim/sim';
 import { mulberry32 } from '../src/core/rng';
 import {
   SHOWS, showOf, showFor, showBlock, showStarted, showReward, showJoy, showJoyFor, showRoom, showWait, waitLabel,
-  readShowState, newShowState, showStateEmpty, planMatch, matchK, MATCH_TIME, planRace, raceRecord,
+  readShowState, newShowState, showStateEmpty, planMatch, matchK, MATCH_TIME, planRace, raceRecord, planTourney, showGold, showNeed,
 } from '../src/sim/shows';
 import { RaceView } from '../src/render/shows/race';
 import { FireworksView } from '../src/render/shows/fireworks';
+import { FeastView } from '../src/render/shows/feast';
+import { RiteView } from '../src/render/shows/rite';
+import { PlayView } from '../src/render/shows/play';
+import { TourneyView, arenaSpots } from '../src/render/shows/tourney';
+import { arenaBout } from '../src/render/arena';
+import { getModel } from '../src/render/models';
 import { MatchView } from '../src/render/shows/football';
 import { footSpots, trackSpots, teamColors } from '../src/render/shows/common';
 import { DEFAULT_BLASON } from '../src/sim/blason';
@@ -208,7 +214,8 @@ describe('le feu d’artifice', () => {
   it('la fête foraine a son geste, regardé de dehors, sous la pluie aussi, avec trois jours de délai', () => {
     const d = showOf('funfair')!;
     expect(d.id).toBe('fireworks');
-    expect(d.watch).toBe(true);
+    expect(d.watch).toBeTruthy();
+    expect(d.sky).toBe(true);
     expect(d.dry).toBe(false);
     expect(showBlock(newShowState(), d, 0, DAY, { ...ctx, raining: true })).toBeNull();
     expect(d.cooldown).toBe(3);
@@ -234,6 +241,164 @@ describe('le feu d’artifice', () => {
       // à la fin, plus une étincelle en l'air
       expect((v as any).sparks.length).toBe(0);
       v.dispose();
+    }
+  });
+});
+
+describe('les gestes des premiers âges', () => {
+  beforeAll(() => setMapSize(96));
+  const kit = (age: number, seed = 7) => ({ age, seed, scale: 1, home: 0x2f5fa8, homeB: 0xe2b443, away: 0xf4f2ee, awayB: 0xe8322a, spots: [] });
+  const run = (v: { done: boolean; update(dt: number): void }, max = 200, each?: (t: number) => void) => {
+    let t = 0;
+    while (!v.done && t < max) { v.update(1 / 30); t += 1 / 30; each?.(t); }
+    return t;
+  };
+
+  it('la place du village a son geste dès la Préhistoire ; le temple, le théâtre et l’arène dès qu’ils existent', () => {
+    const at = (kind: 'gather' | 'temple' | 'theater' | 'arena', age: number) => showFor({ id: 1, kind, x: 0, z: 0, rot: 0, auto: true, age });
+    expect(at('gather', 0)!.id).toBe('feast');
+    expect(at('temple', 1)!.id).toBe('rite');
+    expect(at('theater', 1)!.id).toBe('play');
+    expect(at('arena', 1)!.id).toBe('tourney');
+    // délais : trois jours la fête, deux le temple, un le théâtre, un et demi le tournoi
+    expect([showOf('gather')!.cooldown, showOf('temple')!.cooldown, showOf('theater')!.cooldown, showOf('arena')!.cooldown]).toEqual([3, 2, 1, 1.5]);
+    // aucun ne craint la pluie (le feu de la place, le temple, une salle, l'arène)
+    for (const k of ['gather', 'temple', 'theater', 'arena'] as const) expect(showBlock(newShowState(), showOf(k)!, 0, DAY, { ...ctx, raining: true })).toBeNull();
+  });
+
+  it('le temple soigne : ses soins comptent dans la jauge des soins et sa fiche, pas dans le bien-être', () => {
+    const d = showOf('temple')!;
+    expect(showNeed('rite')).toBe('health');
+    expect(showNeed('match')).toBe('joy');
+    // la part du bien-être du temple à son âge : 14 × 0,3 à l'Antiquité, 20 × 0,3 au Moyen Âge
+    expect(showJoyFor(d, { kind: 'temple', age: 1 })).toBe(4);
+    expect(showJoyFor(d, { kind: 'temple', age: 2 })).toBe(6);
+    const w = new World();
+    w.heights.fill(1);
+    const sim = new Sim(w);
+    sim.update(0, 1);
+    const joy = sim.joy.cap, health = sim.health.cap;
+    showReward(w.shows, d, 5, w.exp.clock, DAY);
+    sim.update(0, 1);
+    expect(sim.health.cap).toBeCloseTo(health + 5);
+    expect(sim.joy.cap).toBeCloseTo(joy);
+    expect(showJoy(w.shows, w.exp.clock, 'health')).toBe(5);
+    expect(showJoy(w.shows, w.exp.clock)).toBe(0);
+    expect(sim.needDetail('health').rows.some((r) => r.label === 'Fête au temple (en cours)' && r.v === 5)).toBe(true);
+    // il dure un jour et demi
+    expect(showJoy(w.shows, w.exp.clock + 1.5 * DAY + 1, 'health')).toBe(0);
+  });
+
+  it('sauvegarde : les nouveaux gestes se relisent, une ancienne partie n’a rien en cours', () => {
+    const s = { next: { feast: 300, rite: 200, play: 100, tourney: 50 }, boost: [{ id: 'rite' as const, n: 4, until: 400 }, { id: 'tourney' as const, n: 9, until: 500 }] };
+    expect(readShowState(JSON.parse(JSON.stringify(s)))).toEqual(s);
+    const w = new World();
+    w.shows.next.feast = 700;
+    const w2 = new World();
+    w2.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(w2.shows.next.feast).toBe(700);
+  });
+
+  it('l’or de la recette : le match, et la représentation à l’opéra seulement', () => {
+    expect(showGold('match', 3, 12)).toBe(6);
+    expect(showGold('play', 1, 10)).toBe(0);
+    expect(showGold('play', 3, 10)).toBe(3);
+    expect(showGold('tourney', 2, 12)).toBe(0);
+  });
+
+  it('un tournoi se joue en deux ou trois manches, et le vainqueur en a gagné deux', () => {
+    const seen = new Set<number>();
+    for (let seed = 1; seed < 300; seed++) {
+      const p = planTourney(mulberry32(seed));
+      seen.add(p.rounds.length);
+      expect(p.rounds.filter((x) => x === p.winner).length).toBe(2);
+      expect(p.rounds.filter((x) => x !== p.winner).length).toBeLessThanOrEqual(1);
+      expect(p.rounds[p.rounds.length - 1]).toBe(p.winner);
+    }
+    expect([...seen].sort()).toEqual([2, 3]);
+  });
+
+  it('la fête du village : elle attend le village, allume la fête de la place une fois, et se termine', () => {
+    for (const age of [0, 1, 3]) {
+      let starts = 0;
+      const v = new FeastView(age, { start: () => starts++ });
+      v.update(1);
+      expect(v.phase).toBe('gather');
+      v.ready();
+      const t = run(v);
+      expect(v.done).toBe(true);
+      expect(starts).toBe(1);
+      expect(t).toBeLessThan(45);
+      expect(v.board()).toContain('Fête du village');
+    }
+  });
+
+  it('la fête au temple : chaque fidèle dépose une offrande, les chants, la bénédiction aux trois coups de cloche', () => {
+    for (const age of [1, 2, 4]) {
+      let chants = 0, bells = 0;
+      const v = new RiteView(age, 5 + age, { chant: () => chants++, bell: () => bells++ });
+      for (let i = 0; i < 8; i++) v.arrived(i);
+      expect(v.offered).toBe(8);
+      v.ready();
+      const phases = new Set<string>();
+      run(v, 200, () => phases.add(v.phase));
+      expect(v.done).toBe(true);
+      expect([...phases]).toEqual(['gather', 'chant', 'bless', 'end']);
+      expect(chants).toBeGreaterThanOrEqual(4);
+      // une à l'ouverture des chants, trois à la bénédiction
+      expect(bells).toBe(4);
+      v.dispose();
+    }
+  });
+
+  it('la représentation : la file, l’entrée, deux actes, le salut sous les fleurs ; les spectateurs suivent', () => {
+    for (const age of [1, 2, 3, 5]) {
+      let bells = 0;
+      const v = new PlayView(age, 3 + age, { bell: () => bells++ });
+      const crowd: string[] = [v.crowd];
+      v.ready();
+      run(v, 200, () => { if (crowd[crowd.length - 1] !== v.crowd) crowd.push(v.crowd); });
+      expect(v.done).toBe(true);
+      expect(crowd).toEqual(['wait', 'in', 'show', 'out']);
+      expect(bells).toBe(1);
+      expect((v as any).thrown).toBeGreaterThan(10);
+      // les fleurs arrivées sont au sol, devant l'entrée
+      for (const f of (v as any).flowers) if (f.t >= f.dur) expect(f.m.position.y).toBeLessThan(0.05);
+      expect(v.title.length).toBeGreaterThan(5);
+      v.dispose();
+    }
+  });
+
+  it('le tournoi : le combat de chaque âge, les manches prévues, le vainqueur couronné', () => {
+    expect([1, 2, 3, 4, 5].map((a) => arenaBout(a).kind)).toEqual(['fist', 'joust', 'fist', 'fist', 'robot']);
+    for (const age of [1, 2, 3, 4, 5]) for (const seed of [4, 9]) {
+      const plan = planTourney(mulberry32(seed));
+      let hits = 0, bells = 0;
+      const v = new TourneyView(age, plan.rounds, kit(age, seed), { hit: () => hits++, bell: () => bells++ });
+      // chaque champion a des pièces qui bougent (bras, masse, scie), sauf le chevalier (lance et cheval d'une pièce)
+      if (age !== 2) for (const c of v.champs) expect(c.pieces.length).toBeGreaterThan(0);
+      const t = run(v, 200);
+      expect(v.done).toBe(true);
+      expect(t).toBeLessThan(60);
+      expect(v.champs[plan.winner].wins).toBe(2);
+      expect(v.champs[1 - plan.winner].wins).toBe(plan.rounds.length - 2);
+      expect(v.winner()).toBe(v.champs[plan.winner].name);
+      expect(v.champs[0].name).not.toBe(v.champs[1].name);
+      // un coup au moins par manche, la cloche à chaque manche et au couronnement
+      expect(hits).toBeGreaterThanOrEqual(plan.rounds.length);
+      expect(bells).toBe(plan.rounds.length + 1);
+      expect(arenaSpots(age).length).toBeGreaterThan(50);
+      v.dispose();
+    }
+  });
+
+  it('pendant le tournoi, l’arène se dessine sans ses combattants (un autre modèle), et les retrouve après', () => {
+    for (const age of [1, 2, 3, 4, 5]) {
+      const o = { v: 0, L: false, R: false, F: false };
+      const full = getModel('arena', age, o), bare = getModel('arena', age, { ...o, bare: true });
+      expect(bare).not.toBe(full);
+      expect(bare.body.getAttribute('position').count).toBeLessThan(full.body.getAttribute('position').count);
+      expect(getModel('arena', age, o)).toBe(full);
     }
   });
 });

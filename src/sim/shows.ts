@@ -6,7 +6,10 @@ import { tr, localize } from '../i18n';
  * un spectacle sur le bâtiment, puis une récompense et un délai. Ici, les règles seules : lequel se lance où, quand on peut le
  * refaire, ce qu'il rapporte. La mise en scène est dans `src/shows.ts` et `src/render/shows/`
  */
-export type ShowId = 'match' | 'race' | 'fireworks';
+export type ShowId = 'match' | 'race' | 'fireworks' | 'feast' | 'rite' | 'play' | 'tourney';
+
+/** Ce que comble la récompense d'un geste, pour un temps : le bien-être, ou les soins (la fête du temple) */
+export type ShowNeed = 'joy' | 'health';
 
 export interface ShowDef {
   id: ShowId;
@@ -28,8 +31,20 @@ export interface ShowDef {
   newcomers: number;
   /** pas sous une forte pluie */
   dry: boolean;
-  /** les spectateurs regardent de dehors, autour du bâtiment (au lieu d'y entrer) */
-  watch?: boolean;
+  /**
+   * les spectateurs regardent de dehors, autour du bâtiment (au lieu d'y entrer) : chacun sa place sur un arc devant la façade,
+   * à `r` cases du bord (négatif : sur le bâtiment, au bord de la place), large de `arc` radians (2π : tout autour), et ce
+   * qu'il y fait une fois arrivé (lever les bras, s'agenouiller)
+   */
+  watch?: { r: number; arc: number; act: 'cheer' | 'sit' };
+  /** les spectateurs font la queue devant l'entrée, entrent un à un quand la scène l'annonce, et ressortent à la fin (le théâtre) */
+  queue?: boolean;
+  /** la vue de plus loin et plus rasante, sur le ciel au-dessus (le feu d'artifice) */
+  sky?: boolean;
+  /** le modèle du bâtiment perd ses personnages pendant le geste (les combattants de l'arène : la scène a les siens) */
+  bare?: boolean;
+  /** ce que comble la récompense (le bien-être, sauf mention) */
+  need?: ShowNeed;
   /** explication du bouton (info-bulle) */
   tip: string;
 }
@@ -44,8 +59,28 @@ export const SHOWS: ShowDef[] = [
     tip: 'Six coureurs sur la ligne, le coup de pistolet, le sprint, le podium. Bien-être pour un jour et demi, le double si le record du village tombe.',
   },
   {
-    id: 'fireworks', kind: 'funfair', icon: '🎆', act: 'Tirer le feu d’artifice', running: 'Feu d’artifice en cours', cooldown: 3, joyK: 0.8, joyDays: 1, fans: 12, newcomers: 3, dry: false, watch: true,
+    id: 'fireworks', kind: 'funfair', icon: '🎆', act: 'Tirer le feu d’artifice', running: 'Feu d’artifice en cours', cooldown: 3, joyK: 0.8, joyDays: 1, fans: 12, newcomers: 3, dry: false,
+    watch: { r: 1.1, arc: 2.2, act: 'cheer' }, sky: true,
     tip: 'La foule se masse autour du parc pour le grand feu d’artifice, plus beau la nuit. Beaucoup de bien-être pour un jour, et la fête attire de nouveaux habitants.',
+  },
+  // les premiers âges : la place du village dès la Préhistoire, le temple, le théâtre et l'arène dès l'Antiquité
+  {
+    id: 'feast', kind: 'gather', icon: '🔥', act: 'Fête du village', running: 'Fête en cours', cooldown: 3, joyK: 1, joyDays: 1, fans: 10, newcomers: 1, dry: false,
+    watch: { r: -0.3, arc: Math.PI * 2, act: 'cheer' },
+    tip: 'Tout le village se retrouve sur la place : le feu, la ronde, le festin, et les fusées aux âges qui en ont. Bien-être pour un jour, et la fête attire parfois un nouvel habitant.',
+  },
+  {
+    id: 'rite', kind: 'temple', icon: '🕯️', act: 'Célébrer une fête', running: 'Fête au temple', cooldown: 2, joyK: 0.3, joyDays: 1.5, fans: 10, newcomers: 0, dry: false,
+    watch: { r: 0.75, arc: 1.9, act: 'sit' }, need: 'health',
+    tip: 'Les fidèles viennent des maisons en procession et déposent leurs offrandes, l’encens monte, le chœur chante. On prie pour les malades : des soins en plus pendant un jour et demi.',
+  },
+  {
+    id: 'play', kind: 'theater', icon: '🎭', act: 'Donner une représentation', running: 'Représentation en cours', cooldown: 1, joyK: 0.8, joyDays: 1.5, fans: 10, newcomers: 0, dry: false, queue: true,
+    tip: 'Les spectateurs font la queue devant l’entrée, la façade s’illumine, les comédiens jouent, et on leur lance des fleurs à la fin. Bien-être pour un jour et demi, et un peu d’or à l’opéra.',
+  },
+  {
+    id: 'tourney', kind: 'arena', icon: '🏆', act: 'Organiser un tournoi', running: 'Tournoi en cours', cooldown: 1.5, joyK: 0.8, joyDays: 2, fans: 12, newcomers: 0, dry: false, bare: true,
+    tip: 'Deux champions s’affrontent en trois manches, le combat de l’époque, devant une foule qui hurle. Le vainqueur est couronné. Bien-être pour deux jours.',
   },
 ];
 
@@ -80,10 +115,13 @@ export function readShowState(d: any): ShowState {
 /** À sauvegarder ? (rien en cours, pas de record : on n'écrit rien) */
 export const showStateEmpty = (s: ShowState) => !Object.keys(s.next).length && !s.boost.length && !s.record;
 
-/** Le bien-être des gestes encore en cours à l'heure `clock` */
-export function showJoy(s: ShowState, clock: number) {
+/** Ce que comble la récompense de ce geste */
+export const showNeed = (id: ShowId): ShowNeed => SHOWS.find((d) => d.id === id)?.need ?? 'joy';
+
+/** Le bien-être des gestes encore en cours à l'heure `clock` (`need` : les soins de la fête du temple) */
+export function showJoy(s: ShowState, clock: number, need: ShowNeed = 'joy') {
   let n = 0;
-  for (const b of s.boost) if (b.until > clock) n += b.n;
+  for (const b of s.boost) if (b.until > clock && showNeed(b.id) === need) n += b.n;
   return n;
 }
 
@@ -121,7 +159,7 @@ export function showStarted(s: ShowState, d: ShowDef, clock: number, dayLen: num
 
 /**
  * Le bien-être que rapporte le geste, sur ce bâtiment : la part `joyK` de son bien-être à son âge, ×`k` (une victoire, un
- * record), au moins 2
+ * record), au moins 2 (pour la fête du temple, ce sont des soins, comptés de même)
  */
 export function showJoyFor(d: ShowDef, b: Pick<Building, 'kind' | 'age'>, k = 1) {
   const a = Math.max(b.age, KINDS[b.kind].minAge), base = KINDS[b.kind].joy?.[a] ?? 0;
@@ -181,5 +219,22 @@ export function planRace(rnd: () => number, n = 6) {
 
 /** Un record tombe-t-il ? (le meilleur temps de la première course en est un) */
 export const raceRecord = (s: ShowState, best: number) => !s.record || best < s.record;
+
+// ---------------- Le tournoi ----------------
+
+/** Les manches d'un tournoi : le vainqueur de chacune (0 ou 1), jusqu'à deux manches gagnées (deux ou trois manches) */
+export function planTourney(rnd: () => number) {
+  const won: (0 | 1)[] = [], n = [0, 0];
+  // (le champion 0 un peu favori : il arrive en tête du tableau)
+  while (n[0] < 2 && n[1] < 2) { const w = rnd() < 0.55 ? 0 : 1; won.push(w); n[w]++; }
+  return { rounds: won, winner: (n[0] === 2 ? 0 : 1) as 0 | 1 };
+}
+
+/** L'or de la recette, s'il y en a : le match, et la représentation à l'opéra (dès l'âge industriel) */
+export function showGold(id: ShowId, age: number, fans: number) {
+  if (id === 'match') return 2 + Math.floor(fans / 3);
+  if (id === 'play' && age >= 3) return 1 + Math.floor(fans / 4);
+  return 0;
+}
 
 for (const d of SHOWS) localize(d, ['act', 'running', 'tip']);

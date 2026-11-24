@@ -8,12 +8,16 @@ import { FRONT } from './build/placement';
 import { archipelagoOn } from './sim/diplomacy';
 import {
   SHOWS, showFor, showBlock, showStarted, showReward, showJoyFor, showRoom, showScale, showWait, planMatch, matchK,
-  planRace, raceRecord, type ShowDef,
+  planRace, raceRecord, planTourney, showGold, type ShowDef,
 } from './sim/shows';
 import { teamColors, footSpots, trackSpots, type Kit, type ShowView } from './render/shows/common';
 import { MatchView } from './render/shows/football';
 import { RaceView } from './render/shows/race';
 import { FireworksView } from './render/shows/fireworks';
+import { FeastView } from './render/shows/feast';
+import { RiteView } from './render/shows/rite';
+import { PlayView } from './render/shows/play';
+import { TourneyView } from './render/shows/tourney';
 import { tr } from './i18n';
 
 /** Ce que les spectacles demandent au jeu */
@@ -36,6 +40,8 @@ export interface ShowHost {
   goTo(x: number, z: number, dist: number): void;
   /** baisse la vue jusqu'à cette inclinaison (radians au-dessus de l'horizon), si elle est plus haute */
   tilt(pitch: number): void;
+  /** la fête du village sur cette place (festivities.ts : le feu, la ronde, le festin, les fusées selon l'âge) */
+  feast(b: Building): void;
 }
 
 /** Ce que la scène en cours donne au directeur : le tableau d'affichage, et le résultat à la fin */
@@ -47,7 +53,11 @@ interface Act {
   result(): { k: number; title: string; newcomers: boolean; line?: string };
 }
 
-interface Run { def: ShowDef; b: Building; act: Act; fans: number[]; hidden: Set<number>; t: number; door: [number, number] }
+interface Run {
+  def: ShowDef; b: Building; act: Act; fans: number[]; hidden: Set<number>; t: number; door: [number, number];
+  /** les spectateurs sont tous là (la scène l'a su) ; ils sont ressortis (le théâtre) ; l'attente avant le prochain qui entre */
+  ready: boolean; out: boolean; inT: number;
+}
 
 /** Les supporters marchent jusqu'à l'entrée au plus tant de secondes de jeu, puis ceux qui restent entrent quand même */
 const GATHER_MAX = 14;
@@ -85,7 +95,14 @@ export class ShowDirector {
     if (!g) return tr('Rien à lancer ici');
     const seed = (Math.floor(w.exp.clock * 13) ^ (b.id * 2654435761)) >>> 0;
     const cols = teamColors(w.blason);
-    const kit: Kit = { age: b.age, seed, scale: showScale(b), ...cols, spots: [] };
+    // (le bâtiment est posé à la hauteur de sa parcelle ; devant sa façade, le terrain peut monter ou descendre)
+    const ground = (x: number, z: number) => {
+      const gg = h.buildings.entries.get(b.id)?.group ?? g;
+      gg.updateMatrixWorld();
+      const p = new THREE.Vector3(x, 0, z).applyMatrix4(gg.matrixWorld);
+      return Math.min(0.6, Math.max(-0.1, (w.surfaceAt(p.x, p.z) - p.y) / (gg.scale.y || 1)));
+    };
+    const kit: Kit = { age: b.age, seed, scale: showScale(b), ...cols, spots: [], ground };
     const act = this.stage(d, b, kit);
     g.add(act.view.group);
     // les spectateurs viennent de chez eux jusqu'à l'entrée
@@ -95,18 +112,32 @@ export class ShowDirector {
     const fans = n > 0 ? h.agents.recruit(n) ?? [] : [];
     if (fans.length) {
       h.agents.partyGo(fans, door[0], door[1], 0.45);
-      // pour un spectacle qui se regarde de dehors : chacun sa place, en arc devant le bâtiment, tourné vers lui
-      if (d.watch) fans.forEach((id, i) => {
-        const a = Math.atan2(f[1], f[0]) + ((i + 0.5) / fans.length - 0.5) * 2.2, r = s / 2 + 1.1 + (i % 2) * 0.35;
-        const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
-        h.agents.memberGo(id, x, z, Math.atan2(cx - x, cz - z));
+      // pour un spectacle qui se regarde de dehors : chacun sa place, en arc devant le bâtiment (ou tout autour), tourné vers lui
+      if (d.watch) this.ring(fans, b, d.watch.r, d.watch.arc);
+      // au théâtre : la queue devant l'entrée, en file qui part de la porte
+      if (d.queue) fans.forEach((id, i) => {
+        const k = 0.15 + i * 0.2, side = (i % 2 ? 1 : -1) * 0.06, r = RIGHT_OF(f);
+        const x = door[0] + f[0] * k + r[0] * side, z = door[1] + f[1] * k + r[1] * side;
+        h.agents.memberGo(id, x, z, Math.atan2(-f[0], -f[1]));
       });
     }
-    this.run = { def: d, b, act, fans, hidden: new Set(), t: 0, door };
+    // l'arène se dessine sans ses combattants : la scène a les siens
+    if (d.bare) { h.buildings.bare.add(b.id); h.buildings.refresh(b); }
+    this.run = { def: d, b, act, fans, hidden: new Set(), t: 0, door, ready: false, out: false, inT: 0 };
     showStarted(w.shows, d, w.exp.clock, h.dayLen());
     this.frame(d, b);
     h.audio.sfxClick();
     return null;
+  }
+
+  /** Les spectateurs à leur place, en arc devant le bâtiment (à `r` cases de son bord, sur `arc` radians), tournés vers lui */
+  private ring(fans: number[], b: Building, r0: number, arc: number) {
+    const s = sizeOf(b), f = FRONT[b.rot], cx = b.x + s / 2, cz = b.z + s / 2, full = arc >= Math.PI * 1.9;
+    fans.forEach((id, i) => {
+      const a = Math.atan2(f[1], f[0]) + (full ? (i / fans.length) * Math.PI * 2 : ((i + 0.5) / fans.length - 0.5) * arc), r = s / 2 + r0 + (i % 2) * 0.35;
+      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      this.h.agents.memberGo(id, x, z, Math.atan2(cx - x, cz - z));
+    });
   }
 
   /** La scène du geste, et comment la lire */
@@ -157,6 +188,30 @@ export class ShowDirector {
       const view = new FireworksView(kit, { bang: (k) => a.sfxBang(k), whistle: () => a.sfxRocket(), roar: (k) => a.sfxCrowd(k) });
       return { view, board: () => view.board(), result: () => ({ k: 1, newcomers: true, title: tr('Quel feu d’artifice !') }) };
     }
+    if (d.id === 'feast') {
+      const view = new FeastView(b.age, { start: () => this.h.feast(b), roar: (k) => a.sfxCrowd(k) });
+      return { view, board: () => view.board(), result: () => ({ k: 1, newcomers: true, title: tr('Belle fête au village !') }) };
+    }
+    if (d.id === 'rite') {
+      const view = new RiteView(b.age, kit.seed, { chant: (n) => a.sfxChant(n), bell: (k) => a.sfxBell(k), roar: (k) => a.sfxCrowd(k) }, kit.ground);
+      return {
+        view, board: () => view.board(),
+        result: () => ({ k: 1, newcomers: false, title: tr('Une belle fête au temple'), line: view.offered ? tr('{n} offrandes déposées', { n: view.offered }) : undefined }),
+      };
+    }
+    if (d.id === 'play') {
+      const view = new PlayView(b.age, kit.seed, { bell: () => a.sfxBell(0.7), applause: (k) => a.sfxApplause(k), roar: (k) => a.sfxCrowd(k), music: () => a.sfxFeast() }, kit.ground);
+      return { view, board: () => view.board(), result: () => ({ k: 1, newcomers: false, title: tr('« {title} » : un triomphe !', { title: view.title }) }) };
+    }
+    if (d.id === 'tourney') {
+      const plan = planTourney(rng(kit.seed));
+      const view = new TourneyView(b.age, plan.rounds, kit, {
+        hit: (k) => { if (k === 'fist') a.sfxKick(0.9); else { a.sfxClash('blade'); if (k === 'joust') a.sfxKick(1); } },
+        bell: () => a.sfxBell(0.8),
+        roar: (k) => a.sfxCrowd(k),
+      });
+      return { view, board: () => view.board(), result: () => ({ k: 1, newcomers: false, title: tr('{name} remporte le tournoi !', { name: view.winner() }) }) };
+    }
     throw new Error(`spectacle inconnu : ${d.id}`);
   }
 
@@ -169,11 +224,7 @@ export class ShowDirector {
     if (!h.world.buildings.has(r.b.id)) { this.stop(); return; }
     r.t += dt;
     this.hudT -= 1 / 60;
-    // les spectateurs entrent à mesure qu'ils arrivent (ceux qui traînent entrent au bout d'un moment)
-    // (devant un feu d'artifice, ils restent dehors et lèvent les bras)
-    for (const id of r.fans) if (!r.hidden.has(id) && (ag.memberDone(id) || r.t > GATHER_MAX)) {
-      if (r.def.watch) { if (ag.memberDone(id)) { ag.partyAct([id], 'cheer'); r.hidden.add(id); } } else { ag.partyHide([id], true); r.hidden.add(id); }
-    }
+    this.crowd(r, dt);
     // le bâtiment peut être refait (passage d'âge, saison) : la scène suit son nouveau groupe, comme les bêtes du zoo
     const g = h.buildings.entries.get(r.b.id)?.group;
     if (g && r.act.view.group.parent !== g) g.add(r.act.view.group);
@@ -184,17 +235,51 @@ export class ShowDirector {
     if (r.act.view.done) this.finish();
   }
 
+  /**
+   * Les spectateurs : ceux qui regardent de dehors font leur geste en arrivant (lever les bras, s'agenouiller) et la scène le
+   * sait (l'offrande du temple) ; au théâtre, ils attendent en file puis entrent un à un quand la scène ouvre les portes, et
+   * ressortent à la fin devant la façade ; ailleurs, ils entrent à mesure qu'ils arrivent (ceux qui traînent, au bout d'un
+   * moment). (`r.hidden` : ceux dont on s'est occupé, entrés ou arrivés à leur place)
+   */
+  private crowd(r: Run, dt: number) {
+    const ag = this.h.agents, v = r.act.view, d = r.def;
+    if (!r.ready && (r.t > GATHER_MAX || r.fans.every((id) => ag.memberDone(id)))) { r.ready = true; v.ready?.(); }
+    if (d.watch) {
+      r.fans.forEach((id, i) => { if (!r.hidden.has(id) && ag.memberDone(id)) { ag.partyAct([id], d.watch!.act); r.hidden.add(id); v.arrived?.(i); } });
+      return;
+    }
+    if (d.queue) {
+      const st = v.crowd ?? 'wait';
+      if (st === 'in' || st === 'show') {
+        // un à un, de la tête de la file ; tous les autres d'un coup quand le spectacle commence
+        r.inT -= dt;
+        for (const id of r.fans) if (!r.hidden.has(id) && (st === 'show' || (r.inT <= 0 && ag.memberDone(id)))) { ag.partyHide([id], true); r.hidden.add(id); r.inT = 0.45; if (st === 'in') break; }
+      } else if (st === 'out' && !r.out) {
+        // ils ressortent par l'entrée, se tiennent en arc devant la façade et applaudissent
+        r.out = true;
+        ag.partyHide(r.fans, false); ag.partyPlace(r.fans, r.door[0], r.door[1]);
+        this.ring(r.fans, r.b, 0.7, 1.8);
+        r.hidden.clear();
+      }
+      if (r.out) for (const id of r.fans) if (!r.hidden.has(id) && ag.memberDone(id)) { ag.partyAct([id], 'cheer'); r.hidden.add(id); }
+      return;
+    }
+    for (const id of r.fans) if (!r.hidden.has(id) && (ag.memberDone(id) || r.t > GATHER_MAX)) { ag.partyHide([id], true); r.hidden.add(id); }
+  }
+
   /** La fin : la récompense, l'annonce, et chacun rentre chez soi */
   private finish() {
     const r = this.run!, h = this.h, w = h.world, d = r.def, res = r.act.result();
     const n = showJoyFor(d, r.b, res.k);
     showReward(w.shows, d, n, w.exp.clock, h.dayLen());
-    const parts = [tr('+{n} bien-être pendant {d}', { n, d: d.joyDays === 1 ? tr('un jour') : d.joyDays === 1.5 ? tr('un jour et demi') : tr('{n} jours', { n: d.joyDays }) })];
+    const days = d.joyDays === 1 ? tr('un jour') : d.joyDays === 1.5 ? tr('un jour et demi') : tr('{n} jours', { n: d.joyDays });
+    const parts = [d.need === 'health' ? tr('+{n} soins pendant {d}', { n, d: days }) : tr('+{n} bien-être pendant {d}', { n, d: days })];
     if (res.newcomers && d.newcomers) {
       const k = showRoom(d.newcomers, h.sim.pop, h.sim.housing.cap);
       if (k > 0) { h.sim.pop += k; parts.push(k === 1 ? tr('un nouvel habitant attiré par la fête') : tr('{n} nouveaux habitants attirés par la fête', { n: k })); }
     }
-    if (d.id === 'match' && archipelagoOn(w)) { const g = 2 + Math.floor(r.fans.length / 3); w.gold += g; parts.push(tr('recette : {n} or', { n: g })); }
+    const g = archipelagoOn(w) ? showGold(d.id, r.b.age, r.fans.length) : 0;
+    if (g > 0) { w.gold += g; parts.push(tr('recette : {n} or', { n: g })); }
     if (res.line) parts.push(res.line);
     h.banner(`${d.icon} ${res.title}`, parts.join(' · '));
     this.stop();
@@ -207,8 +292,9 @@ export class ShowDirector {
     const ag = this.h.agents;
     r.act.view.group.removeFromParent();
     r.act.view.dispose();
+    if (r.def.bare) { this.h.buildings.bare.delete(r.b.id); if (this.h.world.buildings.has(r.b.id)) this.h.buildings.refresh(r.b); }
     if (r.fans.length) {
-      if (!r.def.watch) { ag.partyHide(r.fans, false); ag.partyPlace(r.fans, r.door[0], r.door[1]); }
+      if (!r.def.watch && !r.out) { ag.partyHide(r.fans, false); ag.partyPlace(r.fans, r.door[0], r.door[1]); }
       ag.dismiss(r.fans);
     }
     this.run = null;
@@ -228,7 +314,9 @@ export class ShowDirector {
    */
   private frame(d: ShowDef, b: Building) {
     const s = sizeOf(b), cx = b.x + s / 2, cz = b.z + s / 2;
-    if (!d.watch) { this.h.goTo(cx, cz, s >= 3 ? 6.5 : 5); return; }
+    // (devant le temple et le théâtre, la vue vise un peu en avant de la façade : c'est là que tout se passe)
+    const f = FRONT[b.rot], ahead = d.queue || (d.watch && d.watch.arc < 6) ? s * 0.3 : 0;
+    if (!d.sky) { this.h.goTo(cx + f[0] * ahead, cz + f[1] * ahead, s >= 3 ? 6.5 : 5); return; }
     const v = this.h.camera.getWorldDirection(this.v), L = Math.hypot(v.x, v.z) || 1;
     this.h.goTo(cx + (v.x / L) * 3.2, cz + (v.z / L) * 3.2, 13);
     this.h.tilt(0.42);
@@ -266,6 +354,8 @@ export class ShowDirector {
 /** Les équipes qui viennent jouer au village */
 const AWAY_TEAMS = ['Racing des Collines', 'Union du Fleuve', 'Olympique des Marais', 'Étoile du Nord', 'Sporting des Falaises', 'Athletic de la Plaine'];
 
+/** la droite de la façade (perpendiculaire au sens `f` de l'entrée) */
+const RIGHT_OF = (f: readonly number[]): [number, number] => [-f[1], f[0]];
 const rng = (seed: number) => { let s = (seed % 2147483646) + 1; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; };
 /** « 46,12 » : un temps au centième, à la virgule française */
 const secs = (t: number) => t.toFixed(2).replace('.', tr(','));

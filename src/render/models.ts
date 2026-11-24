@@ -144,6 +144,8 @@ export interface ModelOpts {
   tier?: number;
   /** remparts : les côtés reliés à un autre pan (WALL_N, E, S, W de hellBase.ts), pour se raccorder aux voisins */
   mask?: number;
+  /** sans ses personnages du milieu, le temps d'un spectacle qui a les siens (les combattants de l'arène, voir shows.ts) */
+  bare?: boolean;
 }
 
 /** Bâtiments passés en 2 × 2 dont le modèle procédural est dessiné pour une case : on l'agrandit d'autant */
@@ -13647,7 +13649,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'baths': futureBaths(p, o.v); return true;
     case 'zoo': zooBig(p, 5); return true;
     case 'circus': sink(0.012); circus(p, 5, CIRCUS_KIT); return true;
-    case 'arena': sink(0.012); arena(p, 5, ARENA_KIT); return true;
+    case 'arena': sink(0.012); arena(p, 5, ARENA_KIT, !!o.bare); return true;
     case 'explorers': sink(0.012); explorersHouse(p, 5, ARENA_KIT); return true;
     case 'cemetery': sink(0.012); cemetery(p, 5, ARENA_KIT); return true;
     case 'racetrack': sink(0.012); racetrack(p, 5, ARENA_KIT); return true;
@@ -14505,7 +14507,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   if (imported) return imported;
   // (le bloc ne compte qu'au Moyen Âge, pour la couleur des toits ; le rang dans la ligne d'horizon, à l'âge futuriste)
   const key = kind === 'house' ? `${kind}|${age}|${o.v}|${+o.L}${+o.R}${+o.F}|${age === 2 ? o.row ?? '' : ''}|${age >= 5 ? o.tier ?? '' : ''}`
-    : `${kind}|${age}|${o.v % 3}|${size}${age >= 5 && kind === 'workshop' ? `|${o.tier ?? ''}` : ''}${isRampart(kind) || isLinear(kind) ? `|m${o.mask ?? 0}` : ''}`;
+    : `${kind}|${age}|${o.v % 3}|${size}${age >= 5 && kind === 'workshop' ? `|${o.tier ?? ''}` : ''}${isRampart(kind) || isLinear(kind) ? `|m${o.mask ?? 0}` : ''}${o.bare ? '|bare' : ''}`;
   let m = cache.get(key);
   if (m) return m;
   const p = new Parts();
@@ -14577,7 +14579,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'funfair': if (size === 3) funfairBig(p, Math.max(3, age)); else funfair(p, Math.max(3, age)); break;
     case 'zoo': zooBig(p, Math.max(4, age)); break;
     case 'circus': sink(0.012); circus(p, Math.max(2, age), CIRCUS_KIT); break;
-    case 'arena': sink(0.012); arena(p, Math.max(1, age), ARENA_KIT); break;
+    case 'arena': sink(0.012); arena(p, Math.max(1, age), ARENA_KIT, !!o.bare); break;
     case 'explorers': sink(0.012); explorersHouse(p, Math.max(2, age), ARENA_KIT); break;
     case 'cemetery': sink(0.012); cemetery(p, age, ARENA_KIT); break;
     case 'racetrack': sink(0.012); racetrack(p, Math.max(4, age), ARENA_KIT); break;
