@@ -881,6 +881,15 @@ function oHouse(p: Parts, age: number, v: number, w: number, d: number) {
     p.cyl(0.035, 0.025, 0.06, 6, -sd * W * 0.42, 0, D / 2 + 0.04, O.terra);
     p.add(new THREE.IcosahedronGeometry(0.05, 0), -sd * W * 0.42, 0.09, D / 2 + 0.04, O.greenD);
     win(f, -du, 0.12, 0.07, 0.11, s.arch, s.trim, { grille: O.darkwood });
+    if (age === 3) {
+      // l'Industriel : une boutique sous un store de toile sur la rue (deux maisons sur trois), une citerne de tôle sur le toit
+      if (v % 3 !== 2) {
+        const aw = pick(AWNING, v + 1);
+        f.add(new THREE.BoxGeometry(W * 0.42, 0.01, 0.15).rotateX(0.4), -du, 0.27, 0.07, aw);
+        for (let i = 0; i < 2; i++) f.box(0.07, 0.06, 0.06, -du - 0.06 + i * 0.12, 0, 0.09, pick([0xc98a3a, 0x9a3a2a, 0x6a8a3a, O.turq], v + i));
+      }
+      if (v % 4 === 1) { p.cyl(0.06, 0.06, 0.1, 7, -sd * W * 0.3, h + 0.05, -D * 0.3, 0x8a8f94); for (const sx of [-1, 1]) p.box(0.012, 0.05, 0.012, -sd * W * 0.3 + sx * 0.04, h, -D * 0.3, O.darkwood); }
+    }
     // les étages : fenêtres grillagées sur la rue, moucharabieh à l'Industriel, bandeau de faïence entre les étages
     for (let k = 1; k < floors; k++) {
       const y = k * fh;
