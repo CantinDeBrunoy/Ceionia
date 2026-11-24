@@ -40,7 +40,7 @@ import { CameraRig, SURFACE_MIN_PITCH, PointerInfo, ToolInput, CAM_SENS } from '
 import { GameTime } from './core/time';
 import { SurfaceGate } from './core/surface';
 import { Sim, modernStepsFor } from './sim/sim';
-import { sickToll, theftToll, applySick, applyTheft, sickNews, theftNews, DEATH_MIN_POP, applyMourning } from './sim/mishaps';
+import { sickToll, theftToll, applySick, applyTheft, sickNews, theftNews, DEATH_MIN_POP, applyMourning, logDeath, naturalRate, naturalNews, NATURAL } from './sim/mishaps';
 import { Funeral } from './render/funeral';
 import { doorCells, doorSide, FRONT } from './build/placement';
 import { GEAR_BY } from './sim/gear';
@@ -358,6 +358,8 @@ class Game implements UIHost {
   private volcanoV = -1;
   /** prochain rappel à l'aide pour les feux que personne ne combat (s) */
   private fireCallT = 0;
+  /** les morts naturelles : l'échéance avance avec le temps de jeu, un ancien s'éteint à chaque unité (voir `stepElders`) */
+  private elderDue = Math.random() * 0.5;
   /** le bouton « Retourner au village », quand la vue s'éloigne de la grande place */
   private homeBtn: HomeButton;
   /** la mise en scène du royaume des Enfers (combat du roi, victoire) */
@@ -749,6 +751,7 @@ class Game implements UIHost {
         // un défunt : avec un cimetière, un petit cortège l'y mène ; sans, le village en porte le deuil
         const rest = died && this.burial(b);
         if (died && !rest) applyMourning(w, this.time.dayLen);
+        if (died) logDeath(w, rest, this.time.dayLen);
         if (died || toll.n) this.ui.toast(sickNews(toll, died, rest), rest ? () => { const p = this.funeral.where(); if (p) this.cam.goTo(p[0], p[1], 9); } : undefined, 'danger');
       } else {
         const loot = theftToll(w);
@@ -2963,6 +2966,24 @@ class Game implements UIHost {
     return true;
   }
 
+  /**
+   * Les anciens qui s'éteignent de vieillesse (`naturalRate`) : un habitant de moins, mené au cimetière depuis une maison
+   * prise au hasard, ou pleuré par le village faute de cimetière (bien-être et soins en moins un temps)
+   */
+  private stepElders(gdt: number) {
+    if (gdt <= 0) return;
+    const w = this.world;
+    this.elderDue += (gdt / this.time.dayLen) * naturalRate(w, this.sim.pop);
+    if (this.elderDue < 1) return;
+    this.elderDue -= 1;
+    const homes = [...w.buildings.values()].filter((b) => (KINDS[b.kind]?.housing?.[b.age] ?? 0) > 0);
+    if (!homes.length || !this.sim.loseOne(NATURAL.minPop)) return;
+    const rest = this.burial(homes[Math.floor(Math.random() * homes.length)]);
+    if (!rest) applyMourning(w, this.time.dayLen);
+    logDeath(w, rest, this.time.dayLen);
+    this.ui.toast(naturalNews(rest), rest ? () => { const p = this.funeral.where(); if (p) this.cam.goTo(p[0], p[1], 9); } : undefined);
+  }
+
   followIncident(key: string | null) {
     const i = key ? this.incidents().find((x) => x.key === key) : undefined;
     if (!i) { this.incidentCam = null; return; }
@@ -3882,6 +3903,7 @@ class Game implements UIHost {
     this.sim.rain = this.env.rainK;
     this.sim.season = this.time.season;
     this.sim.update(gdt, dt);
+    this.stepElders(gdt);
     this.eruptions.update(gdt);
     this.fauna.alarm = this.eruptions.alarm() ?? this.calam.alarm();
     this.fires.update(dt, gdt);

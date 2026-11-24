@@ -7,6 +7,7 @@ import { rampartTower } from '../build/rampart';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
 import { Sim, NeedId, ageGo } from '../sim/sim';
 import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
+import { hasCemetery, recentDeaths, MOURN, UNBURIED_HEALTH, DEATH_LOG_DAYS, NATURAL } from '../sim/mishaps';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
@@ -2713,9 +2714,27 @@ export class UI {
       <div class="crow total"><span>${tr(housing ? 'Places' : 'Disponible')}</span><em>${num(d.cap)}</em></div>
       <div class="crow total"><span>${housing ? tr('Habitants') : tr('Nécessaire ({p} habitants)', { p })}</span><em>${num(housing ? p : d.demand)}</em></div>
       <p class="hint ${state}">${tip}</p>
-      ${d.per > 0 && (!d.ok || housing) ? `<button class="primary" data-kind="${d.kind}" title="${where}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>` : ''}`;
+      ${d.per > 0 && (!d.ok || housing) ? `<button class="primary" data-kind="${d.kind}" title="${where}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>` : ''}
+      ${k === 'health' ? this.cemeteryHtml() : ''}`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
+  }
+
+  /**
+   * La partie Cimetière de la fiche Santé : le cimetière du village (ou aucun), les décès des derniers jours et ceux restés
+   * sans sépulture, ce qu'un défunt sans cimetière coûte, et le bouton pour en bâtir un
+   */
+  private cemeteryHtml(): string {
+    const { sim, world } = this.host, has = hasCemetery(world), name = sim.nameOf('cemetery');
+    const r = recentDeaths(world, this.host.time.dayLen);
+    const note = r.n ? (r.unburied ? tr('dont {n} sans sépulture', { n: r.unburied }) : tr('tous reposent au cimetière')) : tr('aucun pour l’instant');
+    const rule = has ? tr('Les défunts y reposent, menés par un petit cortège. Le village n’en porte pas le deuil.')
+      : tr('Sans cimetière, chaque défunt coûte {j} de bien-être et {h} de soins pendant {d}.', { j: MOURN.n, h: UNBURIED_HEALTH, d: tr('{n} jours', { n: MOURN.days }) });
+    return `
+      <h5>${ic('stele', 16, 2)} ${tr('Cimetière')}<em class="${has ? 'ok' : r.unburied ? 'warn' : 'full'}">${has ? name : tr('aucun')}</em></h5>
+      <div class="crow"><span>${tr('Décès ces {n} derniers jours', { n: DEATH_LOG_DAYS })}<small>${note}</small></span><em class="${r.unburied ? 'neg' : ''}">${r.n}</em></div>
+      <p class="hint ${has ? 'ok' : r.unburied ? 'warn' : ''}">${rule} ${tr('Des anciens s’éteignent aussi de vieillesse, dès {n} habitants.', { n: NATURAL.minPop })}</p>
+      ${has ? '' : `<button data-kind="cemetery" title="${sim.whereOf('cemetery')}">${ic('hammer', 14, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}`;
   }
 
   /** Fiche du besoin Sécurité : couverture des pompiers et de la police, rayons, conseils, et le bouton de surbrillance sur la carte */

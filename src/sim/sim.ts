@@ -1,5 +1,5 @@
 import { tr } from '../i18n';
-import { ailing, grief } from './mishaps';
+import { ailing, grief, unburied } from './mishaps';
 import { Coverage, computeCoverage } from './coverage';
 import { World, N } from '../world/world';
 import { WISH_JOY, WISH_JOY_MAX } from './wishes';
@@ -238,7 +238,8 @@ export class Sim {
     // (plus la joie d'un spectacle, moins le deuil d'un défunt sans cimetière où reposer, un temps)
     this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) + showJoy(this.world.shows, e.clock) - grief(this.world));
     // (les malades restés sans soins pèsent sur les soins un temps, voir `sim/mishaps.ts` ; la fête du temple en ajoute un temps)
-    this.health.cap = Math.max(0, this.baseHealth - ailing(this.world) + showJoy(this.world.shows, e.clock, 'health'));
+    // (et les défunts restés sans sépulture, faute de cimetière)
+    this.health.cap = Math.max(0, this.baseHealth - ailing(this.world) - unburied(this.world) + showJoy(this.world.shows, e.clock, 'health'));
     this.housing.demand = p;
     this.food.demand = up((n + 1) * rulesOf(this.world.difficulty).foodK);
     this.water.demand = n + 1;
@@ -265,6 +266,7 @@ export class Sim {
     if (k === 'joy' && this.world.wishesMet) rows.push({ label: tr('Envies d’habitants comblées'), n: this.world.wishesMet, v: Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) });
     if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts où l’on se promène'), n: L.forests, v: L.forests * 0.08 });
     if (k === 'health') { const a = ailing(this.world); if (a) rows.push({ label: tr('Malades restés sans soins'), n: 0, v: -a }); }
+    if (k === 'health') { const u = unburied(this.world); if (u) rows.push({ label: tr('Défunts sans sépulture (aucun cimetière)'), n: 0, v: -u }); }
     if (k === 'health') { const n = showJoy(this.world.shows, this.world.exp.clock, 'health'); if (n) rows.push({ label: tr('Fête au temple (en cours)'), n: 0, v: n }); }
     if (k === 'joy') { const g = grief(this.world); if (g) rows.push({ label: tr('Deuil (aucun cimetière)'), n: 0, v: -g }); }
     if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: tr(b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)'), n: 0, v: b }); }

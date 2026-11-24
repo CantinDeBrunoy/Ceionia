@@ -16,7 +16,7 @@ import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn
 import { FleetState, newFleet, readFleet, saveFleet } from '../sim/fleet';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Blason, DEFAULT_BLASON, DEFAULT_ISLE, readBlason, readIsleName } from '../sim/blason';
-import { readIlls } from '../sim/mishaps';
+import { readIlls, readDeaths } from '../sim/mishaps';
 import { ShowState, newShowState, readShowState, showStateEmpty } from '../sim/shows';
 import { Crossing, crossingMap, nearestOnDeck, DECK_CLEAR, waterLevel } from './crossings';
 
@@ -447,6 +447,8 @@ export class World {
   ills: { n: number; until: number }[] = [];
   /** deuils d'un village sans cimetière : bien-être en moins jusqu'à l'horloge des expéditions (`until`), voir `sim/mishaps.ts` */
   mourning: { n: number; until: number }[] = [];
+  /** les décès des derniers jours (horloge des expéditions, reposé au cimetière ou non), pour la fiche Santé */
+  deaths: { at: number; rest: boolean }[] = [];
   /** la côte de l'île principale est sûre (agrandie après le 21 nov. 2026, ou réparée par `repairCoast`, voir `expand.ts`) */
   coast = 0;
   /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
@@ -1960,6 +1962,7 @@ export class World {
       ...(this.modernSteps !== null ? { modern: this.modernSteps ? 1 : 0 } : {}),
       ...(this.ills.length ? { ills: this.ills.filter((i) => i.until > this.exp.clock) } : {}),
       ...(this.mourning.length ? { mourning: this.mourning.filter((i) => i.until > this.exp.clock) } : {}),
+      ...(this.deaths.length ? { deaths: this.deaths } : {}),
       ...(this.isles && this.mainGen !== GEN_VAR ? { mainGen: this.mainGen } : {}),
       ...(this.reveal ? { reveal: 1 } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
@@ -2117,6 +2120,7 @@ export class World {
     this.modernSteps = d.modern === 1 ? true : d.modern === 0 ? false : null;
     this.ills = readIlls(d.ills);
     this.mourning = readIlls(d.mourning);
+    this.deaths = readDeaths(d.deaths);
     this.mainGen = this.isles && [GEN_FIXED, 2, 5].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);

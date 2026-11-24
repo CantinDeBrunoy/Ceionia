@@ -80,6 +80,61 @@ export function applyMourning(w: World, dayLen: number) {
   w.mourning.push({ n: MOURN.n, until: w.exp.clock + MOURN.days * dayLen });
 }
 
+/**
+ * Un défunt sans sépulture pèse aussi sur la santé du village (demande de l'auteur du 24 nov. 2026 : « ça doit compter dans
+ * les stats si on ne s'occupe pas des morts ») : `UNBURIED_HEALTH` de soins en moins par deuil en cours
+ */
+export const UNBURIED_HEALTH = 1;
+
+/** Soins en moins en ce moment : les défunts sans sépulture dont le deuil n'est pas fini */
+export function unburied(w: Pick<World, 'mourning' | 'exp'>): number {
+  let n = 0;
+  for (const i of w.mourning) if (i.until > w.exp.clock) n += UNBURIED_HEALTH;
+  return n;
+}
+
+/**
+ * Les morts naturelles (même demande : « on a des morts naturels quand même ») : les anciens s'éteignent de vieillesse, à
+ * peu près `pop / NATURAL.per` par jour de jeu (au plus `NATURAL.max`), dès `NATURAL.minPop` habitants. Moitié moins en
+ * Facile, aucune au bac à sable. Un habitant de moins, que le village remplace s'il a ce qu'il faut
+ */
+export const NATURAL = { per: 100, max: 1.5, minPop: 15, easy: 0.5 } as const;
+
+/** Décès de vieillesse attendus par jour de jeu */
+export function naturalRate(w: Pick<World, 'difficulty' | 'sandbox'>, pop: number): number {
+  if (w.sandbox || w.difficulty === 'sandbox' || pop < NATURAL.minPop) return 0;
+  return Math.min(NATURAL.max, pop / NATURAL.per) * (w.difficulty === 'easy' ? NATURAL.easy : 1);
+}
+
+/** Les décès récents gardés pour la fiche Santé (`DEATH_LOG_DAYS` jours) */
+export const DEATH_LOG_DAYS = 2;
+
+/** Note un décès (`rest` : il repose au cimetière) et oublie les plus anciens */
+export function logDeath(w: World, rest: boolean, dayLen: number) {
+  const t = w.exp.clock;
+  w.deaths = w.deaths.filter((d) => d.at > t - DEATH_LOG_DAYS * dayLen);
+  w.deaths.push({ at: t, rest });
+}
+
+/** Les décès des derniers jours : combien, et combien sans sépulture */
+export function recentDeaths(w: Pick<World, 'deaths' | 'exp'>, dayLen: number): { n: number; unburied: number } {
+  const from = w.exp.clock - DEATH_LOG_DAYS * dayLen;
+  let n = 0, u = 0;
+  for (const d of w.deaths) if (d.at > from) { n++; if (!d.rest) u++; }
+  return { n, unburied: u };
+}
+
+/** Relit le registre des décès d'une sauvegarde (absent : vide) */
+export function readDeaths(d: unknown): { at: number; rest: boolean }[] {
+  return Array.isArray(d) ? d.filter((x) => x && Number.isFinite(x.at)).map((x) => ({ at: +x.at, rest: !!x.rest })) : [];
+}
+
+/** Le message d'un ancien qui s'éteint de vieillesse (`rest` : il repose au cimetière) */
+export function naturalNews(rest: boolean): string {
+  if (rest) return tr('🕯️ Un ancien du village s’est éteint de vieillesse. Ses proches le mènent au cimetière, où il repose en paix.');
+  return tr('🕯️ Un ancien du village s’est éteint de vieillesse. Faute de cimetière où reposer, le village porte son deuil {d} : bien-être −{n}, soins −{h}.', { n: MOURN.n, h: UNBURIED_HEALTH, d: tr('{n} jours', { n: MOURN.days }) });
+}
+
 /** Bien-être en moins en ce moment (les deuils qui ne sont pas finis) */
 export function grief(w: Pick<World, 'mourning' | 'exp'>): number {
   let n = 0;
@@ -93,7 +148,7 @@ export function grief(w: Pick<World, 'mourning' | 'exp'>): number {
  */
 export function sickNews(toll: SickToll, died: boolean, rest = false): string {
   if (died && rest) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé. Ses proches le mènent au cimetière, où il repose en paix.');
-  if (died) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé. Faute de cimetière où reposer, le village porte son deuil {d} : bien-être −{n}.', { n: MOURN.n, d: tr('{n} jours', { n: MOURN.days }) });
+  if (died) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé. Faute de cimetière où reposer, le village porte son deuil {d} : bien-être −{n}, soins −{h}.', { n: MOURN.n, h: UNBURIED_HEALTH, d: tr('{n} jours', { n: MOURN.days }) });
   return tr('🤒 Sans soins à temps, le malade reste alité {d} : santé −{n}. Un hôpital à portée des maisons l’aurait soigné.', { n: toll.n, d: toll.days > 1 ? tr('{n} jours', { n: toll.days }) : tr('une journée') });
 }
 

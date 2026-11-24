@@ -265,7 +265,7 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Le village y garde la mémoire des siens, entre les fleurs et les arbres. On y vient se recueillir.',
     // un peu de bien-être, comme un petit jardin ; son vrai rôle vient avec les décès (voir mishaps.ts)
     joy: [1, 1, 2, 2, 3, 3], jobs: [0, 0, 1, 1, 1, 2],
-    perk: 'Un habitant qui meurt y est mené par un petit cortège et y repose. Sans cimetière, chaque décès coûte un peu de bien-être pendant deux jours. Un seul suffit.',
+    perk: 'Un habitant qui meurt y est mené par un petit cortège et y repose. Sans cimetière, chaque décès coûte un peu de bien-être et de soins pendant deux jours. Les anciens finissent aussi par s’éteindre. Un seul suffit.',
   },
   mill: {
     id: 'mill', size: 2, minAge: 2, icon: '🌬️', cat: 'prod',

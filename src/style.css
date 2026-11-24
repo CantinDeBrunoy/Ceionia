@@ -257,6 +257,8 @@ button.pop:hover { background: rgba(255, 255, 255, 0.7); }
 #needInfo .crow.total span { font-weight: 800; }
 #needInfo .hint.warn, #needInfo .hint.full, #needInfo .hint.ok { font-weight: 700; }
 #needInfo button { width: 100%; justify-content: center; margin-top: 4px; }
+#needInfo h5 { display: flex; align-items: center; gap: 6px; margin: 10px 0 2px; padding-top: 8px; border-top: 1px solid rgba(40, 50, 70, 0.12); font-size: 13px; color: var(--ink); }
+#needInfo h5 em { margin-left: auto; font-style: normal; font-weight: 800; font-size: 12px; }
 /* comptoir des voisins (fiche de l'or) : une ligne par ressource, vendre et acheter */
 #needInfo.trade { width: 360px; }
 #needInfo .tlot { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 12px; color: var(--ink2); }

@@ -8,7 +8,7 @@ import { KIND_ICON, ic } from '../src/ui/icons';
 import { getModel } from '../src/render/models';
 import { costOf } from '../src/sim/economy';
 import { Funeral } from '../src/render/funeral';
-import { applyMourning, grief, hasCemetery, sickNews, sickToll, MOURN } from '../src/sim/mishaps';
+import { applyMourning, grief, hasCemetery, sickNews, sickToll, MOURN, unburied, UNBURIED_HEALTH, naturalRate, naturalNews, NATURAL, logDeath, recentDeaths, DEATH_LOG_DAYS } from '../src/sim/mishaps';
 import { setLang, i18nEntries } from '../src/i18n';
 import '../src/i18n/en';
 
@@ -155,6 +155,69 @@ describe('un décès, avec ou sans cimetière', () => {
     expect(sickNews(t, true, true)).toMatch(/cemetery/);
     expect(sickNews(t, true, false)).toMatch(/no cemetery.*2 days/);
     expect(en.size).toBeGreaterThan(0);
+  });
+});
+
+describe('les morts dans la fiche Santé, et les morts naturelles', () => {
+  it('un défunt sans sépulture pèse aussi sur les soins, la fiche Santé le dit', () => {
+    const w = continent();
+    w.difficulty = 'normal';
+    const [x, z] = spot(w, 'health', 30, 30);
+    w.place('health', x, z, 0, true, 3, false);
+    const sim = new Sim(w);
+    sim.age = 3;
+    sim.recalc();
+    sim.update(0.1);
+    const full = sim.health.cap;
+    expect(full).toBeGreaterThan(0);
+    applyMourning(w, 100);
+    expect(unburied(w)).toBe(UNBURIED_HEALTH);
+    sim.update(0.1);
+    expect(sim.health.cap).toBeCloseTo(full - UNBURIED_HEALTH, 5);
+    expect(sim.needDetail('health').rows.some((r) => r.v === -UNBURIED_HEALTH && /sépulture/.test(r.label))).toBe(true);
+    for (let i = 0; i < MOURN.days * 100 + 10; i++) sim.update(1);
+    expect(unburied(w)).toBe(0);
+  });
+
+  it('les anciens s’éteignent de vieillesse : jamais au bac à sable ni dans un petit village, moitié moins en Facile', () => {
+    const w = continent();
+    w.difficulty = 'normal';
+    expect(naturalRate(w, NATURAL.minPop - 1)).toBe(0);
+    expect(naturalRate(w, 50)).toBeCloseTo(0.5, 5);
+    expect(naturalRate(w, 1000)).toBe(NATURAL.max);
+    w.difficulty = 'easy';
+    expect(naturalRate(w, 50)).toBeCloseTo(0.25, 5);
+    w.difficulty = 'sandbox';
+    expect(naturalRate(w, 50)).toBe(0);
+  });
+
+  it('le registre des décès : les derniers jours seulement, ceux sans sépulture à part, gardé par la sauvegarde', () => {
+    const w = continent();
+    logDeath(w, true, 100);
+    logDeath(w, false, 100);
+    expect(recentDeaths(w, 100)).toEqual({ n: 2, unburied: 1 });
+    const back = new World();
+    back.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(recentDeaths(back, 100)).toEqual({ n: 2, unburied: 1 });
+    w.exp.clock += DEATH_LOG_DAYS * 100 + 1;
+    expect(recentDeaths(w, 100)).toEqual({ n: 0, unburied: 0 });
+    logDeath(w, true, 100);
+    expect(w.deaths.length).toBe(1);
+    // une ancienne sauvegarde n'a pas de registre
+    const old = JSON.parse(JSON.stringify(w.toJSON()));
+    delete old.deaths;
+    const legacy = new World();
+    legacy.fromJSON(old);
+    expect(legacy.deaths).toEqual([]);
+  });
+
+  it('le message d’un ancien qui s’éteint, en français et en anglais', () => {
+    expect(naturalNews(true)).toMatch(/vieillesse.*cimetière.*repose/);
+    expect(naturalNews(false)).toMatch(/vieillesse.*Faute de cimetière.*bien-être −2, soins −1/);
+    for (const m of [naturalNews(true), naturalNews(false)]) expect(m).not.toContain(';');
+    setLang('en', false);
+    expect(naturalNews(true)).toMatch(/old age.*cemetery/);
+    expect(naturalNews(false)).toMatch(/no cemetery.*care −1/);
   });
 });
 
