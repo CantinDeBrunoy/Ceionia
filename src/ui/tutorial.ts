@@ -404,8 +404,6 @@ export class Tutorial {
   /** `fresh` : nouvelle partie (le tutoriel, s'il est activé, reprend au début) */
   constructor(private ui: UI, private host: UIHost, fresh: boolean, private off = false) {
     const h = host, T = TUTO_TEXT.steps, q = (s: string) => ui.root.querySelector(s);
-    // la boussole des expéditions ; dans l'écran allégé, elle est rangée sous le bouton « Monde » : celui-ci tant que son menu est fermé
-    const expBtn = () => { const b = q('#bExp'); return b && b.getClientRects().length ? b : q('#bWorld'); };
     const count = () => { const n: Record<string, number> = {}; for (const b of h.world.buildings.values()) n[b.kind] = (n[b.kind] ?? 0) + 1; return n; };
     const roads = () => { let n = 0; const r = h.world.road; for (let k = 0; k < r.length; k++) if (r[k]) n++; return n; };
     const name = (k: KindId) => KINDS[k].names[Math.max(h.sim.age, KINDS[k].minAge)];
@@ -484,7 +482,7 @@ export class Tutorial {
         id: 'gear', read: true,
         anchor: () => {
           const m = q('.expModal');
-          if (!m) return expBtn();
+          if (!m) return q('#bExp');
           const tab = m.querySelector('[data-tab="gear"]');
           if (!tab?.classList.contains('on')) return tab;
           const g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
@@ -523,7 +521,7 @@ export class Tutorial {
             if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
             return b ?? m.querySelector('.mtitle');
           }
-          return this.ticks[1] ? null : expBtn();
+          return this.ticks[1] ? null : q('#bExp');
         },
         check: () => [!!q('.expModal'), h.expeditions.active.length > 0],
         note: () => {

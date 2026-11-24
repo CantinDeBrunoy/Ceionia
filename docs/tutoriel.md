@@ -68,10 +68,9 @@ de l'allié. Ils ne se montrent qu'une fois.
   vignettes de construction se replient tant qu'aucun outil n'est en main, sauf pendant que la bulle guide (`tutorial.active`,
   lu par `UI.syncFold`) : la suite principale et les chapitres trouvent toujours rayons et vignettes ouverts. Les ancres ne
   changent pas : `#modes`, `#quickL` et `#quickR` passent sur la même bande que les rayons (`#dockTop`), avec leurs
-  identifiants. Une vignette montrée (`.tHi`) garde le panneau ouvert. La boussole des expéditions (`#bExp`) y est rangée sous
-  le bouton « Monde » : les étapes `gear` et `expeditions` montrent `#bExp` s'il se voit, sinon `#bWorld` (`expBtn`), dont le clic
-  mène tout droit aux expéditions tant qu'il n'a qu'elles. L'étape `time` montre `#timePanel`, qui contient désormais pause et
-  vitesse.
+  identifiants. Une vignette montrée (`.tHi`) garde le panneau ouvert. La boussole des expéditions (`#bExp`), que
+  montrent les étapes `gear` et `expeditions`, garde son bouton ; seuls Peuples, Enfers et la cloche passent dans le menu
+  `#bMenu`, qu'aucune étape ne montre. L'étape `time` montre `#timePanel`, qui contient désormais pause et vitesse.
 - **Fin** : « Terminer » à la dernière étape. Le temps encore en pause repart à vitesse ×1. Le tutoriel reste dans les réglages (« Recommencer »).
 - **Chapitre « Affronter les démons »** (`pve`) : **plus lancé** depuis le passage direct (22 nov. 2026, décision de l'auteur :
   le choix « Les Enfers » joue la cinématique et mène tout droit aux Enfers, voir [enfers.md](enfers.md)). Le code reste

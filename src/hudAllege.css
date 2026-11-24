@@ -215,29 +215,29 @@ body.allege #dock > #homeBack { margin-bottom: 14px; }
   body.allege #dock #subcats button:not(.on) { padding: 0 7px; }
 }
 
-/* ---------- les boutons ronds regroupés (demande de l'auteur, 24 nov. 2026) : pause et vitesse entrent dans la pastille de
-   l'heure, sans cadre ; la boussole, Peuples et Enfers passent sous un seul bouton « Monde », qui déplie leurs trois choix
-   (`UI.placeWorld`, `#worldMenu`) ; restent à part la cloche et les réglages ---------- */
-#bWorld, #worldMenu, #menuBtns .wl { display: none; }
-body.allege #bWorld { display: grid; place-items: center; }
-body.allege #bWorld.ping::after { content: ''; position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px #fff; animation: pulse 1.2s infinite; }
+/* ---------- les boutons ronds regroupés (demande de l'auteur, 24 nov. 2026) : restent visibles le temps (l'heure, pause et
+   vitesse, qui entrent dans sa pastille, sans cadre), les expéditions et les paramètres ; Peuples, Enfers et les notifications
+   passent dans un seul menu (`#bMenu`, `UI.placeMenu`, `#hudMenu`), dont le bouton porte le nombre de notifications nouvelles
+   (`#menuBadge`). Un message urgent passe toujours à la place du conseil ---------- */
+#bMenu, #hudMenu, #menuBtns .wl { display: none; }
+body.allege #bMenu { display: grid; place-items: center; }
+body.allege #menuBadge:not(:empty) { position: absolute; top: -7px; right: -6px; min-width: 19px; padding: 0 4px; border: 1.5px solid #fff; border-radius: 10px; font-size: 10px; font-weight: 800; line-height: 1.5; text-align: center; color: #fff; background: linear-gradient(180deg, #F0584A, #C8352A); }
 body.allege #timePanel { gap: 2px; }
 body.allege #hud #timePanel button.round { width: 30px; height: 30px; background: transparent; border-color: transparent; box-shadow: none; }
 body.allege #hud #timePanel button.round:hover { background: rgba(255, 236, 190, 0.6); }
 body.allege #hud #timePanel button.round.on { background: var(--hGoldFill); border-color: var(--hGold); box-shadow: var(--hGoldShadow); }
 body.allege #timePanel #clock { margin-right: 2px; }
 body.allege #menuBtns { position: relative; }
-body.allege #worldMenu:not([hidden]) {
-  display: flex; flex-direction: column; gap: 3px; position: absolute; top: calc(100% + 12px); right: 0; z-index: 9; min-width: 190px; padding: 6px;
+body.allege #hudMenu:not([hidden]) {
+  display: flex; flex-direction: column; gap: 3px; position: absolute; top: calc(100% + 12px); right: 0; z-index: 9; min-width: 200px; padding: 6px;
   border-radius: 15px; background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
 }
-body.allege #hud #worldMenu button.round {
+body.allege #hud #hudMenu button.round {
   justify-content: flex-start; gap: 10px; width: 100%; height: 38px; padding: 0 12px 0 10px; border-radius: 10px; border: 1.5px solid transparent;
   background: transparent; box-shadow: none; font-size: 13.5px; font-weight: 700; color: var(--hInk);
 }
-body.allege #hud #worldMenu button.round:hover { background: rgba(255, 236, 190, 0.6); }
-body.allege #worldMenu .wl { display: inline; }
-body.allege #worldMenu #bPeoples.off { color: var(--hInk2); }
-/* (la pastille des équipes « 1/3 » se pose au bout de la ligne, le point rouge des expéditions obligatoires devant le libellé) */
-body.allege #worldMenu #expBadge:not(:empty) { position: static; margin-left: auto; transform: none; }
-body.allege #worldMenu #bExp.ping::after { top: 8px; left: 24px; right: auto; }
+body.allege #hud #hudMenu button.round:hover { background: rgba(255, 236, 190, 0.6); }
+body.allege #hudMenu .wl { display: inline; }
+body.allege #hudMenu #bPeoples.off { color: var(--hInk2); }
+/* (le compte de la cloche au bout de sa ligne) */
+body.allege #hudMenu #bellBadge:not(:empty) { position: static; margin-left: auto; }
