@@ -2729,11 +2729,13 @@ export class UI {
     const r = recentDeaths(world, this.host.time.dayLen);
     const note = r.n ? (r.unburied ? tr('dont {n} sans sépulture', { n: r.unburied }) : tr('tous reposent au cimetière')) : tr('aucun pour l’instant');
     const rule = has ? tr('Les défunts y reposent, menés par un petit cortège. Le village n’en porte pas le deuil.')
-      : tr('Sans cimetière, chaque défunt coûte {j} de bien-être et {h} de soins pendant {d}.', { j: MOURN.n, h: UNBURIED_HEALTH, d: tr('{n} jours', { n: MOURN.days }) });
+      : tr('Sans cimetière, chaque défunt reste sans sépulture et coûte {j} de bien-être et {h} de soins, jusqu’à ce qu’un cimetière l’accueille.', { j: MOURN.n, h: UNBURIED_HEALTH });
+    const left = world.unburied;
     return `
-      <h5>${ic('stele', 16, 2)} ${tr('Cimetière')}<em class="${has ? 'ok' : r.unburied ? 'warn' : 'full'}">${has ? name : tr('aucun')}</em></h5>
-      <div class="crow"><span>${tr('Décès ces {n} derniers jours', { n: DEATH_LOG_DAYS })}<small>${note}</small></span><em class="${r.unburied ? 'neg' : ''}">${r.n}</em></div>
-      <p class="hint ${has ? 'ok' : r.unburied ? 'warn' : ''}">${rule} ${tr('Des anciens s’éteignent aussi de vieillesse, dès {n} habitants.', { n: NATURAL.minPop })}</p>
+      <h5>${ic('stele', 16, 2)} ${tr('Cimetière')}<em class="${has ? 'ok' : left ? 'warn' : 'full'}">${has ? name : tr('aucun')}</em></h5>
+      <div class="crow"><span>${tr('Décès ces {n} derniers jours', { n: DEATH_LOG_DAYS })}<small>${note}</small></span><em>${r.n}</em></div>
+      ${left ? `<div class="crow"><span>${tr('Défunts sans sépulture')}<small>${tr('bien-être −{j}, soins −{h}', { j: left * MOURN.n, h: left * UNBURIED_HEALTH })}</small></span><em class="neg">${left}</em></div>` : ''}
+      <p class="hint ${has ? 'ok' : left ? 'warn' : ''}">${rule} ${tr('Des anciens s’éteignent aussi de vieillesse, dès {n} habitants.', { n: NATURAL.minPop })}</p>
       ${has ? '' : `<button data-kind="cemetery" title="${sim.whereOf('cemetery')}">${ic('hammer', 14, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}`;
   }
 

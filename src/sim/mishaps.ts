@@ -63,11 +63,12 @@ export function readIlls(d: unknown): { n: number; until: number }[] {
 }
 
 /**
- * Le deuil d'un village sans cimetière (demande de l'auteur du 24 nov. 2026) : un défunt qui n'a pas où reposer coûte
- * `MOURN.n` de bien-être pendant `MOURN.days` jours. Avec un cimetière, un cortège l'y mène et rien n'est perdu. Les décès
- * n'arrivent qu'en Normal : en Facile, le cimetière n'apporte qu'un peu de bien-être
+ * Les défunts sans sépulture (demandes de l'auteur du 24 nov. 2026 : « un mort coûte 2 de bien-être », « ça doit compter
+ * dans les stats si on ne s'occupe pas des morts ») : un défunt qui n'a pas où reposer coûte `MOURN.n` de bien-être et
+ * `UNBURIED_HEALTH` de soins, sans fin de délai, jusqu'à ce que le village bâtisse un cimetière (`buryAll` : ils y reposent
+ * tous, le coût s'efface). Avec un cimetière, un cortège mène chaque défunt et rien n'est perdu
  */
-export const MOURN = { n: 2, days: 2 } as const;
+export const MOURN = { n: 2 } as const;
 
 /** Le village a-t-il un cimetière (de tout âge, n'importe où) ? */
 export function hasCemetery(w: Pick<World, 'buildings'>): boolean {
@@ -75,22 +76,38 @@ export function hasCemetery(w: Pick<World, 'buildings'>): boolean {
   return false;
 }
 
-/** Le village porte le deuil d'un défunt sans sépulture */
-export function applyMourning(w: World, dayLen: number) {
-  w.mourning.push({ n: MOURN.n, until: w.exp.clock + MOURN.days * dayLen });
+/** Un défunt de plus sans sépulture */
+export function applyMourning(w: Pick<World, 'unburied'>) {
+  w.unburied += 1;
+}
+
+/** Soins en moins par défunt sans sépulture */
+export const UNBURIED_HEALTH = 1;
+
+/** Soins en moins en ce moment : les défunts sans sépulture */
+export function unburied(w: Pick<World, 'unburied'>): number {
+  return w.unburied * UNBURIED_HEALTH;
 }
 
 /**
- * Un défunt sans sépulture pèse aussi sur la santé du village (demande de l'auteur du 24 nov. 2026 : « ça doit compter dans
- * les stats si on ne s'occupe pas des morts ») : `UNBURIED_HEALTH` de soins en moins par deuil en cours
+ * Un cimetière bâti : les défunts sans sépulture y reposent tous, leur coût s'efface. Rend le message à dire, ou rien s'il
+ * n'y avait personne
  */
-export const UNBURIED_HEALTH = 1;
+export function buryAll(w: Pick<World, 'unburied' | 'buildings'>): string | null {
+  if (w.unburied <= 0 || !hasCemetery(w)) return null;
+  const n = w.unburied;
+  w.unburied = 0;
+  return n > 1 ? tr('🕊️ Les {n} défunts sans sépulture reposent enfin au cimetière. Le village retrouve sa sérénité.', { n }) : tr('🕊️ Le défunt sans sépulture repose enfin au cimetière. Le village retrouve sa sérénité.');
+}
 
-/** Soins en moins en ce moment : les défunts sans sépulture dont le deuil n'est pas fini */
-export function unburied(w: Pick<World, 'mourning' | 'exp'>): number {
-  let n = 0;
-  for (const i of w.mourning) if (i.until > w.exp.clock) n += UNBURIED_HEALTH;
-  return n;
+/**
+ * Relit les défunts sans sépulture d'une sauvegarde : le compte (`unburied`), ou les anciens deuils à durée (`mourning`,
+ * avant le 24 nov. 2026) encore en cours, un défunt chacun
+ */
+export function readUnburied(d: { unburied?: unknown; mourning?: unknown; exp?: { clock?: unknown } }): number {
+  if (Number.isFinite(d.unburied)) return Math.max(0, Math.floor(d.unburied as number));
+  const clock = Number.isFinite(d.exp?.clock) ? (d.exp!.clock as number) : 0;
+  return readIlls(d.mourning).filter((i) => i.until > clock).length;
 }
 
 /**
@@ -132,14 +149,12 @@ export function readDeaths(d: unknown): { at: number; rest: boolean }[] {
 /** Le message d'un ancien qui s'éteint de vieillesse (`rest` : il repose au cimetière) */
 export function naturalNews(rest: boolean): string {
   if (rest) return tr('🕯️ Un ancien du village s’est éteint de vieillesse. Ses proches le mènent au cimetière, où il repose en paix.');
-  return tr('🕯️ Un ancien du village s’est éteint de vieillesse. Faute de cimetière où reposer, le village porte son deuil {d} : bien-être −{n}, soins −{h}.', { n: MOURN.n, h: UNBURIED_HEALTH, d: tr('{n} jours', { n: MOURN.days }) });
+  return tr('🕯️ Un ancien du village s’est éteint de vieillesse. Faute de cimetière, il reste sans sépulture : bien-être −{n} et soins −{h} tant que le village n’a pas de cimetière.', { n: MOURN.n, h: UNBURIED_HEALTH });
 }
 
-/** Bien-être en moins en ce moment (les deuils qui ne sont pas finis) */
-export function grief(w: Pick<World, 'mourning' | 'exp'>): number {
-  let n = 0;
-  for (const i of w.mourning) if (i.until > w.exp.clock) n += i.n;
-  return n;
+/** Bien-être en moins en ce moment : les défunts sans sépulture */
+export function grief(w: Pick<World, 'unburied'>): number {
+  return w.unburied * MOURN.n;
 }
 
 /**
@@ -148,7 +163,7 @@ export function grief(w: Pick<World, 'mourning' | 'exp'>): number {
  */
 export function sickNews(toll: SickToll, died: boolean, rest = false): string {
   if (died && rest) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé. Ses proches le mènent au cimetière, où il repose en paix.');
-  if (died) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé. Faute de cimetière où reposer, le village porte son deuil {d} : bien-être −{n}, soins −{h}.', { n: MOURN.n, h: UNBURIED_HEALTH, d: tr('{n} jours', { n: MOURN.days }) });
+  if (died) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé. Faute de cimetière, il reste sans sépulture : bien-être −{n} et soins −{h} tant que le village n’a pas de cimetière.', { n: MOURN.n, h: UNBURIED_HEALTH });
   return tr('🤒 Sans soins à temps, le malade reste alité {d} : santé −{n}. Un hôpital à portée des maisons l’aurait soigné.', { n: toll.n, d: toll.days > 1 ? tr('{n} jours', { n: toll.days }) : tr('une journée') });
 }
 

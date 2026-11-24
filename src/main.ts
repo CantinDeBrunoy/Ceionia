@@ -750,7 +750,7 @@ class Game implements UIHost {
         if (!died) applySick(w, toll, this.time.dayLen);
         // un défunt : avec un cimetière, un petit cortège l'y mène ; sans, le village en porte le deuil
         const rest = died && this.burial(b);
-        if (died && !rest) applyMourning(w, this.time.dayLen);
+        if (died && !rest) applyMourning(w);
         if (died) logDeath(w, rest, this.time.dayLen);
         if (died || toll.n) this.ui.toast(sickNews(toll, died, rest), rest ? () => { const p = this.funeral.where(); if (p) this.cam.goTo(p[0], p[1], 9); } : undefined, 'danger');
       } else {
@@ -2979,7 +2979,7 @@ class Game implements UIHost {
     const homes = [...w.buildings.values()].filter((b) => (KINDS[b.kind]?.housing?.[b.age] ?? 0) > 0);
     if (!homes.length || !this.sim.loseOne(NATURAL.minPop)) return;
     const rest = this.burial(homes[Math.floor(Math.random() * homes.length)]);
-    if (!rest) applyMourning(w, this.time.dayLen);
+    if (!rest) applyMourning(w);
     logDeath(w, rest, this.time.dayLen);
     this.ui.toast(naturalNews(rest), rest ? () => { const p = this.funeral.where(); if (p) this.cam.goTo(p[0], p[1], 9); } : undefined);
   }
