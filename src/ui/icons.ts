@@ -105,6 +105,7 @@ const P: Record<string, string> = {
   // rayons de construction
   wheat: '<path d="M12 22V9"/><path d="M12 9c-2-1-3-2.6-3-4.6 2 0 3 1.4 3 3 0-1.6 1-3 3-3 0 2-1 3.6-3 4.6z"/><path d="M12 14c-2-1-3-2.4-3-4.4 2 0 3 1.4 3 3 0-1.6 1-3 3-3 0 2-1 3.4-3 4.4z"/><path d="M12 19c-2-1-3-2.4-3-4.4 2 0 3 1.4 3 3 0-1.6 1-3 3-3 0 2-1 3.4-3 4.4z"/>',
   cross: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/>',
+  stele: '<path d="M6 21V9a6 6 0 0 1 12 0v12"/><path d="M3 21h18"/><path d="M10 10h4M10 13.5h4"/><path d="M8 21c0-1.5.8-2.5 2-2.5"/>',
   columns: '<path d="M3 21h18"/><path d="M4 10h16"/><path d="M12 3l9 5H3z"/><path d="M6 10v8M10 10v8M14 10v8M18 10v8"/>',
   // bâtiments
   well: '<path d="M3 7l9-4 9 4"/><path d="M6 7v6M18 7v6M12 7v4"/><path d="M4 13h16v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>',
@@ -221,7 +222,7 @@ export const KIND_ICON: Record<KindId, string> = {
   shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
   concord: 'concord', tradepost: 'scales', triumph: 'arch', embassy: 'dome',
   hedge: 'hedge', fence: 'fence', flowerbed: 'flower', bench: 'bench', statue: 'statue', paving: 'paving', fountain: 'fountain', pond: 'pond', coralpool: 'coral',
-  explorers: 'compass', racetrack: 'flag', powerplant: 'bulb',
+  explorers: 'compass', racetrack: 'flag', powerplant: 'bulb', cemetery: 'stele',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', deco: 'flower', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */
