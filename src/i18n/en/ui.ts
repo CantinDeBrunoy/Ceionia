@@ -637,6 +637,7 @@ registerDict('goals', {
   'Objectifs': 'Goals', 'Masqués': 'Hidden', 'Affichés': 'Shown',
   'Conseils du moment': 'Tips', 'Le conseil du moment, au milieu sous la barre du haut : ce qu’il faut bâtir ensuite': 'The current tip, in the middle under the top bar: what to build next',
   '{n} décision': '{n} decision', '{n} décisions': '{n} decisions',
+  'Le monde': 'The world', 'Le monde : expéditions, peuples, Enfers': 'The world: expeditions, peoples, Hell',
   'Les équipes en route : cliquer pour voir leurs cartes': 'Teams out on a mission: click to see their cards',
   'Trois petits objectifs à la fois dans la barre du haut, chacun avec une récompense.': 'Three small goals at a time in the top bar, each with a reward.',
   // Préhistoire

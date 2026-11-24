@@ -694,9 +694,11 @@ export class UI {
             <button id="bSpeed" class="round" title="${tr('Vitesse (− / +)')}" aria-label="${tr('Vitesse')}"></button>
           </div>
           <nav id="menuBtns">
-            <button id="bExp" class="round" title="${tr('Expéditions (J)')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span id="expBadge"></span></button>
-            <button id="bHell" class="round" title="${tr('Les Enfers : vos troupes et votre base, de l’autre côté du portail')}" aria-label="${tr('Les Enfers')}" style="display:none">${ic('flame', 21)}</button>
-            <button id="bPeoples" class="round" title="${tr('Peuples')}" aria-label="${tr('Peuples')}" style="display:none">${ic('flag', 21)}</button>
+            <button id="bWorld" class="round" type="button" title="${tr('Le monde : expéditions, peuples, Enfers')}" aria-label="${tr('Le monde')}" aria-expanded="false">${ic('compass', 21)}</button>
+            <div id="worldMenu" class="panel" hidden></div>
+            <button id="bExp" class="round" title="${tr('Expéditions (J)')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span class="wl">${tr('Expéditions')}</span><span id="expBadge"></span></button>
+            <button id="bHell" class="round" title="${tr('Les Enfers : vos troupes et votre base, de l’autre côté du portail')}" aria-label="${tr('Les Enfers')}" style="display:none">${ic('flame', 21)}<span class="wl">${tr('Les Enfers')}</span></button>
+            <button id="bPeoples" class="round" title="${tr('Peuples')}" aria-label="${tr('Peuples')}" style="display:none">${ic('flag', 21)}<span class="wl">${tr('Peuples')}</span></button>
             <button id="bBell" class="round" title="${tr('Notifications (N)')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
             <button id="bSettings" class="round" title="${tr('Paramètres')}" aria-label="${tr('Paramètres')}">${ic('gear', 21)}</button>
           </nav>
@@ -779,7 +781,7 @@ export class UI {
     // chaque besoin : son picto 3D, le pourcentage comblé et sa jauge (le nom reste en infobulle, et sous la jauge si la place le permet)
     $('#needs').innerHTML = [...NEEDS, SECURITY_NEED].map((n) => `<div class="need" id="n-${n.k}"><b>${hudPic(NEED_PIC[n.k], 26)}</b><em class="pv"></em><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('');
     // l'écran allégé, dès 1 100 px de large (en dessous, la barre du haut passe sur deux lignes comme avant)
-    const mq = matchMedia(ALLEGE), lighten = () => { document.body.classList.toggle('allege', mq.matches); this.fitKey = ''; this.placeDock(); };
+    const mq = matchMedia(ALLEGE), lighten = () => { document.body.classList.toggle('allege', mq.matches); this.fitKey = ''; this.placeDock(); this.placeWorld(); };
     mq.addEventListener('change', () => { lighten(); this.update(); });
     document.body.classList.toggle('allege', mq.matches);
     // les besoins, dans l'écran allégé : seuls ceux qui manquent, ou un mot quand tout va bien ; ce bouton déplie la liste entière
@@ -936,6 +938,17 @@ export class UI {
     };
     $('#bSettings').onclick = () => this.openSettings();
     $('#bExp').onclick = () => this.openExpeditions();
+    // l'écran allégé : boussole, Peuples et Enfers sous un seul bouton « Monde » (demande de l'auteur, 24 nov. 2026) ; avec un
+    // seul choix (les expéditions, avant l'archipel et le portail), il y mène tout droit
+    $('#bWorld').onclick = () => {
+      const menu = $('#worldMenu'), items = [...menu.querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.style.display !== 'none');
+      if (items.length === 1) { this.worldMenu(false); items[0].click(); return; }
+      this.worldMenu(menu.hidden);
+      this.host.audio.sfxClick();
+    };
+    // (un choix pris referme le menu)
+    $('#worldMenu').addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('button')) this.worldMenu(false); });
+    document.addEventListener('pointerdown', (e) => { if (!$('#worldMenu').hidden && !(e.target as HTMLElement).closest('#worldMenu, #bWorld')) this.worldMenu(false); });
     // l'écran allégé : les équipes en route tiennent dans une pastille, un clic déplie leurs cartes (et les replie)
     $('#expPill').onclick = () => {
       const on = $('#expList').classList.toggle('open');
@@ -1033,6 +1046,7 @@ export class UI {
     matchMedia(FOLD_SIDE).addEventListener('change', () => this.placeFold());
     // (l'état retenu ne vaut que hors de l'écran allégé, où les vignettes suivent l'outil en main : `placeDock`)
     this.placeDock();
+    this.placeWorld();
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
@@ -1134,6 +1148,23 @@ export class UI {
    * La languette qui replie la barre : à droite, sur le bord haut de la mini-carte (à gauche, sur les modes, on ne la
    * comprenait pas : retour de joueurs, 22 nov. 2026) ; au téléphone, où la colonne de droite se cache, au milieu de la barre
    */
+  /** Ouvre ou ferme le menu du bouton « Monde » (écran allégé) */
+  private worldMenu(open: boolean) {
+    $('#worldMenu').hidden = !open;
+    $('#bWorld').setAttribute('aria-expanded', String(open));
+    $('#bWorld').classList.toggle('on', open);
+  }
+
+  /**
+   * L'écran allégé range la boussole, Peuples et Enfers dans le menu du bouton « Monde » (`#worldMenu`) ; ailleurs, ils reviennent
+   * dans la rangée des boutons ronds, devant la cloche
+   */
+  private placeWorld() {
+    const menu = $('#worldMenu'), ids = ['#bExp', '#bHell', '#bPeoples'].map((q) => $(q));
+    if (allege()) { if (ids[0].parentElement !== menu) menu.append(...ids); }
+    else { if (ids[0].parentElement === menu) { for (const b of ids) $('#menuBtns').insertBefore(b, $('#bBell')); } this.worldMenu(false); }
+  }
+
   private placeFold() {
     const b = $('#bFold'), home = matchMedia(FOLD_SIDE).matches ? $('#dockSide') : $('#dockRight');
     if (b.parentElement !== home) home.prepend(b);
@@ -2804,6 +2835,8 @@ export class UI {
     pb.classList.toggle('off', !arch);
     // les Enfers : le portail ouvert (décision de l'auteur, 22 nov. 2026 : l'arche de l'île et ce bouton y mènent)
     $('#bHell').style.display = h.hellOpen?.() ? '' : 'none';
+    // (le bouton « Monde » reprend le point rouge de la boussole : une expédition obligatoire attend)
+    $('#bWorld').classList.toggle('ping', $('#bExp').classList.contains('ping'));
     this.offerPending();
   }
 
