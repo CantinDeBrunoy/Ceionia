@@ -15,6 +15,7 @@ import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Blason, DEFAULT_BLASON, DEFAULT_ISLE, readBlason, readIsleName } from '../sim/blason';
 import { readIlls } from '../sim/mishaps';
+import { ShowState, newShowState, readShowState, showStateEmpty } from '../sim/shows';
 import { Crossing, crossingMap, nearestOnDeck, DECK_CLEAR, waterLevel } from './crossings';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
@@ -351,6 +352,8 @@ export class World {
   brick = 0;
   /** or, tiré du seul comptoir des voisins, dans une partie qui a accepté l'archipel (les anciennes sauvegardes : zéro) */
   gold = 0;
+  /** les gestes des bâtiments (match, feu d'artifice, course) : délais, bien-être en cours, record (sim/shows.ts) */
+  shows: ShowState = newShowState();
   /** comptoir des voisins : saturation des cours (sauvegardée) */
   trade: TradeState = newTradeState();
   /** Gisements de pétrole : cases où le brut suinte (1), tirées de la graine de la carte ; seul un puits de pétrole s'y pose */
@@ -1966,6 +1969,7 @@ export class World {
       fuel: this.fuel,
       brick: this.brick,
       ...(this.gold ? { gold: this.gold } : {}),
+      ...(showStateEmpty(this.shows) ? {} : { shows: this.shows }),
       trade: saveTradeState(this.trade),
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       exp: this.exp,
@@ -2126,6 +2130,7 @@ export class World {
     this.fuel = Math.max(0, +d.fuel || 0);
     this.brick = Math.max(0, +d.brick || 0);
     this.gold = Math.max(0, +d.gold || 0);
+    this.shows = readShowState(d.shows);
     this.trade = readTradeState(d.trade, archipelagoOn(this));
     // une ancienne sauvegarde n'a pas de gisements : ils se tirent de la graine au chargement (addDefaultDecor)
     this.oil.fill(0);

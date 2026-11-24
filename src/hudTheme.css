@@ -1131,7 +1131,7 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 .tabs button.on { color: var(--hInk); background: rgba(255, 226, 150, 0.35); border-bottom-color: var(--hGold); }
 .subtabs button { background: linear-gradient(180deg, #FFFCF4, #F6E7C9); border: 1.5px solid var(--hEdge); color: var(--hInk2); }
 .subtabs button.on { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
-#selCard .acts.ups button.primary { background: var(--hGoldFill); border: 1.5px solid var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+#selCard .acts.ups button.primary, #selCard .acts.showAct button.primary { background: var(--hGoldFill); border: 1.5px solid var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
 .overlay { background: rgba(45, 30, 12, 0.3); }
 .overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) { background: var(--hGlass); border: 2px solid var(--hEdge); border-radius: 20px; color: var(--hInk); box-shadow: var(--hShadow), 0 18px 50px rgba(40, 25, 10, 0.35); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) h3 { font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 48; font-size: 22px; font-weight: 800; color: #3A2213; }
@@ -1675,3 +1675,18 @@ button.round.off:hover { opacity: 0.85; }
 #items .ageMk.now { box-shadow: 0 0 0 1.5px #E9B949, 0 0 6px rgba(233, 185, 73, 0.7); }
 #items button.tile.locked .ageMk { filter: grayscale(0.4); opacity: 0.85; }
 @media (max-width: 1180px) { #items .ageMk { width: 17px; height: 17px; left: 4px; top: 3px; } #items .ageMk .pic { width: 12px; height: 12px; } #items button.tile.big .ageMk { top: 14px; } }
+
+/* ---------- les gestes des bâtiments (le match, le feu d'artifice, la course : voir src/shows.ts) ---------- */
+#selCard .acts.showAct button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; }
+#selCard .acts.showAct button:disabled { opacity: 0.6; cursor: default; }
+#selCard .stat.showWhy { color: var(--hInk2); font-style: italic; }
+#selCard .stat.showOn { color: #2c7a36; font-weight: 700; }
+/* le tableau d'affichage au-dessus du bâtiment, suivi à l'écran : les deux camps et le score (ou le classement de la course) */
+.showBoard { position: absolute; transform: translate(-50%, -100%); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 340px;
+  padding: 5px 12px 6px; border-radius: 14px; background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); color: var(--hInk);
+  font: 600 12px/1.2 Manrope, system-ui, sans-serif; white-space: nowrap; pointer-events: none; z-index: 2; }
+.showBoard i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
+.showBoard b.tm { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+.showBoard .sc { font-family: var(--hSerif); font-weight: 800; font-size: 19px; padding: 0 4px; letter-spacing: 0.02em; }
+.showBoard small { flex-basis: 100%; text-align: center; color: var(--hInk2); font-size: 11px; }
+.showBoard ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: auto auto auto; gap: 1px 8px; font-size: 11px; }

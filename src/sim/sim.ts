@@ -3,6 +3,7 @@ import { ailing, grief } from './mishaps';
 import { Coverage, computeCoverage } from './coverage';
 import { World, N } from '../world/world';
 import { WISH_JOY, WISH_JOY_MAX } from './wishes';
+import { showJoy } from './shows';
 import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine, DECOR, DECOR_JOY_MAX } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
@@ -234,8 +235,8 @@ export class Sim {
     this.water.cap = down(this.baseWater + needBonus(e, 'water'));
     this.jobs.cap = down(this.baseJobs + needBonus(e, 'jobs'));
     // (et les envies d'habitants comblées : un petit plus, plafonné)
-    // (moins le deuil d'un défunt sans cimetière où reposer, un temps)
-    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) - grief(this.world));
+    // (plus la joie d'un spectacle, moins le deuil d'un défunt sans cimetière où reposer, un temps)
+    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) + showJoy(this.world.shows, e.clock) - grief(this.world));
     // (les malades restés sans soins pèsent sur les soins un temps, voir `sim/mishaps.ts`)
     this.health.cap = Math.max(0, this.baseHealth - ailing(this.world));
     this.housing.demand = p;
@@ -260,6 +261,7 @@ export class Sim {
     if (k === 'food' && L.fields) rows.push({ label: tr(L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)'), n: L.fields, v: this.fieldsFood });
     if (k === 'jobs' && L.fields >= 2) rows.push({ label: tr('Champs'), n: L.fields, v: Math.floor(L.fields / 2) });
     if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: tr('Sécurité (pompiers et police)'), n: this.coverage.both, v: this.coverage.joy });
+    if (k === 'joy') { const n = showJoy(this.world.shows, this.world.exp.clock); if (n) rows.push({ label: tr('Fêtes et spectacles (en cours)'), n: 0, v: n }); }
     if (k === 'joy' && this.world.wishesMet) rows.push({ label: tr('Envies d’habitants comblées'), n: this.world.wishesMet, v: Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) });
     if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts où l’on se promène'), n: L.forests, v: L.forests * 0.08 });
     if (k === 'health') { const a = ailing(this.world); if (a) rows.push({ label: tr('Malades restés sans soins'), n: 0, v: -a }); }

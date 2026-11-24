@@ -1,3 +1,4 @@
+import type { ShowDirector } from '../shows';
 import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang, bothOf, bothLangs, isEnglish } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
@@ -148,6 +149,8 @@ export interface UIHost {
   setWeatherFx(k: 'rain' | 'snow' | 'fog', on: boolean): void;
   /** expéditions, et celle que la caméra suit (son numéro) */
   expeditions: Expeditions;
+  /** les gestes des bâtiments (lancer un match…) : voir shows.ts */
+  shows: ShowDirector;
   /** chemin de fer de gare en gare, et la caméra qui suit le train */
   railway: Railway;
   followTrain(line: number): void;
@@ -1661,6 +1664,9 @@ export class UI {
         <button data-act="follow:${l.id}" title="${tr('Suivre le train')}" aria-label="${tr('Suivre le train')}">${ic('eye', 14, 2)}</button><button data-act="edit:${l.id}" title="${tr('Modifier la ligne : ses arrêts et le tracé de sa voie')}" aria-label="${tr('Modifier la ligne')}">${ic('road', 14, 2)}</button><button data-act="drop:${l.id}" title="${tr('Fermer la ligne')}" aria-label="${tr('Fermer la ligne')}">${ic('close', 14, 2)}</button></div>`;
     }).join('')}</div>` : ''}</div>`
       : '';
+    // le geste du bâtiment (lancer un match…), comme « Nouvelle ligne » à la gare : un bouton, ou ce qui l'empêche
+    const st = h.shows.status(b);
+    const show = st ? `<div class="acts showAct"><button data-act="show" class="${st.why ? '' : 'primary'}"${st.why ? ' disabled' : ''} title="${attr(st.def.tip)}">${pic(st.def.icon, 16)} ${st.here ? tr('Voir le spectacle') : st.def.act}</button></div>${st.here ? `<p class="stat showOn">${pic(st.def.icon, 14)} ${st.def.running}</p>` : st.why ? `<p class="stat showWhy">${st.why}</p>` : ''}` : '';
     // améliorations : ce qu'il peut devenir à cet âge, et leur prix (ou ce qui manque pour les débloquer)
     const ups = UPGRADES.filter((u) => u.from === b.kind && h.sim.age >= KINDS[u.to].minAge).map((u) => {
       const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
@@ -1679,7 +1685,7 @@ export class UI {
     // ce qu'il produit ou consomme par jour, gare de marchandises comprise
     const flow = flowChips(flowOfBuilding(h.world, b));
     // (« Commander la garnison » n'a de sens que le portail ouvert : avant, le bouton ne menait à rien, testeur v6)
-    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${flow}|${railChip}|${rails}|${upgrades}|${h.world.portalOpen}`;
+    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${flow}|${railChip}|${rails}|${show}|${upgrades}|${h.world.portalOpen}`;
     if (key === this.selKey) return;
     const same = box.dataset.id === String(b.id) && box.classList.contains('show');
     this.selKey = key;
@@ -1694,7 +1700,7 @@ export class UI {
     const perk = d.perk ? `<details class="perk" data-k="perk"><summary>✦ <span>${perkHead}</span></summary>${perkRest}</details>` : '';
     const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = tr(b.auto ? 'façade tournée vers la route' : 'orientée à la main');
     box.innerHTML = `<div class="ihead">${this.cardThumb(b.kind, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub" title="${attr(`${AGES[b.age].name}${size ? tr(' · {size} cases', { size }) : ''} · ${facing}`)}">${sizeOf(b)} × ${sizeOf(b)} · ${AGES[b.age].name}</small></div><button class="xfold" data-act="fold" title="${tr('Replier ou déplier')}" aria-label="${tr('Replier ou déplier')}">▾</button><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
-      ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${upgrades}
+      ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${show}${upgrades}
       ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle && h.world.portalOpen && h.isleGarrison?.() ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
       <div class="acts xacts"><button data-act="move">${hudPic('deplacer', 18)} ${tr('Déplacer')}</button><button data-act="rot">${ic('rotate', 16, 2)} ${tr('Tourner')} <kbd>R</kbd></button><button data-act="del" class="danger xdel" title="${tr('Démolir')}" aria-label="${tr('Démolir')}">${ic('demolish', 17, 2)}</button></div>`;
     box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
@@ -1714,6 +1720,7 @@ export class UI {
       else if (act === 'del') tl.demolishSelected();
       else if (act === 'command') { h.audio.sfxClick(); tl.select(null); h.commandIsle?.(); }
       else if (act === 'newline') { h.audio.sfxClick(); h.startRailEdit({ stop: b.id }); }
+      else if (act === 'show') { if (h.shows.run?.b.id === b.id) h.shows.goSee(); else { const why = h.shows.launch(b); if (why) { h.audio.sfxDeny(); this.toast(why); } } this.selKey = ''; }
       else if (act === 'badges') { h.setHideUpBadges(!h.hideUpBadges); h.audio.sfxClick(); this.selKey = ''; }
       else if (act === 'tower') tl.toggleSelectedTower();
       else if (act?.startsWith('up:')) tl.upgradeSelected(act.slice(3) as KindId);

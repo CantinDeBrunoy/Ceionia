@@ -39,6 +39,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [objectifs.md](objectifs.md) : les petits objectifs avec récompense entre les conditions d'âge (pastille de la barre du haut).
 - [difficulte.md](difficulte.md) : la table des réglages par difficulté.
 - [blason.md](blason.md) : le blason du village (deux couleurs, emblème, forme), sur tous ses drapeaux et ses troupes ; la fenêtre de choix ; la peinture par couleurs sentinelles.
+- [spectacles.md](spectacles.md) : les gestes des bâtiments (le match au stade de football…) : un bouton sur la fiche, le village qui vient, un spectacle animé, une récompense et un délai.
 - [habitants.md](habitants.md) : habitants instanciés, trajets, recherche de chemin, patrouilles et sentinelles.
 - [incidents.md](incidents.md) : incendies, cambriolages, interventions des secours, événements.
 - [catastrophes.md](catastrophes.md) : les catastrophes naturelles (une au plus par âge) : crues, séismes, pluies de météorites et fer céleste ; bâtiments abîmés et leurs réparations.
