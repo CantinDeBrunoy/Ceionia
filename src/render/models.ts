@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Parts, type Glow } from './parts';
 import { TEAM_A, TEAM_B, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG, TEAM_FLAG_R } from './teamPaint';
+import { discWater, rectWater, ringWater, splashWater, splashRing, fallWater, curtainWater, sheetWater, waterTint } from './buildingWater';
 import { KindId, KINDS, smallSize, isRampart, isLinear } from '../build/catalog';
 import { decorModel, DecorKit } from './decor';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -2517,38 +2518,38 @@ function farm(p: Parts, age: number) {
   }
 }
 
+/** Teinte de l'eau des bassins (le shader l'éclaircit au bord et l'assombrit au milieu) */
+const WATER = 0x4fa2c2;
+/** Eau d'un puits ou d'un tonneau : plus sombre, sans écume au bord */
+const WELL_WATER = 0x3f88a8;
 /**
- * Eau d'un bassin, d'une vasque, d'un puits, à la hauteur `y` : disque (à `seg` pans) aux bleus dégradés, clair au bord, plus
- * profond au centre, que le shader ride, éclaire de caustiques et fait scintiller (voir `addWater` : seuls ces bleus reçoivent
- * les ondulations) ; un liseré d'écume contre le bord
+ * Eau d'un bassin, d'une vasque, d'un puits, à la hauteur `y` : nappe ronde (à `seg` pans, tournée de `ry`) que le shader de
+ * l'eau anime (`addWater`, `buildingWater.ts`) : vaguelettes, reflets du ciel, clair et mousseux au bord, plus sombre au milieu.
+ * `foam` faux : eau calme et sombre (puits, tonneau, bassine), sans liseré d'écume
  */
-function waterPool(p: Parts, x: number, y: number, z: number, r: number, seg = 12, foam = true, ry = 0) {
-  p.cyl(r, r, 0.004, seg, x, y - 0.004, z, 0x8fd0e0, false, ry);
-  p.cyl(r * 0.74, r * 0.74, 0.004, seg, x, y - 0.0035, z, 0x5aa8c8, false, ry);
-  p.cyl(r * 0.42, r * 0.42, 0.004, seg, x, y - 0.003, z, 0x3f8fb8, false, ry);
-  if (foam) p.add(new THREE.TorusGeometry(r * 0.96, 0.0045, 3, Math.min(24, seg * 2)).rotateX(Math.PI / 2), x, y, z, 0xeef6f4, ry);
+function waterPool(p: Parts, x: number, y: number, z: number, r: number, seg = 12, foam = true, ry = 0, color = foam ? WATER : WELL_WATER) {
+  // (1,5 mm au-dessus de `y` : une vasque dont le dessus est à la même hauteur ne perce pas l'eau)
+  p.water(discWater(r, seg, foam ? 0 : 0.03, ry), x, y + 0.0015, z, color);
 }
-/** La même eau dans un bassin rectangulaire (w × d), tourné de `ry` : bandes de plus en plus profondes vers le milieu, écume aux bords */
-function waterRect(p: Parts, x: number, y: number, z: number, w: number, d: number, ry = 0, foam = true) {
-  p.add(new THREE.BoxGeometry(w, 0.004, d), x, y - 0.002, z, 0x8fd0e0, ry);
-  p.add(new THREE.BoxGeometry(w - Math.min(w, d) * 0.3, 0.004, d * 0.7), x, y - 0.0015, z, 0x5aa8c8, ry);
-  p.add(new THREE.BoxGeometry(w - Math.min(w, d) * 0.62, 0.004, d * 0.38), x, y - 0.001, z, 0x3f8fb8, ry);
-  if (!foam) return;
-  const c = Math.cos(ry), s = Math.sin(ry);
-  for (const e of [-1, 1]) {
-    p.add(new THREE.BoxGeometry(w, 0.004, 0.008), x + e * (d / 2 - 0.004) * s, y, z + e * (d / 2 - 0.004) * c, 0xeef6f4, ry);
-    p.add(new THREE.BoxGeometry(0.008, 0.004, d), x + e * (w / 2 - 0.004) * c, y, z - e * (w / 2 - 0.004) * s, 0xeef6f4, ry);
-  }
+/** La même eau dans un bassin rectangulaire (w × d), tourné de `ry` */
+function waterRect(p: Parts, x: number, y: number, z: number, w: number, d: number, ry = 0, foam = true, color = foam ? WATER : WELL_WATER) {
+  p.water(rectWater(w, d, foam ? 0 : 0.03), x, y + 0.0015, z, color, ry);
 }
-/** Jet d'eau qui monte de (x, y, z) et retombe en gerbe : colonne d'eau claire, gouttes, éclaboussures à la retombée */
-function waterJet(p: Parts, x: number, y: number, z: number, h: number) {
-  p.cyl(0.004, 0.009, h, 5, x, y, z, 0xd8f2fa);
+/**
+ * Jet d'eau qui monte de (x, y, z) et retombe en gerbe : colonne d'eau, filets qui retombent, gouttes, le tout parcouru de
+ * stries qui filent (le shader). `pool` : la distance au bord de la nappe où il retombe (le jet sort de l'eau) ; une tache
+ * d'écume tourne alors autour de son pied, de la teinte de la nappe
+ */
+function waterJet(p: Parts, x: number, y: number, z: number, h: number, pool?: number, color = WATER) {
+  const jet = 0xd8f2fa;
+  p.water(fallWater(new THREE.CylinderGeometry(0.004, 0.009, h, 5).translate(0, h / 2, 0), 0, h), x, y, z, jet);
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * 6.283;
-    p.add(new THREE.CylinderGeometry(0.0025, 0.004, h * 0.55, 4).translate(0, -h * 0.27, 0), x + Math.cos(a) * 0.012, y + h, z + Math.sin(a) * 0.012, 0xd8f2fa, 0, false, Math.sin(a) * 0.5, -Math.cos(a) * 0.5);
-    p.add(new THREE.OctahedronGeometry(0.005, 0), x + Math.cos(a) * h * 0.3, y + h * 0.4, z + Math.sin(a) * h * 0.3, 0xf2fbff);
+    p.water(fallWater(new THREE.CylinderGeometry(0.0025, 0.004, h * 0.55, 4).translate(0, -h * 0.27, 0), 0, -h * 0.55), x + Math.cos(a) * 0.012, y + h, z + Math.sin(a) * 0.012, jet, 0, Math.sin(a) * 0.5, -Math.cos(a) * 0.5);
+    p.water(fallWater(new THREE.OctahedronGeometry(0.005, 0), -0.02, 0.02), x + Math.cos(a) * h * 0.3, y + h * 0.4, z + Math.sin(a) * h * 0.3, 0xf2fbff);
   }
-  p.sphere(0.012, x, y + h, z, 0xf2fbff);
+  p.water(fallWater(new THREE.IcosahedronGeometry(0.012, 0), 0.012, -0.012), x, y + h, z, 0xf2fbff);
+  if (pool !== undefined) p.water(splashWater(Math.min(pool * 0.8, Math.max(0.025, h * 0.5)), 10), x, y + 0.003, z, waterTint(color, pool));
 }
 
 /**
@@ -2734,13 +2735,16 @@ function well(p: Parts, age: number) {
     p.cyl(0.03, 0.04, 0.12, 8, 0, 0.3, 0, rim);
     p.cyl(0.085, 0.035, 0.03, 10, 0, 0.415, 0, rim);
     waterPool(p, 0, 0.44 + 0.006, 0, 0.07, 10);
-    p.cyl(0.01, 0.018, 0.16, 6, 0, 0.44, 0, jet);
-    p.sphere(0.028, 0, 0.61, 0, 0xe4f6ff, 1);
-    // nappes qui tombent des vasques, gerbes de la margelle vers le centre
-    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; p.box(0.04, 0.15, 0.006, Math.cos(a) * 0.15, 0.11, Math.sin(a) * 0.15, jet, -a + Math.PI / 2); }
+    p.water(fallWater(new THREE.CylinderGeometry(0.01, 0.018, 0.16, 6).translate(0, 0.08, 0), 0, 0.16), 0, 0.44, 0, jet);
+    p.water(fallWater(new THREE.IcosahedronGeometry(0.028, 1), 0.03, -0.03), 0, 0.61, 0, 0xe4f6ff);
+    // les vasques débordent : rideaux d'eau d'une vasque à l'autre, l'écume tourne à leur pied ; gerbes de la margelle vers le centre
+    p.water(curtainWater(0.085, 0.095, 0.145, 10), 0, 0.3, 0, jet);
+    p.water(splashRing(0.095, 0.02, 12), 0, 0.303, 0, waterTint(WATER, 0.045));
+    p.water(curtainWater(0.16, 0.172, 0.178, 12), 0, 0.122, 0, jet);
+    p.water(splashRing(0.172, 0.035, 16), 0, 0.125, 0, waterTint(WATER, 0.118));
     for (let i = 0; i < 8; i++) {
       const a = ((i + 0.5) / 8) * Math.PI * 2;
-      p.add(new THREE.CylinderGeometry(0.005, 0.009, 0.17, 4).translate(0, 0.085, 0).rotateZ(0.62).rotateY(-a), Math.cos(a) * 0.29, 0.11, Math.sin(a) * 0.29, jet);
+      p.water(fallWater(new THREE.CylinderGeometry(0.005, 0.009, 0.17, 4).translate(0, 0.085, 0), 0, 0.17).rotateZ(0.62).rotateY(-a), Math.cos(a) * 0.29, 0.11, Math.sin(a) * 0.29, jet);
     }
     // bancs, bornes lumineuses, jardinières
     for (let i = 0; i < 4; i++) {
@@ -3122,12 +3126,15 @@ function fountainFr(p: Parts, x: number, z: number, r: number, y = 0.012, stone 
   p.add(new THREE.TorusGeometry(r + 0.016, 0.016, 3, 8).rotateX(Math.PI / 2).rotateY(Math.PI / 8), x, y + 0.046, z, stone);
   waterPool(p, x, y + 0.046, z, r, 10);
   p.cyl(0.03, 0.045, 0.12, 8, x, y + 0.04, z, stone); p.cyl(0.05, 0.03, 0.02, 8, x, y + 0.16, z, stone);
-  p.cyl(r * 0.42, r * 0.2, 0.04, 10, x, y + 0.17, z, stone); p.cyl(r * 0.38, r * 0.38, 0.004, 10, x, y + 0.205, z, 0x5aa8c8);
+  p.cyl(r * 0.42, r * 0.2, 0.04, 10, x, y + 0.17, z, stone); waterPool(p, x, y + 0.209, z, r * 0.38, 10);
   p.cyl(0.016, 0.022, 0.06, 6, x, y + 0.2, z, stone); p.sphere(0.02, x, y + 0.26, z, stone);
   waterJet(p, x, y + 0.27, z, 0.12);
+  // la vasque déborde : un rideau d'eau tombe dans le bassin, l'écume tourne à son pied
+  p.water(curtainWater(r * 0.42, r * 0.46, 0.165, 10), x, y + 0.046, z, 0xd8f2fa);
+  p.water(splashRing(r * 0.46, Math.min(0.03, r * 0.2), 16), x, y + 0.049, z, waterTint(WATER, r * 0.54));
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2 + 0.3, jx = x + Math.cos(a) * r * 0.82, jz = z + Math.sin(a) * r * 0.82;
-    p.add(new THREE.CylinderGeometry(0.0025, 0.004, r * 0.5, 4).translate(0, r * 0.25, 0), jx, y + 0.05, jz, 0xd8f2fa, 0, false, Math.sin(a) * 0.7, -Math.cos(a) * 0.7);
+    p.water(fallWater(new THREE.CylinderGeometry(0.0025, 0.004, r * 0.5, 4).translate(0, r * 0.25, 0), 0, r * 0.5), jx, y + 0.05, jz, 0xd8f2fa, 0, Math.sin(a) * 0.7, -Math.cos(a) * 0.7);
   }
   for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + Math.PI / 4; p.box(0.03, 0.05, 0.03, x + Math.cos(a) * (r + 0.03), y + 0.05, z + Math.sin(a) * (r + 0.03), stone, -a); }
 }
@@ -3269,7 +3276,7 @@ function gather(p: Parts, age: number, o: ModelOpts) {
     p.box(0.92, 0.01, 0.92, 0, 0, 0, 0xe2ded6);
     for (let i = 0; i < 7; i++) { p.box(0.92, 0.003, 0.006, 0, 0.01, -0.42 + i * 0.14, 0xc8c4bc); p.box(0.006, 0.003, 0.92, -0.42 + i * 0.14, 0.01, 0, 0xc8c4bc); }
     p.box(0.34, 0.04, 0.34, 0, 0.01, 0, 0xb8bcc4); waterRect(p, 0, 0.046 + 0.006, 0, 0.3, 0.3, 0);
-    for (const [x, z] of [[-0.08, -0.08], [0.08, -0.08], [-0.08, 0.08], [0.08, 0.08], [0, 0]]) p.cyl(0.004, 0.009, x || z ? 0.1 : 0.16, 4, x, 0.05, z, 0xcfeaf4);
+    for (const [x, z] of [[-0.08, -0.08], [0.08, -0.08], [-0.08, 0.08], [0.08, 0.08], [0, 0]]) { const h = x || z ? 0.1 : 0.16; p.water(fallWater(new THREE.CylinderGeometry(0.004, 0.009, h, 4).translate(0, h / 2, 0), 0, h), x, 0.05, z, 0xcfeaf4); }
     for (const [x, z] of [[-0.34, -0.34], [0.34, -0.34], [-0.34, 0.34], [0.34, 0.34]]) { p.box(0.13, 0.06, 0.13, x, 0.01, z, 0x8a8a8a); clipped(p, x, z, 'cube', 1.35, 0.07, 0x5a9452); }
     // deux parterres géométriques de lavande et de rosiers, bordés de buis
     parterreFr(p, 0.27, -0.2, 0.15, 0.14, o.v, 0.01, [0x9a7ad8, 0xf2f0ea]); parterreFr(p, -0.31, 0.22, 0.15, 0.14, o.v + 1, 0.01, [0xd84a6e, 0x9a7ad8]);
@@ -3279,7 +3286,7 @@ function gather(p: Parts, age: number, o: ModelOpts) {
     // margelle blanche où l'on s'assoit, spots sous l'eau, couronne de petits jets ; fleurs au pied des arbres
     for (const s of [-1, 1]) { p.box(0.36, 0.012, 0.03, 0, 0.05, s * 0.17, 0xf4f2ee); p.box(0.03, 0.012, 0.31, s * 0.17, 0.05, 0, 0xf4f2ee); }
     for (const [x, z] of [[-0.12, -0.12], [0.12, -0.12], [-0.12, 0.12], [0.12, 0.12]]) p.box(0.02, 0.004, 0.02, x, 0.05, z, 0xbfe8ff, 0, true);
-    for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; p.cyl(0.003, 0.006, 0.06, 4, Math.cos(a) * 0.11, 0.05, Math.sin(a) * 0.11, 0xcfeaf4); }
+    for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; p.water(fallWater(new THREE.CylinderGeometry(0.003, 0.006, 0.06, 4).translate(0, 0.06 / 2, 0), 0, 0.06), Math.cos(a) * 0.11, 0.05, Math.sin(a) * 0.11, 0xcfeaf4); }
     for (const [x, z] of [[-0.34, -0.34], [0.34, -0.34], [-0.34, 0.34], [0.34, 0.34]]) for (let k = 0; k < 4; k++) p.sphere(0.014, x + (k % 2 ? 0.045 : -0.045), 0.074, z + (k < 2 ? 0.045 : -0.045), [C.pink, C.butter, 0xd84a3e, C.lav][k]);
     // kiosque à café : chariot vert, comptoir, percolateur, parasol, ardoise ; le barista et son client
     p.box(0.15, 0.09, 0.09, -0.3, 0.02, -0.12, 0x3f7a5a); p.box(0.17, 0.01, 0.1, -0.3, 0.11, -0.12, 0xd8d6d0);
@@ -5385,8 +5392,8 @@ function school(p: Parts, age: number) {
     p.box(0.22, 0.014, 0.8, 0, 0.043, 0.48, 0xd8d0c0);
     for (let k = 0; k < 8; k++) p.box(0.22, 0.003, 0.006, 0, 0.057, 0.12 + k * 0.1, 0xc8c0b0);
     p.cyl(0.13, 0.14, 0.05, 12, 0, 0.04, 0.5, trim); waterPool(p, 0, 0.085 + 0.006, 0.5, 0.115, 12);
-    p.cyl(0.02, 0.03, 0.1, 8, 0, 0.08, 0.5, trim); p.cyl(0.005, 0.008, 0.08, 5, 0, 0.18, 0.5, 0xcdeef7); p.sphere(0.018, 0, 0.27, 0.5, 0xe4f6ff, 1);
-    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; p.add(new THREE.CylinderGeometry(0.003, 0.006, 0.09, 4).translate(0, 0.045, 0).rotateZ(0.6).rotateY(-a), Math.cos(a) * 0.11, 0.09, 0.5 + Math.sin(a) * 0.11, 0xcdeef7); }
+    p.cyl(0.02, 0.03, 0.1, 8, 0, 0.08, 0.5, trim); p.water(fallWater(new THREE.CylinderGeometry(0.005, 0.008, 0.08, 5).translate(0, 0.08 / 2, 0), 0, 0.08), 0, 0.18, 0.5, 0xcdeef7); p.water(fallWater(new THREE.IcosahedronGeometry(0.018, 1), 0.02, -0.02), 0, 0.27, 0.5, 0xe4f6ff);
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; p.water(fallWater(new THREE.CylinderGeometry(0.003, 0.006, 0.09, 4).translate(0, 0.045, 0), 0, 0.09).rotateZ(0.6).rotateY(-a), Math.cos(a) * 0.11, 0.09, 0.5 + Math.sin(a) * 0.11, 0xcdeef7); }
     for (const [x, z, kind] of [[-0.16, 0.22, 0], [0.16, 0.22, 1], [-0.16, 0.8, 1], [0.16, 0.8, 0]] as [number, number, number][]) {
       p.box(0.06, 0.08, 0.06, x, 0.04, z, trim);
       if (kind) { p.sphere(0.03, x, 0.15, z, 0xb8b4ac, 1, 1.2); p.box(0.02, 0.03, 0.02, x, 0.12, z, 0xb8b4ac); }
@@ -5667,7 +5674,7 @@ function firehouse(p: Parts, age: number, v: number) {
     p.box(0.004, 0.36, 0.004, 0.76, 0.12, -0.33, 0xd8d4c4); p.box(0.03, 0.04, 0.03, 0.76, 0.1, -0.33, 0xd84a3e);
     figure(p, 0.62, 0.02, fire, Math.PI + 0.3, false, helmet, 'idle', 0.03); figure(p, 0.68, 0.06, fire, Math.PI + 0.2, false, helmet, 'idle', 0.03);
     p.add(new THREE.CylinderGeometry(0.008, 0.01, 0.12, 5).rotateX(-1.2), 0.63, 0.13, -0.04, 0x8a8f96);
-    for (let k = 0; k < 6; k++) { const t = k / 6; p.box(0.006, 0.006, 0.04, 0.63 - t * 0.06 + Math.sin(k) * 0.01, 0.15 + t * 0.2 - t * t * 0.12, -0.1 - t * 0.2, 0xcfeaf4); }
+    for (let k = 0; k < 6; k++) { const t = k / 6; p.water(fallWater(new THREE.BoxGeometry(0.006, 0.006, 0.04), -0.003 - t, 0.003 + 1 - t), 0.63 - t * 0.06 + Math.sin(k) * 0.01, 0.15 + t * 0.2 - t * t * 0.12, -0.1 - t * 0.2, 0xcfeaf4); }
     pipeRun(p, [[0.66, 0.035, 0.08], [0.78, 0.035, 0.12], [0.84, 0.035, 0.18]], 0.008, 0xe8e0c8);
     figure(p, 0.45, 0.1, 0xd84a3e, -0.6, false, 0x8a8f96, 'idle', 0.03);
     p.box(0.05, 0.035, 0.03, 0.62, 0.09, 0.86, 0xd8c84a); p.sphere(0.02, 0.66, 0.11, 0.86, helmet);
@@ -5942,7 +5949,11 @@ function baths(p: Parts, age: number) {
     for (const s of [-1, 1]) p.box(pw + 0.11, 0.012, 0.06, 0, 0.1, pz + s * (pd / 2 + 0.025), MARBLE);
     for (const s of [-1, 1]) p.box(0.06, 0.012, pd, s * (pw / 2 + 0.025), 0.1, pz, MARBLE);
     // jets des mufles de lion, à chaque bout du bassin
-    for (const s of [-1, 1]) { p.box(0.04, 0.04, 0.03, s * (pw / 2 + 0.03), 0.11, pz, 0xc8a24a); p.add(new THREE.CylinderGeometry(0.004, 0.006, 0.08, 4).translate(0, -0.04, 0), s * (pw / 2 + 0.005), 0.13, pz, 0xd8f2fa, 0, false, s * 1.1); }
+    for (const s of [-1, 1]) {
+      p.box(0.04, 0.04, 0.03, s * (pw / 2 + 0.03), 0.11, pz, 0xc8a24a);
+      p.water(fallWater(new THREE.CylinderGeometry(0.004, 0.006, 0.08, 4).translate(0, -0.04, 0), 0, -0.08), s * (pw / 2 + 0.005), 0.13, pz, 0xd8f2fa, 0, -s * 1.1);
+      p.water(splashWater(0.04, 10), s * (pw / 2 - 0.066), 0.096, pz, waterTint(WATER, 0.066));
+    }
     for (let k = 0; k < 2; k++) p.box(0.22, 0.02, 0.05, 0, 0.04 + k * 0.022, pz + pd / 2 - 0.03 - k * 0.04, marble);
     smoke(-0.2, 0.12, pz, 0); smoke(0.22, 0.12, pz - 0.1, 0);
     // portiques de part et d'autre, toits de tuiles penchés vers le bassin
@@ -5992,7 +6003,7 @@ function baths(p: Parts, age: number) {
     figure(p, 0.5, -0.22, 0xb48a68, -1.2); p.sphere(0.026, 0.48, 0.22, -0.24, C.terracotta, 0, 1.4);
     // la vasque au milieu du parvis
     p.cyl(0.03, 0.04, 0.08, 8, 0, 0.03, 0.82, marble); p.cyl(0.1, 0.06, 0.03, 12, 0, 0.11, 0.82, marble);
-    waterPool(p, 0, 0.138, 0.82, 0.088, 12); waterJet(p, 0, 0.138, 0.82, 0.07);
+    waterPool(p, 0, 0.138, 0.82, 0.088, 12); waterJet(p, 0, 0.138, 0.82, 0.07, 0.088);
     // la chaufferie : gueule du foyer qui rougeoie, bûches empilées ; amphores d'huile près de la porte
     p.box(0.07, 0.06, 0.014, 0.66, 0.03, -0.755, C.flame, 0, true);
     for (let k = 0; k < 7; k++) log(p, 0.18, 0.022, 0.8, 0.03 + (k > 3 ? 0.04 : 0), -0.64 + (k % 4) * 0.046 + (k > 3 ? 0.023 : 0));
@@ -6071,7 +6082,7 @@ function baths(p: Parts, age: number) {
     // la piscine de plein air : margelle carrelée, lignes d'eau, nageurs, plongeoir de béton à deux plateformes, cabines rayées
     const pz = 0.4, pw = 1.14, pd = 0.6, px = -0.06;
     for (const s of [-1, 1]) { p.box(pw + 0.08, 0.05, 0.04, px, 0.025, pz + s * (pd / 2 + 0.02), C.white); p.box(0.04, 0.05, pd, px + s * (pw / 2 + 0.02), 0.025, pz, C.white); }
-    p.box(pw, 0.01, pd, px, 0.025, pz, 0x3f8fb8); p.box(pw, 0.008, pd, px, 0.06, pz, 0x6cc4e0);
+    p.box(pw, 0.01, pd, px, 0.025, pz, 0x3f8fb8); waterRect(p, px, 0.068, pz, pw, pd, 0, true, 0x52aed0);
     for (let k = 1; k < 4; k++) p.box(pw - 0.04, 0.006, 0.008, px, 0.066, pz - pd / 2 + (k * pd) / 4, k % 2 ? 0xd84a3e : C.white);
     for (const [x, z, cap] of [[-0.42, pz - 0.22, 0xd84a3e], [-0.02, pz - 0.08, 0xf2c23a], [0.22, pz + 0.08, 0x3a6ab8], [-0.24, pz + 0.22, C.white]] as number[][]) { p.sphere(0.016, x, 0.07, z, 0xe8b894); p.sphere(0.017, x, 0.078, z, cap, 0, 0.6); }
     for (const z of [pz - 0.08, pz + 0.08]) p.box(0.035, 0.46, 0.035, 0.7, 0.025, z, C.cream);
@@ -6093,7 +6104,7 @@ function baths(p: Parts, age: number) {
     // bassin extérieur : plage de dalles, lignes d'eau, échelle ; toboggan qui tourne en descendant depuis sa tour
     const pz = 0.32, pw = 1.1, pd = 0.66;
     for (const s of [-1, 1]) { p.box(pw + 0.08, 0.06, 0.04, 0, 0.025, pz + s * (pd / 2 + 0.02), C.white); p.box(0.04, 0.06, pd, s * (pw / 2 + 0.02), 0.025, pz, C.white); }
-    p.box(pw, 0.01, pd, 0, 0.025, pz, 0x3fa8c8); p.box(pw, 0.008, pd, 0, 0.07, pz, 0x6cd0e8);
+    p.box(pw, 0.01, pd, 0, 0.025, pz, 0x3fa8c8); waterRect(p, 0, 0.078, pz, pw, pd, 0, true, 0x4cb6d8);
     for (let k = 1; k < 5; k++) p.box(0.012, 0.004, pd - 0.06, -pw / 2 + k * (pw / 5), 0.079, pz, 0x2a5aa0);
     for (const s of [-1, 1]) p.box(0.006, 0.08, 0.006, 0.4 + s * 0.03, 0.06, pz - pd / 2 + 0.01, C.metal);
     for (const [x, z] of [[0.72, -0.12], [0.86, -0.12], [0.72, 0.02], [0.86, 0.02]]) p.box(0.02, 0.5, 0.02, x, 0.025, z, 0xf2c84b);
@@ -9850,10 +9861,10 @@ function tennis(p: Parts, age: number) {
  */
 function waterpark(p: Parts) {
   p.box(1.9, 0.012, 1.9, 0, 0, 0, 0xe8e0d0);
-  p.box(0.9, 0.03, 0.6, -0.35, 0.0, 0.4, 0x2a8ab8); p.box(0.86, 0.006, 0.56, -0.35, 0.028, 0.4, 0x5ac8e8);
+  p.box(0.9, 0.03, 0.6, -0.35, 0.0, 0.4, 0x2a8ab8); waterRect(p, -0.35, 0.034, 0.4, 0.86, 0.56, 0, true, 0x48b4d8);
   p.box(0.92, 0.04, 0.02, -0.35, 0.0, 0.1, C.white); p.box(0.92, 0.04, 0.02, -0.35, 0.0, 0.71, C.white);
   // rivière à bouées : un anneau d'eau entre deux margelles, et ses bouées
-  ellipseRing(p, 0.62, 0.62, 0.0, 0.09, 0xd8d6d0, 0.45, -0.35); ellipseRing(p, 0.62, 0.62, 0.035, 0.07, 0x5ac8e8, 0.45, -0.35);
+  ellipseRing(p, 0.62, 0.62, 0.0, 0.09, 0xd8d6d0, 0.45, -0.35); p.water(ringWater(0.555, 0.685, 40), 0.45, 0.082, -0.35, 0x48b4d8);
   for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2 + 0.3, x = 0.45 + Math.cos(a) * 0.62, z = -0.35 + Math.sin(a) * 0.62; p.add(new THREE.TorusGeometry(0.035, 0.013, 4, 10).rotateX(Math.PI / 2), x, 0.105, z, [0xf2c23a, 0xd84a3e, 0x3c7fd8][k % 3]); p.sphere(0.016, x, 0.12, z, 0xe8b894); }
   // tour et toboggans en spirale, aux couleurs vives, jusqu'au bassin
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.02, 0.62, 0.02, -0.55 + dx * 0.08, 0.012, -0.55 + dz * 0.08, 0xd8d6d0);
@@ -9953,7 +9964,7 @@ function waterparkBig(p: Parts) {
   p.box(2.92, 0.012, 2.92, 0, 0, 0, 0xe8e0d0);
   /** Bassin rectangulaire : l'eau, quatre margelles, des spots sous l'eau qui s'allument le soir */
   const pool = (x: number, z: number, w: number, d: number, water: number) => {
-    p.box(w, 0.028, d, x, y0, z, water);
+    p.water(rectWater(w, d), x, y0 + 0.028, z, water);
     for (const s of [-1, 1]) { p.box(w + 0.06, 0.042, 0.03, x, y0, z + s * (d / 2 + 0.015), rim); p.box(0.03, 0.042, d, x + s * (w / 2 + 0.015), y0, z, rim); }
     for (let k = 0; k < Math.floor(w / 0.3); k++) p.box(0.03, 0.01, 0.004, x - w / 2 + 0.15 + k * 0.3, y0 + 0.029, z - d / 2 + 0.002, 0x9ae8ff, 0, true);
   };
@@ -10002,7 +10013,7 @@ function waterparkBig(p: Parts) {
   for (let k = 0; k < 6; k++) p.box(0.14, 0.05, 0.006, wx - 0.5 + k * 0.2, y0 + 0.02, 0.072, 0x3a4250);
   for (let k = 0; k < 13; k++) p.box(0.1, 0.03 + (k % 2) * 0.025, 0.006, wx - 0.6 + k * 0.1, y0 + 0.09, 0.072, k % 2 ? 0x3c7fd8 : 0x7ad8ee);
   p.box(1.33, 0.02, 0.15, wx, y0 + 0.17, 0.005, 0xf2c23a);
-  for (const [z, d, c] of [[0.265, 0.37, 0x2a9ad0], [0.625, 0.35, 0x4ab8e0], [0.95, 0.3, 0x7ad8ee]] as number[][]) p.box(1.25, 0.028, d, wx, y0, z, c);
+  p.water(rectWater(1.25, 1.02), wx, y0 + 0.028, 0.59, 0x3eaad4);
   for (const s of [-1, 1]) p.box(0.03, 0.042, 1.04, wx + s * 0.64, y0, 0.59, rim);
   p.box(1.31, 0.03, 0.36, wx, y0, 1.28, 0xead8b0);
   for (let k = 0; k < 4; k++) p.box(0.03, 0.01, 0.004, wx - 0.45 + k * 0.3, y0 + 0.029, 0.074, 0x9ae8ff, 0, true);
@@ -10021,7 +10032,7 @@ function waterparkBig(p: Parts) {
 
   // ---- la rivière à bouées autour de l'île, ses bouées qui tournent, ses passerelles
   const rx = 0.75, rz = -0.2;
-  p.add(new THREE.RingGeometry(0.5, 0.66, 48).rotateX(-Math.PI / 2), rx, y0 + 0.026, rz, 0x4ab8e0);
+  p.water(ringWater(0.5, 0.66, 48), rx, y0 + 0.026, rz, 0x3eaad4);
   for (const r of [0.5, 0.66]) p.add(new THREE.TorusGeometry(r, 0.022, 4, 48).rotateX(Math.PI / 2), rx, y0 + 0.02, rz, rim);
   for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + 0.2; p.box(0.03, 0.01, 0.004, rx + Math.cos(a) * 0.69, y0 + 0.02, rz + Math.sin(a) * 0.69, 0x9ae8ff, -a + Math.PI / 2, true); }
   const R = turning([rx, y0 + 0.03, rz], [0, 1, 0], 0.02);
@@ -10040,7 +10051,7 @@ function waterparkBig(p: Parts) {
   footbridge(rz + 0.58); footbridge(rz - 0.58);
   // l'île : pelouse, aire de jeux d'eau ; le château aux deux mini-toboggans et son grand seau qui bascule ; le champignon fontaine
   p.cyl(0.47, 0.47, 0.02, 40, rx, y0, rz, 0x8fcf7e);
-  p.cyl(0.2, 0.2, 0.004, 24, rx, y0 + 0.02, rz, 0x7ad8ee);
+  waterPool(p, rx, y0 + 0.024, rz, 0.2, 24, true, 0, 0x62c4e2);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.018, 0.62, 0.018, rx + sx * 0.12, y0, rz + sz * 0.12, 0xf2c23a);
   p.box(0.28, 0.02, 0.28, rx, 0.22, rz, 0x4fa860); p.box(0.28, 0.02, 0.28, rx, 0.42, rz, 0xd84a3e); p.box(0.28, 0.02, 0.28, rx, 0.62, rz, 0x4fa860);
   for (const y of [0.24, 0.44, 0.64]) for (const s of [-1, 1]) p.box(0.28, 0.04, 0.006, rx, y, rz + s * 0.14, 0xf4f2ee);
@@ -10048,7 +10059,7 @@ function waterparkBig(p: Parts) {
   p.box(0.22, 0.025, 0.025, rx, 0.86, rz, 0xd84a3e);
   p.cyl(0.006, 0.006, 0.08, 4, rx, 0.78, rz, C.metal);
   const B = swing([rx, 0.8, rz], [1, 0, 0], 0.55, 0.12);
-  B.cyl(0.075, 0.055, 0.1, 10, 0, -0.1, 0, 0xf2c23a); B.cyl(0.077, 0.077, 0.012, 10, 0, -0.005, 0, 0xd84a3e); B.cyl(0.068, 0.068, 0.004, 10, 0, -0.012, 0, 0x5ac8e8);
+  B.cyl(0.075, 0.055, 0.1, 10, 0, -0.1, 0, 0xf2c23a); B.cyl(0.077, 0.077, 0.012, 10, 0, -0.005, 0, 0xd84a3e); B.water(discWater(0.068, 10), 0, -0.008, 0, 0x48b4d8);
   for (const s of [-1, 1]) B.box(0.006, 0.03, 0.006, s * 0.075, -0.02, 0, C.metal);
   slideRun(p, [V(rx + 0.14, 0.245, rz), V(rx + 0.2, 0.22, rz), V(rx + 0.36, 0.08, rz + 0.02), V(rx + 0.42, 0.045, rz + 0.03)], 0.06, 0x4fa860);
   slideRun(p, [V(rx - 0.13, 0.445, rz - 0.03), V(rx - 0.2, 0.39, rz - 0.07), V(rx - 0.28, 0.24, rz - 0.04), V(rx - 0.33, 0.12, rz + 0.04), V(rx - 0.35, 0.05, rz + 0.12)], 0.06, 0xf28a3c);
@@ -10070,7 +10081,7 @@ function waterparkBig(p: Parts) {
   for (const s of [-1, 1]) p.box(0.04, 0.17, 0.4, sx + s * 0.31, y0, sz, rim);
   p.box(0.66, 0.045, 0.03, sx, y0, -0.995, rim);
   for (const [w, x, z, d] of [[0.68, sx, -1.4, 0.05], [0.05, sx - 0.31, sz, 0.42], [0.05, sx + 0.31, sz, 0.42]]) p.box(w, 0.015, d, x, y0 + 0.17, z, 0x3a4a9a);
-  p.add(new THREE.BoxGeometry(0.58, 0.01, 0.4).rotateX(0.3), sx, y0 + 0.085, sz, 0x5ac8e8);
+  p.water(fallWater(new THREE.PlaneGeometry(0.58, 0.4).rotateX(-Math.PI / 2 + 0.3), 0.06, -0.06), sx, y0 + 0.09, sz, 0x62c4e2);
   p.add(new THREE.CylinderGeometry(0.022, 0.022, 0.58, 8).rotateZ(Math.PI / 2), sx, y0 + 0.15, -1.37, 0xf4fbfd);
   for (let k = 0; k < 5; k++) { const zz = sz + 0.06 - (k % 3) * 0.05; p.box(0.1, 0.004, 0.012, sx - 0.24 + k * 0.12, y0 + 0.089 - (zz - sz) * 0.31, zz, 0xf4fbfd, 0.2 * (k - 2)); }
   const S = sway([sx + 0.04, y0 + 0.088, sz + 0.02], [0, 1, 0], 0.5, 0.35);
@@ -11087,7 +11098,7 @@ function senate(p: Parts, age: number) {
       for (const z of [0.4, 0.72]) p.box(0.5, 0.02, 0.05, s * 0.5, 0.03, z, s > 0 ? 0xf2a6b8 : 0xf2d26a);
     }
     p.cyl(0.14, 0.15, 0.05, 14, 0, 0.02, 0.56, C.stone); waterPool(p, 0, 0.06 + 0.01, 0.56, 0.12, 14);
-    p.cyl(0.006, 0.012, 0.12, 5, 0, 0.06, 0.56, 0xcfeaf4);
+    waterJet(p, 0, 0.0715, 0.56, 0.12, 0.12);
     // le palais : deux étages de hautes fenêtres, corniche et balustrade
     p.box(1.6, 0.42, 0.5, 0, 0.02, -0.4, st);
     for (const y of [0.2, 0.44]) p.box(1.64, 0.025, 0.54, 0, y, -0.4, cream);
@@ -11675,8 +11686,8 @@ function manor(p: Parts, age: number) {
     for (const s of [-1, 1]) p.box(0.026, 0.012, 0.004, 0.62 + s * 0.05, y0 + 0.07, 0.141, 0xfff1c9, 0, true);
     // la piscine à débordement, sa margelle, ses spots, son échelle, la bouée flamant
     p.box(0.98, 0.03, 0.5, -0.3, y0, 0.3, 0xe8e2d4);
-    p.box(0.88, 0.012, 0.4, -0.3, y0 + 0.025, 0.3, 0x5ac8e8);
-    p.box(0.88, 0.02, 0.02, -0.3, y0, 0.56, 0x8ad4ee);
+    p.box(0.88, 0.012, 0.4, -0.3, y0 + 0.025, 0.3, 0x3f8fb8); waterRect(p, -0.3, y0 + 0.038, 0.3, 0.88, 0.4, 0, true, 0x4cb6d8);
+    p.box(0.88, 0.016, 0.02, -0.3, y0, 0.56, 0xd8e4ea); p.water(sheetWater(0.88, 0.022, 0.012), -0.3, y0 + 0.016, 0.502, 0xbfe8f4);
     for (let k = 0; k < 4; k++) p.box(0.03, 0.006, 0.006, -0.66 + k * 0.24, y0 + 0.02, 0.501, 0xe8f8ff, 0, true);
     for (const s of [-1, 1]) p.add(new THREE.TorusGeometry(0.03, 0.004, 3, 8, Math.PI), 0.12, y0 + 0.04, 0.2 + s * 0.04, 0xc4cad2, Math.PI / 2);
     p.add(new THREE.TorusGeometry(0.04, 0.014, 5, 12).rotateX(Math.PI / 2), -0.45, y0 + 0.04, 0.32, 0xf28aa8);

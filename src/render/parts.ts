@@ -20,6 +20,31 @@ export class Parts {
   glow: THREE.BufferGeometry[] = [];
 
   add(g: THREE.BufferGeometry, x: number, y: number, z: number, color: number, ry = 0, glow: Glow = false, rz = 0, rx = 0) {
+    const ng = this.place(g, x, y, z, color, ry, rz, rx);
+    if (glow) {
+      // la graine de cette lumière (voir LIGHTS) : une fenêtre (> 0) a son heure, une flamme ou une lanterne (< 0, teinte
+      // chaude) vacille à son rythme, un néon (≥ 2) luit de sa couleur
+      const c = new THREE.Color(color), n = ng.attributes.position.count;
+      const seed = 0.05 + 0.95 * Math.abs((Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453) % 1);
+      ng.setAttribute('aLight', new THREE.BufferAttribute(new Float32Array(n).fill(glow === 'neon' ? 2 + seed : c.r > c.b + 0.15 ? -seed : seed), 1));
+    }
+    (glow ? this.glow : this.body).push(ng);
+  }
+
+  /**
+   * Eau animée (voir `buildingWater.ts`) : la géométrie porte déjà sa graine `aLight` (surface, gerbe ou chute) ; elle est
+   * rangée avec les lumières (même format), mais le shader la reconnaît et ne la fait pas luire
+   */
+  water(g: THREE.BufferGeometry, x: number, y: number, z: number, color: number, ry = 0, rz = 0, rx = 0) {
+    const src = g.index ? g.toNonIndexed() : g, seed = src.attributes.aLight;
+    if (src !== g) g.dispose();
+    const ng = this.place(src, x, y, z, color, ry, rz, rx);
+    ng.setAttribute('aLight', seed);
+    this.glow.push(ng);
+  }
+
+  /** Copie de la géométrie posée (x, y, z, rotations), ses normales et sa couleur ; sans uv ni graine */
+  private place(g: THREE.BufferGeometry, x: number, y: number, z: number, color: number, ry: number, rz: number, rx: number) {
     const ng = g.index ? g.toNonIndexed() : g.clone();
     g.dispose();
     ng.deleteAttribute('uv');
@@ -37,13 +62,8 @@ export class Parts {
     const arr = team ?? new Float32Array(n * 3);
     if (!team) for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
     ng.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-    if (glow) {
-      // la graine de cette lumière (voir LIGHTS) : une fenêtre (> 0) a son heure, une flamme ou une lanterne (< 0, teinte
-      // chaude) vacille à son rythme, un néon (≥ 2) luit de sa couleur
-      const seed = 0.05 + 0.95 * Math.abs((Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453) % 1);
-      ng.setAttribute('aLight', new THREE.BufferAttribute(new Float32Array(n).fill(glow === 'neon' ? 2 + seed : c.r > c.b + 0.15 ? -seed : seed), 1));
-    }
-    (glow ? this.glow : this.body).push(ng);
+    ng.deleteAttribute('aLight');
+    return ng;
   }
 
   /** y = base de la boîte */
