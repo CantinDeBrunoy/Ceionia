@@ -65,6 +65,8 @@ import { Blason, readIsleName } from './sim/blason';
 import { Controls, loadControls, saveControls, guessLayout } from './core/controls';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
+import { railChapter, railWanted, stationPairs } from './ui/tutorialRail';
+import { isStation } from './sim/freight';
 import { allyIsle, allyView, onAllyIsle, allyPostReady, allyHarborSpot } from './sim/allyLand';
 import { SpotBeacon } from './render/spotBeacon';
 import { AGES, BUILD_CATS, KINDS, KIND_ORDER, Building, sizeOf, lineOf, type KindId } from './build/catalog';
@@ -923,8 +925,8 @@ class Game implements UIHost {
     this.ui.update();
     // (pas de tutoriel au bac à sable : il n'y a rien à apprendre dans l'ordre)
     this.tutorial = new Tutorial(this.ui, this, !save, w.sandbox);
-    // ses chapitres : l'île du portail (le PvE choisi), la première entrée dans les Enfers
-    this.tutorial.setChapters(chapters(this.tutorial, this.ui, {
+    // ses chapitres : l'île du portail (le PvE choisi), la première entrée dans les Enfers, la première ligne de train
+    this.tutorial.setChapters({ ...chapters(this.tutorial, this.ui, {
       root: uiRoot, age: () => this.sim.age,
       isle: () => isleDefenses(this.world), village: () => this.villageDefenses(),
       army: () => this.war.army.troops.length + this.war.army.queue.length, sent: () => this.war.army.troops.filter((t) => t.where === 'hell').length + this.war.crossing.size, pve: () => this.war.pve === 'on',
@@ -934,9 +936,22 @@ class Game implements UIHost {
       arch: () => !!allyIsle(this.world), allyIsle: () => (this.world.diplo.ally ? isleName(this.world.diplo.ally) : ''),
       harbors: () => this.harborsByIsle(), posts: () => this.postsAtAlly(),
       atAlly: () => this.lookingAtAlly(), goAlly: () => this.goAlly(), handsBusy: () => this.handsBusy(),
-    }));
+    }), rail: railChapter(this.ui, {
+      root: uiRoot, age: () => this.sim.age, count: (k) => this.sim.counts[k] ?? 0, stations: () => this.stationList().length,
+      bricks: () => this.world.brick, lines: () => this.world.lines.length,
+      holding: () => (this.tools.tool === 'build' ? this.tools.kind : null), drop: () => this.tools.setTool('none'),
+      stationCard: () => { const b = this.tools.selected === null ? undefined : this.world.buildings.get(this.tools.selected); return !!b && isStation(b); },
+      editing: () => this.railEdit?.stops ?? null, trouble: () => this.railTrouble(),
+      nextStop: () => this.railNextStop(), pin: (id) => this.railPinAt(id), look: (ids) => this.railLook(ids),
+      openLine: () => { const t = this.railNextStop(); if (t !== null) { this.startRailEdit({ stop: t }); this.railLook([t]); } },
+      forMe: () => this.railForMe(),
+      train: () => { const l = this.world.lines[this.world.lines.length - 1], t = l ? this.railway.trains.get(l.id) : undefined; if (!l || !t) return null; if (t.phase === 'run') this.railRan.add(l.id); return { running: this.railRan.has(l.id), why: t.why ?? '' }; },
+      follow: () => { const l = this.world.lines[this.world.lines.length - 1]; if (l) this.followTrain(l.id); },
+      following: () => this.trainCam !== null,
+      away: () => this.mode !== 'surface' || !!this.isleCmd,
+    }, (id) => this.tutorial.jump(id)) });
     // un chapitre fini dit déjà ce que disaient les aides militaires du même moment : elles ne se répètent pas
-    this.tutorial.onChapterEnd = (id, done) => { if (done) for (const t of (id === 'pve' ? ['isle', 'orders'] : ['hell']) as WarTipId[]) this.warTips.markSeen(t); };
+    this.tutorial.onChapterEnd = (id, done) => { if (id === 'rail') this.railPin = null; if (done) for (const t of (id === 'pve' ? ['isle', 'orders'] : ['hell']) as WarTipId[]) this.warTips.markSeen(t); };
     // les aides du volet militaire (bulles facultatives, au moment utile)
     this.warTips = new WarTips({
       root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
@@ -2616,6 +2631,117 @@ class Game implements UIHost {
     this.ui.update();
   }
 
+  // ---------- Le guidage de la première ligne (voir src/ui/tutorialRail.ts) ----------
+
+  /** les gares du village, dans l'ordre où elles ont été bâties */
+  private stationList() { return [...this.world.buildings.values()].filter(isStation).sort((a, b) => a.id - b.id); }
+
+  /**
+   * La gare à cliquer : sans tracé, la gare centrale (ou la première) ; pendant le tracé, la plus proche du dernier arrêt
+   * parmi celles qu'on peut encore ajouter ; null s'il n'y en a pas
+   */
+  railNextStop(): number | null {
+    const st = this.stationList(), e = this.railEdit;
+    if (!e?.stops.length) return (st.find((b) => b.kind === 'terminal') ?? st[0])?.id ?? null;
+    const last = this.world.buildings.get(e.stops[e.stops.length - 1]);
+    const free = st.filter((b) => !e.stops.includes(b.id) && !!this.railway.stopOf(b));
+    if (!last || !free.length) return null;
+    const d = (b: Building) => Math.hypot(b.x - last.x, b.z - last.z);
+    return free.sort((a, b) => d(a) - d(b))[0].id;
+  }
+
+  /**
+   * La vue va sur ces bâtiments, tous à l'écran et plutôt dans le bas : le panneau du tracé, en haut au milieu, cachait la
+   * gare suivante (le centre de la vue est poussé un peu plus loin, dans le sens où l'on regarde)
+   */
+  railLook(ids: number[]) {
+    const bs = ids.map((id) => this.world.buildings.get(id)).filter((b): b is Building => !!b);
+    if (!bs.length || this.mode !== 'surface' || this.isleCmd) return;
+    const xs = bs.flatMap((b) => [b.x, b.x + sizeOf(b)]), zs = bs.flatMap((b) => [b.z, b.z + sizeOf(b)]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const span = Math.max(x1 - x0, z1 - z0), dist = Math.min(80, Math.max(24, span * 1.8 + 12));
+    const c = this.cam.camera.position, t = this.cam.target, fx = t.x - c.x, fz = t.z - c.z, f = Math.hypot(fx, fz) || 1, k = dist * 0.07;
+    this.trainCam = null;
+    this.cam.goTo((x0 + x1) / 2 + (fx / f) * k, (z0 + z1) / 2 + (fz / f) * k, dist);
+  }
+
+  /**
+   * « Relier pour moi » : les deux gares les plus proches dont la voie passe (et pas déjà reliées), la gare centrale en
+   * premier ; le tracé s'ouvre avec elles, la vue les montre, il ne reste qu'à valider. Faux : aucune paire ne se relie
+   */
+  railForMe(): boolean {
+    const st = this.stationList(), first = st.find((b) => b.kind === 'terminal')?.id ?? null;
+    const pairs = stationPairs(st.map((b) => ({ id: b.id, x: b.x, z: b.z, size: sizeOf(b) })), first);
+    for (const [a, b] of pairs.slice(0, 8)) {
+      const A = this.world.buildings.get(a.id), B = this.world.buildings.get(b.id);
+      if (!A || !B || this.railway.sameAs([a.id, b.id]) || !this.railway.plan(A, B, [])?.seg) continue;
+      this.startRailEdit({ stop: a.id });
+      const e = this.railEdit;
+      if (!e) return false;
+      e.stops.push(b.id);
+      e.via.push([]);
+      audio.sfxClick();
+      this.railLook([a.id, b.id]);
+      this.ui.update();
+      return true;
+    }
+    this.ui.toast(tr('🚂 Aucune paire de gares ne se relie : posez une gare plus près, sur un terrain plat.'));
+    return false;
+  }
+
+  /** le marqueur doré du guidage : la gare qu'il montre (null : aucune), et les trains déjà partis une fois */
+  private railPin: number | null = null;
+  private railPinEl: HTMLElement | null = null;
+  private railRan = new Set<number>();
+  /** Pose le marqueur doré sur ce bâtiment (null : l'ôte) ; rend l'élément s'il est à l'écran, que la bulle entoure */
+  private railPinAt(id: number | null): Element | null {
+    this.railPin = id;
+    this.placeRailPin();
+    const el = this.railPinEl;
+    return id !== null && el && el.style.display !== 'none' ? el : null;
+  }
+
+  /** Le marqueur suit sa gare à chaque image ; hors de l'écran, ou le guidage caché, il disparaît */
+  private placeRailPin() {
+    let el = this.railPinEl;
+    const b = this.railPin === null ? undefined : this.world.buildings.get(this.railPin);
+    const on = !!b && this.tutorial.chapterOn === 'rail' && this.tutorial.active && this.mode === 'surface' && !this.isleCmd;
+    if (!on && !el) return;
+    if (!el) {
+      el = this.railPinEl = document.createElement('div');
+      el.id = 'railPin';
+      el.innerHTML = '<i></i>';
+      uiRoot.appendChild(el);
+    }
+    const s = b ? sizeOf(b) : 0, p = on ? this.toScreen(new THREE.Vector3(b!.x + s / 2, this.world.hAt(b!.x + s / 2, b!.z + s / 2) + 0.6, b!.z + s / 2)) : null;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    if (!p || p[0] < 0 || p[1] < 0 || p[0] > W || p[1] > H) { el.style.display = 'none'; return; }
+    const r = canvas.getBoundingClientRect(), d = Math.max(48, Math.min(170, (s * 900) / Math.max(8, this.cam.dist)));
+    el.style.display = '';
+    el.style.width = el.style.height = `${d}px`;
+    el.style.left = `${r.left + p[0] - d / 2}px`;
+    el.style.top = `${r.top + p[1] - d / 2}px`;
+  }
+
+  /**
+   * Le guidage de la première ligne se lance de lui-même, une fois : à l'âge industriel, dans un village sans ligne qui a sa
+   * briqueterie (ou déjà une gare), à la surface, sans fenêtre ouverte ni autre chapitre en cours. Une partie qui a déjà une
+   * ligne ne le voit pas
+   */
+  private watchRail() {
+    const w = this.world, c = this.sim.counts;
+    if (this.tutorial.chapterOn || this.mode !== 'surface' || this.isleCmd) return;
+    if (!railWanted({ sandbox: w.sandbox, age: this.sim.age, lines: w.lines.length, kiln: c.brickworks ?? 0, stations: (c.terminal ?? 0) + (c.station ?? 0) + (c.maglev ?? 0) })) return;
+    if (this.ui.root.querySelector('.overlay')) return;
+    this.tutorial.chapter('rail');
+  }
+
+  /** « Me guider pas à pas » (onglet Chemin de fer) : le guidage de la première ligne reprend du début */
+  railGuide() {
+    if (this.world.sandbox) return;
+    this.tutorial.replay('rail');
+  }
+
   /** La caméra suit l'expédition donnée (null : elle redevient libre) */
   /** la vue suivie garde sa distance (au départ d'une expédition : pas de gros plan d'office) */
   private followFar = false;
@@ -3247,6 +3373,7 @@ class Game implements UIHost {
       const ck = re ? `${this.world.version}|${this.railway.version}|${re.stops.join('.')}` : '';
       if (ck !== this.candCk) { this.candCk = ck; this.railView.setCandidates(re ? [...this.world.buildings.values()].filter((b) => !re.stops.includes(b.id) && !!this.railway.stopOf(b)) : []); }
       this.trackEdit.update();
+      if (this.railPin !== null || this.railPinEl) this.placeRailPin();
       const train = this.trainCam === null ? undefined : this.railway.trains.get(this.trainCam), tp = train ? this.railway.trainAt(train) : null;
       if (tp) this.cam.follow(tp[0], tp[1]);
       else this.trainCam = null;
@@ -3279,7 +3406,7 @@ class Game implements UIHost {
     if ((this.spotT -= dt) <= 0) { this.spotT = 0.25; this.syncSpots(!uv && !hv); }
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.stepGoals(); this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.stepGoals(); this.ui.update(); this.watchRail(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) {
       // (le bouton reste là tant que la vue glisse vers le village : il disparaissait sous la souris, et un second clic
       // tombait sur un bâtiment)

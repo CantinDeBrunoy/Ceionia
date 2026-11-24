@@ -180,16 +180,17 @@ export interface Step {
 }
 
 /**
- * Les chapitres : l'île du portail quand le joueur choisit d'affronter les démons, la première entrée dans les Enfers, et
- * l'archipel (ports, comptoir et or) quand il choisit son allié
+ * Les chapitres : l'île du portail quand le joueur choisit d'affronter les démons, la première entrée dans les Enfers,
+ * l'archipel (ports, comptoir et or) quand il choisit son allié, et la première ligne de train (voir `tutorialRail.ts`)
  */
-export type ChapterId = 'pve' | 'hell' | 'arch';
-export const CHAPTERS: readonly ChapterId[] = ['pve', 'hell', 'arch'];
+export type ChapterId = 'pve' | 'hell' | 'arch' | 'rail';
+export const CHAPTERS: readonly ChapterId[] = ['pve', 'hell', 'arch', 'rail'];
 /**
  * Les chapitres qui se lancent même si le joueur a passé la suite principale : un mécanisme neuf, qu'il ne connaît pas
- * (l'or et le comptoir ; l'auteur, en partie, n'avait pas compris l'or). Désactivé à l'accueil, il ne se lance pas
+ * (l'or et le comptoir ; l'auteur, en partie, n'avait pas compris l'or ; le tracé des lignes de train, trop compliqué la
+ * première fois). Désactivé à l'accueil, il ne se lance pas
  */
-const ALWAYS: readonly ChapterId[] = ['arch'];
+const ALWAYS: readonly ChapterId[] = ['arch', 'rail'];
 
 /** Un chapitre : une courte suite d'étapes qu'un événement lance, une seule fois */
 export interface Chapter {
@@ -634,6 +635,27 @@ export class Tutorial {
     return true;
   }
 
+  /**
+   * Rejoue un chapitre à la demande du joueur (« Me guider pas à pas ») : même déjà vu, même le tutoriel mis de côté.
+   * Un autre chapitre en cours compte pour vu. Vrai s'il démarre (rien au bac à sable)
+   */
+  replay(id: ChapterId): boolean {
+    if (this.off || !this.chapters[id]) return false;
+    if (this.ch === id) { this.begin(); return true; }
+    if (this.ch) this.seen.add(this.ch);
+    this.seen.delete(id);
+    this.openChapter(id, 0);
+    return true;
+  }
+
+  /** Va droit à une étape du chapitre en cours (« Relier pour moi » saute le choix des gares) */
+  jump(stepId: string) {
+    const c = this.ch ? this.chapters[this.ch] : null, j = c ? c.steps.findIndex((s) => s.id === stepId) : -1;
+    if (j < 0 || j === this.ci) return;
+    this.ci = j;
+    this.begin();
+  }
+
   private openChapter(id: ChapterId, i: number) {
     this.ch = id;
     this.ci = clamp(i, 0, this.chapters[id]!.steps.length - 1);
@@ -844,7 +866,7 @@ export class Tutorial {
     // les conditions de l'âge, la fiche du bâtiment, l'équipement à fabriquer, les onglets du bas)
     const rects = (q: string) => [...this.ui.root.querySelectorAll<HTMLElement>(q)].filter((e) => e !== box && !e.hidden && e.offsetParent).map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
     const blocks: Block[] = [
-      ...rects('#needInfo, #census, #selCard, #info, .expCard, #agePanel.open #ageReq, .overlay > .modal, #agePanel, #resPanel, #needsBox, #goalBox, #hudR, #msg, ' + DOCK).map((b) => ({ r: b, k: 1 })),
+      ...rects('#needInfo, #census, #selCard, #info, .expCard, #agePanel.open #ageReq, .overlay > .modal, #agePanel, #resPanel, #needsBox, #goalBox, #hudR, #msg, #railEdit.show, ' + DOCK).map((b) => ({ r: b, k: 1 })),
     ];
     if (!this.ui.root.querySelector('.overlay')) blocks.push({ r: { left: W * 0.3, right: W * 0.7, top: H * 0.3, bottom: H * 0.68 }, k: 0.7 });
     // les places fixes, quand rien n'est montré ou que les côtés de l'élément sont pris : sous le HUD à droite et à gauche,

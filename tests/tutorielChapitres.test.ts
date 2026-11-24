@@ -106,7 +106,7 @@ describe('tutoriel : les chapitres', () => {
 
   it('chaque étape tient en une phrase courte', () => {
     const all = chapterTexts();
-    expect(all.length).toBe(15); // (aux Enfers : « Se déplacer », « Revenir au camp », « Le camp de base » et « Des renforts » s'ajoutent)
+    expect(all.length).toBe(21); // (aux Enfers : « Se déplacer », « Revenir au camp », « Le camp de base » et « Des renforts » s'ajoutent ; la première ligne de train : 6 étapes)
     for (const st of all) {
       expect(st.text.length, st.title).toBeLessThan(120);
       expect(st.text.replace(/«[^»]*»/g, '').slice(0, -1).includes('. '), st.title).toBe(false);
