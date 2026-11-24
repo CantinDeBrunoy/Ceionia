@@ -17,6 +17,8 @@ body.allege #hud .panel, body.allege #timePanel {
   box-sizing: border-box; height: 46px; border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
 }
 body.allege #hud .hudPill { min-height: 0; padding: 0 8px; }
+/* l'heure est un `.panel` dans le bloc de l'heure : pas de cadre dans le cadre */
+body.allege #hud #clock { height: 34px; background: none; border: none; box-shadow: none; border-radius: 0; }
 
 /* l'âge : son logo, son nom, ▾ et une jauge fine ; le nom de l'île, le pourcentage et « Vers … » passent dans la liste qu'ouvre
    un clic (`.rqHead`) */
