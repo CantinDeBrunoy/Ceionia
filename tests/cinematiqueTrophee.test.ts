@@ -83,6 +83,26 @@ describe('cinématique d’un trophée sur la place', () => {
     expect(q2.detect(['dragon'], () => shown++, true)).toBe(false);
   });
 
+  it('le récit ne s’ouvre jamais par-dessus la cinématique : trophée relevé avant le récit, ou cinématique déjà en cours', () => {
+    // (retour de l'auteur, 24 nov. 2026 : « Chasser le mammouth » réussie s'ouvrait pendant la cinématique du trophée)
+    let shown = 0;
+    const q = new TrophyCineQueue([]);
+    // le jeu voit le trophée avant le récit (le récit retardé, la vue qu'on tournait) : le récit le suit quand même
+    q.detect(['mammoth']);
+    expect(q.detect(['mammoth'], () => shown++, true, null, 'mammoth')).toBe(true);
+    const r = run(q, CALM_DELAY + 0.1);
+    expect(r.started).toEqual(['mammoth']);
+    expect(shown).toBe(0);
+    // la cinématique en cours : un autre récit (réussi ou non) attend aussi sa fin
+    expect(q.detect(['mammoth'], () => shown++, false, null, null)).toBe(true);
+    expect(q.afterCurrent(() => shown++)).toBe(true);
+    expect(shown).toBe(0);
+    q.skip()!.after?.();
+    expect(shown).toBe(3);
+    // plus rien ne joue : à l'appelant de montrer le récit
+    expect(q.afterCurrent(() => shown++)).toBe(false);
+  });
+
   it('la vue part de celle du joueur, s’approche du trophée, tourne, puis revient', () => {
     const from = { x: 10, z: 10, yaw: 0.75 + Math.PI * 2, pitch: 0.85, dist: 80 };
     const close = { x: 40, z: 30, yaw: 0.75, pitch: 0.42, dist: 6 };

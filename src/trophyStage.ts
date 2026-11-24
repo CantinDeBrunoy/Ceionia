@@ -84,10 +84,14 @@ export class TrophyStage {
 
   /**
    * Une expédition réussie revient : si elle rapporte un trophée (ou en refait la chasse : `replay`, le trophée déjà sur la
-   * place) et que le joueur est tranquille, la cinématique part et `after` (le récit) attend sa fin ; rend vrai dans ce cas. Sinon le trophée attend son tour, et c'est à l'appelant de
-   * montrer le récit tout de suite
+   * place) et que le joueur est tranquille, la cinématique part et `after` (le récit) attend sa fin ; rend vrai dans ce cas.
+   * De même si une cinématique joue déjà, ou si celle du trophée `own` (celui de l'expédition) attend déjà son tour. Sinon le
+   * trophée attend son tour, et c'est à l'appelant de montrer le récit tout de suite
    */
-  report(after: () => void, replay: string | null = null) { return this.q.detect(this.host.won(), after, this.host.calm(false) && !this.cur, replay); }
+  report(after: () => void, replay: string | null = null, own: string | null = null) { return this.q.detect(this.host.won(), after, this.host.calm(false) && !this.cur, replay, own); }
+
+  /** `after` (un récit d'expédition ratée) attend la fin de la cinématique en cours ; rend faux s'il n'y en a pas */
+  afterCurrent(after: () => void) { return this.q.afterCurrent(after); }
 
   /** Un tour (temps réel, s) */
   update(dt: number) {

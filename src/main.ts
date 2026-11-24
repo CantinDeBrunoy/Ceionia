@@ -910,7 +910,9 @@ class Game implements UIHost {
       };
       // un trophée rejoint la place : sa cinématique d'abord (avec son carillon), le récit ensuite
       // (une chasse refaite, le trophée déjà sur la place, y a droit aussi : il remonte de terre)
-      if (r.ok && this.trophyStage.report(show, r.redo ? trophyOfMission(r.m) : null)) return;
+      // (et tout récit, réussi ou non, attend la fin d'une cinématique de trophée qui joue déjà : il s'ouvrait par-dessus)
+      const own = r.ok ? trophyOfMission(r.m) : null;
+      if (r.ok ? this.trophyStage.report(show, r.redo ? own : null, own) : this.trophyStage.afterCurrent(show)) return;
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       show();
     };
@@ -940,7 +942,8 @@ class Game implements UIHost {
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
       // (au bac à sable, tout est déjà ouvert : pas de liste)
-      if (!this.world.sandbox) setTimeout(() => this.ui.showNewAge(age), 3600);
+      // (une cinématique en cours, celle du trophée d'une chasse qui vient de finir l'âge par exemple : la fenêtre attend sa fin)
+      if (!this.world.sandbox) setTimeout(() => this.afterCinematics(() => this.ui.showNewAge(age)), 3600);
       audio.sfxAgeUp();
       this.propsDirty = true;
     };
@@ -2281,7 +2284,7 @@ class Game implements UIHost {
    */
   private popupBusy() {
     return !!document.getElementById('loadScreen') || !!uiRoot.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible
-      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.openingStage?.playing || this.mode !== 'surface'
+      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.openingStage?.playing || this.trophyStage?.playing || this.voyageStage?.playing || this.mode !== 'surface'
       || document.body.classList.contains('photo');
   }
 
@@ -2335,6 +2338,10 @@ class Game implements UIHost {
     this.voyageStage.play(fromMist, () => { clearFilmMark(); this.revealing = false; ends(); this.onIslesRevealed?.(); this.saveNow(); });
   }
   private voyageEnds: (() => void)[] = [];
+  /** Une cinématique joue (trophée, traversée, portail, ouverture, royaume) : les fenêtres qui s'ouvrent seules l'attendent */
+  cinematicPlaying() { return this.trophyStage.playing || this.voyageStage.playing || this.revealing || !!this.portalStage?.playing || !!this.openingStage?.playing || this.kingStage.playing; }
+  /** `f` tout de suite, ou à la fin de la cinématique en cours */
+  afterCinematics(f: () => void) { if (!this.cinematicPlaying()) f(); else setTimeout(() => this.afterCinematics(f), 250); }
   /**
    * Tenu quand la cinématique « Explorer le monde » de ce lancement est finie (tout de suite s'il n'y en a pas). Le choix des
    * contrôles et le blason l'attendent : la fenêtre des contrôles s'ouvrait par-dessus le survol des îles
