@@ -4,13 +4,14 @@ import { roadView, prepGain, type RoadCtx } from '../src/sim/diploRoad';
 import { ISLE_MISSIONS } from '../src/sim/isleMissions';
 import { roadHtml } from '../src/ui/diploChoice';
 import { campaignResult, RAID_FIRST } from '../src/sim/campaign';
+import { seaWon, seaLost } from '../src/sim/saga';
 
 /**
  * La feuille de route du conflit des deux îles (retour de joueurs, 22 nov. 2026 : « perdu » après « Aider notre allié » ou
  * « Négocier la paix ») : les étapes qui déclenchent la suite, et les visites des îles qui la préparent
  */
 const world = () => ({ isles: {} as any, diplo: newDiplo(), exp: { done: [] as string[], clock: 0 } }) as any;
-const ctx = (running: string[] = [], age = 2): RoadCtx => ({ running: (id) => running.includes(id), dayLen: 100, age });
+const ctx = (running: string[] = [], age = 2, afloat = 3, arming = 0): RoadCtx => ({ running: (id) => running.includes(id), dayLen: 100, age, fleet: { afloat, arming } });
 
 describe('la feuille de route', () => {
   it('rien sans voie prise, ni le conflit réglé', () => {
@@ -29,7 +30,7 @@ describe('la feuille de route', () => {
     chooseAlly(w.diplo, 'orient');
     choosePath(w.diplo, 'war');
     let r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => [s.id, s.state, s.go])).toEqual([[WAR_MISSION, 'now', 'mission'], ['plage', 'next', 'wait'], ['camp', 'next', 'wait'], ['port', 'next', 'wait'], ['tour', 'next', 'wait'], ['assault', 'next', 'wait']]);
+    expect(r.steps.map((s) => [s.id, s.state, s.go])).toEqual([[WAR_MISSION, 'now', 'mission'], ['strait', 'next', 'wait'], ['plage', 'next', 'wait'], ['camp', 'next', 'wait'], ['blockade', 'next', 'wait'], ['port', 'next', 'wait'], ['tour', 'next', 'wait'], ['assault', 'next', 'wait']]);
     // (trois chapitres : le Médiéval déplié, les deux autres plus tard)
     expect(r.chapters.map((c) => [c.age, c.state])).toEqual([[2, 'now'], [3, 'later'], [4, 'later']]);
     // (pour la guerre, seulement les visites qui rapportent à la bataille ; le vol des semences n'y est pas)
@@ -41,14 +42,29 @@ describe('la feuille de route', () => {
     expect(roadView(w, ctx([WAR_MISSION]))!.steps[0]).toMatchObject({ state: 'now', go: 'wait' });
     w.exp.done.push(WAR_MISSION);
     applyDiplo(w.diplo, 'landing');
+    // la bataille du bras de mer (chantier B) : sans deux navires, le bouton mène au chantier naval
+    r = roadView(w, ctx([], 2, 1, 0))!;
+    expect(r.steps[1]).toMatchObject({ id: 'strait', state: 'now', go: 'fleet' });
+    expect(r.steps[1].sub).toMatch(/chantier naval \(1\/2\)/);
+    expect(roadHtml(r)).toContain('data-a="fleet"');
+    expect(roadView(w, ctx([], 2, 1, 1))!.steps[1].sub).toMatch(/en chantier/);
+    expect(r.notes.join(' ')).toMatch(/Notre flotte : 1 navires/);
     r = roadView(w, ctx())!;
-    expect(r.steps.slice(0, 2).map((s) => [s.state, s.go])).toEqual([['done', 'wait'], ['now', 'battle']]);
+    expect(r.steps[1]).toMatchObject({ id: 'strait', state: 'now', go: 'naval' });
+    expect(roadHtml(r)).toContain('data-a="naval"');
+    // (perdue : la flotte se refait un jour)
+    seaLost(w.diplo, 0, 100, 1);
+    expect(roadView(w, ctx())!.steps[1]).toMatchObject({ go: 'wait', sub: 'notre flotte se refait : encore un jour' });
+    w.diplo.saga.seaRetry = 0;
+    seaWon(w.diplo, 'strait');
+    r = roadView(w, ctx())!;
+    expect(r.steps.slice(0, 3).map((s) => [s.state, s.go])).toEqual([['done', 'wait'], ['done', 'wait'], ['now', 'battle']]);
     expect(r.canChange).toBe(false);
     // perdue : la bataille attend que les troupes se refassent
     loseAllyBattle(w.diplo, 0, 100);
     r = roadView(w, ctx())!;
-    expect(r.steps[1]).toMatchObject({ state: 'now', go: 'wait' });
-    expect(r.steps[1].sub).toMatch(/jours/);
+    expect(r.steps[2]).toMatchObject({ state: 'now', go: 'wait' });
+    expect(r.steps[2].sub).toMatch(/jours/);
   });
 
   it('la campagne : la plage prise, le port est l’étape du moment ; une sortie rivale passe avant tout', () => {
@@ -57,12 +73,13 @@ describe('la feuille de route', () => {
     choosePath(w.diplo, 'war');
     w.exp.done.push(WAR_MISSION);
     applyDiplo(w.diplo, 'landing');
+    seaWon(w.diplo, 'strait');
     campaignResult(w.diplo, 'landing', true, [12, 9], 0, 100);
     let r = roadView(w, ctx())!;
     // (au Médiéval : la plage prise, reste à tenir le camp contre la première sortie, qui vient d'elle-même)
-    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'now', 'next', 'next', 'next']);
-    expect(r.steps[2]).toMatchObject({ id: 'camp', go: 'wait' });
-    expect(r.steps[2].sub).toBe('repousser la première sortie rivale');
+    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'done', 'now', 'next', 'next', 'next', 'next']);
+    expect(r.steps[3]).toMatchObject({ id: 'camp', go: 'wait' });
+    expect(r.steps[3].sub).toBe('repousser la première sortie rivale');
     expect(r.notes.join(' ')).toMatch(/d’ici un jour/);
     expect(r.alert).toBeUndefined();
     expect(r.notes.join(' ')).toMatch(/21 soldats sur 25/);
@@ -70,7 +87,7 @@ describe('la feuille de route', () => {
     w.exp.clock = RAID_FIRST * 100;
     r = roadView(w, ctx())!;
     expect(r.alert).toBeTruthy();
-    expect(r.steps[2].go).toBe('battle');
+    expect(r.steps[3].go).toBe('battle');
     expect(roadHtml(r)).toContain('dcAlert');
     // repoussée : le chapitre du Médiéval est fait, la suite s'ouvre à l'Industriel
     campaignResult(w.diplo, 'defend', true, [12, 9], w.exp.clock, 100);
@@ -78,9 +95,12 @@ describe('la feuille de route', () => {
     expect(r.chapters.map((c) => c.state)).toEqual(['done', 'later', 'later']);
     expect(r.steps.find((s) => s.state === 'now')).toBeUndefined();
     expect(r.notes.join(' ')).toMatch(/Chapitre fait/);
-    // à l'Industriel : le port est l'étape du moment, le corps a grandi
+    // à l'Industriel : le blocus du port, puis le port ; le corps a grandi
     r = roadView(w, ctx([], 3))!;
     expect(r.chapters.map((c) => c.state)).toEqual(['done', 'now', 'later']);
+    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'blockade', go: 'naval' });
+    seaWon(w.diplo, 'blockade');
+    r = roadView(w, ctx([], 3))!;
     expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'port', go: 'battle' });
     expect(r.notes.join(' ')).toMatch(/sur 30/);
   });
@@ -90,15 +110,19 @@ describe('la feuille de route', () => {
     chooseAlly(w.diplo, 'asie');
     choosePath(w.diplo, 'peace');
     let r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => [s.id, s.state])).toEqual([['envoys', 'now'], ['truce', 'next'], ['post2', 'next'], ['embassy', 'next'], ['sign', 'next']]);
+    expect(r.steps.map((s) => [s.id, s.state])).toEqual([['convoy', 'now'], ['envoys', 'next'], ['truce', 'next'], ['post2', 'next'], ['embassy', 'next'], ['sign', 'next']]);
+    // (l'escorte du premier convoi : un bouton qui la lance)
+    expect(r.steps[0]).toMatchObject({ go: 'naval', title: 'L’escorte du premier convoi' });
     expect(r.prep.every((p) => p.gain === 'pourparlers plus sûrs')).toBe(true);
     expect(r.prep.some((p) => p.id === 'isleSabotage')).toBe(false);
+    expect(r.canChange).toBe(true);
+    seaWon(w.diplo, 'convoy');
+    expect(roadView(w, ctx())!.canChange).toBe(false);
     w.exp.done.push('envoys', 'isleFair');
     r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => s.state)).toEqual(['done', 'now', 'next', 'next', 'next']);
+    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'now', 'next', 'next', 'next']);
     // (une visite faite passe en bas, cochée)
     expect(r.prep.at(-1)).toMatchObject({ id: 'isleFair', done: true });
-    expect(r.canChange).toBe(true);
     // la trêve : plus de changement de voie ; à l'Industriel, un second comptoir (bouton qui le prend en main)
     applyDiplo(w.diplo, 'truce');
     expect(roadView(w, ctx())!.canChange).toBe(false);

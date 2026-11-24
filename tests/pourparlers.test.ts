@@ -47,6 +47,8 @@ function setup() {
   const ex = new Expeditions(w, agents, () => 100, mulberry32(7));
   ex.pop = () => 60; ex.missing = () => [];
   Object.assign(w.diplo, { met: ['orient', 'asie'], ally: 'orient', path: 'peace', conflict: 'open', asked: true });
+  // (le premier convoi escorté : les émissaires peuvent partir, chantier B)
+  w.diplo.saga.sea.push('convoy');
   return { w, agents, ex };
 }
 

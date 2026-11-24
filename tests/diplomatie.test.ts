@@ -155,7 +155,7 @@ describe('diplomatie : le dénouement (au Médiéval)', () => {
     expect(sim.ready).toBe(false);
     // la voie prise : les étapes du chapitre
     choosePath(w.diplo, 'war');
-    expect(line()).toMatchObject({ have: 0, need: 3 });
+    expect(line()).toMatchObject({ have: 0, need: 4 });
     w.diplo.conflict = 'peace';
     expect(line()).toMatchObject({ have: 1, need: 1 });
     sim.age = 4;

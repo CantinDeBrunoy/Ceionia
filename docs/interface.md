@@ -125,7 +125,7 @@ Les images de `public/menu/` sont des illustrations fournies par l'auteur (pas g
 
 **Ajouter une fenêtre** : `const { ov, close } = modal(this.root, 'ma-classe', titre, corps, onClose?)` ; lier les boutons du `ov` (`$('.ok', ov).onclick = close`) ; styles `.overlay .ma-classe` ; pas besoin de gérer `Échap` ni le clic sur le fond. Une décision à ne pas écarter : `sticky = true`. Une confirmation : `confirmBox`.
 
-**Ajouter une ligne à la fiche d'un bâtiment** : dans `renderSelection`, pousser une chaîne dans `stats` (elle fait partie de `selKey`) ; pour une action, un bouton `data-act="…"` et sa branche dans le gestionnaire en bas de la fonction.
+**Ajouter une ligne à la fiche d'un bâtiment** : dans `renderSelection`, pousser une chaîne dans `stats` (elle fait partie de `selKey`) ; pour une action, un bouton `data-act="…"` et sa branche dans le gestionnaire en bas de la fonction. Exemple : la flotte de guerre sur la fiche du chantier naval (`fleetBlock`, bouton `arm`, dans `selKey` ; voir [flotte.md](flotte.md)). La barre de la bataille navale est une branche de `CommandUI.render` (`setNaval`, `renderNaval`) : pas de théâtre ni de troupes, le même cadre que la barre des troupes.
 
 **Ajouter un réglage** : bouton dans la section voulue d'`openSettings`, branche sur un champ de l'hôte, sauvegarde : voir la recette de [sauvegarde.md](sauvegarde.md).
 

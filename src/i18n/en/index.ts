@@ -12,3 +12,4 @@ import './misc';
 import './expeditions';
 import './army';
 import './citizens';
+import './fleet';

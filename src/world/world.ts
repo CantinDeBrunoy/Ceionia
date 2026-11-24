@@ -12,6 +12,7 @@ import { GoalState, newGoalState, readGoalState } from '../sim/goals';
 import { TradeState, newTradeState, readTradeState, saveTradeState } from '../sim/trade';
 import { allyLand, awayWhy, tradepostWhy } from '../sim/allyLand';
 import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
+import { FleetState, newFleet, readFleet, saveFleet } from '../sim/fleet';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Blason, DEFAULT_BLASON, DEFAULT_ISLE, readBlason, readIsleName } from '../sim/blason';
 import { readIlls } from '../sim/mishaps';
@@ -440,6 +441,8 @@ export class World {
   reveal = false;
   /** la diplomatie de l'archipel : peuples rencontrés, allié, conflit des deux îles (sauvegardée, voir `sim/diplomacy.ts`) */
   diplo: DiploState = newDiplo();
+  /** notre flotte de guerre (chantier B du nouveau monde : `sim/fleet.ts`) ; absente des anciennes sauvegardes */
+  fleet: FleetState = newFleet();
 
   /** Case dans le cadre de l'île principale (toujours vrai avant la version 4) */
   inMain(x: number, z: number) {
@@ -1975,6 +1978,7 @@ export class World {
       exp: this.exp,
       goals: this.goals,
       ...(saveDiplo(this.diplo) ? { diplo: this.diplo } : {}),
+      ...(saveFleet(this.fleet) ? { fleet: saveFleet(this.fleet) } : {}),
       difficulty: this.difficulty,
       diffV: DIFF_VERSION,
       ageBase: this.ageBase,
@@ -2143,6 +2147,7 @@ export class World {
     this.goals = readGoalState(d.goals);
     // (une partie d'avant la diplomatie : personne de rencontré)
     this.diplo = readDiplo(d.diplo);
+    this.fleet = readFleet(d.fleet);
     this.difficulty = readDifficulty(d.difficulty, d.diffV);
     // une ancienne sauvegarde n'en a pas : tout le village compte pour l'âge suivant
     this.ageBase = {};

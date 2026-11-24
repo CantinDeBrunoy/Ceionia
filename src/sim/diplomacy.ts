@@ -231,6 +231,8 @@ export function missionWhy(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string
     return null;
   }
   if (d.path !== 'peace') return tr('Il faut d’abord choisir la voie de la paix.');
+  // (les émissaires partent avec le premier convoi escorté : chantier B)
+  if (id === PEACE_CHAIN[0] && !d.saga.sea.includes('convoy') && !d.saga.truce) return tr('Il faut d’abord escorter le premier convoi (la feuille de route du conflit).');
   return null;
 }
 
@@ -306,7 +308,8 @@ export function endgameWhy(w: World, age: number): string | null {
  * Choisir (ou changer) sa voie tant que le conflit dure, que la bataille n'est pas engagée et que la trêve n'est pas signée :
  * la paix ouvre les pourparlers, la guerre les éclaireurs
  */
-export const canChangePath = (d: DiploState) => d.battle === 'none' && !d.saga.truce;
+// (ni une fois la première bataille navale ou le premier convoi passés : chantier B)
+export const canChangePath = (d: DiploState) => d.battle === 'none' && !d.saga.truce && !d.saga.sea.length;
 export function choosePath(d: DiploState, p: Path) {
   if (!d.ally || d.conflict !== 'open' || !PATHS.includes(p) || !canChangePath(d)) return false;
   d.path = p;
