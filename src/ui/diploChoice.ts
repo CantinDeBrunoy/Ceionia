@@ -3,17 +3,19 @@ import { hudPic } from './pics';
 import type { People } from '../world/archipelago';
 import { DiploState, Path, isleName, peopleName, rivalOf, talkRisk, TALK_RISK, type Intel } from '../sim/diplomacy';
 import type { Road } from '../sim/diploRoad';
+import type { KindId } from '../build/catalog';
 
 /**
  * Les cartes de la diplomatie de l'archipel, dans le style de la carte du choix du portail (parchemin bordé d'or, titre en
  * Fraunces, deux ou trois grands choix) :
  * - **le choix de l'allié**, à la fin de la cinématique des îles : les deux peuples côte à côte, chacun avec son blason, son
  *   île et ses mœurs ; le choix est obligatoire et définitif (la carte n'a pas de croix) ;
- * - **le dénouement**, au Médiéval (une fois l'allié installé chez lui) : négocier la paix (une ambassade, puis la
- *   cinématique de la paix) ou aider notre allié (une expédition militaire, puis la bataille). Il faut régler le conflit pour
- *   passer à l'Industriel. Elle s'ouvre d'elle-même une fois, quand le reste du passage est rempli ; « Plus tard » la referme
- *   (on reste au Médiéval). On la rouvre depuis la condition du panneau des âges, le conseil, l'onglet « Grands choix » ou la
- *   ligne en tête du rayon Vie ; on peut changer de voie tant que la bataille n'est pas engagée
+ * - **le dénouement**, au Médiéval (une fois l'allié installé chez lui) : négocier la paix (des pourparlers, une trêve, puis
+ *   la paix au Moderne) ou aider notre allié (des éclaireurs, puis la campagne de l'île rivale). Le conflit se joue en trois
+ *   chapitres, un par âge (`sim/saga.ts`), chacun une condition du passage d'âge. Elle s'ouvre d'elle-même une fois, quand le
+ *   reste du passage est rempli ; « Plus tard » la referme. On la rouvre depuis la condition du panneau des âges, le conseil,
+ *   l'onglet « Grands choix » ou la ligne en tête du rayon Vie ; on peut changer de voie tant que la bataille n'est pas
+ *   engagée et la trêve pas signée
  */
 export class DiploChoice {
   private el: HTMLElement;
@@ -23,7 +25,7 @@ export class DiploChoice {
   /** le choix tactique en cours de la bataille (1 : les remparts ; 2 : l'assaut final) */
   private step: 1 | 2 = 1;
 
-  constructor(root: HTMLElement, private host: { diplo(): DiploState; why?(): string | null; click(): void; ally(p: People): void; path(p: Path): void; tactic?(c: string): void; battle?(): void; road?(): Road | null; mission?(id: string): void; hold?(): void }) {
+  constructor(root: HTMLElement, private host: { diplo(): DiploState; why?(): string | null; click(): void; ally(p: People): void; path(p: Path): void; tactic?(c: string): void; battle?(): void; road?(): Road | null; mission?(id: string): void; hold?(): void; build?(k: KindId): void; sign?(): void }) {
     this.el = document.createElement('div');
     this.el.id = 'diploChoice';
     this.el.className = 'panel';
@@ -41,6 +43,8 @@ export class DiploChoice {
       else if (a === 'orient' || a === 'asie') this.host.ally(a);
       else if (a === 'peace' || a === 'war') this.host.path(a);
       else if (a === 'battle') this.host.battle?.();
+      else if (a === 'build' && b.dataset.k) this.host.build?.(b.dataset.k as KindId);
+      else if (a === 'sign') this.host.sign?.();
     });
     root.append(this.el);
   }
@@ -104,7 +108,7 @@ export class DiploChoice {
         <p class="pcSub">${tr('La côte de {isle} est reconnue. Nos troupes et celles de {ally} sont prêtes à débarquer.', { isle: isleName(rival), ally: peopleName(ally) })}</p>
         ${learnt ? `<ul class="dcIntel">${learnt}</ul>` : ''}
         <div class="pcBtns dcCol">
-          ${choice('battle', 'pcGo', hudPic('militaire', 34), tr('Débarquer'), tr('prendre la plage, y poser un camp, puis le port, la tour et la ville'))}
+          ${choice('battle', 'pcGo', hudPic('militaire', 34), tr('Débarquer'), tr('prendre la plage et y poser un camp. Le port, la tour et la ville viendront aux âges suivants'))}
           ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('préparer encore le village : la bataille attendra'))}
         </div>
         <small class="pcNote">${tr('Pour débarquer plus tard : le bouton des Peuples, ou la condition « le conflit des deux îles ».')}</small>`;
@@ -129,12 +133,12 @@ export class DiploChoice {
       <p class="pcSub">${tr('Nos alliés, {ally}, sont toujours en guerre contre {rival}. Que fera notre village ?', { ally: peopleName(ally), rival: peopleName(rival) })}</p>
       <div class="pcBtns dcCol">
         ${why ? `<p class="dcWhy">${why}</p>` : ''}
-        ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('deux pourparlers, {r} % d’échec chacun : un comptoir, un monument, une fête', { r: Math.round(talkRisk(d) * 100) }), d.path === 'peace', !!why)}
-        ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('une expédition militaire, puis la bataille : butin et tribut d’or'), d.path === 'war', !!why)}
+        ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('deux pourparlers, {r} % d’échec chacun, pour une trêve, puis la paix au Moderne', { r: Math.round(talkRisk(d) * 100) }), d.path === 'peace', !!why)}
+        ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('des éclaireurs, puis une campagne jusqu’au Moderne : butin et tribut d’or'), d.path === 'war', !!why)}
         ${boonsNote(d)}
-        ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('rester au Médiéval et continuer à jouer'))}
+        ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('attendre et continuer à jouer'))}
       </div>
-      <small class="pcNote">${tr('Il faut régler ce conflit pour passer à l’âge suivant. Pour y revenir : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
+      <small class="pcNote">${tr('Le conflit se joue en trois chapitres, du Médiéval au Moderne. Chacun est une condition du passage à l’âge suivant. Pour y revenir : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
   }
 
   hide() { this.el.style.display = 'none'; }
@@ -150,7 +154,16 @@ export function roadHtml(r: Road) {
     const go = s.state === 'now' && s.go !== 'wait', mark = s.state === 'done' ? '✓' : String(i + 1);
     const body = `<i class="dcNum">${mark}</i><em class="dcIco" aria-hidden="true">${s.icon}</em><span><b>${s.title}</b><small>${s.sub}</small></span>`;
     if (!go) return `<div class="dcStep ${s.state}">${body}</div>`;
-    return s.go === 'battle' ? `<button data-a="battle" class="dcStep now pcGo">${body}</button>` : `<button data-a="mission" data-id="${s.id}" class="dcStep now pcGo">${body}</button>`;
+    if (s.go === 'battle') return `<button data-a="battle" class="dcStep now pcGo">${body}</button>`;
+    if (s.go === 'build') return `<button data-a="build" data-k="${s.kind}" class="dcStep now pcGo">${body}</button>`;
+    if (s.go === 'sign') return `<button data-a="sign" class="dcStep now pcGo">${body}</button>`;
+    return `<button data-a="mission" data-id="${s.id}" class="dcStep now pcGo">${body}</button>`;
+  };
+  // les chapitres : celui de l'âge est déplié (ses étapes), les autres tiennent sur une ligne
+  const chapter = (c: Road['chapters'][number]) => {
+    const head = `<div class="dcChap ${c.state}"><i aria-hidden="true">${c.state === 'done' ? '✓' : c.state === 'now' ? '▾' : '▸'}</i><b>${c.title}</b><small>${c.sub}</small></div>`;
+    if (c.state !== 'now') return head;
+    return head + `<div class="dcSteps">${r.steps.filter((s) => s.age === c.age).map(step).join('')}</div>`;
   };
   const prep = r.prep.map((p) => `<button data-a="mission" data-id="${p.id}" class="dcPrepIt${p.done ? ' done' : ''}"${p.done ? ' disabled' : ''}><em aria-hidden="true">${p.done ? '✓' : p.icon}</em><span><b>${p.title}</b><small>${p.running ? tr('en route') : p.gain}</small></span></button>`).join('');
   return `<div class="dcCrests">${crest(r.ally, 56)}<span class="dcVs">${war ? '⚔' : '🕊'}</span>${crest(r.rival, 56)}</div>
@@ -158,7 +171,7 @@ export function roadHtml(r: Road) {
     <p class="pcSub">${war ? tr('Avec {ally}, contre {rival}.', { ally: peopleName(r.ally), rival: peopleName(r.rival) }) : tr('Réconcilier {ally} et {rival}.', { ally: peopleName(r.ally), rival: peopleName(r.rival) })}</p>
     ${r.alert ? `<button data-a="battle" class="dcAlert pcGo"><em aria-hidden="true">🔥</em><span><b>${r.alert}</b><small>${tr('Défendre le camp')}</small></span></button>` : ''}
     <h5 class="dcH">${tr('La suite')}</h5>
-    <div class="dcSteps">${r.steps.map(step).join('')}</div>
+    ${r.chapters.map(chapter).join('')}
     ${r.notes.length ? `<p class="dcNotes">${r.notes.join('<br>')}</p>` : ''}
     ${prep ? `<h5 class="dcH">${tr('Pour se préparer')} <small>${tr('facultatif')}</small></h5><div class="dcPrep">${prep}</div>` : ''}
     <div class="dcFoot">${r.canChange ? `<button data-a="change" class="dcLink">${tr('Changer de voie')}</button>` : ''}<button data-a="later" class="dcLink">${tr('Fermer')}</button></div>

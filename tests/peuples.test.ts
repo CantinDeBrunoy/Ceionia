@@ -77,7 +77,7 @@ describe('le panneau Peuples', () => {
     expect(g(rival.gestures, 'war')).toMatchObject({ done: true });
   });
 
-  it('la voie de la paix : le geste mène au pourparler suivant ; la paix signée apaise le rival', () => {
+  it('la voie de la paix : le geste mène au pourparler suivant ; la trêve apaise le rival, la paix signée le rend amical', () => {
     const w = world();
     chooseAlly(w.diplo, 'orient');
     choosePath(w.diplo, 'peace');
@@ -89,17 +89,23 @@ describe('le panneau Peuples', () => {
     expect(rival.mood).toBe(2);
     expect(g(rival.gestures, 'peace').mission).toBe('truce');
     applyDiplo(w.diplo, 'truce');
+    // (la trêve, au Médiéval : les combats cessent, on ne revient plus à la guerre ; la paix vient au Moderne)
+    const truce = peoplesView(w, ctx()).cards;
+    expect(truce[1]).toMatchObject({ mood: 3, tone: 'peace' });
+    expect(g(truce[1].gestures, 'peace')).toMatchObject({ on: true, go: 'path' });
+    expect(g(truce[1].gestures, 'war').on).toBe(false);
+    w.diplo.conflict = 'peace';
     const after = peoplesView(w, ctx()).cards;
     expect(after[1]).toMatchObject({ mood: 3, tone: 'peace' });
     expect(after[0].mood).toBe(4);
     expect(g(after[1].gestures, 'peace').done).toBe(true);
   });
 
-  it('un traité (partie au-delà du Médiéval) : rien à faire, et la fiche le dit', () => {
+  it('un traité (archipel accepté au Futuriste) : rien à faire, et la fiche le dit', () => {
     const w = world();
     chooseAlly(w.diplo, 'asie');
-    settleLate(w.diplo, 3, true);
-    const rival = peoplesView(w, ctx({ age: 3 })).cards[0];
+    settleLate(w.diplo, 5, true);
+    const rival = peoplesView(w, ctx({ age: 5 })).cards[0];
     expect(rival.status).toMatch(/traité/);
     expect(rival.gestures.every((x) => !x.on)).toBe(true);
   });

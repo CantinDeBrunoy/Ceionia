@@ -11,7 +11,8 @@ import { MAKER, Shortage, shortages, shortText } from './ledger';
 import { goldNeed, goldSince, tradeOpen } from './trade';
 import { archipelagoOn, canExpand } from '../world/expand';
 import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from './crossroads';
-import { CONFLICT_LABEL, conflictItem } from './diplomacy';
+import { chapterItem, isChapterLabel, stepNow } from './saga';
+import { stepTitle as sagaStepTitle } from './diploRoad';
 import { SEEDS_PERK, SEEDS_FIELDS } from './isleMissions';
 import { guardReach, perkFood, perkJoy } from './legacy';
 import { DAMAGED_K } from './calamity';
@@ -52,7 +53,7 @@ export function ageGo(i: AgeItem): AgeGo {
   if (i.kind) return { kind: i.kind };
   if (i.missionId) return { mission: i.missionId };
   const l = i.label;
-  return { req: l === CHOICE_LABEL ? 'choice' : l === CONFLICT_LABEL ? 'conflict' : l === GOLD_LABEL ? 'gold' : l === 'minerai' ? 'ore' : l.startsWith('briques') ? 'brick' : l === RAIL_FIRST || l === RAIL_LINKED ? 'rail' : 'pop' };
+  return { req: l === CHOICE_LABEL ? 'choice' : isChapterLabel(l) ? 'conflict' : l === GOLD_LABEL ? 'gold' : l === 'minerai' ? 'ore' : l.startsWith('briques') ? 'brick' : l === RAIL_FIRST || l === RAIL_LINKED ? 'rail' : 'pop' };
 }
 
 /** Les deux conditions du chemin de fer, en fin d'âge industriel (leur libellé commence par « chemin de fer ») */
@@ -349,9 +350,9 @@ export class Sim {
       const met = crossroadsMet(w, hellWay(w, 'ask'), worldWay(w, canExpand({ n: N, gen: w.gen })));
       items.push({ label: CHOICE_LABEL, have: met ? 1 : 0, need: 1 });
     }
-    // l'archipel : le conflit des deux îles réglé (paix ou guerre) pour passer au Moderne, voir `sim/diplomacy.ts`
-    const conflict = conflictItem(w, n);
-    if (conflict) items.push({ label: CONFLICT_LABEL, ...conflict });
+    // l'archipel : le chapitre du conflit des deux îles de l'âge en cours (le Médiéval, l'Industriel, le Moderne), voir `sim/saga.ts`
+    const conflict = chapterItem(w, n, { count: (k) => this.counts[k] ?? 0 });
+    if (conflict) items.push(conflict);
     // la fin de l'âge : la raffinerie (ouverte par l'expédition « L'or noir ») et ses puits, puis le chemin de fer
     kinds(true);
     if (req.reqRail) {
@@ -433,7 +434,12 @@ export class Sim {
       const miss = ap.items.find((i) => i.have < i.need);
       if (!miss) return tr('Tout est prêt pour l’âge suivant ({age}) : passez-y quand vous voulez.', { age: AGES[ap.next].name });
       if (miss.label === CHOICE_LABEL) { this.messageChoice = true; return tr('Pour l’âge suivant : faites le grand choix, les Enfers, le monde, ou ni l’un ni l’autre (cliquez ici).'); }
-      if (miss.label === CONFLICT_LABEL) { this.messageConflict = true; return tr('Pour l’âge suivant : réglez le conflit des deux îles, par la paix ou par la guerre (cliquez ici).'); }
+      if (isChapterLabel(miss.label)) {
+        this.messageConflict = true;
+        if (!w.diplo.path) return tr('Pour l’âge suivant : choisissez la paix ou la guerre dans le conflit des deux îles (cliquez ici).');
+        const now = stepNow(w, this.age, { count: (k) => this.counts[k] ?? 0 });
+        return now ? tr('Pour l’âge suivant : le chapitre du conflit des deux îles, étape « {step} » (cliquez ici).', { step: sagaStepTitle(now.id, w.diplo) }) : tr('Pour l’âge suivant : le chapitre du conflit des deux îles (cliquez ici).');
+      }
       if (miss?.mission) {
         // toutes celles qui restent à réussir (la Préhistoire en demande deux)
         const left = ap.items.filter((i) => i.mission && i.have < i.need).map((i) => tr('« {name} »', { name: tr(i.mission!) }));

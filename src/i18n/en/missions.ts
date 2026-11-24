@@ -485,9 +485,9 @@ registerDict('missions', {
   "la guerre gagnée : butin et tribut d’or": "the war won: gold spoils and tribute",
   // le dénouement de l'archipel au Médiéval : l'ambassade de la paix, l'expédition de la guerre
   "L’ambassade de la paix": "The Peace Embassy",
-  "Nos ambassadeurs vont réunir les chefs des deux îles autour d’une même table. S’ils signent, la guerre cesse, et les trois peuples feront la fête.": "Our ambassadors will bring the chiefs of the two islands around one table. If they sign, the war ends, and the three peoples will celebrate.",
+  "Nos ambassadeurs vont réunir les chefs des deux îles autour d’une même table. S’ils signent une trêve, les combats cessent, et les trois peuples feront la fête.": "Our ambassadors will bring the chiefs of both islands around one table. If they sign a truce, the fighting stops, and the three peoples will celebrate.",
   "Les chefs ne sont pas venus.": "The chiefs did not come.",
-  "la paix des deux îles : les combats cessent": "peace between the two islands: the fighting stops",
+  "la trêve des deux îles : les combats cessent": "a truce between the two islands: the fighting stops",
   // la paix de l'archipel en deux pourparlers : les émissaires, l'ambassade
   "Les émissaires": "The Envoys",
   "Pour faire la paix, il faut d’abord parler. Nos émissaires vont porter des paroles de paix chez notre allié, puis chez son rival.": "To make peace, first we must talk. Our envoys will carry words of peace to our ally, then to its rival.",
@@ -500,8 +500,8 @@ registerDict('missions', {
   "Plus court : on parle tout de suite à celui qui se méfie.": "Quicker: we talk right away to the one who mistrusts us.",
   "va droit chez le rival, paroles de paix en main": "goes straight to the rival, words of peace in hand",
   "Surpris de nous voir arriver seuls, les chefs du rival ont écouté jusqu’au bout. En gage, ils ouvrent à nos marchands un comptoir sur leur île. Reste à réunir les deux chefs.": "Surprised to see us come alone, the rival’s chiefs listened to the end. As a pledge, they open a trading post on their island to our merchants. Now the two chiefs must be brought together.",
-  "Sous la tente, les deux chefs ont signé la paix, et notre village en est le témoin. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.": "Under the tent, the two chiefs signed the peace, with our village as witness. Guests from both islands come to celebrate the peace with us. To remember it: a Concord Monument and an embassy to build.",
-  "À notre bord, au milieu du bras de mer, les deux chefs ont signé la paix. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.": "Aboard our ship, in the middle of the strait, the two chiefs signed the peace. Guests from both islands come to celebrate the peace with us. To remember it: a Concord Monument and an embassy to build.",
+  "Sous la tente, les deux chefs ont signé une trêve, et notre village en est le témoin. Les invités des deux îles viennent la fêter chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.": "Under the tent, the two chiefs signed a truce, with our village as witness. Guests from both islands come to celebrate it with us. To remember it: a monument of concord and an embassy to build.",
+  "À notre bord, au milieu du bras de mer, les deux chefs ont signé une trêve. Les invités des deux îles viennent la fêter chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.": "On board our ship, in the middle of the strait, the two chiefs signed a truce. Guests from both islands come to celebrate it with us. To remember it: a monument of concord and an embassy to build.",
   // la guerre de l'archipel : les éclaireurs
   "Envoyer des éclaireurs": "Send Scouts",
   "Avant la bataille, il faut connaître la côte rivale. Ses défenses, la plage où débarquer, combien de soldats la gardent : une barque d’éclaireurs part de nuit, la longue-vue à la main.": "Before the battle, we must know the rival coast. Its defences, the beach to land on, how many soldiers guard it: a boat of scouts sets out at night, spyglass in hand.",

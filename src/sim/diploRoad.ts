@@ -1,18 +1,20 @@
 import type { World } from '../world/world';
 import type { People } from '../world/archipelago';
 import { tr } from '../i18n';
-import { archipelagoOn, isleOffered, isleName, Path, PEACE_CHAIN, rivalOf, WAR_MISSION, type BoonKind } from './diplomacy';
+import { archipelagoOn, canChangePath, isleOffered, isleName, Path, rivalOf, type BoonKind, type DiploState } from './diplomacy';
 import { ISLE_MISSIONS } from './isleMissions';
 import { MISSIONS, type Mission } from './missions';
-import { corps, corpsMax, raidDue, type Front } from './campaign';
+import { battleOpen, campaignNext, corps, corpsMax, raidDue } from './campaign';
+import { AGES, type KindId } from '../build/catalog';
+import { CHAPTERS, chapterDone, sagaSteps, type Chapter, type SagaStep } from './saga';
 
 /**
  * La feuille de route du conflit des deux îles (retour de joueurs, 22 nov. 2026 : après « Aider notre allié » ou « Négocier
  * la paix », on ne savait plus quoi faire). Une fois la voie prise, une fenêtre montre ce qui prépare la suite (les visites
  * facultatives sur les îles, avec ce qu'elles rapportent pour cette voie) et les étapes qui la déclenchent, dans l'ordre :
- * la guerre (les éclaireurs, puis la campagne de l'île rivale : le débarquement, le port, la tour du rempart, l'assaut ; voir
- * `sim/campaign.ts`), la paix (les émissaires, puis l'ambassade). Règle pure : `DiploChoice` la
- * dessine (`showRoad`), `Game.openDiploChoice` la rouvre
+ * en trois chapitres, un par âge, du Médiéval au Moderne (le fil des âges, `sim/saga.ts`) : seul celui de l'âge du village
+ * est déplié, les autres montrent leur titre et l'âge où ils s'ouvrent. Règle pure : `DiploChoice` la dessine (`showRoad`),
+ * `Game.openDiploChoice` la rouvre
  */
 
 /** Une visite facultative sur les îles, vue depuis la voie prise */
@@ -21,9 +23,20 @@ export interface RoadPrep { id: string; icon: string; title: string; gain: strin
  * Une étape de la suite : faite, à faire maintenant, ou plus tard (après la précédente). `go` dit où mène son bouton :
  * l'expédition (`mission`), la bataille (`battle`), ou rien (`wait` : en cours, ou délai)
  */
-export interface RoadStep { id: string; icon: string; title: string; sub: string; state: 'done' | 'now' | 'next'; go: 'mission' | 'battle' | 'wait' }
+export interface RoadStep {
+  id: string; icon: string; title: string; sub: string; state: 'done' | 'now' | 'next'; go: 'mission' | 'battle' | 'build' | 'sign' | 'wait';
+  /** le chapitre de l'étape (son âge) */
+  age: Chapter;
+  /** le bâtiment à poser (`build`) */
+  kind?: KindId;
+}
+/** Un chapitre : fait, celui de l'âge (déplié), ou plus tard (son titre et l'âge où il s'ouvre) */
+export interface RoadChapter { age: Chapter; title: string; state: 'done' | 'now' | 'later'; sub: string }
 export interface Road {
-  path: Path; ally: People; rival: People; prep: RoadPrep[]; steps: RoadStep[];
+  path: Path; ally: People; rival: People; prep: RoadPrep[];
+  /** toutes les étapes, des trois chapitres, dans l'ordre */
+  steps: RoadStep[];
+  chapters: RoadChapter[];
   /** on peut encore changer de voie (pas une fois la bataille engagée) */
   canChange: boolean;
   /** une sortie rivale fond sur le camp : la défendre passe avant tout (son bouton mène à la bataille) */
@@ -49,13 +62,56 @@ export interface RoadCtx {
   running(id: string): boolean;
   /** durée d'un jour de jeu (s), pour dire le délai d'une bataille perdue */
   dayLen: number;
+  /** l'âge du village (le chapitre en cours) ; absent : le Médiéval */
+  age?: number;
+  /** le nombre de bâtiments d'un genre (les étapes de construction de la paix) */
+  count?(k: KindId): number;
+}
+
+/** Le titre d'un chapitre, selon la voie */
+export function chapterTitle(path: Path, age: Chapter): string {
+  if (path === 'war') return age === 2 ? tr('La tête de pont') : age === 3 ? tr('Les avant-postes') : tr('La bataille des deux îles');
+  return age === 2 ? tr('La trêve') : age === 3 ? tr('Le commerce des deux îles') : tr('La paix des îles');
+}
+
+/** Le titre d'une étape (pour le conseil et la feuille de route) */
+export function stepTitle(id: string, d: Pick<DiploState, 'ally'>): string {
+  const rival = d.ally ? rivalOf(d.ally) : 'asie';
+  const m = MISSIONS.find((x) => x.id === id);
+  if (m) return tr(m.title);
+  const t: Record<string, () => string> = {
+    plage: () => tr('Le débarquement'), camp: () => tr('Tenir le camp'), port: () => tr('Le port de {isle}', { isle: isleName(rival) }),
+    tour: () => tr('La tour du rempart'), assault: () => tr('L’assaut'), post2: () => tr('Un second comptoir'),
+    embassy: () => tr('L’ambassade'), sign: () => tr('Signer la paix des îles'),
+  };
+  return t[id]?.() ?? id;
+}
+
+const ICON: Record<string, string> = { plage: '⛵', camp: '🏕️', port: '⚓', tour: '🏰', assault: '⚔️', post2: '💰', embassy: '🌐', sign: '📜' };
+
+/** Le sous-titre d'une étape pas encore faite */
+function subOf(id: string, rival: People): string {
+  switch (id) {
+    case 'allywar': return tr('reconnaître la côte de {isle}', { isle: isleName(rival) });
+    case 'plage': return tr('la plage : un camp et une caserne avancée');
+    case 'camp': return tr('repousser la première sortie rivale');
+    case 'port': return tr('un avant-poste et sa garnison');
+    case 'tour': return tr('une tour qui tire, et ses archers');
+    case 'assault': return tr('les remparts, puis le palais');
+    case 'envoys': return tr('ouvre leur comptoir et la discussion');
+    case 'truce': return tr('une trêve signée : les combats cessent');
+    case 'post2': return tr('chez notre allié : le commerce des deux îles grandit');
+    case 'embassy': return tr('la maison des trois peuples, sur notre île');
+    case 'sign': return tr('les deux chefs signent la paix chez nous');
+  }
+  return '';
 }
 
 /** La feuille de route, ou null (pas d'archipel, pas d'allié, pas de voie, ou le conflit réglé) */
 export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx): Road | null {
   const d = w.diplo;
   if (!archipelagoOn(w) || !d.ally || !d.path || d.conflict !== 'open') return null;
-  const path = d.path, ally = d.ally, rival = rivalOf(ally);
+  const path = d.path, ally = d.ally, rival = rivalOf(ally), age = ctx.age ?? 2, sctx = { count: ctx.count };
   const prep: RoadPrep[] = [];
   for (const m of ISLE_MISSIONS) {
     if (!isleOffered(w, m.id, m.isle!.when)) continue;
@@ -65,51 +121,57 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
   }
   // (celles qui restent à faire d'abord)
   prep.sort((a, b) => Number(a.done) - Number(b.done));
-  const steps: RoadStep[] = [];
-  const mission = (id: string, sub: string, before: boolean): RoadStep => {
-    const m = MISSIONS.find((x) => x.id === id), done = w.exp.done.includes(id), run = ctx.running(id);
-    return {
-      id, icon: m?.icon ?? '🧭', title: m?.title ?? id,
-      sub: done ? tr('C’est fait') : run ? tr('L’expédition est en route') : sub,
-      state: done ? 'done' : before ? 'now' : 'next', go: done || run ? 'wait' : 'mission',
-    };
+
+  // les chapitres : faits, celui de l'âge (ou d'avant, pas encore fait), ou plus tard
+  const chapters: RoadChapter[] = CHAPTERS.map((a): RoadChapter => {
+    const title = chapterTitle(path, a);
+    if (chapterDone(w, a, sctx)) return { age: a, title, state: 'done', sub: tr('Chapitre fait') };
+    if (a <= age) return { age: a, title, state: 'now', sub: tr('Le chapitre de l’âge : {age}', { age: AGES[a].name }) };
+    return { age: a, title, state: 'later', sub: tr('S’ouvre à l’âge : {age}', { age: AGES[a].name }) };
+  });
+  const open = new Set(chapters.filter((c) => c.state === 'now').map((c) => c.age));
+
+  // les étapes : celle du moment est la première pas faite d'un chapitre ouvert
+  const clock = w.exp.clock, raid = path === 'war' && raidDue(d, clock);
+  const wait = d.battle === 'lost' ? Math.max(0, d.retry - clock) : 0;
+  const all = sagaSteps(w, sctx), first = all.find((s) => !s.done && open.has(s.age));
+  const view = (s: SagaStep): RoadStep => {
+    const now = s === first, m = s.mission ? MISSIONS.find((x) => x.id === s.mission) : undefined, run = !!s.mission && ctx.running(s.mission);
+    const st: RoadStep = { id: s.id, icon: m?.icon ?? ICON[s.id] ?? '🧭', title: stepTitle(s.id, d), sub: subOf(s.id, rival), state: s.done ? 'done' : now ? 'now' : 'next', go: 'wait', age: s.age, kind: s.kind };
+    if (s.done) { st.sub = tr('C’est fait'); return st; }
+    if (!now) return st;
+    if (s.go === 'mission') { st.go = run ? 'wait' : 'mission'; if (run) st.sub = tr('L’expédition est en route'); }
+    else if (s.go === 'battle') {
+      if (wait > 0) st.sub = tr('nos troupes se refont : encore {n} jours', { n: Math.max(1, Math.ceil(wait / ctx.dayLen)) });
+      else if (!raid && battleOpen(d, age)) {
+        st.go = 'battle';
+        // (une sortie a repris ce qu'on tenait : on le reprend d'abord)
+        const k = campaignNext(d), what = k === 'port' ? tr('le port') : k === 'tour' ? tr('la tour du rempart') : tr('la plage');
+        if ((s.id === 'assault' && k !== 'assault') || (s.id === 'tour' && (k === 'landing' || k === 'port')) || (s.id === 'port' && k === 'landing')) st.sub = tr('d’abord reprendre {what}', { what });
+      }
+    } else if (s.go === 'wait') {
+      // (la première sortie rivale : elle vient d'elle-même ; arrivée, le bouton mène à la défense)
+      if (raid) st.go = 'battle';
+      else if (d.camp.raid > clock) st.sub = tr('repousser la première sortie rivale, dans {n} jours', { n: Math.max(1, Math.ceil((d.camp.raid - clock) / ctx.dayLen)) });
+    } else st.go = s.go;
+    return st;
   };
-  if (path === 'peace') {
-    const [envoys, truce] = PEACE_CHAIN, first = w.exp.done.includes(envoys);
-    steps.push(mission(envoys, tr('ouvre leur comptoir et la discussion'), true));
-    steps.push(mission(truce, tr('la paix signée : une fête, un monument'), first));
-  } else {
-    const scouted = d.battle !== 'none' || w.exp.done.includes(WAR_MISSION);
-    const s = mission(WAR_MISSION, tr('reconnaître la côte de {isle}', { isle: isleName(rival) }), true);
-    if (scouted) { s.state = 'done'; s.go = 'wait'; s.sub = tr('C’est fait'); }
-    steps.push(s);
-    // la campagne de l'île rivale : chaque bataille dans l'ordre (la plage, le port, la tour, l'assaut)
-    const clock = w.exp.clock, held = d.camp.held, raid = raidDue(d, clock);
-    const wait = d.battle === 'lost' ? Math.max(0, d.retry - clock) : 0;
-    const waitSub = tr('nos troupes se refont : encore {n} jours', { n: Math.max(1, Math.ceil(wait / ctx.dayLen)) });
-    const BATTLES: [Front | 'assault', string, string, string][] = [
-      ['plage', '⛵', tr('Le débarquement'), tr('la plage : un camp et une caserne avancée')],
-      ['port', '⚓', tr('Le port de {isle}', { isle: isleName(rival) }), tr('un avant-poste et sa garnison')],
-      ['tour', '🏰', tr('La tour du rempart'), tr('une tour qui tire, et ses archers')],
-      ['assault', '⚔️', tr('L’assaut'), tr('les remparts, puis le palais')],
-    ];
-    // (l'étape du moment : la première pas encore tenue ; une sortie en cours la fait attendre)
-    const first = BATTLES.findIndex(([f]) => f === 'assault' || !held.includes(f));
-    for (const [i, [f, icon, title, sub]] of BATTLES.entries()) {
-      const done = f !== 'assault' && held.includes(f), now = scouted && i === first;
-      steps.push({
-        id: f, icon, title, sub: done ? tr('C’est fait') : now && wait > 0 ? waitSub : sub,
-        state: done ? 'done' : now ? 'now' : 'next', go: now && !raid && wait <= 0 ? 'battle' : 'wait',
-      });
-    }
-    const alert = raid ? tr('Une sortie rivale fond sur notre camp') : undefined;
-    const notes: string[] = [];
-    if (held.length) {
-      const [s0, a0] = corps(d), [s1, a1] = corpsMax(d);
+  const steps = all.map(view);
+
+  const notes: string[] = [];
+  let alert: string | undefined;
+  if (path === 'war') {
+    alert = raid ? tr('Une sortie rivale fond sur notre camp') : undefined;
+    if (d.camp.held.length) {
+      const [s0, a0] = corps(d, age), [s1, a1] = corpsMax(d, age);
       notes.push(tr('Notre corps : {n} soldats sur {m}', { n: s0 + a0, m: s1 + a1 }) + (s0 + a0 < s1 + a1 ? tr(' · la caserne avancée le refait') : ''));
-      if (!raid && d.camp.raid > clock) notes.push(tr('Prochaine sortie rivale dans {n} jours', { n: Math.max(1, Math.ceil((d.camp.raid - clock) / ctx.dayLen)) }));
+      if (!raid && d.camp.raid > clock && open.size) notes.push(tr('Prochaine sortie rivale dans {n} jours', { n: Math.max(1, Math.ceil((d.camp.raid - clock) / ctx.dayLen)) }));
     }
-    return { path, ally, rival, prep, steps, canChange: d.battle === 'none', alert, notes };
   }
-  return { path, ally, rival, prep, steps, canChange: d.battle === 'none', notes: [] };
+  // le chapitre de l'âge fait : on le dit, et ce qui vient (le passage d'âge)
+  if (!open.size) {
+    const next = chapters.find((c) => c.state === 'later');
+    if (next) notes.push(tr('Chapitre fait. La suite, « {title} », s’ouvre à l’âge : {age}.', { title: next.title, age: AGES[next.age].name }));
+  }
+  return { path, ally, rival, prep, steps, chapters, canChange: canChangePath(d), alert, notes };
 }

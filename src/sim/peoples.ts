@@ -129,6 +129,7 @@ function rivalCard(w: Pick<World, 'isles' | 'diplo' | 'exp'>, c: PeoplesCtx, p: 
   if (d.conflict === 'peace') { mood = 3; moodWhy = tr('La paix est signée : vos marchands sont les bienvenus.'); status = tr('En paix avec vous'); tone = 'peace'; }
   else if (d.conflict === 'treaty') { mood = 2; moodWhy = tr('Un traité a fini la guerre entre les deux îles.'); status = tr('En paix (traité)'); tone = 'peace'; }
   else if (d.conflict === 'won') { mood = 1; moodWhy = tr('Vaincus, ils vous paient tribut.'); status = tr('Vaincus : {n} or de tribut par jour', { n: WAR_SPOILS.tribute }); tone = 'calm'; }
+  else if (d.saga.truce) { mood = 3; moodWhy = tr('Une trêve est signée : les combats ont cessé.'); status = tr('En trêve avec votre allié'); tone = 'peace'; }
   else if (d.path === 'war') { mood = 0; moodWhy = tr('Vous préparez la guerre contre eux.'); status = tr('En guerre contre vous'); tone = 'war'; }
   else if (d.post) { mood = 2; moodWhy = tr('Vos émissaires les ont apaisés : ils écoutent.'); status = tr('En guerre contre votre allié'); tone = 'war'; }
   else { mood = 1; moodWhy = tr('Vous êtes l’allié de leur ennemi.'); status = tr('En guerre contre votre allié'); tone = 'war'; }
@@ -152,17 +153,24 @@ function rivalCard(w: Pick<World, 'isles' | 'diplo' | 'exp'>, c: PeoplesCtx, p: 
     scouts = { id: 'scouts', label: tr('Envoyer des éclaireurs'), on: false, why: tr('{why}, puis la voie de la guerre', { why }) };
   } else if (d.path === 'war' && d.battle !== 'none') {
     peace = { id: 'peace', label: tr('Faire la paix'), on: false, why: tr('Trop tard : la bataille est engagée') };
-    war = { id: 'war', label: tr('À la bataille'), on: true, go: 'path', why: d.battle === 'lost' ? tr('Nos troupes se refont chez notre allié') : tr('Nos troupes sont prêtes à débarquer') };
+    // (le camp posé : la campagne suit les âges, le geste rouvre sa feuille de route)
+    war = d.camp.held.length ? { id: 'war', label: tr('La suite de la guerre'), on: true, go: 'path', why: tr('Notre camp tient leur plage : la campagne, âge par âge') }
+      : { id: 'war', label: tr('À la bataille'), on: true, go: 'path', why: d.battle === 'lost' ? tr('Nos troupes se refont chez notre allié') : tr('Nos troupes sont prêtes à débarquer') };
     scouts = { id: 'scouts', label: tr('Envoyer des éclaireurs'), on: false, done: true, why: tr('Leur côte est reconnue') };
   } else if (d.path === 'war') {
     peace = { id: 'peace', label: tr('Faire la paix plutôt'), on: true, go: 'change', why: tr('Changer de voie : deux pourparlers, {r} % d’échec chacun', { r: Math.round(talkRisk(d) * 100) }) };
     // (la voie prise : le geste rouvre sa feuille de route, les étapes et comment s'y préparer)
     war = { id: 'war', label: tr('La suite de la guerre'), on: true, go: 'path', why: tr('Les étapes, et comment s’y préparer') };
     scouts = { id: 'scouts', label: tr('Envoyer des éclaireurs'), on: true, go: 'mission', mission: WAR_MISSION, why: tr('Reconnaître leur côte avant la bataille') };
+  } else if (d.path === 'peace' && d.saga.truce) {
+    // (la trêve signée : la suite de la paix ; plus de retour à la guerre)
+    peace = { id: 'peace', label: tr('Poursuivre la paix'), on: true, go: 'path', why: tr('La trêve est signée : la suite, jusqu’à la paix') };
+    war = { id: 'war', label: tr('Faire la guerre plutôt'), on: false, why: tr('Une trêve est signée') };
+    scouts = { id: 'scouts', label: tr('Envoyer des éclaireurs'), on: false, why: tr('Sur la voie de la guerre') };
   } else if (d.path === 'peace') {
     const next = PEACE_CHAIN.find((id) => !done(id)) ?? PEACE_MISSION;
     peace = { id: 'peace', label: tr('Poursuivre la paix'), on: true, go: 'path', mission: next, why: next === PEACE_MISSION ? tr('L’ambassade de la paix') : tr('Les émissaires, puis l’ambassade') };
-    war = { id: 'war', label: tr('Faire la guerre plutôt'), on: true, go: 'change', why: tr('Changer de voie : une bataille, butin et tribut') };
+    war = { id: 'war', label: tr('Faire la guerre plutôt'), on: true, go: 'change', why: tr('Changer de voie : une campagne, butin et tribut') };
     scouts = { id: 'scouts', label: tr('Envoyer des éclaireurs'), on: false, why: tr('Sur la voie de la guerre') };
   } else {
     peace = { id: 'peace', label: tr('Faire la paix'), on: true, go: 'path', why: tr('Deux pourparlers, {r} % d’échec chacun', { r: Math.round(talkRisk(d) * 100) }) };
