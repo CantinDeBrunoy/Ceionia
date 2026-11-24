@@ -113,7 +113,8 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
   if (!archipelagoOn(w) || !d.ally || !d.path || d.conflict !== 'open') return null;
   const path = d.path, ally = d.ally, rival = rivalOf(ally), age = ctx.age ?? 2, sctx = { count: ctx.count };
   const prep: RoadPrep[] = [];
-  for (const m of ISLE_MISSIONS) {
+  // (la trêve signée, plus de pourparlers : les visites qui les rendaient plus sûrs ne servent plus à la paix)
+  for (const m of path === 'peace' && d.saga.truce ? [] : ISLE_MISSIONS) {
     if (!isleOffered(w, m.id, m.isle!.when)) continue;
     const gain = prepGain(m, path);
     if (!gain) continue;
@@ -142,7 +143,7 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
     if (!now) return st;
     if (s.go === 'mission') { st.go = run ? 'wait' : 'mission'; if (run) st.sub = tr('L’expédition est en route'); }
     else if (s.go === 'battle') {
-      if (wait > 0) st.sub = tr('nos troupes se refont : encore {n} jours', { n: Math.max(1, Math.ceil(wait / ctx.dayLen)) });
+      if (wait > 0) { const n = Math.max(1, Math.ceil(wait / ctx.dayLen)); st.sub = n === 1 ? tr('nos troupes se refont : encore un jour') : tr('nos troupes se refont : encore {n} jours', { n }); }
       else if (!raid && battleOpen(d, age)) {
         st.go = 'battle';
         // (une sortie a repris ce qu'on tenait : on le reprend d'abord)
@@ -150,9 +151,8 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
         if ((s.id === 'assault' && k !== 'assault') || (s.id === 'tour' && (k === 'landing' || k === 'port')) || (s.id === 'port' && k === 'landing')) st.sub = tr('d’abord reprendre {what}', { what });
       }
     } else if (s.go === 'wait') {
-      // (la première sortie rivale : elle vient d'elle-même ; arrivée, le bouton mène à la défense)
+      // (la première sortie rivale : elle vient d'elle-même, la ligne du corps dit quand ; arrivée, le bouton mène à la défense)
       if (raid) st.go = 'battle';
-      else if (d.camp.raid > clock) st.sub = tr('repousser la première sortie rivale, dans {n} jours', { n: Math.max(1, Math.ceil((d.camp.raid - clock) / ctx.dayLen)) });
     } else st.go = s.go;
     return st;
   };
@@ -165,7 +165,7 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
     if (d.camp.held.length) {
       const [s0, a0] = corps(d, age), [s1, a1] = corpsMax(d, age);
       notes.push(tr('Notre corps : {n} soldats sur {m}', { n: s0 + a0, m: s1 + a1 }) + (s0 + a0 < s1 + a1 ? tr(' · la caserne avancée le refait') : ''));
-      if (!raid && d.camp.raid > clock && open.size) notes.push(tr('Prochaine sortie rivale dans {n} jours', { n: Math.max(1, Math.ceil((d.camp.raid - clock) / ctx.dayLen)) }));
+      if (!raid && d.camp.raid > clock && open.size) { const n = Math.max(1, Math.ceil((d.camp.raid - clock) / ctx.dayLen)); notes.push(n === 1 ? tr('Prochaine sortie rivale d’ici un jour') : tr('Prochaine sortie rivale dans {n} jours', { n })); }
     }
   }
   // le chapitre de l'âge fait : on le dit, et ce qui vient (le passage d'âge)

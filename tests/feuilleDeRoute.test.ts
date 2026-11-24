@@ -62,7 +62,8 @@ describe('la feuille de route', () => {
     // (au Médiéval : la plage prise, reste à tenir le camp contre la première sortie, qui vient d'elle-même)
     expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'now', 'next', 'next', 'next']);
     expect(r.steps[2]).toMatchObject({ id: 'camp', go: 'wait' });
-    expect(r.steps[2].sub).toMatch(/dans 1 jours|dans \d+ jours/);
+    expect(r.steps[2].sub).toBe('repousser la première sortie rivale');
+    expect(r.notes.join(' ')).toMatch(/d’ici un jour/);
     expect(r.alert).toBeUndefined();
     expect(r.notes.join(' ')).toMatch(/21 soldats sur 25/);
     expect(r.notes.join(' ')).toMatch(/sortie rivale/);
@@ -101,6 +102,8 @@ describe('la feuille de route', () => {
     // la trêve : plus de changement de voie ; à l'Industriel, un second comptoir (bouton qui le prend en main)
     applyDiplo(w.diplo, 'truce');
     expect(roadView(w, ctx())!.canChange).toBe(false);
+    // (plus de pourparlers : plus de visites pour les rendre plus sûrs)
+    expect(roadView(w, ctx())!.prep).toEqual([]);
     let n = 1;
     const count = (k: string) => (k === 'tradepost' ? n : 0);
     r = roadView(w, { ...ctx([], 3), count })!;

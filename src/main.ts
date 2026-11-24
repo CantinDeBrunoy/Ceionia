@@ -1842,7 +1842,8 @@ class Game implements UIHost {
   private buildForSaga(k: KindId) {
     if (this.mode !== 'surface') { this.ensureSurface(() => this.buildForSaga(k), true); return; }
     if (k === 'tradepost') this.goAlly();
-    this.tools.setTool('build', k);
+    // (comme un clic sur sa vignette : verrouillé, un message dit pourquoi et où aller)
+    this.ui.pickBuild(k);
     this.ui.update();
   }
 
