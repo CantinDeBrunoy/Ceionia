@@ -10,13 +10,110 @@ import { BLASON_COLORS, type Blason } from '../../sim/blason';
 export interface Spot { x: number; y: number; z: number; side: 0 | 1 }
 
 /** Ce qu'un spectacle reçoit : l'âge du bâtiment, une graine, l'échelle (plan réduit), les couleurs, les tribunes */
-export interface Kit { age: number; seed: number; scale: number; home: number; homeB: number; away: number; awayB: number; spots: Spot[] }
+export interface Kit {
+  age: number; seed: number; scale: number; home: number; homeB: number; away: number; awayB: number; spots: Spot[];
+  /** la hauteur du terrain en (x, z) du repère du bâtiment, au-dessus de son sol : ce qui se tient devant la façade s'y pose */
+  ground?: (x: number, z: number) => number;
+}
 
 export interface ShowView {
   group: THREE.Group;
   done: boolean;
   update(dt: number): void;
   dispose(): void;
+  /** tous les spectateurs sont à leur place (ou on ne les attend plus) : la scène peut commencer */
+  ready?(): void;
+  /** le spectateur n° i vient d'arriver à sa place (au temple : il dépose son offrande) */
+  arrived?(i: number): void;
+  /**
+   * où en sont les spectateurs d'un geste à file d'attente (le théâtre, `queue`) : `wait` dans la file devant l'entrée, `in` ils
+   * entrent un à un, `show` tous dedans, `out` ils ressortent et se tiennent devant la façade
+   */
+  crowd?: 'wait' | 'in' | 'show' | 'out';
+}
+
+/** Un petit halo lumineux (texture ronde et floue, ajouté à l'image) : torches, lampes, encens, couronne */
+export function glowSprite(color: number, size: number, opacity = 0.9) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTexture(), color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending }));
+  s.scale.setScalar(size);
+  return s;
+}
+
+/** Des points lumineux qui montent, retombent et s'éteignent (étincelles d'un coup, poussières d'or), par lots */
+export class Sparks {
+  points: THREE.Points;
+  private pos: Float32Array;
+  private col: Float32Array;
+  private list: { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; c: THREE.Color; g: number }[] = [];
+
+  constructor(private cap = 600, size = 0.05) {
+    const g = new THREE.BufferGeometry();
+    this.pos = new Float32Array(cap * 3); this.col = new Float32Array(cap * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    g.setDrawRange(0, 0);
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size, map: puffTexture(), vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true }));
+    this.points.frustumCulled = false;
+  }
+
+  /** n étincelles en (x, y, z), vitesse `v` dans toutes les directions (plus `up` vers le haut), pesanteur `g`, vie `life` s */
+  burst(n: number, x: number, y: number, z: number, color: number, v: number, life: number, up = 0, g = 1, rnd = Math.random) {
+    const c = new THREE.Color(color);
+    for (let i = 0; i < n && this.list.length < this.cap; i++) {
+      const a = rnd() * Math.PI * 2, e = (rnd() - 0.3) * Math.PI * 0.8, vv = v * (0.5 + rnd() * 0.6);
+      const l = life * (0.6 + rnd() * 0.6);
+      this.list.push({ x, y, z, vx: Math.cos(a) * Math.cos(e) * vv, vy: Math.sin(e) * vv + up, vz: Math.sin(a) * Math.cos(e) * vv, life: l, max: l, c, g });
+    }
+  }
+
+  update(dt: number) {
+    let n = 0;
+    this.list = this.list.filter((p) => (p.life -= dt) > 0);
+    for (const p of this.list) {
+      p.vy -= p.g * dt; p.vx *= 1 - dt * 1.5; p.vz *= 1 - dt * 1.5;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      const f = Math.min(1, (p.life / p.max) * 2) * 1.5;
+      this.pos[n * 3] = p.x; this.pos[n * 3 + 1] = Math.max(0.01, p.y); this.pos[n * 3 + 2] = p.z;
+      this.col[n * 3] = p.c.r * f; this.col[n * 3 + 1] = p.c.g * f; this.col[n * 3 + 2] = p.c.b * f;
+      n++;
+    }
+    const g = this.points.geometry;
+    g.setDrawRange(0, n);
+    (g.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    (g.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
+  }
+
+  dispose() { this.points.geometry.dispose(); (this.points.material as THREE.Material).dispose(); }
+}
+
+/** Des bouffées qui montent, grossissent et s'effacent (encens, poussière d'un coup, fumée) */
+export class Puffs {
+  group = new THREE.Group();
+  private list: { s: THREE.Sprite; t: number; life: number; vx: number; vy: number; vz: number; s0: number; s1: number; o: number }[] = [];
+
+  add(x: number, y: number, z: number, color: number, o: { life?: number; vy?: number; s0?: number; s1?: number; opacity?: number; drift?: number } = {}, rnd = Math.random) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTexture(), color, transparent: true, opacity: 0, depthWrite: false }));
+    s.position.set(x, y, z);
+    this.group.add(s);
+    const d = o.drift ?? 0.04;
+    this.list.push({ s, t: 0, life: o.life ?? 3, vx: (rnd() - 0.5) * d, vy: o.vy ?? 0.12, vz: (rnd() - 0.5) * d, s0: o.s0 ?? 0.08, s1: o.s1 ?? 0.4, o: o.opacity ?? 0.6 });
+  }
+
+  update(dt: number) {
+    this.list = this.list.filter((f) => {
+      f.t += dt;
+      const k = f.t / f.life;
+      if (k >= 1) { this.group.remove(f.s); f.s.material.dispose(); return false; }
+      f.s.position.x += f.vx * dt; f.s.position.y += f.vy * dt; f.s.position.z += f.vz * dt;
+      f.s.scale.setScalar(f.s0 + (f.s1 - f.s0) * k);
+      f.s.material.opacity = Math.min(1, f.t * 3) * (1 - k) * f.o;
+      return true;
+    });
+  }
+
+  get count() { return this.list.length; }
+
+  dispose() { for (const f of this.list) f.s.material.dispose(); }
 }
 
 /** Couleurs vives des visiteurs, dont on prend la plus éloignée de celles du village */

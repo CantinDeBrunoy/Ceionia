@@ -641,6 +641,7 @@ class Game implements UIHost {
       banner: (t, sub) => this.ui.banner(t, sub),
       goTo: (x, z, d) => { this.follow(null); this.cam.goTo(x, z, d); },
       tilt: (p) => this.cam.tiltTo(p),
+      feast: (b) => this.fest.start(0, 0, this.sim.age, { x0: b.x, z0: b.z, size: sizeOf(b), fire: b.age === 0 }),
     });
     this.alpine = new AlpineView(w, this.buildings);
     this.emergencies = new Emergencies(w, this.fires, this.roads.islands);

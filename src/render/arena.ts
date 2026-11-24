@@ -174,6 +174,7 @@ interface FighterO { skin: number; shorts: number; glove: number; hair: number; 
  * qui se balancent autour de l'épaule, chacune à son rythme)
  */
 function fighter(f: Fr, kit: ArenaKit, x: number, y: number, z: number, ry: number, o: FighterO, seed: number) {
+  if (bare) return;
   const g = f.sub(x, z, ry), legs = o.legs ?? o.skin;
   g.box(0.02, 0.07, 0.022, -0.02, y, -0.014, legs); g.box(0.02, 0.07, 0.022, 0.02, y, 0.014, legs);
   if (o.boots) { g.box(0.024, 0.022, 0.03, -0.02, y, -0.01, o.boots); g.box(0.024, 0.022, 0.03, 0.02, y, 0.018, o.boots); }
@@ -348,6 +349,7 @@ function colosseum(f: Fr, kit: ArenaKit) {
 interface KnightO { coat: number; c1: number; c2: number }
 /** Chevalier au galop, lance baissée (face à +z du repère, la barrière à sa gauche, en +x) : cheval caparaçonné, armure, écu */
 function knight(f: Fr, x: number, z: number, ry: number, o: KnightO) {
+  if (bare) return;
   const g = f.sub(x, z, ry), MAIL = 0xa8aeb6, dc = dk(o.coat, 0.7);
   // le cheval : corps, caparaçon frangé aux armoiries, encolure couverte, chanfrein, jambes au galop, queue
   g.box(0.07, 0.075, 0.2, 0, 0.1, 0, o.coat);
@@ -697,6 +699,7 @@ function boxingPalace(f: Fr, kit: ArenaKit) {
 /** Robot de combat (face à +z du repère) : jambes d'acier, torse blindé à réacteur, visière lumineuse ; une scie circulaire qui
  * tourne au bras droit, une masse qui frappe au bras gauche */
 function robot(f: Fr, kit: ArenaKit, x: number, z: number, ry: number, c1: number, c2: number, eye: number, seed: number) {
+  if (bare) return;
   const g = f.sub(x, z, ry), r = f.ry + ry, fx = Math.sin(r), fz = Math.cos(r), ax: V3 = [Math.cos(r), 0, -Math.sin(r)], DK = 0x2a2e38;
   for (const s of [-1, 1]) {
     g.box(0.05, 0.022, 0.08, s * 0.045, 0.02, 0.01, DK);
@@ -821,11 +824,59 @@ function robotArena(f: Fr, kit: ArenaKit) {
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* L'ENSEMBLE                                                                                                          */
 /* ------------------------------------------------------------------------------------------------------------------ */
-export function arena(p: Parts, age: number, kit: ArenaKit) {
+/** Le modèle se dessine sans ses deux combattants (pendant un tournoi, la scène a les siens : voir `render/shows/tourney.ts`) */
+let bare = false;
+
+export function arena(p: Parts, age: number, kit: ArenaKit, noFighters = false) {
   const f = new Fr(p, 0, 0, 0, 1), a = Math.min(5, Math.max(1, age));
-  if (a === 1) colosseum(f, kit);
-  else if (a === 2) lists(f, kit);
-  else if (a === 3) fightHall(f, kit);
-  else if (a === 4) boxingPalace(f, kit);
-  else robotArena(f, kit);
+  bare = noFighters;
+  try {
+    if (a === 1) colosseum(f, kit);
+    else if (a === 2) lists(f, kit);
+    else if (a === 3) fightHall(f, kit);
+    else if (a === 4) boxingPalace(f, kit);
+    else robotArena(f, kit);
+  } finally { bare = false; }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* LE TOURNOI (render/shows/tourney.ts)                                                                                */
+/* ------------------------------------------------------------------------------------------------------------------ */
+/** Le combat de l'âge : aux poings (pugilat, lutte, boxe), la joute à cheval, les robots */
+export type BoutKind = 'fist' | 'joust' | 'robot';
+
+/**
+ * Où se tient le combat de l'arène à cet âge (repère du modèle) : le centre (`cz`), la hauteur du sol (`y`, le ring), la
+ * demi-largeur de l'aire (`half`), les deux couloirs de la joute (`lanes`, de part et d'autre de la lice), la sorte de combat,
+ * les couleurs des deux champions (pour le tableau), et les gradins (anneaux de l'ovale : rayon et hauteur, ou rangées droites)
+ */
+export function arenaBout(age: number): { kind: BoutKind; cz: number; y: number; half: number; lanes: [number, number]; colors: [number, number] } {
+  const a = Math.min(5, Math.max(1, age));
+  if (a === 1) return { kind: 'fist', cz: -0.06, y: 0.004, half: 0.42, lanes: [0, 0], colors: [0x3a6ab8, 0xb8402e] };
+  if (a === 2) return { kind: 'joust', cz: -0.08, y: 0, half: 0.72, lanes: [0.06, -0.22], colors: [0x2a4a9a, 0xb8302a] };
+  if (a === 3) return { kind: 'fist', cz: -0.22, y: 0.076, half: 0.2, lanes: [0, 0], colors: [0x3a8a4a, 0xc8302a] };
+  if (a === 4) return { kind: 'fist', cz: -0.12, y: 0.066, half: 0.18, lanes: [0, 0], colors: [0xd8352e, 0x2a5ab8] };
+  return { kind: 'robot', cz: -0.08, y: 0.03, half: 0.34, lanes: [0, 0], colors: [0xd84a2a, 0x2a6ad8] };
+}
+
+/**
+ * Dessine l'un des deux champions de l'arène à cet âge (0 ou 1, aux couleurs du modèle), à l'origine, face à +z : pugiliste,
+ * chevalier en selle, lutteur, boxeur ou robot. Les pièces qui frappent (bras, masse, scie) passent par le kit comme dans le
+ * modèle : la scène du tournoi en fait des pièces qu'elle anime elle-même
+ */
+export function drawChampion(p: Parts, age: number, kit: ArenaKit, side: 0 | 1) {
+  const f = new Fr(p, 0, 0, 0, 1, 0), a = Math.min(5, Math.max(1, age));
+  if (a === 1) {
+    const pug: FighterO = { skin: 0xc89870, shorts: 0xf2eee2, glove: 0x6a4228, hair: 0x2a2018 };
+    fighter(f, kit, 0, 0, 0, 0, side ? { ...pug, skin: 0xe0b08a, shorts: 0xb8402e, hair: 0x6a4a30 } : { ...pug, shorts: 0x3a6ab8 }, side);
+  } else if (a === 2) {
+    knight(f, 0, 0, 0, side ? { coat: 0x5a3a28, c1: 0xb8302a, c2: 0xf2ead2 } : { coat: 0xf0ece4, c1: 0x2a4a9a, c2: 0xf2c23a });
+  } else if (a === 3) {
+    const brawler: FighterO = { skin: 0xe8b894, shorts: 0xf2ead2, legs: 0x2a2a3a, glove: 0xe8b894, hair: 0x3a2618, boots: 0x2a2018 };
+    fighter(f, kit, 0, 0, 0, 0, side ? { ...brawler, skin: 0xc89870, shorts: 0xc8302a, legs: 0x4a3a2a, glove: 0xc89870, hair: 0x1a1a1e } : { ...brawler, shorts: 0x3a8a4a }, side);
+  } else if (a === 4) {
+    fighter(f, kit, 0, 0, 0, 0, side ? { skin: 0xf0c8a4, shorts: 0x2a5ab8, glove: 0x2a5ab8, hair: 0xd8b060, boots: 0x2a2a30 } : { skin: 0xc89870, shorts: 0xd8352e, glove: 0xd8352e, hair: 0x1a1a1e, boots: 0xf4f4f0 }, side);
+  } else {
+    robot(f, kit, 0, 0, 0, side ? 0x2a6ad8 : 0xd84a2a, side ? 0x3a3a46 : 0xe8ecf0, side ? 0x4ae8ff : 0xffe24a, side);
+  }
 }

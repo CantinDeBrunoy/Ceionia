@@ -161,6 +161,8 @@ export class BuildingView implements WorldListener {
   private spinT = 0;
   private q = new THREE.Quaternion();
   onPlaced: ((b: Building) => void) | null = null;
+  /** les bâtiments dessinés sans leurs personnages du milieu, le temps d'un spectacle (le tournoi de l'arène, voir shows.ts) */
+  bare = new Set<number>();
   /**
    * Les corps de tous les bâtiments (lumières comprises), leurs pièces qui se balancent ou tournent, leurs personnages :
    * trois lots dessinés chacun en un seul appel (voir `show`), au lieu d'un maillage (et de son ombre) par pièce
@@ -256,6 +258,7 @@ export class BuildingView implements WorldListener {
 
   private opts(b: Building): ModelOpts {
     const o: ModelOpts = { v: Math.floor(hash2(b.x, b.z, 7) * 6), L: false, R: false, F: false, small: !!b.small };
+    if (this.bare.has(b.id)) o.bare = true;
     if (b.kind === 'house' || b.kind === 'workshop') o.tier = skylineTier(b.x, b.z);
     if (isRampart(b.kind)) { o.mask = rampartMask(this.world, b); return o; }
     // haies et clôtures : les côtés où elles rejoignent leurs voisines (le modèle se tourne lui-même)
@@ -290,7 +293,7 @@ export class BuildingView implements WorldListener {
     this.autoRot(b);
     const o = this.opts(b);
     const m = getModel(b.kind, b.age, o);
-    const key = `${b.kind}|${b.age}|${o.v}|${+o.L}${+o.R}${+o.F}|${o.row ?? ''}|${o.tier ?? ''}|${o.mask ?? ''}`;
+    const key = `${b.kind}|${b.age}|${o.v}|${+o.L}${+o.R}${+o.F}|${o.row ?? ''}|${o.tier ?? ''}|${o.mask ?? ''}${o.bare ? '|bare' : ''}`;
     // corps et lumières en un seul maillage quand ils se fondent, dessiné avec tous les autres dans le lot des corps (sinon,
     // deux maillages à part comme avant)
     const lit = litOf(m.body, m.glow), bodyG = lit ?? m.body, glowG = lit ? null : m.glow;
