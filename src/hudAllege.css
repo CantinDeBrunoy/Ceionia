@@ -9,25 +9,23 @@
 /* (hors de l'écran allégé, les pièces qui lui sont propres restent cachées) */
 #needsOk, #ageReq .rqHead, #clock small.ds { display: none; }
 
-/* ---------- la barre du haut : une seule bande crème de 46 px, ses blocs séparés par un filet doré ---------- */
-body.allege #hud {
-  top: max(8px, env(safe-area-inset-top)); left: 10px; right: 10px; height: 46px; box-sizing: border-box; align-items: center; gap: 0;
-  padding: 0 5px 0 6px; border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
-  pointer-events: auto;
+/* ---------- la barre du haut : des blocs crème de 46 px, chacun son cadre, séparés par un vide (l'auteur préférait la barre en
+   morceaux à une seule bande, 24 nov. 2026) : l'âge, les stocks, les besoins, l'objectif, l'heure avec pause et vitesse, puis
+   les boutons ronds ---------- */
+body.allege #hud { top: max(8px, env(safe-area-inset-top)); left: 10px; right: 10px; height: 46px; box-sizing: border-box; align-items: center; gap: 8px; }
+body.allege #hud .panel, body.allege #timePanel {
+  box-sizing: border-box; height: 46px; border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
 }
-body.allege #hud .panel { background: none; border: none; box-shadow: none; border-radius: 0; }
-body.allege #hud .hudPill { min-height: 0; height: 34px; padding: 0 8px; }
-/* le filet entre deux blocs */
-body.allege #needsPanel > .panel, body.allege #hudR #timePanel, body.allege #hudR #menuBtns { border-left: 1.5px solid rgba(190, 145, 75, 0.38) !important; }
+body.allege #hud .hudPill { min-height: 0; padding: 0 8px; }
 
 /* l'âge : son logo, son nom, ▾ et une jauge fine ; le nom de l'île, le pourcentage et « Vers … » passent dans la liste qu'ouvre
    un clic (`.rqHead`) */
 body.allege #hudL { align-self: stretch; display: flex; align-items: center; }
 body.allege #agePanel {
   display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto; grid-template-areas: 'logo name chev' 'logo gauge gauge';
-  align-items: center; column-gap: 7px; row-gap: 2px; width: auto; height: 38px; padding: 0 10px 0 2px; border-radius: 13px;
+  align-items: center; column-gap: 7px; row-gap: 2px; width: auto; padding: 0 12px 0 5px;
 }
-body.allege #agePanel:hover { background: rgba(255, 236, 190, 0.45); }
+body.allege #agePanel:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
 body.allege #agePanel .vCard, body.allege #agePanel .vText { display: contents; }
 body.allege #agePanel .vLogo { grid-area: logo; width: 32px; height: 32px; }
 body.allege #agePanel .vLogo img.pic { width: 30px; height: 30px; }
@@ -44,7 +42,7 @@ body.allege #ageReq .rqHead b { display: block; margin: 0; font-family: var(--hS
 body.allege #ageReq .rqHead em { margin-left: auto; white-space: nowrap; font-size: 12px; }
 
 /* au milieu, calés à gauche après l'âge : les stocks, les habitants, les besoins, l'objectif */
-body.allege #needsPanel { flex: 1 1 auto; justify-content: flex-start; align-items: center; gap: 0; }
+body.allege #needsPanel { flex: 1 1 auto; justify-content: flex-start; align-items: center; gap: 8px; }
 /* les stocks : le nombre seul (la production du jour est dans la fiche, au survol) */
 body.allege #res .res { gap: 5px; padding: 2px 5px; border-radius: 10px; }
 body.allege #res .res img.pic { width: 24px; height: 24px; }
@@ -104,16 +102,18 @@ body.allege #goalBox.compact { max-width: 180px; }
 body.allege #goalBox.mini { max-width: 130px; }
 
 /* à droite : l'heure sur une ligne (« 11:00 Printemps · j. 23 »), pause et vitesse, puis les boutons ronds en 34 px */
-body.allege #hudR { gap: 0; }
-body.allege #timePanel, body.allege #menuBtns { gap: 5px; padding: 0 6px; }
-body.allege #hudR #timePanel { border-left: none !important; }
-body.allege #menuBtns { padding-right: 0; }
+body.allege #hudR { gap: 8px; }
+body.allege #timePanel { gap: 5px; padding: 0 6px 0 8px; }
+/* les boutons ronds, chacun le sien, à la hauteur des blocs */
+body.allege #menuBtns { gap: 6px; padding: 0; }
 body.allege #clock { gap: 7px; min-height: 0; height: 34px; padding: 0 4px; }
 body.allege #clock img.pic { width: 24px; height: 24px; }
 body.allege #clock .time { flex-direction: row; align-items: baseline; gap: 7px; font-size: 18px; min-width: 0; }
 body.allege #clock small.dl { display: none; }
 body.allege #clock small.ds { display: flex; font-size: 12px; color: var(--hInk2); }
 body.allege #hud button.round { width: 34px; height: 34px; }
+body.allege #menuBtns button.round { width: 44px; height: 44px; }
+body.allege #menuBtns button.round svg.ic { width: 20px; height: 20px; }
 body.allege #hud button.round svg.ic { width: 18px; height: 18px; }
 /* la vitesse : sa pastille seulement quand elle passe ×1 (le bouton doré le dit déjà) */
 body.allege #bSpeed:not(.on) small { display: none; }
