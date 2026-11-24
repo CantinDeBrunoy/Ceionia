@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { newDiplo, readDiplo, chooseAlly, choosePath, applyDiplo, claimVictory, settleLate, conflictState, type DiploState } from '../src/sim/diplomacy';
-import { sagaSteps, chapterDone, chapterItem, stepSaga, catchUp, signPeace, stepNow, readSaga, CONFLICT_LABEL, CHAPTER_LABELS, isChapterLabel, type SagaCtx } from '../src/sim/saga';
+import { sagaSteps, chapterDone, chapterItem, stepSaga, catchUp, signPeace, stepNow, readSaga, seaBefore, seaWon, seaLost, seaReady, CONFLICT_LABEL, CHAPTER_LABELS, isChapterLabel, type SagaCtx } from '../src/sim/saga';
 import { nextBattle, campaignResult, stepCamp, raidDue, corpsMax, corpsTroops, RAID_FIRST, BATTLE_AGE } from '../src/sim/campaign';
 import { ageGo } from '../src/sim/sim';
 import { roadView } from '../src/sim/diploRoad';
@@ -34,13 +34,17 @@ describe('le fil des âges : la voie de la guerre', () => {
   it('se joue du Médiéval au Moderne, une étape après l’autre, chaque chapitre une condition d’âge', () => {
     const w = onPath('war');
     const item = (next: number) => chapterItem(w, next)!;
-    expect(item(3)).toMatchObject({ label: CHAPTER_LABELS[2], have: 0, need: 3 });
-    // au Médiéval : les éclaireurs, le débarquement, la première sortie repoussée
+    expect(item(3)).toMatchObject({ label: CHAPTER_LABELS[2], have: 0, need: 4 });
+    // au Médiéval : les éclaireurs, la bataille du bras de mer (chantier B), le débarquement, la première sortie repoussée
     expect(stepNow(w, 2)!.id).toBe('allywar');
     w.exp.done.push('allywar'); applyDiplo(w.diplo, 'landing');
+    expect(stepNow(w, 2)).toMatchObject({ id: 'strait', go: 'naval' });
+    expect(seaBefore(w.diplo, 'landing')).toBe('strait');
+    seaWon(w.diplo, 'strait');
+    expect(seaBefore(w.diplo, 'landing')).toBeNull();
     expect(nextBattle(w.diplo, 0, 2)).toBe('landing');
     expect(win(w, 2)).toBe('landing');
-    expect(item(3)).toMatchObject({ have: 2, need: 3 });
+    expect(item(3)).toMatchObject({ have: 3, need: 4 });
     // le port attend l'Industriel : rien d'autre à livrer au Médiéval que la défense du camp
     expect(nextBattle(w.diplo, 0, 2)).toBeNull();
     expect(stepNow(w, 2)!.id).toBe('camp');
@@ -62,7 +66,11 @@ describe('le fil des âges : la voie de la guerre', () => {
     expect(nextBattle(w.diplo, w.exp.clock, 3)).toBe('port');
     stepCamp(w.diplo, w.exp.clock, DAY, 3);
     expect(raidDue(w.diplo, w.exp.clock)).toBe(false);
-    expect(item(4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 2 });
+    expect(item(4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 3 });
+    // (le blocus du port, avant sa prise)
+    expect(stepNow(w, 3)).toMatchObject({ id: 'blockade', go: 'naval' });
+    expect(seaBefore(w.diplo, 'port')).toBe('blockade');
+    seaWon(w.diplo, 'blockade');
     expect(win(w, 3)).toBe('port');
     expect(win(w, 3)).toBe('tour');
     expect(nextBattle(w.diplo, w.exp.clock, 3)).toBeNull();
@@ -100,7 +108,11 @@ describe('le fil des âges : la voie de la guerre', () => {
 describe('le fil des âges : la voie de la paix', () => {
   it('se joue du Médiéval au Moderne : la trêve, un second comptoir, l’ambassade, puis la paix signée', () => {
     const w = onPath('peace');
-    expect(chapterItem(w, 3)).toMatchObject({ have: 0, need: 2 });
+    expect(chapterItem(w, 3)).toMatchObject({ have: 0, need: 3 });
+    // l'escorte du premier convoi (chantier B), puis les émissaires et l'ambassade
+    expect(stepNow(w, 2)).toMatchObject({ id: 'convoy', go: 'naval' });
+    seaWon(w.diplo, 'convoy');
+    expect(stepNow(w, 2)!.id).toBe('envoys');
     w.exp.done.push('envoys'); applyDiplo(w.diplo, 'post');
     w.exp.done.push('truce'); applyDiplo(w.diplo, 'truce');
     // la trêve : le chapitre du Médiéval, la cinématique, le conflit encore ouvert, les combats en mer cessent
@@ -166,16 +178,38 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
 
   it('Médiéval, aucune voie prise : le nouveau déroulé, du début', () => {
     const w = world(readDiplo({ ally: 'orient', conflict: 'open' }));
-    expect(w.diplo.saga).toEqual({ done: [], truce: false });
+    expect(w.diplo.saga).toEqual({ done: [], truce: false, sea: [], seaRetry: 0 });
     expect(catchUp(w.diplo, 2, 0, DAY)).toBe(false);
     expect(chapterItem(w, 3)).toMatchObject({ have: 0 });
   });
 
-  it('Médiéval, guerre, éclaireurs revenus sans camp : le débarquement d’abord', () => {
+  it('Médiéval, guerre, éclaireurs revenus sans camp : la bataille du bras de mer s’ajoute avant le débarquement', () => {
     const w = world(readDiplo({ ally: 'orient', path: 'war', conflict: 'open', battle: 'ready' }));
     w.exp.done.push('allywar');
     expect(nextBattle(w.diplo, 0, 2)).toBe('landing');
+    expect(seaBefore(w.diplo, 'landing')).toBe('strait');
+    expect(stepNow(w, 2)!.id).toBe('strait');
+    seaWon(w.diplo, 'strait');
     expect(stepNow(w, 2)!.id).toBe('plage');
+  });
+
+  it('Médiéval, paix, émissaires pas faits : l’escorte du convoi s’ajoute avant ; la voie ne change plus une fois la mer passée', () => {
+    const w = world(readDiplo({ ally: 'orient', path: 'peace', conflict: 'open' }));
+    expect(stepNow(w, 2)!.id).toBe('convoy');
+    expect(choosePath(w.diplo, 'war')).toBe(true);
+    expect(choosePath(w.diplo, 'peace')).toBe(true);
+    seaWon(w.diplo, 'convoy');
+    expect(choosePath(w.diplo, 'war')).toBe(false);
+  });
+
+  it('une bataille navale perdue se rejoue dans un jour ; gagnée, elle est notée une fois', () => {
+    const w = onPath('war');
+    expect(seaReady(w.diplo, 0)).toBe(true);
+    seaLost(w.diplo, 50, DAY, 1);
+    expect(seaReady(w.diplo, 50 + DAY - 1)).toBe(false);
+    expect(seaReady(w.diplo, 50 + DAY)).toBe(true);
+    seaWon(w.diplo, 'strait'); seaWon(w.diplo, 'strait');
+    expect(w.diplo.saga.sea).toEqual(['strait']);
   });
 
   it('Médiéval, guerre, le camp, le port et la tour déjà pris : ils restent pris et comptent pour l’Industriel', () => {
@@ -221,9 +255,10 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
     expect(catchUp(war.diplo, 3, 1000, DAY)).toBe(false);
     expect(war.diplo.camp.held).toEqual([]);
     expect(stepNow(war, 3)!.id).toBe('allywar');
-    // (la condition vers le Moderne demande les deux chapitres : 3 étapes du Médiéval, 2 de l'Industriel)
-    expect(chapterItem(war, 4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 5 });
+    // (la condition vers le Moderne demande les deux chapitres : 4 étapes du Médiéval, 3 de l'Industriel)
+    expect(chapterItem(war, 4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 7 });
     war.exp.done.push('allywar'); applyDiplo(war.diplo, 'landing');
+    seaWon(war.diplo, 'strait');
     expect(win(war, 3)).toBe('landing');
     // (à l'Industriel, le port s'ouvre aussitôt : l'étape « Tenir le camp » se fait en le prenant)
     expect(win(war, 3)).toBe('port');
@@ -233,9 +268,9 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
     expect(chapterItem(war, 4)).toMatchObject({ have: 1, need: 1 });
     // la paix : les pourparlers d'abord, puis le second comptoir
     const peace = world(readDiplo({ ally: 'orient', path: 'peace', conflict: 'open' }));
-    expect(stepNow(peace, 3)!.id).toBe('envoys');
+    expect(stepNow(peace, 3)!.id).toBe('convoy');
     // (deux comptoirs bâtis d'avance : reste le chapitre du Médiéval)
-    expect(chapterItem(peace, 4, kinds({ tradepost: 2 }))).toMatchObject({ have: 0, need: 2 });
+    expect(chapterItem(peace, 4, kinds({ tradepost: 2 }))).toMatchObject({ have: 0, need: 3 });
     // sans voie : la carte du dénouement d'abord
     const none = world(readDiplo({ ally: 'orient', conflict: 'open' }));
     expect(chapterItem(none, 4)).toMatchObject({ have: 0, need: 1 });
@@ -244,7 +279,7 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
   it('archipel accepté au Moderne : les trois chapitres à la suite, le Moderne ne s’ouvre qu’après les autres', () => {
     const war = world(readDiplo({ ally: 'orient', path: 'war', conflict: 'open' }));
     war.exp.done.push('allywar'); applyDiplo(war.diplo, 'landing');
-    expect(chapterItem(war, 5)).toMatchObject({ label: CONFLICT_LABEL, have: 1, need: 6 });
+    expect(chapterItem(war, 5)).toMatchObject({ label: CONFLICT_LABEL, have: 1, need: 8 });
     for (const k of ['landing', 'port', 'tour', 'assault']) expect(win(war, 4)).toBe(k);
     expect(war.diplo.conflict).toBe('won');
     // la paix : la paix ne se signe qu'au bout des trois chapitres
@@ -271,6 +306,9 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
         expect(stepNow(w, 5)!.id).toBe('allywar');
         w.exp.done.push('allywar'); applyDiplo(w.diplo, 'landing');
         expect(win(w, 5)).toBe('landing');
+        // (la plage prise compte la bataille du bras de mer ; le blocus vient avant le port)
+        expect(stepNow(w, 5)!.id).toBe('blockade');
+        seaWon(w.diplo, 'blockade');
         // (pas d'attente : le port est ouvert, « Tenir le camp » se fera en le prenant ; la feuille de route le dit)
         expect(stepNow(w, 5)!.id).toBe('port');
         const r = roadView(w, { running: () => false, dayLen: DAY, age: 5 })!;
@@ -295,10 +333,11 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
   });
 
   it('l’état des chapitres se relit, un champ abîmé donne l’état vierge', () => {
-    expect(readSaga({ done: [2, 9, 'x', 3], truce: true })).toEqual({ done: [2, 3], truce: true });
-    expect(readSaga('oui')).toEqual({ done: [], truce: false });
-    const d = readDiplo({ ally: 'asie', saga: { done: [2], truce: true } });
-    expect(d.saga).toEqual({ done: [2], truce: true });
+    expect(readSaga({ done: [2, 9, 'x', 3], truce: true })).toEqual({ done: [2, 3], truce: true, sea: [], seaRetry: 0 });
+    expect(readSaga('oui')).toEqual({ done: [], truce: false, sea: [], seaRetry: 0 });
+    expect(readSaga({ sea: ['convoy', 'mer', 'strait'], seaRetry: 'x' })).toEqual({ done: [], truce: false, sea: ['strait', 'convoy'], seaRetry: 0 });
+    const d = readDiplo({ ally: 'asie', saga: { done: [2], truce: true, sea: ['strait'], seaRetry: 40 } });
+    expect(d.saga).toEqual({ done: [2], truce: true, sea: ['strait'], seaRetry: 40 });
     expect(readDiplo(JSON.parse(JSON.stringify(d))).saga).toEqual(d.saga);
   });
 });

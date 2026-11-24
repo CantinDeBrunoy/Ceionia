@@ -36,7 +36,7 @@ Un fichier par zone, chacun `registerDict('zone', { 'texte français': 'English 
 - `catalog` : catalogue (noms par âge, descriptions, atouts), bâtiments et leurs fiches ;
 - `missions` : titres, récits, choix, résultats, résumés d'effets ; `events` : imprévus d'expédition ; `expeditions` : messages et comptes rendus ;
 - `gear` : équipement, onglet Équipement et messages divers (incendies, pose, lieux) ; `army` : troupes, recrutement, commandement ;
-- `war` : guerre, Enfers, nouvelles du front, barre de commandement, base avancée ;
+- `war` : guerre, Enfers, nouvelles du front, barre de commandement, base avancée ; `fleet` : la flotte de guerre, la bataille navale, l'escorte du convoi ;
 - `tutorial` : tutoriel, aides (`warTips`), conseils du village, bannières, écrans de victoire, royaume des Enfers ;
 - `menu` : accueil, réglages, difficultés, crédits ; `ui` : barre du haut, barre de construction, fenêtres, notifications ; `citizens` : fiche d'un habitant, arrivées de nouveaux venus, décorations ; `misc` : le reste.
 

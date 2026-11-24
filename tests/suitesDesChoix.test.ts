@@ -65,6 +65,8 @@ function fresh(age: number) {
   w.updateVis();
   w.isles = { main: { x: 0, z: 0, n: N }, rivals: [], small: [] };
   w.diplo.met = ['orient', 'asie']; w.diplo.ally = 'orient'; w.diplo.path = 'peace';
+  // (le premier convoi escorté : les émissaires peuvent partir, chantier B)
+  w.diplo.saga.sea.push('convoy');
   // toute la réserve d'équipement : chaque option qui demande une pièce peut se prendre
   for (const g of GEAR) w.exp.gear[g.id] = 12;
   return w;

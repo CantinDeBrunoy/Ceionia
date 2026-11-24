@@ -39,6 +39,8 @@ function village(age: number) {
   // (la diplomatie de l'archipel : une partie qui a accepté l'archipel, sur la voie de la paix ; l'île principale couvre la carte)
   w.isles = { main: { x: 0, z: 0, n: N }, rivals: [], small: [] };
   w.diplo.met = ['orient', 'asie']; w.diplo.ally = 'orient'; w.diplo.path = 'peace';
+  // (le premier convoi escorté : les émissaires peuvent partir, chantier B)
+  w.diplo.saga.sea.push('convoy');
   return { w, agents, ex, view: new ExpeditionView(w, agents, ex) };
 }
 

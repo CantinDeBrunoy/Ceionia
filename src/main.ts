@@ -104,6 +104,9 @@ import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { isleDefenses, nearIsle, villageBarracks } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
 import { NavalConflict } from './render/navalConflict';
+import { NavalBattleView, FleetMoorings, navalFrame } from './render/navalBattleView';
+import { NavalBattle, SEA_RETRY_DAYS, type NavalChoice } from './sim/navalBattle';
+import { afloat, armShip, armWhy, fleetBack, shipClass, stepFleet, MIN_FLEET } from './sim/fleet';
 import type { ConflictState } from './sim/navalConflict';
 import { IsleRuins } from './render/isleRuins';
 import { RivalTowns } from './render/rivalTowns';
@@ -129,7 +132,7 @@ import type { ConflictWay } from './ui/ways';
 import { bindPostReady, pathDue, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
 import { RivalBattle, BattleGoal, BATTLE_LIMIT, type BattleKind } from './sim/rivalBattle';
 import { nextBattle, campaignResult, corps, corpsTroops, raidDue, raidLevel, stepCamp, RAID_GRACE, HOLD_SHARE, type Front } from './sim/campaign';
-import { chapterDone, chaptersUpTo, conflictAge, inSaga, isChapterLabel, signPeace, stepSaga, type SagaCtx } from './sim/saga';
+import { chapterDone, chaptersUpTo, conflictAge, inSaga, isChapterLabel, signPeace, stepSaga, stepNow, seaBefore, seaWon, seaLost, seaReady, isSeaStep, type SagaCtx, type SeaStep } from './sim/saga';
 import { chapterTitle } from './sim/diploRoad';
 import { RivalCamp } from './render/rivalCamp';
 import type { TroopKind } from './sim/army';
@@ -376,6 +379,15 @@ class Game implements UIHost {
   onAllyChosen?: (p: People) => void;
   /** la bataille de l'archipel en cours (voie de la guerre), et sa vue */
   rivalBattle: RivalBattle | null = null;
+  /** la bataille navale en cours (chantier B : le bras de mer, le blocus, l'escorte du convoi), sa vue, son étape */
+  navalBattle: NavalBattle | null = null;
+  private navalView: NavalBattleView | null = null;
+  private navalStep: SeaStep = 'strait';
+  /** la fin de la bataille navale, mise en scène (s réelles restantes) ; la vue suit l'action toutes les quelques secondes */
+  private navalEndT = 0;
+  private navalCamT = 0;
+  /** nos navires au mouillage devant les chantiers navals */
+  fleetMoor!: FleetMoorings;
   private rivalLayer: BattleLayer | null = null;
   /** la bataille rejouable a été annoncée (une fois par défaite) */
   private retrySaid = false;
@@ -654,6 +666,7 @@ class Game implements UIHost {
     this.naval = new NavalConflict(w);
     this.naval.onClash = (k) => this.audio.sfxClash(k);
     this.naval.onFirst = (x, z, seen) => this.firstSkirmish(x, z, seen);
+    this.fleetMoor = new FleetMoorings(w);
     // halos de lumière des feux et des lanternes, la nuit
     this.halos = new Halos(w);
     this.upBadges = new UpgradeBadges(w);
@@ -722,7 +735,7 @@ class Game implements UIHost {
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.houndView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.calam.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.funeral.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.houndView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.calam.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.funeral.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.fleetMoor.group, this.harborBeacon.group);
     this.applyQuality();
 
     const host = this;
@@ -794,6 +807,8 @@ class Game implements UIHost {
       diplo: () => this.world.diplo, why: () => endgameWhy(this.world, this.sim.age), click: () => audio.sfxClick(), battle: () => { this.startRivalBattle(); },
       road: () => this.road(), mission: (id) => this.ui.gotoMission(id), hold: () => this.holdCamp(),
       build: (k) => this.buildForSaga(k), sign: () => this.signPeace(),
+      naval: () => { this.startNaval(); }, navalTactic: (c) => this.navalTactic(c), fleet: () => this.goFleet(),
+      afloat: () => afloat(this.world.fleet), seaFirst: () => !!seaBefore(this.world.diplo, 'landing'),
       ally: (p) => {
         if (!chooseAlly(this.world.diplo, p)) return;
         this.ui.banner(tr('Une alliance !'), tr('{people} sont nos alliés', { people: peopleName(p).replace(/^./, (c) => c.toUpperCase()) }));
@@ -898,7 +913,7 @@ class Game implements UIHost {
     this.onIslesRevealed = () => { if (allyPending(this.world) && !this.lateReports.length) this.diploChoice.showAlly(); };
     // la diplomatie de l'archipel : pas de passage d'âge pendant la bataille (le conflit à régler est une condition de l'âge)
     this.sim.beforeAdvance = () => {
-      const why = ageGate(this.allyBattle);
+      const why = ageGate(this.allyBattle || !!this.navalBattle);
       if (!why) return true;
       this.ui.toast(why);
       return false;
@@ -1532,9 +1547,9 @@ class Game implements UIHost {
     // la campagne de l'île rivale : la caserne avancée refait le corps, la sortie qui vient s'annonce ; laissée trop longtemps
     // sans réponse, la garnison la règle seule. Sans étape en cours à cet âge, les sorties attendent
     if (d.ally && stepCamp(d, w.exp.clock, this.time.dayLen, this.sim.age) === 'warn') this.ui.toast(tr('⚔️ {rival} préparent une sortie contre notre camp de la plage.', { rival: cap(peopleName(rivalOf(d.ally))) }), () => this.openDiploChoice(), 'action');
-    if (!this.rivalBattle && raidDue(d, w.exp.clock) && w.exp.clock >= d.camp.raid + RAID_GRACE * this.time.dayLen) { if (this.diploChoice.visible) this.diploChoice.hide(); this.holdCamp(); }
+    if (!this.rivalBattle && !this.navalBattle && raidDue(d, w.exp.clock) && w.exp.clock >= d.camp.raid + RAID_GRACE * this.time.dayLen) { if (this.diploChoice.visible) this.diploChoice.hide(); this.holdCamp(); }
     // (un récit d'expédition en attente, sa cinématique de trophée : ils passent avant les cartes)
-    if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine || this.reportsDue.size || this.lateReports.length || this.trophyStage.playing) return;
+    if (this.rivalBattle || this.navalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine || this.reportsDue.size || this.lateReports.length || this.trophyStage.playing) return;
     // (au chargement d'une partie, plus de grande carte : ce qui attendait déjà dans la sauvegarde se dit en un message qui y
     // mène ; écran allégé, retour de joueurs du 23 nov. 2026. Les cartes reviennent pour ce qui arrive en cours de partie)
     const quiet = this.diploLoad;
@@ -1668,7 +1683,10 @@ class Game implements UIHost {
   startRivalBattle() {
     const w = this.world, d = w.diplo, kind = nextBattle(d, w.exp.clock, this.sim.age);
     // (la défense du camp n'attend pas : une sortie vient quand elle vient ; les autres batailles, le délai d'une défaite)
-    if (this.rivalBattle || !kind || (kind !== 'defend' && !battleReady(d, w.exp.clock)) || !d.ally) return false;
+    if (this.rivalBattle || this.navalBattle || !kind || (kind !== 'defend' && !battleReady(d, w.exp.clock)) || !d.ally) return false;
+    // (chantier B : la mer d'abord, le bras de mer avant le débarquement, le blocus avant le port)
+    const sea = seaBefore(d, kind);
+    if (sea) return this.startNaval(sea);
     if (this.mode !== 'surface') { this.ui.toast(tr('Revenez au village pour mener la bataille.')); return false; }
     let b: RivalBattle;
     try { b = this.campaignBattle(kind, corpsTroops(d, Math.max(1, this.sim.age))); } catch { return false; }
@@ -1821,6 +1839,211 @@ class Game implements UIHost {
     this.ui.update();
   }
 
+  // ---------- La flotte et la bataille navale (chantier B du nouveau monde) ----------
+
+  /** Les chantiers navals du village */
+  private yards() { return this.sim.counts.shipyard ?? 0; }
+
+  /** Le nom de nos navires de guerre, à l'âge du village (ils se modernisent d'eux-mêmes) */
+  shipName(age = this.sim.age) { const c = shipClass(age); return c === 'galleon' ? tr('galion de guerre') : c === 'ironclad' ? tr('frégate cuirassée') : tr('destroyer'); }
+
+  /** Arme un navire de guerre au chantier naval (le bouton de sa fiche) ; renvoie ce qui l'empêche, ou null */
+  armShip(): string | null {
+    const w = this.world;
+    const why = armWhy(w, this.sim.age, this.yards());
+    if (why || !armShip(w, this.sim.age, this.yards(), w.exp.clock, this.time.dayLen)) return why ?? '';
+    this.audio.sfxClick();
+    this.ui.toast(tr('⚒️ Le chantier naval arme un navire ({name}) : il sera prêt dans une demi-journée.', { name: this.shipName() }), undefined, 'notice');
+    this.ui.update(); this.saveNow();
+    return null;
+  }
+
+  /** Le temps qui passe pour la flotte : les navires prêts mettent à l'eau, les coques se réparent au chantier */
+  private stepFleet(gdt: number) {
+    const w = this.world, f = w.fleet;
+    if (!f.hulls.length && !f.arming.length) return;
+    // (pendant la bataille navale, nos navires sont en mer : pas de réparation)
+    if (this.navalBattle) return;
+    const n = stepFleet(f, w.exp.clock, gdt, this.time.dayLen, this.yards());
+    if (n) {
+      this.ui.toast(tr('⚓ Un navire de guerre est prêt ({name}) : il mouille devant le chantier naval.', { name: this.shipName() }), () => this.goFleet(), 'notice');
+      this.ui.update(); this.saveNow();
+    }
+  }
+
+  /** Mène au chantier naval (sa fiche : armer des navires) ; sans chantier, le chantier en main */
+  goFleet() {
+    if (this.mode !== 'surface') { this.ensureSurface(() => this.goFleet(), true); return; }
+    const yard = [...this.world.buildings.values()].filter((b) => b.kind === 'shipyard').sort((a, b) => a.id - b.id)[0];
+    if (!yard) { this.ui.toast(tr('Il faut un chantier naval pour armer des navires de guerre.')); this.buildForSaga('shipyard'); return; }
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
+    this.cam.goTo(yard.x + 1.5, yard.z + 1.5, Math.min(Math.max(this.cam.dist, 14), 24));
+    this.tools.select(yard.id);
+  }
+
+  /**
+   * Lance la bataille navale de l'étape (le bras de mer, le blocus, l'escorte du convoi ; sans étape donnée, celle du moment
+   * sur la feuille de route) : il faut deux navires au moins, et le délai d'une défaite passé. La vue va sur le bras de mer,
+   * la barre de la bataille navale prend la place du village ; la première carte de choix s'ouvre, le jeu en pause
+   */
+  startNaval(step?: SeaStep): boolean {
+    const w = this.world, d = w.diplo;
+    if (this.navalBattle || this.rivalBattle || !d.ally || d.conflict !== 'open') return false;
+    const now = stepNow(w, this.sim.age, this.sagaCtx());
+    const sea = step ?? (now && isSeaStep(now.id) ? now.id : null);
+    if (!sea) return false;
+    if (afloat(w.fleet) < MIN_FLEET) {
+      this.ui.toast(tr('⛵ Il faut au moins {m} navires de guerre (nous en avons {n}) : armez-les au chantier naval.', { m: MIN_FLEET, n: afloat(w.fleet) }), () => this.goFleet(), 'action');
+      return false;
+    }
+    if (!seaReady(d, w.exp.clock)) { this.ui.toast(tr('Notre flotte se refait de sa défaite : la bataille navale pourra reprendre bientôt.')); return false; }
+    if (this.mode !== 'surface') { this.ensureSurface(() => this.startNaval(sea), true); return false; }
+    const rival = rivalOf(d.ally), kind = sea === 'convoy' ? 'convoy' : sea;
+    const frame = navalFrame(w, kind, d.ally, rival);
+    if (!frame) return false;
+    const b = new NavalBattle(kind, Math.max(2, this.sim.age), w.fleet.hulls, { allies: Math.min(2, Math.floor(d.boons.allies / 4)), foeCut: d.boons.foes >= 6 ? 1 : 0, gold: w.gold });
+    this.leaveIsle(true);
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
+    this.tools.setTool('none');
+    this.tools.select(null);
+    this.navalBattle = b;
+    this.navalStep = sea;
+    this.navalEndT = 0;
+    this.navalCamT = 0;
+    const view = new NavalBattleView(w, b, frame, d.ally, rival, this.sim.age);
+    view.fx.onClash = (k) => this.audio.sfxClash(k);
+    view.onShot = () => this.audio.sfxClash('shot');
+    this.navalView = view;
+    this.scene.add(view.group);
+    view.update(0, false);
+    this.command.setNaval({
+      status: () => this.navalStatus(),
+      ships: () => b.ours().sort((x, y) => x.slot - y.slot).map((s) => ({ name: this.shipName(), hull: s.sunk ? 0 : s.hp / s.max, state: s.sunk ? 'sunk' : s.role === 'strike' ? 'strike' : s.role === 'lure' ? 'lure' : 'ok' })),
+      hint: () => this.navalHint(),
+      leave: () => { b.retreat(); this.endNaval(true); },
+    });
+    this.cam.handler = this.command;
+    const [fx, fz] = view.focus();
+    this.cam.goTo(fx, fz, 34);
+    this.cam.tiltTo(0.8);
+    const title = sea === 'strait' ? tr('La bataille du bras de mer') : sea === 'blockade' ? tr('Le blocus du port') : tr('L’escorte du convoi');
+    this.ui.banner(title, sea === 'convoy' ? tr('Mener le convoi jusqu’à leur port') : sea === 'blockade' ? tr('Fermer la mer au port de {isle}', { isle: isleName(rival) }) : tr('Notre flotte, et {ally} à nos côtés', { ally: peopleName(d.ally) }));
+    this.navalChoice();
+    return true;
+  }
+
+  /** La carte de choix que la bataille navale attend (le jeu en pause jusqu'au choix) */
+  private navalChoice() {
+    const b = this.navalBattle;
+    if (!b || !b.waiting) return;
+    this.rivalPause(true);
+    this.diploChoice.showNaval(b.waiting, b.kind, b.age, b.options());
+  }
+
+  /** Le choix du joueur : la bataille reprend */
+  private navalTactic(c: NavalChoice) {
+    const b = this.navalBattle;
+    if (!b || !b.choose(c)) { this.navalChoice(); return; }
+    if (this.diploChoice.visible) this.diploChoice.hide();
+    this.rivalPause(false);
+    // (la vue suit l'action : elle se recentre à chaque temps)
+    this.navalCamT = 0;
+    this.ui.update();
+  }
+
+  /** Le bandeau de la bataille navale : ce qui se passe, nos navires, les leurs */
+  private navalStatus() {
+    const b = this.navalBattle;
+    if (!b) return '';
+    const ours = b.alive('ours').length + b.alive('ally').length, foes = b.alive('foe').length;
+    const line = b.outcome === 'won' ? (b.escort ? tr('Le convoi est arrivé !') : tr('La mer est à nous !')) : b.outcome === 'lost' ? tr('Notre flotte rentre au port')
+      : b.escort ? tr('Le convoi : {n} % du chemin · {m} marchands · {p} pirates', { n: Math.round(b.convoy * 100), m: b.alive('merchant').length, p: foes })
+        : b.phase === 'approach' ? tr('L’approche · {n} de nos navires contre {m}', { n: ours, m: foes }) : b.phase === 'finish' ? tr('L’ennemi fuit · {m} navires rivaux à flot', { m: foes }) : tr('Le combat · {n} de nos navires contre {m}', { n: ours, m: foes });
+    return `<div class="twave gold wst" role="status"><span class="twm" aria-hidden="true">⚓</span><div class="twc"><span class="twh">${line}</span><span class="twf">· ${nplural(b.foesDown(), 'navire ennemi coulé', 'navires ennemis coulés')}</span></div></div>`;
+  }
+
+  /** La bulle d'aide de la bataille navale */
+  private navalHint() {
+    const b = this.navalBattle;
+    if (!b) return '';
+    if (b.waiting) return tr('La bataille attend votre choix.');
+    if (b.escort) return tr('Le convoi avance, nos navires le couvrent.');
+    return tr('Nos navires se battent seuls, selon vos choix.');
+  }
+
+  /**
+   * Un pas de la bataille navale (par pas de 0,25 s de jeu au plus), ses nouvelles (bannières, messages), sa vue ; la vue se
+   * recentre sur l'action toutes les huit secondes ; finie, quelques secondes de mise en scène avant le retour
+   */
+  private stepNaval(dt: number, gdt: number) {
+    const b = this.navalBattle, view = this.navalView;
+    if (!b || !view) return;
+    let left = Math.min(gdt, 1);
+    while (left > 1e-6 && !b.outcome && !b.waiting) { const s = Math.min(0.25, left); b.step(s); left -= s; }
+    for (const n of b.news.splice(0)) {
+      if (n.type === 'choice' && n.step > 1) { this.navalChoice(); this.navalCamT = 0; }
+      else if (n.type === 'sunk') {
+        const s = b.ships.find((x) => x.id === n.id);
+        if (n.side === 'ours' && s?.role !== 'strike') this.ui.toast(tr('💥 Un de nos navires coule !'), undefined, 'danger');
+        else if (n.side === 'ally') this.ui.toast(tr('💥 Un navire allié coule.'));
+        else if (n.side === 'merchant') this.ui.toast(tr('💥 Un navire marchand du convoi coule : sa cargaison est perdue.'), undefined, 'danger');
+        else if (n.side === 'foe') this.ui.toast(b.escort ? tr('⚓ Un navire pirate coule !') : tr('⚓ Un navire rival coule !'));
+      }
+      else if (n.type === 'taken') this.ui.toast(tr('🏴 Un navire rival est pris à l’abordage : il compte double !'));
+      else if (n.type === 'strike') { this.ui.banner(b.age <= 2 ? tr('Le brûlot !') : tr('La torpille !'), tr('Un coup décisif dans leur ligne')); this.navalCamT = 0; }
+      else if (n.type === 'break') this.ui.banner(b.escort ? tr('Les pirates rompent !') : tr('Leur ligne rompt !'), b.escort ? tr('Le convoi poursuit sa route') : tr('Leurs navires tournent la poupe'));
+      else if (n.type === 'pay') this.ui.toast(tr('💰 Le passage est payé : {n} or. Les pirates s’éloignent.', { n: n.gold }));
+      else if (n.type === 'arrive') this.ui.toast(tr('⚓ Le convoi entre au port : {n} navires marchands sur {m}.', { n: n.n, m: 3 }));
+      else if (n.type === 'end') {
+        this.navalEndT = 4;
+        if (n.outcome === 'won') { this.ui.banner(b.escort ? tr('Le convoi est arrivé') : b.kind === 'blockade' ? tr('Le port est bloqué') : tr('La mer est à nous'), b.escort ? tr('Les marchands sont à quai') : tr('Notre flotte tient le bras de mer')); this.audio.sfxAgeUp(); }
+        else this.ui.banner(tr('Défaite en mer'), tr('Notre flotte rentre au port'));
+      }
+    }
+    // la vue suit l'action (le joueur peut la tourner entre-temps)
+    this.navalCamT -= dt;
+    if (this.navalCamT <= 0 && !b.waiting) { this.navalCamT = 8; const [fx, fz] = view.focus(); this.cam.goTo(fx, fz, Math.max(26, Math.min(this.cam.dist, 46))); }
+    view.update(dt, !b.waiting && gdt > 0);
+    if (this.navalEndT > 0) { this.navalEndT -= dt; if (this.navalEndT <= 0) this.endNaval(); }
+  }
+
+  /**
+   * La fin de la bataille navale : nos navires rentrent (les coulés sont perdus, les touchés se réparent au chantier) ; l'or
+   * payé, perdu ou gagné ; gagnée, l'étape est faite (la suite : le débarquement, le port, les émissaires) ; perdue, elle se
+   * rejoue dans un jour
+   */
+  private endNaval(retreat = false) {
+    const b = this.navalBattle, view = this.navalView, w = this.world, d = w.diplo;
+    if (!b) return;
+    if (!b.outcome) b.retreat();
+    fleetBack(w.fleet, b.hullsBack());
+    w.gold = Math.max(0, w.gold - b.goldPaid - b.goldLost) + b.goldWon;
+    const won = b.outcome === 'won', step = this.navalStep;
+    if (won) seaWon(d, step); else seaLost(d, w.exp.clock, this.time.dayLen, SEA_RETRY_DAYS);
+    this.navalBattle = null;
+    this.navalView = null;
+    this.navalEndT = 0;
+    this.rivalPause(false);
+    if (this.diploChoice.visible) this.diploChoice.hide();
+    if (view) { this.scene.remove(view.group); view.dispose(); }
+    this.command.setNaval(null);
+    if (this.mode === 'surface') this.cam.handler = this.tools;
+    const lost = b.oursLost();
+    if (retreat) this.ui.banner(tr('Retraite'), tr('Notre flotte rentre au port : nouvel essai dans un jour'));
+    else if (!won) this.ui.toast(tr('⚓ Défaite en mer : notre flotte se refait, nouvel essai dans un jour.'), () => this.openDiploChoice(), 'action');
+    if (lost) setTimeout(() => this.ui.toast(lost > 1 ? tr('⚓ {n} de nos navires sont perdus. Le chantier naval peut en armer d’autres.', { n: lost }) : tr('⚓ Un de nos navires est perdu. Le chantier naval peut en armer un autre.'), () => this.goFleet(), 'notice'), 1800);
+    if (b.goldWon) setTimeout(() => this.ui.toast(tr('💰 La cargaison du convoi rapporte {n} or.', { n: b.goldWon }), undefined, 'notice'), 3200);
+    this.goHome();
+    this.ui.update();
+    this.saveNow();
+    // (gagnée : la suite, le débarquement pour le bras de mer, sinon la feuille de route)
+    if (won) setTimeout(() => {
+      if (this.rivalBattle || this.navalBattle || this.diploChoice.visible) return;
+      if (step === 'strait' && d.battle === 'ready' && !d.camp.held.length) this.diploChoice.showBattle();
+      else this.diploChoice.showRoad();
+    }, 2600);
+  }
+
   /**
    * La fin de la bataille : gagnée, le conflit est réglé (butin, puis tribut) ; perdue (ou retraite), les troupes rembarquent
    * et la bataille se rejoue dans `RETRY_DAYS` jours. La vue revient au village
@@ -1869,7 +2092,7 @@ class Game implements UIHost {
   }
 
   /** La feuille de route de la voie prise (voir `sim/diploRoad.ts`), null sans voie ou le conflit réglé */
-  road() { return roadView(this.world, { running: (id) => this.expeditions.active.some((e) => e.m.id === id), dayLen: this.time.dayLen, age: this.sim.age, count: (k) => this.sim.counts[k] ?? 0 }); }
+  road() { const f = this.world.fleet; return roadView(this.world, { running: (id) => this.expeditions.active.some((e) => e.m.id === id), dayLen: this.time.dayLen, age: this.sim.age, count: (k) => this.sim.counts[k] ?? 0, fleet: { afloat: afloat(f), arming: f.arming.length } }); }
 
   /**
    * Une étape de construction de la feuille de route (la paix : le second comptoir, l'ambassade) : le bâtiment en main, et la
@@ -3354,6 +3577,8 @@ class Game implements UIHost {
     this.stepDiplo();
     this.stepBeacon(dt);
     this.stepRivalBattle(dt, gdt);
+    this.stepNaval(dt, gdt);
+    this.stepFleet(gdt);
     this.stepFarewell(dt);
     this.stepKingCrowd();
     this.railway.update(gdt);
@@ -3454,7 +3679,9 @@ class Game implements UIHost {
       this.blightView.update(dt, this.env.night, this.cam.target, this.cam.dist);
       this.terrain.setNight(this.env.night);
       this.transports.update(gdt, this.sim.age);
+      this.naval.quiet = !!this.navalBattle;
       this.naval.update(gdt, this.sim.age, this.cam.camera, this.mode === 'surface');
+      this.fleetMoor.update(dt, this.sim.age, afloat(this.world.fleet), this.mode === 'surface' && !this.navalBattle);
       this.railView.update(dt, this.sim.age);
       this.railBoost.update(dt, this.cam.target.x, this.cam.target.z, this.cam.dist, this.env.night);
       if (this.railView.lightsVersion !== this.railLightsV) { this.railLightsV = this.railView.lightsVersion; this.refreshHalos(); }

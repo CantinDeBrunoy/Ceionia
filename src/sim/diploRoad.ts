@@ -6,7 +6,8 @@ import { ISLE_MISSIONS } from './isleMissions';
 import { MISSIONS, type Mission } from './missions';
 import { battleOpen, campaignNext, corps, corpsMax, raidDue } from './campaign';
 import { AGES, type KindId } from '../build/catalog';
-import { CHAPTERS, chapterDone, sagaSteps, stepSkipped, type Chapter, type SagaStep } from './saga';
+import { CHAPTERS, chapterDone, sagaSteps, stepSkipped, seaReady, isSeaStep, type Chapter, type SagaStep } from './saga';
+import { MIN_FLEET } from './fleet';
 
 /**
  * La feuille de route du conflit des deux îles (retour de joueurs, 22 nov. 2026 : après « Aider notre allié » ou « Négocier
@@ -24,7 +25,7 @@ export interface RoadPrep { id: string; icon: string; title: string; gain: strin
  * l'expédition (`mission`), la bataille (`battle`), ou rien (`wait` : en cours, ou délai)
  */
 export interface RoadStep {
-  id: string; icon: string; title: string; sub: string; state: 'done' | 'now' | 'next'; go: 'mission' | 'battle' | 'build' | 'sign' | 'wait';
+  id: string; icon: string; title: string; sub: string; state: 'done' | 'now' | 'next'; go: 'mission' | 'battle' | 'naval' | 'fleet' | 'build' | 'sign' | 'wait';
   /** le chapitre de l'étape (son âge) */
   age: Chapter;
   /** le bâtiment à poser (`build`) */
@@ -66,6 +67,8 @@ export interface RoadCtx {
   age?: number;
   /** le nombre de bâtiments d'un genre (les étapes de construction de la paix) */
   count?(k: KindId): number;
+  /** notre flotte : les navires à flot, ceux en chantier (absent : aucune) */
+  fleet?: { afloat: number; arming: number };
 }
 
 /** Le titre d'un chapitre, selon la voie */
@@ -82,17 +85,21 @@ export function stepTitle(id: string, d: Pick<DiploState, 'ally'>): string {
   const t: Record<string, () => string> = {
     plage: () => tr('Le débarquement'), camp: () => tr('Tenir le camp'), port: () => tr('Le port de {isle}', { isle: isleName(rival) }),
     tour: () => tr('La tour du rempart'), assault: () => tr('L’assaut'), post2: () => tr('Un second comptoir'),
+    strait: () => tr('La bataille du bras de mer'), blockade: () => tr('Le blocus du port'), convoy: () => tr('L’escorte du premier convoi'),
     embassy: () => tr('L’ambassade'), sign: () => tr('Signer la paix des îles'),
   };
   return t[id]?.() ?? id;
 }
 
-const ICON: Record<string, string> = { plage: '⛵', camp: '🏕️', port: '⚓', tour: '🏰', assault: '⚔️', post2: '💰', embassy: '🌐', sign: '📜' };
+const ICON: Record<string, string> = { strait: '⚓', blockade: '⛓️', convoy: '🚢', plage: '⛵', camp: '🏕️', port: '⚓', tour: '🏰', assault: '⚔️', post2: '💰', embassy: '🌐', sign: '📜' };
 
 /** Le sous-titre d'une étape pas encore faite */
 function subOf(id: string, rival: People): string {
   switch (id) {
     case 'allywar': return tr('reconnaître la côte de {isle}', { isle: isleName(rival) });
+    case 'strait': return tr('notre flotte et celle de l’allié contre la leur');
+    case 'blockade': return tr('fermer la mer au port : plus de renforts par bateau');
+    case 'convoy': return tr('trois navires marchands à mener chez eux, malgré les pirates');
     case 'plage': return tr('la plage : un camp et une caserne avancée');
     case 'camp': return tr('repousser la première sortie rivale');
     case 'port': return tr('un avant-poste et sa garnison');
@@ -146,6 +153,13 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
     if (stepSkipped(w, s, age)) { st.sub = tr('se fait en prenant le port'); return st; }
     if (!now) return st;
     if (s.go === 'mission') { st.go = run ? 'wait' : 'mission'; if (run) st.sub = tr('L’expédition est en route'); }
+    else if (s.go === 'naval') {
+      // une bataille navale : il faut d'abord des navires de guerre (le chantier naval), puis le délai d'une défaite
+      const f = ctx.fleet ?? { afloat: 0, arming: 0 }, seaWait = Math.max(0, d.saga.seaRetry - clock);
+      if (f.afloat < MIN_FLEET) { st.go = 'fleet'; st.sub = f.arming && f.afloat + f.arming >= MIN_FLEET ? tr('nos navires de guerre sont en chantier ({n}/{m} à flot)', { n: f.afloat, m: MIN_FLEET }) : tr('armez au moins {m} navires de guerre au chantier naval ({n}/{m})', { n: f.afloat, m: MIN_FLEET }); }
+      else if (!seaReady(d, clock)) { const n = Math.max(1, Math.ceil(seaWait / ctx.dayLen)); st.sub = n === 1 ? tr('notre flotte se refait : encore un jour') : tr('notre flotte se refait : encore {n} jours', { n }); }
+      else st.go = 'naval';
+    }
     else if (s.go === 'battle') {
       if (wait > 0) { const n = Math.max(1, Math.ceil(wait / ctx.dayLen)); st.sub = n === 1 ? tr('nos troupes se refont : encore un jour') : tr('nos troupes se refont : encore {n} jours', { n }); }
       else if (!raid && battleOpen(d, age)) {
@@ -164,6 +178,10 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
 
   const notes: string[] = [];
   let alert: string | undefined;
+  // notre flotte, dès qu'une bataille navale reste à livrer (ou qu'on a des navires)
+  const f = ctx.fleet;
+  if (f && (f.afloat + f.arming > 0 || all.some((s) => isSeaStep(s.id) && !s.done)))
+    notes.push(f.arming ? tr('Notre flotte : {n} navires de guerre, {k} en chantier', { n: f.afloat, k: f.arming }) : tr('Notre flotte : {n} navires de guerre', { n: f.afloat }));
   if (path === 'war') {
     alert = raid ? tr('Une sortie rivale fond sur notre camp') : undefined;
     if (d.camp.held.length) {

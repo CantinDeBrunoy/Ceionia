@@ -35,8 +35,16 @@ export interface SagaState {
   done: Chapter[];
   /** paix : la trêve est signée (l'ambassade de la paix, au Médiéval) ; la paix elle-même vient au Moderne */
   truce: boolean;
+  /** les batailles navales gagnées (chantier B : le bras de mer, le blocus du port, l'escorte du convoi) */
+  sea: SeaStep[];
+  /** heure (`exp.clock`) à partir de laquelle une bataille navale perdue se rejoue */
+  seaRetry: number;
 }
-export const newSaga = (): SagaState => ({ done: [], truce: false });
+/** Les étapes navales des chapitres (chantier B, `sim/navalBattle.ts`) */
+export type SeaStep = 'strait' | 'blockade' | 'convoy';
+export const SEA_STEPS: SeaStep[] = ['strait', 'blockade', 'convoy'];
+export const isSeaStep = (id: string): id is SeaStep => (SEA_STEPS as string[]).includes(id);
+export const newSaga = (): SagaState => ({ done: [], truce: false, sea: [], seaRetry: 0 });
 
 /** Relit l'état sauvegardé (partie d'avant les chapitres : rien de fait, voir `catchUp` pour ce qu'on lui compte) */
 export function readSaga(s: any): SagaState {
@@ -44,6 +52,8 @@ export function readSaga(s: any): SagaState {
   if (!s || typeof s !== 'object') return out;
   if (Array.isArray(s.done)) out.done = CHAPTERS.filter((a) => s.done.includes(a));
   out.truce = s.truce === true;
+  if (Array.isArray(s.sea)) out.sea = SEA_STEPS.filter((x) => s.sea.includes(x));
+  out.seaRetry = Number.isFinite(s.seaRetry) ? Math.max(0, s.seaRetry) : 0;
   return out;
 }
 
@@ -51,10 +61,11 @@ export function readSaga(s: any): SagaState {
 export interface SagaCtx { count?(k: KindId): number }
 
 /**
- * Où mène une étape : une expédition (`mission`), la bataille de la campagne (`battle`), un bâtiment à poser (`build`), la
- * paix à signer (`sign`), ou rien qu'attendre (`wait` : la première sortie rivale contre le camp)
+ * Où mène une étape : une expédition (`mission`), la bataille de la campagne (`battle`), une bataille navale (`naval` : le
+ * bras de mer, le blocus, l'escorte du convoi), un bâtiment à poser (`build`), la paix à signer (`sign`), ou rien qu'attendre
+ * (`wait` : la première sortie rivale contre le camp)
  */
-export type StepGo = 'mission' | 'battle' | 'build' | 'sign' | 'wait';
+export type StepGo = 'mission' | 'battle' | 'naval' | 'build' | 'sign' | 'wait';
 export interface SagaStep {
   id: string; age: Chapter; done: boolean; go: StepGo;
   mission?: string; kind?: KindId;
@@ -77,19 +88,23 @@ export function sagaSteps(w: Saga, ctx: SagaCtx = {}): SagaStep[] {
   const count = (k: KindId) => ctx.count?.(k) ?? 0;
   if (!d.path) return [];
   const held = d.camp.held, s: SagaStep[] = [];
+  const sea = d.saga.sea;
   if (d.path === 'war') {
-    // (chantier B : la bataille du bras de mer viendra ici, avant le débarquement)
     s.push({ id: WAR_MISSION, age: 2, go: 'mission', mission: WAR_MISSION, done: d.battle !== 'none' || exp(WAR_MISSION) });
+    // la bataille du bras de mer, avant le débarquement (une partie à la plage déjà prise la compte faite)
+    s.push({ id: 'strait', age: 2, go: 'naval', done: sea.includes('strait') || held.includes('plage') });
     s.push({ id: 'plage', age: 2, go: 'battle', done: held.includes('plage') });
     s.push({ id: 'camp', age: 2, go: 'wait', done: held.includes('plage') && (d.camp.raids > 0 || held.length > 1) });
-    // (chantier B : le blocus du port, avant sa prise ; chantier C : le fort, après la tour)
+    // le blocus du port, avant sa prise (le port déjà pris le compte fait) ; (chantier C : le fort, après la tour)
+    s.push({ id: 'blockade', age: 3, go: 'naval', done: sea.includes('blockade') || held.includes('port') });
     s.push({ id: 'port', age: 3, go: 'battle', done: held.includes('port') });
     s.push({ id: 'tour', age: 3, go: 'battle', done: held.includes('tour') });
     // (chantier C : la ville de garnison ; chantier D : la bataille des deux îles remplacera l'assaut)
     s.push({ id: 'assault', age: 4, go: 'battle', done: d.conflict === 'won', stub: 'D' });
   } else {
-    // (chantier B : l'escorte du premier convoi viendra ici, avant les émissaires)
     const [envoys, truce] = PEACE_CHAIN;
+    // l'escorte du premier convoi, avant les émissaires (les émissaires déjà faits la comptent faite)
+    s.push({ id: 'convoy', age: 2, go: 'naval', done: sea.includes('convoy') || exp(envoys) || d.saga.truce });
     s.push({ id: envoys, age: 2, go: 'mission', mission: envoys, done: exp(envoys) });
     s.push({ id: truce, age: 2, go: 'mission', mission: truce, done: d.saga.truce || exp(truce) });
     // (provisoire : le port marchand partagé, les maisons communes et le sauvetage, chantiers B et C)
@@ -187,3 +202,21 @@ export function stepNow(w: Saga, age: number, ctx: SagaCtx = {}): SagaStep | nul
   const open = chaptersUpTo(age).filter((c) => !chapterDone(w, c, ctx));
   return sagaSteps(w, ctx).find((x) => !x.done && open.includes(x.age) && !stepSkipped(w, x, age)) ?? null;
 }
+
+/**
+ * La bataille navale qui attend avant cette étape de la campagne : le bras de mer avant le débarquement, le blocus avant le
+ * port (null : aucune, ou déjà gagnée). Les anciennes parties à la plage ou au port déjà pris n'en ont pas
+ */
+export function seaBefore(d: Pick<DiploState, 'path' | 'camp' | 'saga' | 'conflict'>, battle: string): SeaStep | null {
+  if (d.path !== 'war' || d.conflict !== 'open') return null;
+  if (battle === 'landing' && !d.saga.sea.includes('strait') && !d.camp.held.includes('plage')) return 'strait';
+  if (battle === 'port' && !d.saga.sea.includes('blockade') && !d.camp.held.includes('port')) return 'blockade';
+  return null;
+}
+
+/** Une bataille navale gagnée : notée (une fois) */
+export function seaWon(d: Pick<DiploState, 'saga'>, step: SeaStep) { if (!d.saga.sea.includes(step)) d.saga.sea.push(step); }
+/** Une bataille navale perdue : elle se rejoue dans `days` jours */
+export function seaLost(d: Pick<DiploState, 'saga'>, clock: number, dayLen: number, days: number) { d.saga.seaRetry = clock + days * dayLen; }
+/** La bataille navale peut-elle partir (le délai d'une défaite passé) ? */
+export const seaReady = (d: Pick<DiploState, 'saga'>, clock: number) => clock >= d.saga.seaRetry;

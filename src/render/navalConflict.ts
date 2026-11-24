@@ -140,6 +140,8 @@ export class NavalConflict {
   private audible = false;
   /** coût de la dernière image (ms), pour la mesure */
   lastMs = 0;
+  /** une bataille navale du joueur se livre (chantier B) : plus d'escarmouche ni de vie en mer, le décor se tait */
+  quiet = false;
 
   constructor(private world: World) {
     this.group.add(this.fx.group, this.smoke.mesh);
@@ -178,10 +180,10 @@ export class NavalConflict {
     this.age = age;
     this.clock += dt;
     // (les places du conflit se calculent à la première scène, pas au chargement : quelques dizaines de millisecondes)
-    const shown = conflictShown(this.state, archipelagoOn(this.world), age), mode = seaLife(shown);
+    const shown = conflictShown(this.state, archipelagoOn(this.world), age), mode = this.quiet ? null : seaLife(shown);
     if (!mode) {
       if (this.skirmish) { this.drop(this.skirmish); this.skirmish = null; }
-      if (this.life) { this.drop(this.life); this.life = null; }
+      if (this.life) { this.drop(this.life); this.life = null; this.lifeKey = ''; }
       this.group.visible = false;
       return;
     }

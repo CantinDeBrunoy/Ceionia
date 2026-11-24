@@ -51,6 +51,19 @@ export interface Theater {
   leave?(): void;
 }
 
+/**
+ * La bataille navale (chantier B du nouveau monde, `sim/navalBattle.ts`) : pas de troupes à commander, une barre à part dans
+ * le même cadre : le bandeau d'état, une carte par navire à nous (sa coque), la bulle d'aide, l'Aide et « Retraite »
+ */
+export interface NavalStage {
+  status(): string;
+  /** nos navires : nom, coque (0 … 1), état (à flot, coulé, sacrifié, leurre) */
+  ships(): { name: string; hull: number; state: 'ok' | 'sunk' | 'strike' | 'lure' }[];
+  /** la bulle d'aide du moment */
+  hint(): string;
+  leave(): void;
+}
+
 export interface CommandHost {
   war: War;
   age(): number;
@@ -163,6 +176,8 @@ export const CONTROLS_HELP: [string, string][] = [
 export class CommandUI implements ToolInput {
   cmd = new Command();
   theater: Theater | null = null;
+  /** la bataille navale en cours (sa barre remplace celle des troupes), ou null */
+  naval: NavalStage | null = null;
   private bar: HTMLElement;
   private box: HTMLElement;
   private alertEl: HTMLElement;
@@ -284,6 +299,40 @@ export class CommandUI implements ToolInput {
     this.render();
   }
 
+  /** Prend la barre de la bataille navale (null : on la rend) */
+  setNaval(n: NavalStage | null) {
+    if (n && this.theater) this.setTheater(null);
+    this.naval = n;
+    this.showCard(null);
+    this.barKey = '';
+    this.helpOpen = false;
+    document.body.classList.toggle('commanding', !!n);
+    document.body.classList.toggle('rivalWar', !!n);
+    this.render();
+  }
+
+  /** La barre de la bataille navale : le bandeau, nos navires et leur coque, la bulle d'aide, l'Aide et la retraite */
+  private renderNaval(n: NavalStage) {
+    this.bar.style.display = '';
+    const cards = n.ships().map((s, i) => {
+      const hp = Math.max(0, Math.min(1, s.hull)), tag = s.state === 'sunk' ? tr('coulé') : s.state === 'strike' ? tr('lancé sur l’ennemi') : s.state === 'lure' ? tr('le leurre') : `${Math.round(hp * 100)} %`;
+      return `<div class="tcard nvcard${s.state === 'sunk' ? ' sunk' : ''}" title="${s.name}"><span class="ti">${pic(s.state === 'sunk' ? '💥' : '⛵', 26)}</span><span class="ttx"><b>${i + 1}</b><span class="tn">${tag}</span></span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></div>`;
+    }).join('');
+    const corner = `<button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="${tr('Comment se joue la bataille navale')}"><span class="tq">?</span><span class="tl">${tr('Aide')}</span></button><button data-a="leave" class="tx go" title="${tr('Rentrer au port : la bataille est perdue, on pourra la retenter')}"><span class="oi">${pic('🏳️', 24)}</span><span class="tl">${tr('Retraite')}</span></button>`;
+    const help = [
+      [tr('Les choix'), tr('avant chaque temps de la bataille, une carte : le jeu attend votre choix')],
+      [tr('Nos navires'), tr('un navire touché revient au chantier naval et s’y répare. Un navire coulé est perdu')],
+      [tr('La caméra'), tr('clic droit glissé : tourner · molette : zoom · bouton du milieu : déplacer')],
+    ];
+    const html = `<div class="tstate twtop">${n.status()}</div>
+      <div class="tfoot tisle">
+        ${cards ? `<div class="tbot panel"><div class="tcards">${cards}</div></div>` : ''}
+        <div class="tbub" role="status"><span class="tbi" aria-hidden="true">i</span><p class="thint">${n.hint()}</p></div>
+        <div class="tcorner panel">${corner}</div>
+      </div>${this.helpOpen ? `<ul class="thelp panel">${help.map(([k, t]) => `<li><b>${k}</b><span>${t}</span></li>`).join('')}</ul>` : ''}`;
+    if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
+  }
+
   /** Les unités qu'on commande : celles de l'armée (pas les essais du mode développeur… qui comptent aussi s'il n'y a qu'eux) */
   units(): HellUnit[] {
     const t = this.theater;
@@ -296,6 +345,8 @@ export class CommandUI implements ToolInput {
 
 
   down(e: PointerInfo) {
+    // (la bataille navale ne se commande pas à la souris : la caméra seulement)
+    if (this.naval) return;
     // l'aide des contrôles se replie dès qu'on joue (un clic sur la carte)
     if (this.helpOpen) this.closeHelp();
     this.start = { x: e.x, y: e.y, touch: e.touch };
@@ -317,6 +368,7 @@ export class CommandUI implements ToolInput {
   }
 
   move(e: PointerInfo) {
+    if (this.naval) return;
     const s = this.start;
     if (!s) return;
     // la pose d'un mur : le tracé suit le doigt (pas de rectangle de sélection)
@@ -331,6 +383,7 @@ export class CommandUI implements ToolInput {
   }
 
   up(e: PointerInfo) {
+    if (this.naval) return;
     const s = this.start, t = this.theater;
     clearTimeout(this.press);
     this.start = null;
@@ -352,6 +405,7 @@ export class CommandUI implements ToolInput {
   cancel() { clearTimeout(this.press); this.start = null; this.box.style.display = 'none'; }
 
   hover(e: PointerInfo) {
+    if (this.naval) return;
     const t = this.theater;
     if (!t) return;
     const p = t.pick(e.x, e.y);
@@ -759,6 +813,13 @@ export class CommandUI implements ToolInput {
 
   private onBar(e: MouseEvent) {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-a]');
+    if (el && this.naval) {
+      const a = el.dataset.a;
+      this.host.click();
+      if (a === 'leave') this.naval.leave();
+      else if (a === 'help') { this.helpOpen = !this.helpOpen; this.barKey = ''; this.render(); }
+      return;
+    }
     if (!el || !this.theater) return;
     const a = el.dataset.a!, w = this.host.war;
     if (a === 'all') this.selectAll();
@@ -890,6 +951,7 @@ export class CommandUI implements ToolInput {
 
   /** Remet l'interface à jour (appelée souvent : ne refait le contenu que s'il a changé) */
   render() {
+    if (this.naval) { this.renderNaval(this.naval); return; }
     const t = this.theater;
     if (this.helpOpen && performance.now() - this.helpAt > HELP_MS) this.helpOpen = false;
     this.stepWaiting();

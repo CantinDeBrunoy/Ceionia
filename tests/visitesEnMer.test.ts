@@ -117,6 +117,7 @@ it('chaque visite chez l’allié arrive sur son île et se termine', { timeout:
   for (const [seed, ally, lagoon] of [[11, 'orient', false], [11, 'orient', true], [20974, 'asie', false]] as const) {
     const w = archipel(seed);
     w.diplo.ally = ally; w.diplo.path = 'peace';
+    w.diplo.saga.sea.push('convoy');
     // (le port allié au fond d'une lagune, comme celui des Jadéens chez Bernard : l’eau à moins de 20 cases du port n'est pas
     // reliée au large, une eau fermée au niveau de la mer)
     if (lagoon) {
