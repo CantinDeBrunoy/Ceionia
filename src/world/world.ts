@@ -429,6 +429,8 @@ export class World {
   isleName = DEFAULT_ISLE;
   /** malades restés sans soins : soins en moins jusqu'à l'horloge des expéditions (`until`), voir `sim/mishaps.ts` */
   ills: { n: number; until: number }[] = [];
+  /** deuils d'un village sans cimetière : bien-être en moins jusqu'à l'horloge des expéditions (`until`), voir `sim/mishaps.ts` */
+  mourning: { n: number; until: number }[] = [];
   /** la côte de l'île principale est sûre (agrandie après le 21 nov. 2026, ou réparée par `repairCoast`, voir `expand.ts`) */
   coast = 0;
   /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
@@ -1926,6 +1928,7 @@ export class World {
       ...(this.coast ? { coast: 1 } : {}),
       ...(this.modernSteps !== null ? { modern: this.modernSteps ? 1 : 0 } : {}),
       ...(this.ills.length ? { ills: this.ills.filter((i) => i.until > this.exp.clock) } : {}),
+      ...(this.mourning.length ? { mourning: this.mourning.filter((i) => i.until > this.exp.clock) } : {}),
       ...(this.isles && this.mainGen !== GEN_VAR ? { mainGen: this.mainGen } : {}),
       ...(this.reveal ? { reveal: 1 } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
@@ -2078,6 +2081,7 @@ export class World {
     this.coast = d.coast === 1 ? 1 : 0;
     this.modernSteps = d.modern === 1 ? true : d.modern === 0 ? false : null;
     this.ills = readIlls(d.ills);
+    this.mourning = readIlls(d.mourning);
     this.mainGen = this.isles && [GEN_FIXED, 2, 5].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);

@@ -1,7 +1,7 @@
 # Besoins et population
 
 > Fichiers : `src/sim/sim.ts` (classe `Sim` : besoins, croissance, conseil), `src/sim/coverage.ts` (couverture pompiers / police, bonus de bien-être), `src/sim/fields.ts` (champs : emplois, bras visibles), `src/sim/difficulty.ts` (réglages qui touchent la croissance), `src/build/catalog.ts` (valeurs `housing`, `food`, `water`, `jobs`, `joy`, `health` de chaque bâtiment), `src/ui/ui.ts` (`#needs`, `#needInfo`, `#census`, `#msg`), `src/render/coverageView.ts` (surbrillance de la couverture).
-> Tests : `tests/besoins.test.ts`, `tests/couverture.test.ts`, `tests/difficulty.test.ts`, `tests/fondateurs.test.ts`, `tests/guidage.test.ts`.
+> Tests : `tests/besoins.test.ts`, `tests/cimetiere.test.ts`, `tests/couverture.test.ts`, `tests/difficulty.test.ts`, `tests/fondateurs.test.ts`, `tests/guidage.test.ts`.
 > Voir aussi : [economie-ressources.md](economie-ressources.md), [ages.md](ages.md), [difficulte.md](difficulte.md), [incidents.md](incidents.md), [batiments-catalogue.md](batiments-catalogue.md), [interface.md](interface.md).
 
 ## En bref
@@ -19,7 +19,7 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 | Nourriture `food` | bâtiments + champs + bonus d'expédition | `up((n+1) × foodK)` | `cap >= demand` |
 | Eau `water` | bâtiments + maisons au bord de l'eau + bonus | `n + 1` | `cap >= demand` |
 | Travail `jobs` | bâtiments + `floor(champs/2)` + bonus | `up(n × 0,5)` si `n >= 6`, sinon 0 | `cap >= demand` |
-| Bien-être `joy` | bâtiments + forêts + sécurité + bonus | `pop × 0,3` si `pop >= 6`, sinon 0 | `cap >= demand` (pas d'arrondi) |
+| Bien-être `joy` | bâtiments + forêts + sécurité + bonus, moins le deuil d'un défunt sans cimetière (`grief`) | `pop × 0,3` si `pop >= 6`, sinon 0 | `cap >= demand` (pas d'arrondi) |
 | Santé `health` | somme des `health`, moins les malades restés sans soins (`ailing`, voir [incidents.md](incidents.md)) | `up(n × 0,2)` si `n >= 15`, sinon 0 | `cap >= demand` |
 
 - `foodK` vient de `difficulty.ts` : 1 en Facile et Bac à sable, 1,25 en Normal. Le « +1 » de nourriture et d'eau est une part de réserve pour le village.
@@ -42,7 +42,7 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 - **Disette** (Normal seulement, `famine = 0,004`) : si la nourriture manque, `pop` baisse de `dt × famine × manque × pop` avec `manque = 1 − cap/demand` ; les partants s'accumulent dans `fled` (remis à 0 quand la nourriture revient). Facile et Bac à sable : `famine = 0`, personne ne part.
 - **Convalescence** : si l'un de nourriture, eau, travail, bien-être ou santé manque (le logement ne compte pas), `recovering = recoverT` (100 s de jeu en Normal) ; sinon il redescend de `dt`. Pendant `recovering > 0`, la croissance est multipliée par `recoverK` (0,5 en Normal). Facile : `recoverT = 0`, aucun effet.
 - Un manque d'eau, de travail, de bien-être ou de santé **ne fait partir personne** : il bloque seulement la croissance.
-- Aucun effet de la santé ou des services sur la population : les malaises et cambriolages sont de la mise en scène (voir [incidents.md](incidents.md)).
+- Les malaises et cambriolages restés sans secours ont des conséquences mesurées (voir [incidents.md](incidents.md)) : soins en moins un temps, en Normal parfois un décès (un habitant de moins), et sans cimetière un deuil qui coûte un peu de bien-être deux jours.
 
 ### La Sécurité (indicateur, jamais un blocage)
 `computeCoverage` (`coverage.ts`) : part des habitations (bâtiments avec `housing > 0` à leur âge, donc les maisons, manoirs, arcologies **et la place du village**) à portée d'un poste, mesurée du centre du poste au centre de l'habitation.

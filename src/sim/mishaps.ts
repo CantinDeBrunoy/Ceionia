@@ -62,9 +62,38 @@ export function readIlls(d: unknown): { n: number; until: number }[] {
   return Array.isArray(d) ? d.filter((i) => i && Number.isFinite(i.n) && Number.isFinite(i.until) && i.n > 0).map((i) => ({ n: +i.n, until: +i.until })) : [];
 }
 
-/** Le message qui dit au joueur ce que le malaise sans soins a coûté */
-export function sickNews(toll: SickToll, died: boolean): string {
-  if (died) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé.');
+/**
+ * Le deuil d'un village sans cimetière (demande de l'auteur du 24 nov. 2026) : un défunt qui n'a pas où reposer coûte
+ * `MOURN.n` de bien-être pendant `MOURN.days` jours. Avec un cimetière, un cortège l'y mène et rien n'est perdu. Les décès
+ * n'arrivent qu'en Normal : en Facile, le cimetière n'apporte qu'un peu de bien-être
+ */
+export const MOURN = { n: 2, days: 2 } as const;
+
+/** Le village a-t-il un cimetière (de tout âge, n'importe où) ? */
+export function hasCemetery(w: Pick<World, 'buildings'>): boolean {
+  for (const b of w.buildings.values()) if (b.kind === 'cemetery') return true;
+  return false;
+}
+
+/** Le village porte le deuil d'un défunt sans sépulture */
+export function applyMourning(w: World, dayLen: number) {
+  w.mourning.push({ n: MOURN.n, until: w.exp.clock + MOURN.days * dayLen });
+}
+
+/** Bien-être en moins en ce moment (les deuils qui ne sont pas finis) */
+export function grief(w: Pick<World, 'mourning' | 'exp'>): number {
+  let n = 0;
+  for (const i of w.mourning) if (i.until > w.exp.clock) n += i.n;
+  return n;
+}
+
+/**
+ * Le message qui dit au joueur ce que le malaise sans soins a coûté. Un décès : ce qui l'aurait évité (un hôpital à portée),
+ * et ce qu'il advient du défunt (`rest` : il repose au cimetière ; sinon le village en porte le deuil)
+ */
+export function sickNews(toll: SickToll, died: boolean, rest = false): string {
+  if (died && rest) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé. Ses proches le mènent au cimetière, où il repose en paix.');
+  if (died) return tr('🕯️ Sans soins à temps, le malade n’a pas survécu. Un hôpital à portée des maisons l’aurait sauvé. Faute de cimetière où reposer, le village porte son deuil {d} : bien-être −{n}.', { n: MOURN.n, d: tr('{n} jours', { n: MOURN.days }) });
   return tr('🤒 Sans soins à temps, le malade reste alité {d} : santé −{n}. Un hôpital à portée des maisons l’aurait soigné.', { n: toll.n, d: toll.days > 1 ? tr('{n} jours', { n: toll.days }) : tr('une journée') });
 }
 

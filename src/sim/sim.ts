@@ -1,5 +1,5 @@
 import { tr } from '../i18n';
-import { ailing } from './mishaps';
+import { ailing, grief } from './mishaps';
 import { Coverage, computeCoverage } from './coverage';
 import { World, N } from '../world/world';
 import { WISH_JOY, WISH_JOY_MAX } from './wishes';
@@ -233,7 +233,8 @@ export class Sim {
     this.water.cap = down(this.baseWater + needBonus(e, 'water'));
     this.jobs.cap = down(this.baseJobs + needBonus(e, 'jobs'));
     // (et les envies d'habitants comblées : un petit plus, plafonné)
-    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY));
+    // (moins le deuil d'un défunt sans cimetière où reposer, un temps)
+    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) - grief(this.world));
     // (les malades restés sans soins pèsent sur les soins un temps, voir `sim/mishaps.ts`)
     this.health.cap = Math.max(0, this.baseHealth - ailing(this.world));
     this.housing.demand = p;
@@ -261,6 +262,7 @@ export class Sim {
     if (k === 'joy' && this.world.wishesMet) rows.push({ label: tr('Envies d’habitants comblées'), n: this.world.wishesMet, v: Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) });
     if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts où l’on se promène'), n: L.forests, v: L.forests * 0.08 });
     if (k === 'health') { const a = ailing(this.world); if (a) rows.push({ label: tr('Malades restés sans soins'), n: 0, v: -a }); }
+    if (k === 'joy') { const g = grief(this.world); if (g) rows.push({ label: tr('Deuil (aucun cimetière)'), n: 0, v: -g }); }
     if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: tr(b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)'), n: 0, v: b }); }
     rows.sort((a, b) => b.v - a.v);
     const kind = ({ housing: 'house', food: 'farm', water: 'well', jobs: 'workshop', joy: 'gather', health: 'health' } as Record<NeedId, KindId>)[k];
@@ -556,6 +558,8 @@ export class Sim {
     if (e.temp.length && e.temp.some((t) => t.until <= e.clock)) e.temp = e.temp.filter((t) => t.until > e.clock);
     const ills = this.world.ills;
     if (ills.length && ills.some((i) => i.until <= e.clock)) this.world.ills = ills.filter((i) => i.until > e.clock);
+    const mo = this.world.mourning;
+    if (mo.length && mo.some((i) => i.until <= e.clock)) this.world.mourning = mo.filter((i) => i.until > e.clock);
     // la pluie humidifie les sols ; ils sèchent vite l'été, lentement au printemps et en automne, pas l'hiver
     if (dt > 0) {
       if (this.rain > 0.3) this.moisture = Math.min(1, this.moisture + dt * 0.05 * this.rain);
