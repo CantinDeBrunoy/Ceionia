@@ -1115,9 +1115,26 @@ function futureHouse(p: Parts, r: () => number, v: number, W: number, D: number)
     const ty = 0.1 + Math.floor(floors * 0.6) * fh;
     p.cyl(rad + 0.1, rad + 0.08, 0.04, seg, 0, ty, 0, O.white);
     p.add(new THREE.IcosahedronGeometry(0.08, 0).scale(1.4, 0.6, 1), rad * 0.7, ty + 0.06, rad * 0.5, O.green);
-    p.cyl(rad * 0.92, rad * 0.92, 0.04, seg, 0, 0.1 + h, 0, O.green);
-    if (v % 2) palm(p, rad * 0.3, 0, 0.32, v, 0x9a8a6a, 0x5f9442, false);
-    else { dome(p, rad * 0.55, rad * 0.45, 0, 0.14 + h, 0, O.glass, 'persian', 10, true); }
+    // le sommet, d'une tour à l'autre : jardin, coupole de verre, aire des drones à anneau lumineux, ou coupole dorée
+    const top = (v >> 1) % 4;
+    if (top === 2) {
+      p.cyl(rad * 0.95, rad * 0.95, 0.03, seg, 0, 0.1 + h, 0, 0xdcdcdc);
+      p.add(new THREE.TorusGeometry(rad * 0.7, 0.012, 3, 12).rotateX(Math.PI / 2), 0, 0.14 + h, 0, O.turqL, 0, 'neon');
+      p.box(0.07, 0.02, 0.07, rad * 0.2, 0.2 + h, 0, 0x3a3a40);
+      for (const a of [0, Math.PI / 2]) p.box(0.12, 0.006, 0.012, rad * 0.2, 0.22 + h, 0, O.steel, a + Math.PI / 4);
+      p.cyl(0.006, 0.006, 0.3, 3, -rad * 0.6, 0.13 + h, 0, O.white);
+      p.box(0.025, 0.025, 0.025, -rad * 0.6, 0.43 + h, 0, 0xff4030, 0, true);
+    } else if (top === 3) {
+      p.cyl(rad * 0.6, rad * 0.66, 0.08, seg, 0, 0.1 + h, 0, O.white);
+      dome(p, rad * 0.55, rad * 0.6, 0, 0.18 + h, 0, O.gold, 'persian', 10, false, dark(O.gold, 0.9));
+      finial(p, 0, 0.18 + h + rad * 0.6, 0, 0.6);
+    } else {
+      p.cyl(rad * 0.92, rad * 0.92, 0.04, seg, 0, 0.1 + h, 0, O.green);
+      if (top === 1) palm(p, rad * 0.3, 0, 0.32, v, 0x9a8a6a, 0x5f9442, false);
+      else dome(p, rad * 0.55, rad * 0.45, 0, 0.14 + h, 0, O.glass, 'persian', 10, true);
+    }
+    // un bandeau de faïence turquoise au pied de la tour
+    column(p, rad + 0.016, rad + 0.016, 0.05, seg, 0, 0.12, 0, O.turqD);
     return;
   }
   // tour à résille de losanges (claustra lumineux), couronnée d'un kiosque
@@ -1131,8 +1148,10 @@ function futureHouse(p: Parts, r: () => number, v: number, W: number, D: number)
   p.box(tw + 0.04, 0.03, td + 0.04, 0, 0.1 + h, 0, O.white);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.cyl(0.015, 0.015, 0.16, 4, sx * tw * 0.3, 0.13 + h, sz * td * 0.3, O.white);
   p.box(tw * 0.7, 0.025, td * 0.7, 0, 0.29 + h, 0, O.white);
-  dome(p, tw * 0.28, tw * 0.24, 0, 0.31 + h, 0, O.turq, 'persian', 8);
+  dome(p, tw * 0.28, tw * 0.24, 0, 0.31 + h, 0, pick([O.turq, O.gold, O.glass], v >> 2), 'persian', 8, (v >> 2) % 3 === 2);
   p.box(tw + 0.05, 0.015, td + 0.05, 0, 0.1 + h * 0.5, 0, O.turqL, 0, 'neon');
+  // jardinières aux angles du kiosque
+  for (const sx of [-1, 1]) p.add(new THREE.IcosahedronGeometry(0.06, 0), sx * tw * 0.32, 0.16 + h, -td * 0.32, O.green);
 }
 
 // ---------- Le souk, puis la bourse (lot de 4 × 4) ----------

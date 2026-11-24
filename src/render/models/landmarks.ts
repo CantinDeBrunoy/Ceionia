@@ -440,6 +440,13 @@ function arcology(p: Parts, people: People, v: number) {
     tiers.forEach((s, i) => {
       p.box(s, th, s, 0, y, 0, c.wall);
       p.box(s + 0.02, th * 0.4, s + 0.02, 0, y + th * 0.3, 0, c.glass, 0, true);
+      // les meneaux blancs qui recoupent le bandeau vitré, et une rangée de baies en arc sur le haut du gradin
+      for (let k = 0; k < 4; k++) {
+        const f = new Face(p, (k * Math.PI) / 2, Math.sin((k * Math.PI) / 2) * s / 2, Math.cos((k * Math.PI) / 2) * s / 2, y);
+        const n = Math.max(3, Math.round(s / 0.32));
+        for (let j = 1; j < n; j++) f.plane(0.05, th * 0.4, -s / 2 + (s / n) * j, th * 0.5, 0.014, c.wall);
+        if (i > 0) for (let j = 0; j < n; j++) bay(f, -s / 2 + (s / n) * (j + 0.5), th * 0.74, 0.12, 0.16, 'pointed', c.glass, { frame: c.accent, glow: true, seg: 3 });
+      }
       if (i === 0) for (let k = 0; k < 4; k++) {
         const f = new Face(p, (k * Math.PI) / 2, Math.sin((k * Math.PI) / 2) * s / 2, Math.cos((k * Math.PI) / 2) * s / 2);
         for (let j = 0; j < 5; j++) bay(f, -1.6 + j * 0.8, 0.02, 0.42, 0.6, 'pointed', c.glass, { frame: c.accent, glow: true, seg: 4 });
@@ -476,7 +483,7 @@ function arcology(p: Parts, people: People, v: number) {
   // trois tours reliées par des anneaux de verre et des jardins suspendus, sous des toits courbes à liseré
   const towers: [number, number, number, number][] = [[-1.2, -0.9, 0.95, 18], [1.2, -0.9, 0.85, 15], [0, 1.15, 0.9, 13]];
   for (const [x, z, s, n] of towers) {
-    const fh = 0.3;
+    const fh = 0.3, roof = [A.tileG, A.tileB, 0x8a5a4a][towers.findIndex((t) => t[0] === x && t[1] === z)];
     let y = 0;
     p.box(s + 0.2, 0.15, s + 0.2, x, 0, z, c.trim);
     y = 0.15;
@@ -484,12 +491,12 @@ function arcology(p: Parts, people: People, v: number) {
       p.box(s, fh * 0.7, s, x, y, z, c.glass, 0, true);
       p.box(s + 0.02, fh * 0.3, s + 0.02, x, y + fh * 0.7, z, c.wall);
       if (f % 4 === 3 && f < n - 1) {
-        hipRoof(p, s + 0.34, s + 0.34, 0.1, x, y + fh, z, c.roof, 0, { lod: true, rows: 0, hips: false, glow: 'neon', edge: c.neon, t: 0.02 });
+        hipRoof(p, s + 0.34, s + 0.34, 0.1, x, y + fh, z, roof, 0, { lod: true, rows: 0, hips: false, glow: 'neon', edge: c.neon, t: 0.02 });
         p.box(s + 0.1, 0.05, 0.08, x, y + fh + 0.02, z + s / 2 + 0.05, A.moss);
       }
     }
     for (const sx of [-1, 1]) p.box(0.025, y - 0.15, 0.025, x + sx * (s / 2 + 0.012), 0.15, z + s / 2 + 0.012, c.neon, 0, 'neon');
-    hipRoof(p, s + 0.3, s + 0.3, 0.45, x, y, z, c.roof, 0, { lod: true, rows: 1, step: 0.14, glow: 'neon', edge: c.neon });
+    hipRoof(p, s + 0.3, s + 0.3, 0.45, x, y, z, roof, 0, { lod: true, rows: 1, step: 0.14, glow: 'neon', edge: c.neon });
     p.cyl(0.01, 0.012, 0.5, 4, x, y + 0.45, z, 0xdddddd);
     p.sphere(0.035, x, y + 0.95, z, c.neon);
   }

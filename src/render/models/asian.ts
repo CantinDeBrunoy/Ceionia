@@ -878,6 +878,17 @@ function futureTower(p: Parts, v: number, w: number, d: number, r: () => number)
     }
   }
   for (const sx of [-1, 1]) p.box(0.02, y - 0.1, 0.02, sx * (tw / 2 + 0.012), 0.1, td / 2 + 0.012, neon, 0, 'neon');
+  // d'une tour à l'autre : une enseigne verticale lumineuse, ou une terrasse plantée en encorbellement à mi-hauteur
+  const extra = (v >> 2) % 3, sd = v % 2 ? 1 : -1;
+  if (extra === 1) {
+    p.box(0.04, y * 0.45, 0.12, sd * (tw / 2 + 0.03), y * 0.25, 0, pick([A.pink, A.amber, 0x9aff6a], v + 2), 0, 'neon');
+    for (let i = 0; i < 4; i++) p.box(0.045, 0.04, 0.06, sd * (tw / 2 + 0.03), y * 0.3 + i * y * 0.1, 0, 0xf2f0ea);
+  } else if (extra === 2) {
+    const ty = 0.1 + Math.floor(floors / 2) * fh;
+    p.box(tw + 0.22, 0.04, td + 0.22, 0, ty, 0, 0xf2f0ea);
+    p.box(tw + 0.18, 0.04, td + 0.18, 0, ty + 0.04, 0, A.moss);
+    for (const s of [-1, 1]) { p.cyl(0.012, 0.018, 0.1, 4, s * (tw / 2 + 0.04), ty + 0.08, s * (td / 2 + 0.04), A.darkwood); p.add(new THREE.IcosahedronGeometry(0.08, 0), s * (tw / 2 + 0.04), ty + 0.2, s * (td / 2 + 0.04), pick([A.maple, A.blossom, A.leaf], v + s)); }
+  }
   hipRoof(p, tw + 0.2, td + 0.2, 0.3, 0, y, 0, roofC, 0, { lod: true, rows: 1, step: 0.11, glow: 'neon', edge: neon });
   p.cyl(0.008, 0.008, 0.3, 4, 0, y + 0.3, 0, 0xdddddd);
   p.sphere(0.02, 0, y + 0.6, 0, neon);
