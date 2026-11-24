@@ -164,6 +164,8 @@ export interface UIHost {
   railUndo(): void;
   railFinish(): void;
   railCancel(): void;
+  /** le guidage pas à pas de la première ligne, rejoué depuis le début (onglet Chemin de fer) */
+  railGuide?(): void;
   /** vignette 3D d'un bâtiment à un âge (data URL), null tant qu'elle n'est pas rendue */
   thumb?(k: KindId, age: number): string | null;
   /** plus de points de passage : la voie se pose d'elle-même ; ce qui empêche de valider le tracé (null : rien) */
@@ -2949,6 +2951,8 @@ export class UI {
       if (rb && rb.dataset.html !== rh) { rb.dataset.html = rh; rb.innerHTML = rh; }
     };
     ov.addEventListener('click', (e) => {
+      // « Me guider pas à pas » : la fenêtre se ferme, la bulle reprend la première ligne du début
+      if ((e.target as HTMLElement).closest('[data-guide]')) { close(); h.audio.sfxClick(); h.railGuide?.(); return; }
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-train]');
       if (!el) return;
       close();
@@ -3193,7 +3197,9 @@ export class UI {
     const h = this.host, r = h.railway, age = h.sim.age, R = './expeditions/rail/';
     const head = (sub: string) => `<div class="rlTop">${hudPic('train', 58)}<div><h4>${tr('Chemin de fer')}</h4><p>${sub}</p></div></div>`;
     // sous les lignes, une carte en pointillé rappelle comment en tracer une autre (au lieu d'un grand vide)
-    const more = `<div class="rlMore"><span class="rlPlus">+</span><p><b>${tr('Nouvelle ligne :')}</b> ${tr('choisissez une gare, puis « Nouvelle ligne ».')}</p></div>`;
+    // (et propose le guidage pas à pas, celui de la première ligne, pour qui s'y perd)
+    const guide = h.world.sandbox ? '' : `<button class="rlGuide" data-guide title="${attr(tr('Une bulle montre chaque geste, des gares au premier train'))}">${ic('bulb', 15, 2)} ${tr('Me guider pas à pas')}</button>`;
+    const more = `<div class="rlMore"><span class="rlPlus">+</span><p><b>${tr('Nouvelle ligne :')}</b> ${tr('choisissez une gare, puis « Nouvelle ligne ».')}</p>${guide}</div>`;
     const how = tr('Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares. Un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.');
     if (age < 3) return head(tr('Le chemin de fer viendra avec les gares, à l’âge industriel.'));
     if (!h.world.lines.length) return `${head(how)}<p class="hint rlNone">${tr('Aucune ligne pour l’instant : bâtissez deux gares (petite gare, ou la gare centrale).')}</p>${more}`;

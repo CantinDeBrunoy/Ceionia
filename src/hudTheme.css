@@ -404,6 +404,8 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 .rlMore p { margin: 0; font-size: 15px; }
 .rlMore b { font-family: var(--hSerif); font-weight: 800; font-size: 18px; }
 .rlPlus { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; border: 2px dashed rgba(200, 160, 95, 0.7); font: 600 24px/1 var(--fL, inherit); color: #8A5A12; }
+.rlGuide { display: inline-flex; align-items: center; gap: 6px; flex: none; min-height: 38px; padding: 0 16px; border-radius: 999px; border: 1.5px solid #D9A646; background: linear-gradient(180deg, #FFE7A6, #F2BE55); color: #4A3010; font-weight: 800; font-size: 14px; cursor: pointer; }
+.rlGuide:hover { background: linear-gradient(180deg, #FFEDB8, #F5C661); }
 .rlNone { margin: 0 4px 12px; }
 @media (max-width: 760px) {
   .rlList { padding: 70px 2px 6px; gap: 70px; }
