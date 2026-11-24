@@ -34,6 +34,8 @@ const WALL = [0x4a3a46, 0x56322a, 0x4e2e24, 0x46404a, 0x5a4a3c, 0x3e3256, 0x4c22
 const TOP = new THREE.Color(0x160a0e);
 const EMBER = new THREE.Color(0x6a1a08);
 const FACE_MIX = 0.85;
+/** Le camp qui se dresse de lui-même sur des ruines sort de terre en tant de secondes */
+const RAISE_TIME = 2.4;
 /** Rayon d'éclairage de la lave, et une source toutes les LAVA_STEP cases */
 const LAVA_STEP = 3;
 const LIGHT_PICK = 0.25;
@@ -59,7 +61,7 @@ export class HellView {
   private fog = new THREE.Fog(BG, 14, 44);
   private d = new THREE.Object3D();
   /** bâtiments : maillage debout, ruines, barre de vie */
-  private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[]; rise?: number; smokeT?: number; base?: BaseDress; wall?: WallPart; puffs?: { smoke: [number, number, number][]; sparks: [number, number, number][]; t: number } }>();
+  private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[]; rise?: number; riseT?: number; dustT?: number; smokeT?: number; base?: BaseDress; wall?: WallPart; puffs?: { smoke: [number, number, number][]; sparks: [number, number, number][]; t: number } }>();
   /** l'âge du village (la sim, via main.ts) : les bâtiments de la base prennent la variante de leur âge sans être rebâtis */
   age = 1;
   /** les murs (palissades, portes) raccordés : leur recalcul quand la carte change, les formes déjà faites */
@@ -749,6 +751,8 @@ export class HellView {
   update(dt: number, camera: THREE.PerspectiveCamera, target: THREE.Vector3, dist: number, events: HellEvent[] = []) {
     this.build();
     this.syncBase();
+    // le camp qui se dresse de lui-même (sur les ruines d'une forteresse) : il sort de terre lentement, dans la poussière
+    for (const e of events) if (e.type === 'raised') { const h = this.houses.get(e.id); if (h) { h.rise = 0; h.riseT = RAISE_TIME; h.dustT = 0; } }
     this.uTime.value += dt;
     const t = this.uTime.value;
     // la brume ferme les zones d'après la dernière ouverte
@@ -779,10 +783,16 @@ export class HellView {
       // relevé (une forteresse, la zone reperdue ; un bâtiment de la base rebâti) : il resurgit
       else if (b && !b.down && h.down) { h.down = false; h.up.visible = true; h.ruin.visible = false; h.rise = 0; this.smoke.stop(id); for (let i = 0; i < 5; i++) this.units.fx.puff(b.site.x + Math.sin(i * 1.3) * b.site.r, h.up.position.y + 0.2, b.site.z + Math.cos(i * 1.3) * b.site.r, 6); }
       if (h.rise !== undefined) {
-        h.rise = Math.min(1, h.rise + dt / 0.6);
+        h.rise = Math.min(1, h.rise + dt / (h.riseT ?? 0.6));
         const k = h.rise, s = 1 + 2.7 * Math.pow(k - 1, 3) + 1.7 * Math.pow(k - 1, 2);
         h.up.scale.set(1, Math.max(0.02, s), 1);
-        if (k >= 1) { h.up.scale.set(1, 1, 1); h.rise = undefined; }
+        // (une construction : des bouffées de poussière tout autour, tant qu'il monte)
+        if (h.riseT && (h.dustT = (h.dustT ?? 0) - dt) <= 0) {
+          h.dustT = 0.22;
+          const a = Math.random() * Math.PI * 2, r = (b?.site.r ?? 1) * (0.8 + Math.random() * 0.5);
+          this.units.fx.puff(h.up.position.x + Math.sin(a) * r, h.up.position.y + 0.15, h.up.position.z + Math.cos(a) * r, 5);
+        }
+        if (k >= 1) { h.up.scale.set(1, 1, 1); h.rise = undefined; h.riseT = undefined; }
       }
       // les ruines qui ont fini de fumer (une fois la zone tenue, la fumée s'éteint au bout d'un moment)
       if (h.down && this.smoke.has(id) && (h.smokeT = (h.smokeT ?? 0) + dt) > 90) this.smoke.stop(id);
