@@ -199,4 +199,7 @@ registerDict('finales', {
   'des expéditions facultatives sur les îles': 'optional expeditions to the islands',
   'Expédition · {gain}': 'Expedition · {gain}',
   'expédition en route': 'expedition under way',
+  // ---- les batailles : les derniers défenseurs ----
+  '🎯 Le dernier défenseur est là.': '🎯 The last defender is here.',
+  '🎯 Les {n} derniers défenseurs sont là.': '🎯 The last {n} defenders are here.',
 });

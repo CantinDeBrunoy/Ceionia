@@ -207,6 +207,8 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Le nom d'un objectif de la bataille de l'archipel */
 /** Sur place, une scène qui file plus vite que ceci (cases par seconde) est suivie sans lissage */
 const FOLLOW_FAST = 2;
+/** Les derniers défenseurs d'une bataille de l'île rivale : la vue va les chercher au bout de ce temps sans changement (s réelles) */
+const STRAGGLER_T = 8;
 const goalName = (g: BattleGoal) => ({ plage: tr('la plage'), remparts: tr('les remparts'), port: tr('le port'), palais: tr('le palais'), tour: tr('la tour du rempart'), camp: tr('le camp'), passage: tr('le passage') })[g];
 
 /**
@@ -1886,9 +1888,15 @@ class Game implements UIHost {
       else if (n.type === 'casemate') this.ui.toast(n.left ? tr('💥 Une casemate se tait : encore une.') : tr('💥 Les casemates se sont tues.'));
       else if (n.type === 'boat') this.ui.toast(tr('⛵ Une autre barque accoste ({n}/3) : nos soldats sautent dans les vagues.', { n: n.n }));
       else if (n.type === 'allyLands') this.ui.banner(tr('Nos alliés débarquent'), tr('{people} se battent à nos côtés', { people: cap(peopleName(this.world.diplo.ally!)) }));
-      else if (n.type === 'counter') this.ui.toast(b.kind === 'port' || b.kind === 'tour' ? tr('⚔️ La ville envoie du renfort à son avant-poste.') : tr('⚔️ Contre-attaque ! Les défenseurs sortent de la ville.'));
+      else if (n.type === 'counter') {
+        this.ui.toast(b.kind === 'port' || b.kind === 'tour' ? tr('⚔️ La ville envoie du renfort à son avant-poste.') : tr('⚔️ Contre-attaque ! Les défenseurs sortent de la ville.'), n.x !== undefined ? () => this.cam.goTo(n.x! + ox, n.z! + oz, Math.max(this.cam.dist, 22)) : undefined);
+      }
       else if (n.type === 'tower') this.ui.banner(tr('La tour s’effondre !'), tr('Reste sa garde'));
-      else if (n.type === 'raid') this.ui.toast(tr('🔥 La sortie rivale fond sur le camp ({n}/2).', { n: n.n }));
+      else if (n.type === 'raid') {
+        this.ui.toast(tr('🔥 La sortie rivale fond sur le camp ({n}/2).', { n: n.n }), n.x !== undefined ? () => this.cam.goTo(n.x! + ox, n.z! + oz, Math.max(this.cam.dist, 22)) : undefined);
+        // (la première vague : la vue va la voir arriver, on la cherchait)
+        if (n.n === 1 && n.x !== undefined && n.z !== undefined) this.cam.goTo(n.x + ox, n.z + oz, Math.max(this.cam.dist, 24));
+      }
       else if (n.type === 'campHit') this.ui.toast(tr('🔥 Le camp brûle : défendez-le !'));
       else if (n.type === 'wave') this.ui.toast(tr('🛡️ Des renforts rivaux sortent du palais.'));
       else if (n.type === 'relief') { this.ui.banner(tr('Les renforts de notre allié !'), tr('Sa flotte accoste : quinze soldats de plus')); audio.sfxAgeUp(); }
@@ -1932,11 +1940,32 @@ class Game implements UIHost {
       }
       if (this.victoryT <= 0) { if (this.rivalLayer) this.rivalLayer.update(dt, this.cam.camera, []); this.endRivalBattle('won'); return; }
     }
+    this.findStragglers(b, dt);
     if (this.rivalLayer) { this.rivalLayer.age = this.sim.age; this.rivalLayer.update(dt, this.cam.camera, b.sim.events.splice(0)); }
     this.airStrike?.update(this.time.paused ? 0 : dt);
   }
   /** le tir des batteries côtières a été dit (une fois par bataille) */
   private batterySaid = false;
+  /**
+   * Les derniers défenseurs qu'on ne trouve pas (retour de l'auteur, 24 nov. 2026 : dans les combats du nouveau monde, on avait
+   * du mal à les trouver) : quand il n'en reste que trois au plus et que leur nombre ne bouge plus depuis `STRAGGLER_T` s
+   * (réelles, le jeu en marche), la vue va sur le plus proche de nos troupes, une fois par nombre, et un message le dit
+   */
+  private straggle = { goal: '', n: -1, t: 0, shown: -1 };
+  private findStragglers(b: RivalBattle, dt: number) {
+    if (b.outcome || b.waiting || this.time.paused) return;
+    const g = b.current ?? '', n = g ? b.defenders(b.current!).length : 0, s = this.straggle;
+    if (g !== s.goal || n !== s.n) { s.goal = g; s.n = n; s.t = 0; return; }
+    if (n === 0 || n > 3 || s.shown === n) return;
+    s.t += dt;
+    if (s.t < STRAGGLER_T) return;
+    const u = b.straggler();
+    if (!u) return;
+    s.shown = n;
+    const [ox, oz] = [b.map.ox, b.map.oz];
+    this.cam.goTo(u.x + ox, u.z + oz, Math.max(this.cam.dist, 20));
+    this.ui.toast(n === 1 ? tr('🎯 Le dernier défenseur est là.') : tr('🎯 Les {n} derniers défenseurs sont là.', { n }), () => this.cam.goTo(u.x + ox, u.z + oz, Math.max(this.cam.dist, 20)));
+  }
   /** la victoire de la bataille, mise en scène (s réelles restantes) */
   private victoryT = 0;
   /** le jeu suspendu pendant un choix tactique (on retrouve l'état d'avant) */

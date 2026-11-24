@@ -359,8 +359,9 @@ export type BattleNews =
   | { type: 'siege' } | { type: 'battery'; x: number; z: number } | { type: 'air'; x: number; z: number; n: number }
   | { type: 'pound' } | { type: 'armor' } | { type: 'casemate'; left: number }
   | { type: 'boat'; n: number } | { type: 'allyLands' }
-  | { type: 'counter' } | { type: 'wave'; n: number } | { type: 'relief' } | { type: 'gate' } | { type: 'breach' }
-  | { type: 'bombard' } | { type: 'cry' } | { type: 'surrender' } | { type: 'tower' } | { type: 'raid'; n: number } | { type: 'campHit' }
+  /** une contre-attaque, un renfort, une vague de sortie : d'où elle part (coordonnées de la bataille), pour que la vue y aille */
+  | { type: 'counter'; x?: number; z?: number } | { type: 'wave'; n: number } | { type: 'relief' } | { type: 'gate' } | { type: 'breach' }
+  | { type: 'bombard' } | { type: 'cry' } | { type: 'surrender' } | { type: 'tower' } | { type: 'raid'; n: number; x?: number; z?: number } | { type: 'campHit' }
   | { type: 'end'; outcome: BattleOutcome };
 
 /**
@@ -907,8 +908,10 @@ export class RivalBattle {
     // la contre-attaque : elle sort de la ville vers la plage (quand la plage faiblit, passé `COUNTER_T`, au plus tard `COUNTER_MAX`)
     if (g === 'plage' && !this.countered && ((this.t >= COUNTER_T && this.enemies('plage').length <= 3) || this.t >= COUNTER_MAX)) {
       this.countered = true;
-      this.charge('contre', this.sizes.contre, this.outside);
-      this.news.push({ type: 'counter' });
+      // (de la tête de pont : du passage, plus près de la plage que la porte de la ville ; elle mettait longtemps à venir)
+      const from = this.nearFrom();
+      this.charge('contre', this.sizes.contre, from);
+      this.news.push({ type: 'counter', x: from[0], z: from[1] });
     }
     // l'avant-poste attaqué appelle la ville : du renfort sort de la porte
     // (comptés de l'approche de nos troupes : la tête de pont est loin de la ville, le renfort n'attend pas qu'on arrive)
@@ -919,13 +922,15 @@ export class RivalBattle {
     if ((this.kind === 'port' || this.kind === 'tour') && g === this.kind && this.near >= 0 && this.helped < OUTPOST_HELP_T.length && this.t >= this.near + OUTPOST_HELP_T[this.helped]) {
       this.helped++;
       this.charge(g, OUTPOST_HELP, this.outside);
-      this.news.push({ type: 'counter' });
+      this.news.push({ type: 'counter', x: this.outside[0], z: this.outside[1] });
     }
     // la sortie rivale contre le camp : des vagues qui sortent de la porte (plus fortes à chaque sortie, à chaque avant-poste tenu)
     if (g === 'camp' && this.raidsSent < RAID_WAVES && this.t >= this.raidsSent * RAID_GAP) {
       this.raidsSent++;
-      this.charge('raid', raidWave(this.raidLevel, this.easy), this.outside);
-      this.news.push({ type: 'raid', n: this.raidsSent });
+      // (la sortie arrive par le passage de la tête de pont, pas de la porte de la ville : elle mettait longtemps à venir)
+      const from = this.nearFrom();
+      this.charge('raid', raidWave(this.raidLevel, this.easy), from);
+      this.news.push({ type: 'raid', n: this.raidsSent, x: from[0], z: from[1] });
     }
     // les vagues de renfort : du palais vers les remparts, pendant leur assaut (plus tard si les éclaireurs ont compté la relève)
     const late = this.intel.includes('scoutGarrison') ? 25 : 0;
@@ -1069,6 +1074,26 @@ export class RivalBattle {
   }
   /** les bombes de l'appui aérien en chute (s avant l'impact) */
   bombs: { x: number; z: number; t: number }[] = [];
+
+  /**
+   * D'où partent la contre-attaque de la plage et les sorties contre le camp : le passage de la tête de pont, s'il est plus près
+   * du camp que la porte de la ville (retour de l'auteur, 24 nov. 2026 : les ennemis mettaient du temps à arriver, et on les
+   * cherchait) ; sinon devant la porte
+   */
+  private nearFrom(): [number, number] {
+    const p = this.goalAt.passage, c = this.goalAt.camp, o = this.outside;
+    if (!p || this.reachOut[this.map.cell(p[0], p[1])] < 0) return o;
+    return Math.hypot(p[0] - c[0], p[1] - c[1]) + 2 < Math.hypot(o[0] - c[0], o[1] - c[1]) ? p : o;
+  }
+  /** Le défenseur debout de l'objectif en cours le plus proche de nos troupes (pour que la vue aille le chercher), ou null */
+  straggler(): HellUnit | null {
+    const g = this.current;
+    if (!g) return null;
+    const foes = this.defenders(g), ours = [...this.troops(), ...this.allied()];
+    if (!foes.length) return null;
+    const d = (u: HellUnit) => Math.min(...ours.map((o) => Math.hypot(o.x - u.x, o.z - u.z)), 1e9);
+    return foes.reduce((a, b) => (d(b) < d(a) ? b : a));
+  }
 
   private end(o: BattleOutcome) { this.outcome = o; this.news.push({ type: 'end', outcome: o }); }
 
