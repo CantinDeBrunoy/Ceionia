@@ -221,4 +221,11 @@ registerDict('misc', {
   'l’ancien record était de {t} s': 'the old record was {t} s',
   'record du village : {t} s': 'village record: {t} s',
   ',': '.',
+  // le feu d'artifice de la fête foraine
+  'Tirer le feu d’artifice': 'Set off the fireworks',
+  'Feu d’artifice en cours': 'Fireworks in progress',
+  'La foule se masse autour du parc pour le grand feu d’artifice, plus beau la nuit. Beaucoup de bien-être pour un jour, et la fête attire de nouveaux habitants.': 'The crowd gathers around the park for the big fireworks display, best at night. Plenty of happiness for a day, and the celebration draws new villagers.',
+  'Quel feu d’artifice !': 'What a fireworks display!',
+  'La foule se rassemble…': 'The crowd gathers…',
+  'Le bouquet final !': 'The grand finale!',
 });

@@ -2,11 +2,11 @@ import { KINDS, sizeOf, type Building, type KindId } from '../build/catalog';
 import { tr, localize } from '../i18n';
 
 /**
- * Les gestes des bâtiments (« Lancer un match », « Organiser une course »…) : un bouton sur la fiche, le village qui vient,
+ * Les gestes des bâtiments (« Lancer un match », « Organiser une course », « Tirer le feu d'artifice ») : un bouton sur la fiche, le village qui vient,
  * un spectacle sur le bâtiment, puis une récompense et un délai. Ici, les règles seules : lequel se lance où, quand on peut le
  * refaire, ce qu'il rapporte. La mise en scène est dans `src/shows.ts` et `src/render/shows/`
  */
-export type ShowId = 'match' | 'race';
+export type ShowId = 'match' | 'race' | 'fireworks';
 
 export interface ShowDef {
   id: ShowId;
@@ -28,6 +28,8 @@ export interface ShowDef {
   newcomers: number;
   /** pas sous une forte pluie */
   dry: boolean;
+  /** les spectateurs regardent de dehors, autour du bâtiment (au lieu d'y entrer) */
+  watch?: boolean;
   /** explication du bouton (info-bulle) */
   tip: string;
 }
@@ -40,6 +42,10 @@ export const SHOWS: ShowDef[] = [
   {
     id: 'race', kind: 'stadium', icon: '🏃', act: 'Organiser une course', running: 'Course en cours', cooldown: 1, joyK: 0.8, joyDays: 1.5, fans: 10, newcomers: 0, dry: true,
     tip: 'Six coureurs sur la ligne, le coup de pistolet, le sprint, le podium. Bien-être pour un jour et demi, le double si le record du village tombe.',
+  },
+  {
+    id: 'fireworks', kind: 'funfair', icon: '🎆', act: 'Tirer le feu d’artifice', running: 'Feu d’artifice en cours', cooldown: 3, joyK: 0.8, joyDays: 1, fans: 12, newcomers: 3, dry: false, watch: true,
+    tip: 'La foule se masse autour du parc pour le grand feu d’artifice, plus beau la nuit. Beaucoup de bien-être pour un jour, et la fête attire de nouveaux habitants.',
   },
 ];
 

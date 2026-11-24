@@ -13,6 +13,7 @@ import {
 import { teamColors, footSpots, trackSpots, type Kit, type ShowView } from './render/shows/common';
 import { MatchView } from './render/shows/football';
 import { RaceView } from './render/shows/race';
+import { FireworksView } from './render/shows/fireworks';
 import { tr } from './i18n';
 
 /** Ce que les spectacles demandent au jeu */
@@ -33,6 +34,8 @@ export interface ShowHost {
   banner(title: string, sub: string): void;
   /** mène la vue au point */
   goTo(x: number, z: number, dist: number): void;
+  /** baisse la vue jusqu'à cette inclinaison (radians au-dessus de l'horizon), si elle est plus haute */
+  tilt(pitch: number): void;
 }
 
 /** Ce que la scène en cours donne au directeur : le tableau d'affichage, et le résultat à la fin */
@@ -90,10 +93,18 @@ export class ShowDirector {
     const door: [number, number] = [cx + f[0] * (s / 2 + 0.4), cz + f[1] * (s / 2 + 0.4)];
     const n = Math.min(d.fans, h.agents.available());
     const fans = n > 0 ? h.agents.recruit(n) ?? [] : [];
-    if (fans.length) h.agents.partyGo(fans, door[0], door[1], 0.45);
+    if (fans.length) {
+      h.agents.partyGo(fans, door[0], door[1], 0.45);
+      // pour un spectacle qui se regarde de dehors : chacun sa place, en arc devant le bâtiment, tourné vers lui
+      if (d.watch) fans.forEach((id, i) => {
+        const a = Math.atan2(f[1], f[0]) + ((i + 0.5) / fans.length - 0.5) * 2.2, r = s / 2 + 1.1 + (i % 2) * 0.35;
+        const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+        h.agents.memberGo(id, x, z, Math.atan2(cx - x, cz - z));
+      });
+    }
     this.run = { def: d, b, act, fans, hidden: new Set(), t: 0, door };
     showStarted(w.shows, d, w.exp.clock, h.dayLen());
-    h.goTo(cx, cz, s >= 3 ? 6.5 : 5);
+    this.frame(d, b);
     h.audio.sfxClick();
     return null;
   }
@@ -142,6 +153,10 @@ export class ShowDirector {
         },
       };
     }
+    if (d.id === 'fireworks') {
+      const view = new FireworksView(kit, { bang: (k) => a.sfxBang(k), whistle: () => a.sfxRocket(), roar: (k) => a.sfxCrowd(k) });
+      return { view, board: () => view.board(), result: () => ({ k: 1, newcomers: true, title: tr('Quel feu d’artifice !') }) };
+    }
     throw new Error(`spectacle inconnu : ${d.id}`);
   }
 
@@ -155,10 +170,15 @@ export class ShowDirector {
     r.t += dt;
     this.hudT -= 1 / 60;
     // les spectateurs entrent à mesure qu'ils arrivent (ceux qui traînent entrent au bout d'un moment)
-    for (const id of r.fans) if (!r.hidden.has(id) && (ag.memberDone(id) || r.t > GATHER_MAX)) { ag.partyHide([id], true); r.hidden.add(id); }
+    // (devant un feu d'artifice, ils restent dehors et lèvent les bras)
+    for (const id of r.fans) if (!r.hidden.has(id) && (ag.memberDone(id) || r.t > GATHER_MAX)) {
+      if (r.def.watch) { if (ag.memberDone(id)) { ag.partyAct([id], 'cheer'); r.hidden.add(id); } } else { ag.partyHide([id], true); r.hidden.add(id); }
+    }
     // le bâtiment peut être refait (passage d'âge, saison) : la scène suit son nouveau groupe, comme les bêtes du zoo
     const g = h.buildings.entries.get(r.b.id)?.group;
     if (g && r.act.view.group.parent !== g) g.add(r.act.view.group);
+    // le cœur du feu d'artifice se tourne vers la caméra (son œil, dans le repère du bâtiment)
+    if (g && r.act.view instanceof FireworksView) { g.updateMatrixWorld(); r.act.view.eye.copy(h.camera.position); g.worldToLocal(r.act.view.eye); }
     r.act.view.update(dt);
     this.showBoard(r);
     if (r.act.view.done) this.finish();
@@ -187,7 +207,10 @@ export class ShowDirector {
     const ag = this.h.agents;
     r.act.view.group.removeFromParent();
     r.act.view.dispose();
-    if (r.fans.length) { ag.partyHide(r.fans, false); ag.partyPlace(r.fans, r.door[0], r.door[1]); ag.dismiss(r.fans); }
+    if (r.fans.length) {
+      if (!r.def.watch) { ag.partyHide(r.fans, false); ag.partyPlace(r.fans, r.door[0], r.door[1]); }
+      ag.dismiss(r.fans);
+    }
     this.run = null;
     this.showBoard(null);
   }
@@ -196,8 +219,19 @@ export class ShowDirector {
   goSee() {
     const b = this.run?.b;
     if (!b) return;
-    const s = sizeOf(b);
-    this.h.goTo(b.x + s / 2, b.z + s / 2, s >= 3 ? 6.5 : 5);
+    this.frame(this.run!.def, b);
+  }
+
+  /**
+   * La vue sur le spectacle : le bâtiment au milieu de l'écran ; pour un feu d'artifice, de plus loin, plus rasante, et visée
+   * un peu au-delà du parc dans le sens du regard : il faut voir le ciel au-dessus, et le parc en bas de l'écran
+   */
+  private frame(d: ShowDef, b: Building) {
+    const s = sizeOf(b), cx = b.x + s / 2, cz = b.z + s / 2;
+    if (!d.watch) { this.h.goTo(cx, cz, s >= 3 ? 6.5 : 5); return; }
+    const v = this.h.camera.getWorldDirection(this.v), L = Math.hypot(v.x, v.z) || 1;
+    this.h.goTo(cx + (v.x / L) * 3.2, cz + (v.z / L) * 3.2, 13);
+    this.h.tilt(0.42);
   }
 
   /** Le geste de ce bâtiment pour sa fiche : son texte, s'il a lieu en ce moment, ce qui l'empêche, le temps d'attente */

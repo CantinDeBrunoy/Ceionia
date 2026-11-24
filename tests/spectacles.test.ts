@@ -7,6 +7,7 @@ import {
   readShowState, newShowState, showStateEmpty, planMatch, matchK, MATCH_TIME, planRace, raceRecord,
 } from '../src/sim/shows';
 import { RaceView } from '../src/render/shows/race';
+import { FireworksView } from '../src/render/shows/fireworks';
 import { MatchView } from '../src/render/shows/football';
 import { footSpots, trackSpots, teamColors } from '../src/render/shows/common';
 import { DEFAULT_BLASON } from '../src/sim/blason';
@@ -198,6 +199,40 @@ describe('la course', () => {
       // dans l'ordre des temps (deux coureurs à moins d'une image l'un de l'autre passent la ligne ensemble)
       for (let i = 1; i < order.length; i++) expect(times[order[i]] - times[order[i - 1]]).toBeGreaterThan(-0.1);
       expect(v.winner().t).toBeCloseTo(Math.min(...times), 5);
+      v.dispose();
+    }
+  });
+});
+
+describe('le feu d’artifice', () => {
+  it('la fête foraine a son geste, regardé de dehors, sous la pluie aussi, avec trois jours de délai', () => {
+    const d = showOf('funfair')!;
+    expect(d.id).toBe('fireworks');
+    expect(d.watch).toBe(true);
+    expect(d.dry).toBe(false);
+    expect(showBlock(newShowState(), d, 0, DAY, { ...ctx, raining: true })).toBeNull();
+    expect(d.cooldown).toBe(3);
+    expect(showJoyFor(d, { kind: 'funfair', age: 4 })).toBe(13);
+  });
+
+  it('tiré jusqu’au bout : chaque fusée part et éclate, le bouquet final, puis la fin ; jamais plus d’étincelles que prévu', () => {
+    for (const age of [3, 4, 5]) {
+      let bangs = 0, whistles = 0, most = 0;
+      const v = new FireworksView({ age, seed: 9 + age, scale: 1, home: 0, homeB: 0, away: 0, awayB: 0, spots: [] }, { bang: () => bangs++, whistle: () => whistles++ });
+      let t = 0, finale = false;
+      while (!v.done && t < 120) {
+        v.update(1 / 30); t += 1 / 30;
+        if (v.phase === 'finale') finale = true;
+        most = Math.max(most, (v as any).sparks.length);
+      }
+      expect(v.done).toBe(true);
+      expect(finale).toBe(true);
+      expect(bangs).toBe(v.count);
+      expect(whistles).toBeGreaterThan(v.count / 3);
+      expect(v.count).toBeGreaterThan(30);
+      expect(most).toBeLessThanOrEqual(5000);
+      // à la fin, plus une étincelle en l'air
+      expect((v as any).sparks.length).toBe(0);
       v.dispose();
     }
   });
