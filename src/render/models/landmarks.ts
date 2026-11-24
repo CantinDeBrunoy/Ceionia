@@ -322,10 +322,11 @@ function station(p: Parts, people: People, age: number, v: number) {
     // l'horloge sur son mât
     p.cyl(0.015, 0.015, 0.9, 4, -1.3, 0, 0.6, c.metal);
     p.cyl(0.08, 0.08, 0.03, 10, -1.3, 0.9, 0.6, 0xf6f0e0, true, 0);
-    // les abris des quais : dalle sur colonnes
+    // les abris des quais, sur la moitié des quais (la rame reste visible d'en haut) : dalle sur colonnes
     for (const z of [-0.2, tz - 0.17]) {
-      p.box(3.2, 0.03, 0.26, 0, 0.5, z, c.trim);
-      for (let i = 0; i < 5; i++) p.box(0.03, 0.5, 0.03, -1.4 + i * 0.7, 0, z, c.metal);
+      p.box(1.3, 0.03, 0.24, 1.05, 0.5, z, c.trim);
+      p.box(1.3, 0.012, 0.012, 1.05, 0.49, z + 0.12, c.accent, 0, 'neon');
+      for (let i = 0; i < 3; i++) p.box(0.03, 0.5, 0.03, 0.5 + i * 0.55, 0, z, c.metal);
     }
     p.box(3.4, 0.06, 0.18, 0, 0, tz - 0.17, c.trim);
     // les pylônes et la caténaire
@@ -374,15 +375,15 @@ function skyscraper(p: Parts, people: People, age: number, v: number) {
     p.box(2.1, 0.32, 1.3, 0, 0, -0.1, c.wall);
     p.box(2.12, 0.14, 1.32, 0, 0.1, -0.1, c.glass, 0, true);
     for (let i = 0; i < 5; i++) new Face(p, 0, -0.8 + i * 0.4, 0.55).shape([new THREE.Vector2(-0.1, 0), new THREE.Vector2(0.1, 0), new THREE.Vector2(0.1, 0.14), new THREE.Vector2(0, 0.24), new THREE.Vector2(-0.1, 0.14)], 0, 0.04, 0.012, c.trim);
-    const steps: [number, number][] = [[0.4, 1.6], [0.35, 1.2], [0.3, 0.9], [0.24, 0.6]];
+    const steps: [number, number][] = [[0.4, 1.6], [0.35, 1.2], [0.3, 0.9], [0.24, 0.6]], clad = fut ? c.trim : 0xd4d8da;
     for (const sx of [-1, 1]) {
       const x = sx * 0.55, z = -0.12;
       let y = 0.32;
       for (const [r, h] of steps) {
-        p.add(new THREE.CylinderGeometry(r, r, h, 8, 1, true).translate(0, h / 2, 0), x, y, z, c.trim, Math.PI / 8);
+        p.add(new THREE.CylinderGeometry(r, r, h, 8, 1, true).translate(0, h / 2, 0), x, y, z, clad, Math.PI / 8);
         const n = Math.max(1, Math.round(h / 0.16));
-        for (let k = 0; k < n; k++) p.add(new THREE.CylinderGeometry(r + 0.008, r + 0.008, 0.08, 8, 1, true).translate(0, 0.04, 0), x, y + (h / n) * k + 0.04, z, c.glass, Math.PI / 8, true);
-        p.cyl(r + 0.03, r + 0.03, 0.03, 8, x, y + h, z, fut ? c.neon : c.trim, fut ? 'neon' : false, Math.PI / 8);
+        for (let k = 0; k < n; k++) p.add(new THREE.CylinderGeometry(r + 0.008, r + 0.008, 0.11, 8, 1, true).translate(0, 0.055, 0), x, y + (h / n) * k + 0.025, z, c.glass, Math.PI / 8, true);
+        p.cyl(r + 0.03, r + 0.03, 0.03, 8, x, y + h, z, fut ? c.neon : O.gold, fut ? 'neon' : false, Math.PI / 8);
         y += h + 0.03;
       }
       p.cone(0.14, 0.4, 8, x, y, z, c.trim);

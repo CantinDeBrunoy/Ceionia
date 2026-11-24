@@ -803,10 +803,14 @@ function arcadeHouse(p: Parts, age: number, v: number, w: number, d: number) {
 /** Immeuble (Moderne) : béton, balcons, climatiseurs, enseignes au néon ; un jardin et un pavillon courbe sur le toit pour certains */
 function modernBlock(p: Parts, v: number, w: number, d: number, r: () => number) {
   const W = w * 0.86, D = d * 0.8, kind = v % 3, floors = kind === 1 ? 3 : 4 + Math.floor(r() * 3), fh = 0.24, H = floors * fh;
-  const wall = pick([A.concrete, 0xe8e2d6, 0xcfd3d6, 0xe0d0c0], v);
+  const wall = pick([A.concrete, 0xe8e2d6, 0xcfd3d6, 0xe0d0c0, 0xc9d3c8, 0xd9c0b0, 0xe8dcc0, 0xb8c4cc], v);
   p.box(W, H, D, 0, 0, 0, wall);
+  // la boutique du rez : store de couleur et étal sur le trottoir
+  const awn = pick([A.red, 0x2f6f9e, 0x3f7a6a, A.ochre, 0x8a4f7a], v + 1);
+  p.add(new THREE.BoxGeometry(W * 0.86, 0.012, 0.14).rotateX(0.35), 0, 0.2, D / 2 + 0.07, awn);
+  for (let i = 0; i < 3; i++) p.box(0.07, 0.05, 0.06, -W * 0.25 + i * W * 0.25, 0, D / 2 + 0.06, pick([0xd9a43c, 0x9a3a2a, 0x6a8a3a, 0xc8783a], i + v));
   // bandeaux vitrés par étage, trumeaux
-  for (let f = 1; f < floors; f++) p.box(W + 0.012, 0.1, D + 0.012, 0, f * fh + 0.08, 0, 0xf0e2b0, 0, true);
+  for (let f = 1; f < floors; f++) p.box(W + 0.012, 0.1, D + 0.012, 0, f * fh + 0.08, 0, 0x9eb8c4, 0, true);
   for (const sx of [-1, -0.33, 0.33, 1]) p.box(0.05, H - fh, D + 0.024, sx * (W / 2 - 0.025), fh, 0, wall);
   // balcons de façade et climatiseurs
   for (let f = 1; f < floors; f++) {
@@ -815,7 +819,7 @@ function modernBlock(p: Parts, v: number, w: number, d: number, r: () => number)
     if ((f + v) % 2) p.box(0.07, 0.05, 0.05, W * 0.3, f * fh + 0.13, D / 2 + 0.03, 0xdadada);
   }
   // rez : vitrine, enseigne lumineuse, enseigne verticale
-  p.box(W * 0.8, 0.14, 0.012, 0, 0.03, D / 2 + 0.006, 0xf0e2b0, 0, true);
+  p.box(W * 0.8, 0.14, 0.012, 0, 0.03, D / 2 + 0.006, 0x9eb8c4, 0, true);
   p.box(W * 0.84, 0.06, 0.03, 0, 0.18, D / 2 + 0.015, pick([0xff4040, 0x40c0ff, 0xffa030, 0x60ff90], v >> 1), 0, 'neon');
   p.box(0.05, Math.min(H * 0.6, 0.8), 0.12, (v % 2 ? 1 : -1) * (W / 2 + 0.03), fh, D * 0.3, pick([A.pink, A.cyan, A.amber], v), 0, 'neon');
   if (kind === 2) {
@@ -831,6 +835,21 @@ function modernBlock(p: Parts, v: number, w: number, d: number, r: () => number)
       // l'enseigne sur le toit
       for (const sx of [-1, 1]) p.box(0.02, 0.14, 0.02, sx * W * 0.3, H, D * 0.3, 0x6a6a6a);
       p.box(W * 0.7, 0.13, 0.02, 0, H + 0.1, D * 0.3, pick([A.pink, A.cyan, A.amber, 0x9aff6a], v + 1), 0, 'neon');
+    }
+    // la vie du toit : château d'eau en tonneau sur ses pieds, linge qui sèche, ou dalle de couleur et paraboles
+    const roof = (v >> 2) % 3;
+    if (roof === 0) {
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.015, 0.12, 0.015, W * 0.22 + sx * 0.06, H, -D * 0.2 + sz * 0.06, A.darkwood);
+      p.cyl(0.09, 0.09, 0.14, 8, W * 0.22, H + 0.12, -D * 0.2, A.timber);
+      p.cone(0.1, 0.07, 8, W * 0.22, H + 0.26, -D * 0.2, A.darkwood);
+      for (const y of [0.15, 0.22]) p.cyl(0.093, 0.093, 0.012, 8, W * 0.22, H + y, -D * 0.2, 0x3a3a3e);
+    } else if (roof === 1) {
+      for (const sx of [-1, 1]) p.box(0.012, 0.16, 0.012, sx * W * 0.36, H, D * 0.05, 0x8a9096);
+      p.box(W * 0.72, 0.004, 0.004, 0, H + 0.15, D * 0.05, 0x3a3a3e);
+      for (let i = 0; i < 4; i++) p.box(0.07, 0.07, 0.004, -W * 0.26 + i * W * 0.17, H + 0.08, D * 0.05, pick([0xf2ead8, A.red, 0x2f6f9e, A.amber, 0x6a8a3a], v + i));
+    } else {
+      p.box(W * 0.5, 0.008, D * 0.4, -W * 0.15, H, D * 0.12, pick([0x3f7a6a, 0x9a5a4a, 0x5a6a8a], v));
+      for (let i = 0; i < 2; i++) p.add(new THREE.CylinderGeometry(0.05, 0.008, 0.02, 8).rotateX(-0.8), W * 0.3, H + 0.06, D * 0.25 - i * 0.12, 0xf0f0f0);
     }
   }
 }
