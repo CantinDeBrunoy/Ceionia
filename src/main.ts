@@ -2141,7 +2141,7 @@ class Game implements UIHost {
     this.isleRuins.group.visible = this.mode === 'surface';
     // les villes des peuples rivaux : créées dès que la carte a son archipel (aussi après un agrandissement en cours de partie)
     if (archipelagoOn(this.world) && !this.rivalTowns) { this.rivalTowns = new RivalTowns(this.world); this.scene.add(this.rivalTowns.group); }
-    if (this.rivalTowns) { this.rivalTowns.update(dt, this.sim.age); this.rivalTowns.group.visible = this.mode === 'surface'; }
+    if (this.rivalTowns) { this.rivalTowns.update(dt, this.sim.age, this.cam.camera.position); this.rivalTowns.group.visible = this.mode === 'surface'; }
     // la campagne de l'île rivale : le camp et nos drapeaux sur l'île rivale (pas pendant une bataille, qui a ses troupes)
     const dip = this.world.diplo;
     if (dip.ally && dip.camp.held.length && !this.rivalCamp) { this.rivalCamp = new RivalCamp(this.world, rivalOf(dip.ally)); this.scene.add(this.rivalCamp.group); }
