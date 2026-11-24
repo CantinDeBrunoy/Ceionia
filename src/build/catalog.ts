@@ -19,7 +19,9 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   // la maison des explorateurs (une équipe d'expédition de plus)
   | 'explorers'
   // l'époque moderne : le circuit automobile et la centrale électrique (étapes vers l'âge futuriste)
-  | 'racetrack' | 'powerplant';
+  | 'racetrack' | 'powerplant'
+  // le cimetière : les défunts y reposent, le village n'en porte pas le deuil
+  | 'cemetery';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'deco' | 'war';
@@ -251,6 +253,14 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['Autel', 'Temple', 'Église', 'Cathédrale', 'Centre culturel', 'Dôme des arts'],
     desc: 'Lieu de culte : beaucoup de bien-être.',
     joy: [6, 14, 20, 26, 32, 40], jobs: [0, 1, 2, 3, 4, 5],
+  },
+  cemetery: {
+    id: 'cemetery', size: 2, minAge: 0, icon: '🕊️', cat: 'life',
+    names: ['Tertre des ancêtres', 'Nécropole', 'Cimetière paroissial', 'Cimetière à chapelle', 'Parc du souvenir', 'Jardin du souvenir'],
+    desc: 'Le village y garde la mémoire des siens, entre les fleurs et les arbres. On y vient se recueillir.',
+    // un peu de bien-être, comme un petit jardin ; son vrai rôle vient avec les décès (voir mishaps.ts)
+    joy: [1, 1, 2, 2, 3, 3], jobs: [0, 0, 1, 1, 1, 2],
+    perk: 'Un habitant qui meurt y est mené par un petit cortège et y repose. Sans cimetière, chaque décès coûte un peu de bien-être pendant deux jours. Un seul suffit.',
   },
   mill: {
     id: 'mill', size: 2, minAge: 2, icon: '🌬️', cat: 'prod',
@@ -637,7 +647,7 @@ export const isLinear = (k: KindId) => k === 'hedge' || k === 'fence';
 /** Plafond du bien-être que donnent toutes les décorations ensemble (le lampadaire, plus ancien, compte à part) */
 export const DECOR_JOY_MAX = 3;
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'powerplant', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'explorers', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'racetrack', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'powerplant', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'explorers', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'racetrack', 'circus', 'zoo', 'alpine', 'temple', 'cemetery', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -672,7 +682,7 @@ export const KIND_SUB: Record<KindId, string> = {
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
   waterpark: 'detente', funfair: 'detente', racetrack: 'detente', circus: 'detente', arena: 'detente', zoo: 'detente', alpine: 'detente', aerodrome: 'detente',
-  temple: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments', concord: 'monuments', triumph: 'monuments', embassy: 'monuments',
+  temple: 'culte', cemetery: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments', concord: 'monuments', triumph: 'monuments', embassy: 'monuments',
 };
 
 export interface AgeDef {
@@ -728,6 +738,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   concord: 'monuments de la concorde', tradepost: 'comptoirs', triumph: 'monuments de la victoire', embassy: 'ambassades',
   hedge: 'haies', fence: 'clôtures', flowerbed: 'parterres de fleurs', bench: 'bancs', statue: 'statues', paving: 'pavés', fountain: 'fontaines', pond: 'mares', coralpool: 'bassins à coraux',
   explorers: 'maisons des explorateurs', racetrack: 'circuits automobiles', powerplant: 'centrales électriques',
+  cemetery: 'cimetières',
 };
 
 /**

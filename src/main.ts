@@ -39,7 +39,9 @@ import { CameraRig, SURFACE_MIN_PITCH, PointerInfo, ToolInput, CAM_SENS } from '
 import { GameTime } from './core/time';
 import { SurfaceGate } from './core/surface';
 import { Sim, modernStepsFor } from './sim/sim';
-import { sickToll, theftToll, applySick, applyTheft, sickNews, theftNews, DEATH_MIN_POP } from './sim/mishaps';
+import { sickToll, theftToll, applySick, applyTheft, sickNews, theftNews, DEATH_MIN_POP, applyMourning } from './sim/mishaps';
+import { Funeral } from './render/funeral';
+import { doorCells, doorSide, FRONT } from './build/placement';
 import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
 import { Patrols, PATROL_MAX } from './sim/patrols';
@@ -389,6 +391,8 @@ class Game implements UIHost {
   private volcanoSeen = false;
   /** la parade du grand départ : les haies de foule, le char et les confettis le long de la route jusqu'au pas de tir */
   parade: Parade;
+  /** le cortège qui mène un défunt au cimetière (voir `render/funeral.ts`) */
+  funeral: Funeral;
   /**
    * le grand départ des colons : la foule qui fait la haie le long de la route (`spots` : ses places, `sent` : combien y sont déjà
    * envoyés), l'instant où la caméra a lâché la fusée (`rel`, en temps de l'expédition, `relAt`, en temps réel), le voyage montré
@@ -652,6 +656,7 @@ class Game implements UIHost {
     this.fest.onBang = (k) => this.audio.sfxBang(k);
     this.fest.onFeast = () => this.audio.sfxFeast();
     this.parade = new Parade(w);
+    this.funeral = new Funeral(w);
     this.trophies = new Trophies(w);
     this.scene.add(this.trophies.group);
     this.parade.onPop = () => this.audio.sfxBang(0.12);
@@ -681,12 +686,15 @@ class Game implements UIHost {
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
     this.emergencies.ignite = (b) => ignite(b);
     // un malaise ou un cambriolage loin de tout poste, resté sans secours : ses conséquences, mesurées selon la difficulté
-    this.emergencies.onUnaided = (sv) => {
+    this.emergencies.onUnaided = (sv, b) => {
       const w = this.world;
       if (sv === 'health') {
         const toll = sickToll(w), died = toll.dies && this.sim.loseOne(DEATH_MIN_POP);
         if (!died) applySick(w, toll, this.time.dayLen);
-        if (died || toll.n) this.ui.toast(sickNews(toll, died), undefined, 'danger');
+        // un défunt : avec un cimetière, un petit cortège l'y mène ; sans, le village en porte le deuil
+        const rest = died && this.burial(b);
+        if (died && !rest) applyMourning(w, this.time.dayLen);
+        if (died || toll.n) this.ui.toast(sickNews(toll, died, rest), rest ? () => { const p = this.funeral.where(); if (p) this.cam.goTo(p[0], p[1], 9); } : undefined, 'danger');
       } else {
         const loot = theftToll(w);
         applyTheft(w, loot);
@@ -701,7 +709,7 @@ class Game implements UIHost {
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.houndView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.calam.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.houndView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.calam.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.funeral.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.harborBeacon.group);
     this.applyQuality();
 
     const host = this;
@@ -2361,6 +2369,28 @@ class Game implements UIHost {
   incidents() { return [...this.fires.incidents(), ...this.emergencies.incidents(), ...this.calam.incidents()]; }
   /** l'incident que la caméra suit */
   incidentCam: string | null = null;
+  /**
+   * Le cortège d'un défunt : de la porte de sa maison `home` à celle du cimetière le plus proche, puis jusqu'à la halte devant
+   * son monument. Faux s'il n'y a pas de cimetière (le village porte alors le deuil)
+   */
+  burial(home: Building): boolean {
+    const w = this.world, hs = sizeOf(home), hx = home.x + hs / 2, hz = home.z + hs / 2;
+    let cem: Building | null = null, best = Infinity;
+    for (const b of w.buildings.values()) if (b.kind === 'cemetery') { const d = Math.hypot(b.x - hx, b.z - hz); if (d < best) { best = d; cem = b; } }
+    if (!cem) return false;
+    const cs = sizeOf(cem), side = doorSide(cem.kind, cem.rot), f = FRONT[side];
+    const door = (b: Building, s: number) => doorCells(b.kind, b.x, b.z, s, doorSide(b.kind, b.rot))[0] ?? [b.x, b.z] as [number, number];
+    const from = door(home, hs), to = door(cem, cs);
+    const path = this.agents.findPath(from[1] * N + from[0], to[1] * N + to[0]) ?? [];
+    const cells: [number, number][] = [from, ...path.map((c) => [c % N, Math.floor(c / N)] as [number, number])];
+    if (cells.length < 2 || cells[cells.length - 1][0] !== to[0] || cells[cells.length - 1][1] !== to[1]) cells.push(to);
+    // la halte : sur l'allée, un peu en avant du centre, face au monument du fond (au futur, devant le bassin)
+    const cx = cem.x + cs / 2, cz = cem.z + cs / 2, k = cem.age >= 5 ? 0.6 : 0.42, spot: [number, number] = [cx + f[0] * k, cz + f[1] * k];
+    const gate: [number, number] = [cx + f[0] * (cs / 2 + 0.25), cz + f[1] * (cs / 2 + 0.25)];
+    this.funeral.start(cells, gate, spot, Math.atan2(-f[0], -f[1]), Math.min(this.sim.age, cem.age), home.id);
+    return true;
+  }
+
   followIncident(key: string | null) {
     const i = key ? this.incidents().find((x) => x.key === key) : undefined;
     if (!i) { this.incidentCam = null; return; }
@@ -3399,6 +3429,7 @@ class Game implements UIHost {
       this.alpine.update(gdt, this.sim.age, this.season.snow);
       this.emergencies.motor = this.traffic.motor;
       this.emergencies.update(gdt, this.sim.age);
+      this.funeral.update(gdt);
       this.seeps.update(dt);
       // le portail : il s'éveille pendant l'expédition qui l'ouvre, et brûle ensuite ; ses halos s'allument avec lui
       const waking = this.expeditions.active.find((a) => a.m.id === 'portal' && a.phase === 'work');
