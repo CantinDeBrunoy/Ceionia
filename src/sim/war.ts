@@ -41,6 +41,16 @@ export type WaveForce = 'small' | 'medium' | 'big';
  * le joueur n'a rien eu à recruter avant (décision de l'auteur, 22 nov. 2026 : plus d'étape sur l'île du portail)
  */
 export const START_TROOPS: readonly TroopKind[] = ['soldier', 'soldier', 'archer', 'soldier'];
+/**
+ * La troupe de départ selon l'âge du village à son arrivée (retour de l'auteur, 24 nov. 2026 : un joueur entré en fin de partie
+ * restait bloqué, quatre soldats devant la première forteresse). Plus nombreuse et de son âge (le chevalier dès le Médiéval :
+ * hallebardier, bazooka, exo-lanceur). Avec elle, la zone 1 se gagne d'une sortie à tous les âges (`arriveeTardive.test.ts`)
+ */
+export function startTroops(age: number): TroopKind[] {
+  const a = Math.max(1, Math.min(5, Math.floor(age) || 1));
+  // (huit ; dès le Médiéval, deux chevaliers à la place du dernier soldat et du dernier archer)
+  return a >= 2 ? [...START_TROOPS, 'soldier', 'archer', 'knight', 'knight'] : [...START_TROOPS, 'soldier', 'archer', 'soldier', 'archer'];
+}
 /** Soldats valides à la garnison pour que l'invasion soit annoncée (moins en Facile et au bac à sable) */
 export const invasionTroops = (d: string) => (d === 'easy' || d === 'sandbox' ? 2 : 3);
 /** Un compte à rebours en m:ss (secondes de jeu) */
@@ -369,7 +379,8 @@ export class War {
 
   /**
    * La première arrivée dans les Enfers, au passage direct : un camp de base et une caserne avancée offerts au Seuil, près du
-   * point d'arrivée, et la troupe de départ (`START_TROOPS`) qui complète l'armée jusqu'à quatre troupes, à la forme de l'âge.
+   * point d'arrivée, et la troupe de départ (`startTroops` : huit troupes à la forme de l'âge, des chevaliers dès le Médiéval) qui
+   * complète l'armée jusque-là ; au-delà des quatre premières (`START_TROOPS`), elles ne prennent pas de place à la caserne.
    * Une fois par partie (`welcomed`) ; rien n'est payé ni pris dans la réserve. Vrai si les dons sont faits
    */
   welcome(age: number): boolean {
@@ -388,9 +399,11 @@ export class War {
     if (!b.buildings().some((x) => x.kind === 'camp')) { const p = spot('camp', m.arrival[0], m.arrival[1] + 3); if (p) b.build('camp', p[0], p[1]); }
     const camp = b.camp(0);
     if (camp && !b.posts()) { const p = spot('post', camp.site.x + 3, camp.site.z); if (p) b.build('post', p[0], p[1]); }
-    for (let i = this.army.troops.length; i < START_TROOPS.length; i++) {
-      const kind = START_TROOPS[i], st = troopStats(kind, age);
-      this.army.troops.push({ id: this.army.nextId++, kind, hp: st.hp, maxHp: st.hp, where: 'hell', heal: 0, gear: [...troopKit(kind, age).gear] });
+    const gift = startTroops(age);
+    for (let i = this.army.troops.length; i < gift.length; i++) {
+      const kind = gift[i], st = troopStats(kind, age);
+      // (au-delà des quatre premières, elles ne prennent pas de place : la caserne avancée garde de quoi recruter)
+      this.army.troops.push({ id: this.army.nextId++, kind, hp: st.hp, maxHp: st.hp, where: 'hell', heal: 0, gear: [...troopKit(kind, age).gear], ...(i >= START_TROOPS.length ? { gift: true } : {}) });
     }
     return true;
   }
@@ -578,6 +591,8 @@ export class War {
       else if (e.type === 'counterEnd') this.news.push({ kind: 'repelled', text: tr('🛡️ Contre-attaque repoussée : la base {zone} tient bon.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: tr('💥 Les démons ont repris la zone {zone} : sa forteresse se relève, le front recule. Tu peux la reprendre quand tu voudras.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'reclaimWarn') this.news.push({ kind: 'zone', text: tr('⚠️ Les démons se rassemblent pour reprendre la zone {zone}, que personne ne garde ! Posez-y un camp de base ou envoyez des troupes.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'raised') this.news.push({ kind: 'zone', text: e.retaken ? tr('⛺ Les démons sont chassés des ruines : le camp se relève au Seuil.') : tr('⛺ Votre camp se dresse sur les ruines de la forteresse {zone} : votre nouveau point de ralliement.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'occupied') this.news.push({ kind: 'zone', text: tr('💥 Le camp du Seuil est tombé : les démons occupent ses ruines. Chassez-les pour le relever.') });
       else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: tr('💥 Le camp de base {zone} est tombé. Rebâtissez-le pour rouvrir la base.', { zone: zoneOf(e.zone) }) });
       // (une construction : l'interface le dit elle-même)
     }
@@ -640,7 +655,7 @@ export class War {
       }
       // la progression dans les Enfers
       if (sim === this.faction) {
-        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: tr('🏴 La zone {zone} est conquise ! La brume se lève sur {next}. Vous pouvez bâtir une base avancée ici.', { zone: zoneOf(e.zone), next: zoneThe(e.zone + 1) }) });
+        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: tr('🏴 La zone {zone} est conquise ! La brume se lève sur {next}.', { zone: zoneOf(e.zone), next: zoneThe(e.zone + 1) }) });
         else if (e.type === 'sealed') this.news.push({ kind: 'info', text: e.byAge ? tr('🌫️ Les démons {zone} sont trop forts : montez à {age} pour y aller.', { zone: zoneOf(e.zone), age: zoneAgeText(e.zone) }) : tr('🌫️ La brume infernale barre {zone} : abattez d’abord la forteresse {prev}.', { zone: zoneThe(e.zone), prev: zoneOf(e.zone - 1) }) });
         // le combat du roi
         else if (e.type === 'boss') this.news.push({ kind: 'boss', text: e.phase === 1 ? tr('👑 Le roi des Enfers se lève de son trône ! Gare à ses boules de feu : écartez-vous des cercles rouges.') : e.phase === 2 ? tr('😡 Le roi des Enfers enrage : le sol s’embrase par plaques, sortez des zones qui rougeoient !') : tr('👑 Le roi des Enfers est abattu ! Sa citadelle vacille : abattez-la.') });

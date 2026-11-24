@@ -89,6 +89,10 @@ export const SITES: Record<SiteKind, { name: string; hp: number; armor: number; 
   gate: { name: 'porte', hp: 300, armor: 4, dmg: 0, range: 0, cooldown: 0 },
   brazier: { name: 'brasero', hp: 120, armor: 1, dmg: 0, range: 0, cooldown: 0 },
 };
+/** La forteresse de la zone 1 : vie (part de la pleine), armure, dégâts de ses tirs (retour de l'auteur, 24 nov. 2026 : les premières zones restent simples) */
+export const FIRST_FORT = { hp: 0.5, armor: 2, dmg: 0.6 };
+/** Le gardien de la zone 1 : part de sa vie et de ses dégâts (0,7 avant le 24 nov. 2026, toujours au bac à sable) */
+export const FIRST_GUARD = 0.55;
 // les noms des démons et des bâtiments se lisent dans la langue courante (dictionnaire src/i18n/en/war.ts)
 for (const d of Object.values(DEMONS)) localize(d, ['name', 'plural']);
 for (const s of Object.values(SITES)) localize(s, ['name']);
@@ -192,7 +196,9 @@ export type HellEvent =
   | { type: 'raidEnd'; wave: number; repelled: boolean }
   | { type: 'secured' }
   /** une troupe passe le portail (lueur courte, d'un côté comme de l'autre) */
-  | { type: 'portal'; x: number; z: number };
+  | { type: 'portal'; x: number; z: number }
+  /** le camp de la base se dresse de lui-même (sur les ruines d'une forteresse) : la vue le fait sortir de terre */
+  | { type: 'raised'; id: number; x: number; z: number };
 
 /**
  * Une incursion : la vague de démons qui passe le portail. Elle n'attaque QUE l'île du portail (jamais l'île principale) :
@@ -214,7 +220,7 @@ function garrisonOf(kind: HellSiteKind, zone: number, legacy = false): DemonKind
     const z = Math.max(1, Math.min(zone, 5));
     const FORT: Record<number, [number, number, number, number, number, number, number]> = {
       // diablotins, archers, brutes, démons-chefs, golems, démons cornus, seigneurs
-      1: [2, 2, 1, 0, 0, 0, 0], 2: [4, 3, 2, 1, 0, 0, 0], 3: [5, 4, 3, 2, 2, 0, 0], 4: [6, 5, 3, 2, 3, 1, 0], 5: [6, 6, 3, 3, 3, 2, 1],
+      1: [2, 2, 0, 0, 0, 0, 0], 2: [4, 3, 2, 1, 0, 0, 0], 3: [5, 4, 3, 2, 2, 0, 0], 4: [6, 5, 3, 2, 3, 1, 0], 5: [6, 6, 3, 3, 3, 2, 1],
     };
     switch (kind) {
       case 'fortress': { const f = FORT[z]; return ['guardian', ...rep('chief', f[3]), ...rep('golem', f[4]), ...rep('horned', f[5]), ...rep('lord', f[6]), ...rep('brute', f[2]), ...rep('archer', f[1]), ...rep('imp', f[0])]; }
@@ -242,11 +248,20 @@ const rep = (v: DemonKind, n: number): DemonKind[] => Array.from({ length: n }, 
 export function demonStats(kind: DemonKind, zone: number, legacy = false): UnitStats {
   const s = DEMONS[kind], lv = Math.max(0, zone - 1);
   // le gardien de la première zone, moins coriace : la première expédition se gagne avec la garnison pleine de l'Antiquité
-  const first = kind === 'guardian' && zone === 1 ? 0.7 : 1;
+  const first = kind === 'guardian' && zone === 1 ? (legacy ? 0.7 : FIRST_GUARD) : 1;
   if (legacy) return { ...s, hp: Math.round(s.hp * (1 + 0.12 * lv) * first), dmg: Math.round(s.dmg * (1 + 0.1 * lv) * first * 10) / 10 };
   const hpK = kind === 'guardian' ? 1 + 0.5 * lv : kind === 'king' ? 2.8 : kind === 'elite' ? 1.3 + 0.1 * lv : 1 + 0.15 * lv;
   const dmgK = kind === 'guardian' ? 1 + 0.2 * lv : kind === 'king' ? 1.35 : kind === 'elite' ? 1.15 + 0.08 * lv : 1 + 0.12 * lv;
   return { ...s, hp: Math.round(s.hp * hpK * first), dmg: Math.round(s.dmg * dmgK * first * 10) / 10 };
+}
+
+/**
+ * L'âge qui règle les sortes de démons d'une zone (renforts, contre-attaques) : celui de la zone, pas moins que l'âge du village
+ * moins un, mais jamais au-delà du numéro de la zone (retour de l'auteur, 24 nov. 2026 : entré en fin de partie, le joueur
+ * trouvait des seigneurs-démons dès les Grottes de braise). Les premières zones restent simples à tout âge
+ */
+export function zoneTier(zone: number, age: number) {
+  return Math.min(5, Math.max(ZONE_AGE[zone] ?? 1, Math.min(tierAge(age) - 1, Math.max(1, zone))));
 }
 
 /** La puissance de chaque sorte de démon à la zone 1 (celle dont se servent les vagues) */
@@ -388,6 +403,8 @@ export class Hell {
           id: this.nextId++, side: 'hell', kind: s.kind, site: s, zone: zn.id, hp: st.hp * (1 + 0.1 * Math.max(0, zn.id - 1)), maxHp: 0,
           armor: st.armor, cool: 0, down: false, spawnT: FORGE_EVERY, swing: 9, hurt: 9, target: null,
         };
+        // la première forteresse, moins solide : elle se prend d'une sortie avec la troupe offerte à l'arrivée
+        if (!this.balance.legacy && zn.id === 1 && s.kind === 'fortress') { b.hp *= FIRST_FORT.hp; b.armor = FIRST_FORT.armor; b.power = FIRST_FORT.dmg; }
         b.hp = Math.round(b.hp); b.maxHp = b.hp;
         this.buildings.set(b.id, b);
         for (const k of g) {
@@ -436,8 +453,7 @@ export class Hell {
     for (const u of this.units.values()) if (u.hp > 0 && u.side === 'hell' && u.zone === zone) have += powerOf(u.stats);
     const want = pp * GARRISON_RATIO * Math.min(1, 0.35 + 0.13 * zone) * this.balance.k - have;
     if (want <= 0) return;
-    const age = Math.min(5, Math.max(ZONE_AGE[zone] ?? 1, tierAge(this.age) - 1));
-    const kinds = compose(want, 4 + zone, age, DEMON_POWER).slice(0, 80);
+    const kinds = compose(want, 4 + zone, zoneTier(zone, this.age), DEMON_POWER).slice(0, 80);
     const zn = this.map.zones[zone], fort = zn.sites.find((s) => s.kind === 'fortress' || s.kind === 'kingdom');
     const ring = fort ? this.postsAround(fort as HellSite, Math.min(kinds.length, 16)) : zn.posts;
     kinds.forEach((k, i) => {
@@ -1016,7 +1032,8 @@ export class Hell {
     const plan = Array.isArray(s.planned) ? s.planned.filter((k) => k in DEMONS) : [];
     h.planned = plan.length ? plan : null;
     s.conquered.forEach((c, i) => (h.conquered[i] = c));
-    for (const [id, hp] of s.buildings) { const b = h.buildings.get(id); if (b) { b.hp = hp; if (hp <= 0) { b.down = true; map.unblock(b.site); } } }
+    // (jamais plus que sa vie pleine : la première forteresse a été allégée le 24 nov. 2026)
+    for (const [id, hp] of s.buildings) { const b = h.buildings.get(id); if (b) { b.hp = Math.min(b.maxHp, hp); if (hp <= 0) { b.down = true; map.unblock(b.site); } } }
     h.units.clear();
     for (const r of s.units) {
       const u = r.side === 'player' ? h.addPlayerUnit(r.kind, r.stats ?? DEMONS.imp, r.x, r.z) : h.spawn(r.kind as DemonKind, r.x, r.z, r.zone);
