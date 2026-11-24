@@ -66,13 +66,15 @@ export function tradeOpen(w: { trade: TradeState }, arch: boolean, posts: number
  */
 export const goldSince = (w: Pick<World, 'exploredAt'>) => w.exploredAt ?? 0;
 
+/** Avec la halle des échanges (la concession de la paix, `sim/concession.ts`) : les cours baissent moitié moins vite */
+export const HALL_STEP = SAT_STEP / 2;
 /** Combien de `r` il faut vendre pour 1 or, saturation comprise */
 export const sellRate = (r: TradeRes, sat = 0) => SELL[r] / (1 - Math.min(SAT_MAX, sat));
 
 /** Vendre `n` or de `r` : ce qu'il en coûte (chaque or vendu sature un peu plus le cours du suivant) et la saturation d'après */
-export function sellQuote(r: TradeRes, sat: number, n: number) {
+export function sellQuote(r: TradeRes, sat: number, n: number, step = SAT_STEP) {
   let cost = 0, s = Math.min(SAT_MAX, Math.max(0, sat));
-  for (let i = 0; i < n; i++) { cost += sellRate(r, s); s = Math.min(SAT_MAX, s + SAT_STEP); }
+  for (let i = 0; i < n; i++) { cost += sellRate(r, s); s = Math.min(SAT_MAX, s + step); }
   return { cost, sat: s };
 }
 
@@ -93,8 +95,8 @@ export function recover(t: TradeState, days: number) {
 type Stocks = Pick<World, TradeRes | 'gold'> & { trade: TradeState };
 
 /** Vend `n` or de `r` si le village en a assez ; true si c'est fait */
-export function sell(w: Stocks, r: TradeRes, n = 1) {
-  const q = sellQuote(r, w.trade.sat[r] ?? 0, n);
+export function sell(w: Stocks, r: TradeRes, n = 1, step = SAT_STEP) {
+  const q = sellQuote(r, w.trade.sat[r] ?? 0, n, step);
   if (n <= 0 || w[r] + 1e-9 < q.cost) return false;
   w[r] = Math.max(0, w[r] - q.cost);
   w.gold += n;

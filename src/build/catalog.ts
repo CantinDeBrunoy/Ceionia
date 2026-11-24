@@ -21,7 +21,12 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   // l'époque moderne : le circuit automobile et la centrale électrique (étapes vers l'âge futuriste)
   | 'racetrack' | 'powerplant'
   // le cimetière : les défunts y reposent, le village n'en porte pas le deuil
-  | 'cemetery';
+  | 'cemetery'
+  // le nouveau monde (chantier C) : la tête de pont chez le rival (la guerre), voir `sim/concession.ts`
+  | 'frontTower' | 'frontInfirmary' | 'fort' | 'battery' | 'frontForge' | 'garrison' | 'milHospital' | 'soldierClub' | 'garrisonHouse' | 'milHeliport' | 'radar'
+  // la base arrière de la guerre et la concession de la paix, chez l'allié
+  | 'allyBarracks' | 'allyShipyard' | 'allyHospital'
+  | 'merchantPort' | 'exchangeHall' | 'commonSchool' | 'dispensary' | 'researchCenter';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'deco' | 'war';
@@ -541,6 +546,128 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [0, 0, 3, 4, 5, 6],
     perk: 'Se bâtit sur l’île de votre allié, hors de sa ville. Il ouvre l’échange : un clic sur l’or (barre des stocks) ouvre le comptoir, où l’on vend bois, pierre ou minerai contre l’or qui fait passer les âges.',
   },
+  // ---- le nouveau monde (chantier C) : les zones des îles rivales, voir `sim/concession.ts` et `docs/diplomatie.md` ----
+  // la tête de pont (la guerre) : seulement dans la zone rivale, une fois la plage prise ; ils comptent par leur présence
+  frontTower: {
+    id: 'frontTower', size: 1, minAge: 2, icon: '🗼', cat: 'war',
+    names: ['', '', 'Tour de guet du camp', 'Tour de guet du camp', 'Mirador blindé', 'Tour de défense du camp'],
+    desc: 'Une tour de guet au bord de notre camp, sur l’île rivale : ses guetteurs voient venir les sorties et leurs archers les accueillent.',
+    perk: 'Dans la tête de pont. Pendant une sortie rivale, la tour tire sur les assaillants.',
+  },
+  frontInfirmary: {
+    id: 'frontInfirmary', size: 2, minAge: 2, icon: '⛑️', cat: 'war',
+    names: ['', '', 'Infirmerie de campagne', 'Infirmerie de campagne', 'Poste de secours', 'Module médical'],
+    desc: 'Des tentes à croix rouge, des brancards et des infirmiers au bord de notre camp : nos blessés y sont soignés sur place.',
+    perk: 'Dans la tête de pont. Les pertes du corps expéditionnaire se refont deux fois plus vite.',
+  },
+  fort: {
+    id: 'fort', size: 3, minAge: 3, icon: '🏰', cat: 'war',
+    names: ['', '', '', 'Fort de la tête de pont', 'Fort de la tête de pont', 'Citadelle de la tête de pont'],
+    desc: 'Le camp de la plage devient un fort : une enceinte basse en étoile, ses bastions, ses casemates et notre drapeau au mât.',
+    perk: 'Dans la tête de pont, une fois le port pris. Le chapitre de l’Industriel le demande. Le camp a deux fois plus de vie quand la ville rivale fait une sortie.',
+  },
+  battery: {
+    id: 'battery', size: 2, minAge: 3, icon: '💥', cat: 'war',
+    names: ['', '', '', 'Batterie côtière', 'Batterie côtière', 'Batterie de lanceurs'],
+    desc: 'Des canons sur leur plateforme, derrière un parapet tourné vers la mer : ils battent le bras de mer.',
+    perk: 'Dans la tête de pont. Dans les batailles en mer, la batterie pilonne la flotte rivale : un de ses navires en moins.',
+  },
+  frontForge: {
+    id: 'frontForge', size: 2, minAge: 3, icon: '⚒️', cat: 'war',
+    names: ['', '', '', 'Forge du front', 'Atelier d’armement', 'Atelier d’armement'],
+    desc: 'Une forge de campagne où l’on répare les armes et refait les munitions du corps expéditionnaire.',
+    perk: 'Dans la tête de pont. Le corps expéditionnaire frappe 20 % plus fort.',
+  },
+  garrison: {
+    id: 'garrison', size: 2, minAge: 4, icon: '🪖', cat: 'war',
+    names: ['', '', '', '', 'Caserne de la garnison', 'Caserne de la garnison'],
+    desc: 'La caserne en dur de notre ville de garnison, autour du fort : dortoirs, cour d’exercice et mât des couleurs.',
+    perk: 'Dans la tête de pont, après le fort. La ville de garnison (la caserne et deux autres de ses bâtiments) est demandée par le chapitre du Moderne. Le corps expéditionnaire grandit de 8 hommes.',
+    reqKind: 'fort',
+  },
+  milHospital: {
+    id: 'milHospital', size: 2, minAge: 4, icon: '🏥', cat: 'war',
+    names: ['', '', '', '', 'Hôpital militaire', 'Hôpital militaire'],
+    desc: 'L’hôpital de la ville de garnison : ses salles, son ambulance et l’hélicoptère des grands blessés.',
+    perk: 'Dans la tête de pont, après le fort. Il compte pour la ville de garnison.',
+    reqKind: 'fort',
+  },
+  soldierClub: {
+    id: 'soldierClub', size: 2, minAge: 4, icon: '☕', cat: 'war',
+    names: ['', '', '', '', 'Foyer du soldat', 'Foyer du soldat'],
+    desc: 'Le café de la garnison : une terrasse, des affiches et des soldats au repos entre deux gardes.',
+    perk: 'Dans la tête de pont, après le fort. Il compte pour la ville de garnison.',
+    reqKind: 'fort',
+  },
+  garrisonHouse: {
+    id: 'garrisonHouse', size: 1, minAge: 4, icon: '🏘️', cat: 'war',
+    names: ['', '', '', '', 'Maison de la garnison', 'Maison de la garnison'],
+    desc: 'Le logement d’un sous-officier et de sa famille, dans la ville de garnison.',
+    perk: 'Dans la tête de pont, après le fort. Elle compte pour la ville de garnison.',
+    reqKind: 'fort',
+  },
+  milHeliport: {
+    id: 'milHeliport', size: 2, minAge: 4, icon: '🚁', cat: 'war',
+    names: ['', '', '', '', 'Héliport militaire', 'Héliport militaire'],
+    desc: 'Une aire marquée, un hangar et un hélicoptère de l’armée prêt à décoller.',
+    perk: 'Dans la tête de pont. Il prépare l’appui aérien de la bataille des deux îles.',
+  },
+  radar: {
+    id: 'radar', size: 2, minAge: 4, icon: '📡', cat: 'war',
+    names: ['', '', '', '', 'Station radar', 'Station radar'],
+    desc: 'Une grande antenne qui tourne jour et nuit et son local technique : rien ne bouge sans qu’on le voie.',
+    perk: 'Dans la tête de pont. Les sorties rivales s’annoncent un jour à l’avance au lieu d’une demi-journée.',
+  },
+  // la base arrière de la guerre, dans la concession alliée
+  allyBarracks: {
+    id: 'allyBarracks', size: 2, minAge: 2, icon: '🛡️', cat: 'war',
+    names: ['', '', 'Caserne alliée', 'Caserne alliée', 'Caserne alliée', 'Caserne alliée'],
+    desc: 'Nos alliés y entraînent des soldats pour notre guerre, sous leurs couleurs et les nôtres.',
+    perk: 'Dans la concession, sur la voie de la guerre. Trois alliés de plus dans chaque bataille de l’île rivale.',
+  },
+  allyShipyard: {
+    id: 'allyShipyard', size: 2, minAge: 2, icon: '⚓', cat: 'war',
+    names: ['', '', 'Chantier naval allié', 'Chantier naval allié', 'Chantier naval allié', 'Chantier naval allié'],
+    desc: 'Une cale où nos alliés arment un navire de guerre de plus pour notre flotte.',
+    perk: 'Dans la concession, sur la voie de la guerre. Un navire allié de plus dans chaque bataille en mer.',
+  },
+  allyHospital: {
+    id: 'allyHospital', size: 2, minAge: 2, icon: '⚕️', cat: 'war',
+    names: ['', '', 'Hôpital allié', 'Hôpital allié', 'Hôpital allié', 'Hôpital allié'],
+    desc: 'Les médecins de notre allié y soignent nos blessés graves avant de les renvoyer au front.',
+    perk: 'Dans la concession, sur la voie de la guerre. Après chaque bataille, un tiers de nos tombés reviennent au corps.',
+  },
+  // la concession de la paix, chez l'allié
+  merchantPort: {
+    id: 'merchantPort', size: 3, minAge: 3, icon: '🛳️', cat: 'prod',
+    names: ['', '', '', 'Port marchand partagé', 'Port marchand partagé', 'Port marchand partagé'],
+    desc: 'Un grand quai, la gare maritime et deux pavillons, le nôtre et celui de l’allié : la ligne de vapeurs relie les îles.',
+    perk: 'Dans la concession, sur la voie de la paix, près de l’eau. Le chapitre de l’Industriel le demande. La ligne de vapeurs rapporte 3 or par jour.',
+  },
+  exchangeHall: {
+    id: 'exchangeHall', size: 2, minAge: 3, icon: '⚖️', cat: 'prod',
+    names: ['', '', '', 'Halle des échanges', 'Halle des échanges', 'Bourse des îles'],
+    desc: 'Une halle couverte, ses étals et le tableau des cours : les marchands des trois peuples y fixent les prix.',
+    perk: 'Dans la concession, sur la voie de la paix. Une maison commune : les cours du comptoir baissent moitié moins vite quand on vend beaucoup.',
+  },
+  commonSchool: {
+    id: 'commonSchool', size: 2, minAge: 3, icon: '🏫', cat: 'service',
+    names: ['', '', '', 'École commune', 'École commune', 'École commune'],
+    desc: 'Une aile à notre style, une aile au style de l’allié, une cour où jouent leurs enfants et les nôtres.',
+    perk: 'Dans la concession, sur la voie de la paix. Une maison commune : les visites sur les îles sont plus sûres.',
+  },
+  dispensary: {
+    id: 'dispensary', size: 2, minAge: 3, icon: '🩺', cat: 'service',
+    names: ['', '', '', 'Dispensaire', 'Dispensaire', 'Dispensaire'],
+    desc: 'Des réserves, des brancards et des médecins des deux peuples, prêts à partir au premier malheur.',
+    perk: 'Dans la concession, sur la voie de la paix. Une maison commune : après une catastrophe, l’allié envoie de l’aide et les réparations vont deux fois plus vite.',
+  },
+  researchCenter: {
+    id: 'researchCenter', size: 2, minAge: 4, icon: '🔬', cat: 'service',
+    names: ['', '', '', '', 'Centre de recherche commun', 'Centre de recherche commun'],
+    desc: 'Les savants des trois peuples y travaillent ensemble : laboratoires, verrière et antennes.',
+    perk: 'Dans la concession, sur la voie de la paix. Les expéditions sont un peu plus sûres (risque −10 %).',
+  },
   // les bâtiments militaires : au village comme sur l'île du portail (où l'on ne bâtit qu'eux, voir `World.portalRule`)
   watchtower: {
     id: 'watchtower', size: 1, minAge: 1, icon: '🏹', cat: 'war',
@@ -647,7 +774,9 @@ export const isLinear = (k: KindId) => k === 'hedge' || k === 'fence';
 /** Plafond du bien-être que donnent toutes les décorations ensemble (le lampadaire, plus ancien, compte à part) */
 export const DECOR_JOY_MAX = 3;
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'powerplant', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'explorers', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'racetrack', 'circus', 'zoo', 'alpine', 'temple', 'cemetery', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'powerplant', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'explorers', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'racetrack', 'circus', 'zoo', 'alpine', 'temple', 'cemetery', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev',
+  'frontTower', 'frontInfirmary', 'fort', 'battery', 'frontForge', 'garrison', 'milHospital', 'soldierClub', 'garrisonHouse', 'milHeliport', 'radar',
+  'allyBarracks', 'allyShipyard', 'allyHospital', 'merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -662,9 +791,9 @@ export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
 export interface BuildSub { id: string; label: string }
 export const BUILD_SUBS: Record<BuildCat, BuildSub[]> = {
   home: [{ id: 'logis', label: 'Logements' }, { id: 'eau', label: 'Eau' }],
-  prod: [{ id: 'nourriture', label: 'Nourriture' }, { id: 'materiaux', label: 'Matériaux' }, { id: 'industrie', label: 'Industrie' }],
-  service: [{ id: 'sante', label: 'Santé' }, { id: 'savoir', label: 'Savoir' }, { id: 'securite', label: 'Sécurité' }, { id: 'transport', label: 'Transport' }],
-  war: [{ id: 'defense', label: 'Défense' }, { id: 'remparts', label: 'Remparts' }],
+  prod: [{ id: 'nourriture', label: 'Nourriture' }, { id: 'materiaux', label: 'Matériaux' }, { id: 'industrie', label: 'Industrie' }, { id: 'concession', label: 'Concession' }],
+  service: [{ id: 'sante', label: 'Santé' }, { id: 'savoir', label: 'Savoir' }, { id: 'securite', label: 'Sécurité' }, { id: 'transport', label: 'Transport' }, { id: 'concession', label: 'Concession' }],
+  war: [{ id: 'defense', label: 'Défense' }, { id: 'remparts', label: 'Remparts' }, { id: 'front', label: 'Tête de pont' }, { id: 'arriere', label: 'Base arrière' }],
   deco: [{ id: 'jardin', label: 'Jardins' }, { id: 'mobilier', label: 'Mobilier' }, { id: 'ornements', label: 'Ornements' }],
   life: [{ id: 'parcs', label: 'Places publiques' }, { id: 'detente', label: 'Détente' }, { id: 'culte', label: 'Culte' }, { id: 'monuments', label: 'Monuments' }],
 };
@@ -683,6 +812,9 @@ export const KIND_SUB: Record<KindId, string> = {
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
   waterpark: 'detente', funfair: 'detente', racetrack: 'detente', circus: 'detente', arena: 'detente', zoo: 'detente', alpine: 'detente', aerodrome: 'detente',
   temple: 'culte', cemetery: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments', concord: 'monuments', triumph: 'monuments', embassy: 'monuments',
+  frontTower: 'front', frontInfirmary: 'front', fort: 'front', battery: 'front', frontForge: 'front', garrison: 'front', milHospital: 'front', soldierClub: 'front', garrisonHouse: 'front', milHeliport: 'front', radar: 'front',
+  allyBarracks: 'arriere', allyShipyard: 'arriere', allyHospital: 'arriere',
+  merchantPort: 'concession', exchangeHall: 'concession', commonSchool: 'concession', dispensary: 'concession', researchCenter: 'concession',
 };
 
 export interface AgeDef {
@@ -739,6 +871,10 @@ export const KIND_LABEL: Record<KindId, string> = {
   hedge: 'haies', fence: 'clôtures', flowerbed: 'parterres de fleurs', bench: 'bancs', statue: 'statues', paving: 'pavés', fountain: 'fontaines', pond: 'mares', coralpool: 'bassins à coraux',
   explorers: 'maisons des explorateurs', racetrack: 'circuits automobiles', powerplant: 'centrales électriques',
   cemetery: 'cimetières',
+  frontTower: 'tours de guet du camp', frontInfirmary: 'infirmeries de campagne', fort: 'forts', battery: 'batteries côtières', frontForge: 'forges du front',
+  garrison: 'casernes de la garnison', milHospital: 'hôpitaux militaires', soldierClub: 'foyers du soldat', garrisonHouse: 'maisons de la garnison', milHeliport: 'héliports militaires', radar: 'stations radar',
+  allyBarracks: 'casernes alliées', allyShipyard: 'chantiers navals alliés', allyHospital: 'hôpitaux alliés',
+  merchantPort: 'ports marchands partagés', exchangeHall: 'halles des échanges', commonSchool: 'écoles communes', dispensary: 'dispensaires', researchCenter: 'centres de recherche communs',
 };
 
 /**

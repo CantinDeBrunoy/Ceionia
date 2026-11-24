@@ -19,11 +19,15 @@ import { hasPerk, perkYield, COAL_CRAFT, HOUND_BEAST, METEO_WEATHER, SAT_SEA } f
 import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
 import { tr, plural } from '../i18n';
+import { peacePerks, SCHOOL_ISLE_RISK, RESEARCH_RISK } from './concession';
 
 /**
  * Étapes d'une expédition : aller, travail sur place, retour, fête (ou mine déconfite) au village ; « gather » (le rassemblement
  * au village d'avant le départ) ne sert plus qu'aux équipes des anciennes sauvegardes
  */
+/** Le choix est-il celui d'une visite sur les îles de l'archipel ? */
+const isleChoice = (c: Choice) => MISSIONS.some((m) => !!m.isle && m.choices.includes(c));
+
 export type Phase = 'gather' | 'out' | 'work' | 'back' | 'home';
 
 export interface ActiveExpedition {
@@ -397,7 +401,10 @@ export class Expeditions {
       * (c.sea ? (this.has('lighthouse') ? LIGHTHOUSE_RISK : 1) * (this.has('shipyard') ? SHIPYARD_RISK : 1) : 1)
       // les savoir-faire des expéditions (`legacy.ts`) : les chiens flairent les bêtes, la station météo annonce le mauvais
       // temps, les satellites guident les navires
-      * this.legacyK(c);
+      * this.legacyK(c)
+      // la concession de la paix : l'école commune rend les visites sur les îles plus sûres, le centre de recherche commun toutes les expéditions
+      * (this.has('commonSchool') && peacePerks(this.world, { commonSchool: 1 }).school && isleChoice(c) ? SCHOOL_ISLE_RISK : 1)
+      * (this.has('researchCenter') && peacePerks(this.world, { researchCenter: 1 }).research ? RESEARCH_RISK : 1);
   }
 
   /** Ce que les savoir-faire des expéditions retirent au risque d'un choix (chiens de garde, station météo, satellites) */
@@ -1094,6 +1101,8 @@ export class Expeditions {
     recover(w.trade, day);
     // le tribut d'or de l'île vaincue, chaque jour, une fois la guerre de l'archipel gagnée
     w.gold += tributePerDay(w.diplo) * day;
+    // la ligne de vapeurs du port marchand partagé (la concession de la paix)
+    if (this.has('merchantPort')) w.gold += peacePerks(w, { merchantPort: 1 }).gold * day;
     for (const r of ['wood', 'stone', 'ore', 'brick', 'crude'] as Resource[]) {
       if (!rate[r]) continue;
       // bois, pierre, minerai et briques arrivent au fil des heures, en petites parts (l'affichage arrondit), et non d'un coup chaque

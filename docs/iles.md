@@ -66,6 +66,7 @@ Un lot (`Lot`) : sorte (`TownKind`), centre (cases du monde), emprise `w` × `d`
 - La future bataille lira `townPlans(world)[i].points` (plage, remparts, portes, port, palais).
 
 ## Pièges et invariants
+- **La zone de chaque île** (concession, tête de pont, voir [diplomatie.md](diplomatie.md)) : sur les cartes neuves, sa limite (ria ou arête) passe au-delà des champs de la ville et se tient loin de sa mer ; elle est posée à la fin de la génération, d'un générateur à part. Le plan de la ville ne change pas (`tests/concession.test.ts`). `forgetTowns` vide le cache des plans (tests).
 - Le plan ne dépend que de la graine et des **hauteurs brutes** : ne pas y lire le relief affiché (`vis`), recalculé plus tard et lissé.
 - `World.town` n'est pas sauvegardé et `veg` est retouché à la création de la vue : une ancienne sauvegarde se charge sans rien de nouveau.
 - Une couleur `undefined` dans un modèle devient du blanc : prendre les couleurs dans une liste par `pick` (indice en boucle, aussi négatif).

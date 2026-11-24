@@ -8,6 +8,8 @@ import { troopStats, TroopKind } from './army';
 import { defenseK } from './isleBattle';
 import type { Intel, Boons } from './diplomacy';
 import { CORPS } from './campaign';
+import { zoneOf } from '../world/concession';
+import { FORGE_DMG } from './concession';
 
 /**
  * La bataille de l'archipel (la voie de la guerre, au Médiéval), « façon gouffre de Helm » (demande de l'auteur) : épique
@@ -43,6 +45,8 @@ export const OUTPOST = { port: [12, 8], tour: [8, 9] } as const satisfies Record
  * gagnés sur les îles) : la vraie bataille de l'allié, c'est l'assaut
  */
 export const OUTPOST_HELP: [number, number] = [5, 3], OUTPOST_HELP_T = [25, 60], TOWER_HP = 6;
+/** Les temps du renfort comptent de l'arrivée de nos troupes à cette distance de l'avant-poste (cases) */
+export const APPROACH_R = 16;
 export const OUTPOST_ALLIES: [number, number] = [3, 2];
 /** La tour prise, les remparts perdent ces archers à l'assaut final */
 export const TOUR_CUT = 2;
@@ -55,6 +59,8 @@ export const RAID: [number, number] = [5, 3], RAID_WAVES = 2, RAID_GAP = 25, RAI
 export const CAMP_ALLIES: [number, number] = [2, 2];
 /** La vie du camp de la plage dans la défense (× celle du camp des Enfers) : abattu, la défense est perdue */
 export const CAMP_HP = 1.6;
+/** Le fort de la tête de pont : le camp a deux fois plus de vie */
+export const FORT_HP = 2;
 /** Un objectif est pris quand ses défenseurs sont tombés et qu'une de nos troupes (ou de l'allié) est à moins de `TAKE_R` cases */
 export const TAKE_R = 4;
 /** Marge autour de la ville (cases) */
@@ -172,7 +178,8 @@ export class RivalMap implements CombatMap {
     const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) * 2);
     for (let i = 1; i < n; i++) {
       const x = x0 + ((x1 - x0) * i) / n, z = z0 + ((z1 - z0) * i) / n;
-      if (this.inside(x, z) && this.block[this.cell(x, z)]) return false;
+      // (l'eau aussi : la ria de la tête de pont, un bras de mer, ne se traverse pas tout droit)
+      if (this.inside(x, z) && (this.block[this.cell(x, z)] || !this.land[this.cell(x, z)])) return false;
     }
     return true;
   }
@@ -417,7 +424,14 @@ export class RivalBattle {
   private readonly held: BattleGoal[];
   private readonly raidLevel: number;
   private readonly easy: boolean;
-  constructor(world: World, rival: People, readonly age: number, easy = false, troops: TroopKind[] = armyOf(age), readonly intel: Intel[] = [], readonly boons: Boons = { allies: 0, ours: 0, foes: 0, peace: 0 }, opts: { kind?: BattleKind; held?: BattleGoal[]; raid?: number } = {}) {
+  /** la forge du front : nos coups plus forts (× `FORGE_DMG`) */
+  private ourDmg = 1;
+
+  /**
+   * `front` : ce que la tête de pont apporte (chantier C, `sim/concession.ts` › `frontPerks`) : le fort (le camp deux fois
+   * plus solide), la tour de guet (elle tire pendant une sortie), la forge du front (nos coups plus forts)
+   */
+  constructor(world: World, rival: People, readonly age: number, easy = false, troops: TroopKind[] = armyOf(age), readonly intel: Intel[] = [], readonly boons: Boons = { allies: 0, ours: 0, foes: 0, peace: 0 }, opts: { kind?: BattleKind; held?: BattleGoal[]; raid?: number; front?: { fort?: boolean; tower?: boolean; forge?: boolean } } = {}) {
     this.kind = opts.kind ?? 'full';
     this.plan = PLANS[this.kind];
     this.held = opts.held ?? [];
@@ -427,8 +441,13 @@ export class RivalBattle {
     const ex = Math.max(0, Math.floor(boons.allies));
     this.allyFirstWave = [ALLY_FIRST[0] + Math.ceil(ex / 2), ALLY_FIRST[1] + Math.floor(ex / 2)];
     troops = [...troops, ...Array(Math.max(0, Math.floor(boons.ours))).fill(age >= 2 ? 'knight' : 'soldier')];
-    const plan = townPlans(world).find((p) => p.people === rival);
-    if (!plan) throw new Error('pas de ville rivale');
+    const town = townPlans(world).find((p) => p.people === rival);
+    if (!town) throw new Error('pas de ville rivale');
+    // (le débarquement se fait sur la plage de la tête de pont, la zone de l'île tournée vers notre île, et le camp s'y pose :
+    // décision de l'auteur, 24 nov. 2026 ; la carte de bataille l'englobe)
+    const zone = zoneOf(world, rival);
+    const plan: TownPlan = zone ? { ...town, points: { ...town.points, plage: zone.beach } } : town;
+    this.ourDmg = opts.front?.forge ? FORGE_DMG : 1;
     this.town = plan;
     this.people = rival;
     this.ally = rival === 'orient' ? 'asie' : 'orient';
@@ -443,26 +462,31 @@ export class RivalBattle {
     const out = this.map.distances(this.map.nearestWalkable(beach[0], beach[1], 8)), snapOut = (q: [number, number]) => this.map.snap(q, out);
     this.reach = reach; this.reachOut = out;
     const inside = snap(this.toward(gate, this.map.local([plan.x, plan.z]), 2.2));
-    const plageAt = snapOut(this.inland(pts.plage, 5));
+    const plageAt = zone ? snapOut(this.map.freeNear(...this.map.local(zone.camp), 4)) : snapOut(this.inland(pts.plage, 5));
     // (la tour du rempart : le sommet des remparts le plus proche de la plage, hors de la porte ; on la prend du dehors)
+    // (la plage de la ville, celle d'avant la tête de pont : la tour reste la même, face à la mer)
+    const old = this.map.local(town.points.plage);
     const corner = pts.remparts.map((q) => this.map.local(q)).filter((q) => Math.hypot(q[0] - gate[0], q[1] - gate[1]) > 5)
-      .sort((a, b) => Math.hypot(a[0] - beach[0], a[1] - beach[1]) - Math.hypot(b[0] - beach[0], b[1] - beach[1]))[0] ?? gate;
-    this.goalAt = { plage: plageAt, port: snapOut(this.map.local(pts.port)), tour: snapOut(this.toward(corner, beach, 2.4)), remparts: inside, palais: snap(this.map.local(pts.palais)), camp: plageAt };
+      .sort((a, b) => Math.hypot(a[0] - old[0], a[1] - old[1]) - Math.hypot(b[0] - old[0], b[1] - old[1]))[0] ?? gate;
+    this.goalAt = { plage: plageAt, port: snapOut(this.map.local(pts.port)), tour: snapOut(this.toward(corner, old, 2.4)), remparts: inside, palais: snap(this.map.local(pts.palais)), camp: plageAt };
     this.outside = snapOut(this.toward(gate, beach, 2.5));
     this.sea = this.toward(this.map.local(pts.port), this.map.local([plan.x, plan.z]), -6);
     const has = (g: BattleGoal) => this.plan.includes(g);
+    // (les avant-postes et l'assaut partent du passage de la tête de pont, vers la ville : la marche depuis le camp, au fond
+    // de la zone, égrenait nos troupes ; la défense, elle, se tient au camp)
+    const start = zone && !has('camp') && !has('plage') ? snapOut(this.map.freeNear(...this.map.local([zone.gate[0], zone.gate[1]]), 4)) : plageAt;
     // nos troupes : en trois barques (la première tout de suite) pour un débarquement ; sinon toutes au camp de la plage
     this.beach = beach;
     this.boats = troops.slice();
     if (has('plage')) this.landBoat();
-    else { this.boatN = BOATS.length; const all = this.boats.splice(0); all.forEach((k, i) => this.army.push(this.landUnit(k, troopStats(k, this.age), plageAt, i).id)); }
+    else { this.boatN = BOATS.length; const all = this.boats.splice(0); all.forEach((k, i) => this.army.push(this.landUnit(k, this.ourStats(k), start, i).id)); }
     this.sim.rally = beach;
     // l'allié : sa première vague suit notre débarquement ; depuis le camp, elle est là d'emblée (la garde du camp, à la défense)
     const outpost = this.kind === 'port' || this.kind === 'tour';
     if (!has('plage')) {
       this.allyLanded = true;
       const extra = this.allyFirstWave[0] + this.allyFirstWave[1] - ALLY_FIRST[0] - ALLY_FIRST[1];
-      this.landAllies(has('camp') ? CAMP_ALLIES : outpost ? [OUTPOST_ALLIES[0] + Math.ceil(extra / 2), OUTPOST_ALLIES[1] + Math.floor(extra / 2)] : this.allyFirstWave, plageAt);
+      this.landAllies(has('camp') ? CAMP_ALLIES : outpost ? [OUTPOST_ALLIES[0] + Math.ceil(extra / 2), OUTPOST_ALLIES[1] + Math.floor(extra / 2)] : this.allyFirstWave, start);
     }
     // la porte principale : un bâtiment au combat, qui bouche le passage tant qu'il tient
     const melee = troopStats(age >= 2 ? 'knight' : 'soldier', age), gateHp = GATE_T * GATE_MEN * (melee.dmg / melee.cooldown) * (intel.includes('scoutGate') ? WEAK_GATE_K : 1);
@@ -488,7 +512,12 @@ export class RivalBattle {
     // le camp de la plage, à tenir : la sortie rivale vient de la porte (`moments`)
     if (has('camp')) {
       const [cx, cz] = this.map.freeNear(plageAt[0], plageAt[1], 4);
-      this.camp = this.sim.addPlayerBuilding('camp', cx, cz, 1.2, 1, CAMP_HP);
+      this.camp = this.sim.addPlayerBuilding('camp', cx, cz, 1.2, 1, CAMP_HP * (opts.front?.fort ? FORT_HP : 1));
+      // (la tour de guet du camp : elle tire sur les assaillants, du côté de la ville)
+      if (opts.front?.tower) {
+        const [tx, tz] = this.toward([cx, cz], gate, 2.6);
+        this.sim.addPlayerBuilding('watchtower', tx, tz, 1.1, 1, 1.5);
+      }
     }
     // l'assaut final : comment prendre les remparts se choisit d'emblée (la plage et le port sont déjà à nous)
     if (this.kind === 'assault') { this.waiting = 1; this.news.push({ type: 'choice', step: 1 }); }
@@ -519,11 +548,16 @@ export class RivalBattle {
   /** Une barque de nos troupes accoste */
   private landBoat() {
     const n = BOATS[this.boatN] ?? this.boats.length, start = this.army.length;
-    this.boats.splice(0, n).forEach((k, i) => this.army.push(this.landUnit(k, troopStats(k, this.age), this.beach, start + i).id));
+    this.boats.splice(0, n).forEach((k, i) => this.army.push(this.landUnit(k, this.ourStats(k), this.beach, start + i).id));
     this.boatN++;
     if (this.boatN > 1) this.news.push({ type: 'boat', n: this.boatN });
   }
 
+  /** Nos troupes de l'âge (la forge du front : des coups plus forts) */
+  private ourStats(k: TroopKind): UnitStats {
+    const s = troopStats(k, this.age);
+    return this.ourDmg === 1 ? s : { ...s, dmg: Math.round(s.dmg * this.ourDmg * 10) / 10 };
+  }
   /** Une troupe débarquée (nous ou l'allié) près d'un point, en grappe */
   private landUnit(kind: string, stats: UnitStats, at: [number, number], i: number) {
     const a = i * 2.4, r = 0.8 + (i % 6) * 0.45 + Math.floor(i / 12) * 0.5;
@@ -624,7 +658,9 @@ export class RivalBattle {
           // (la tour : les archers tirent sur elle et sur ses gardes, à portée ; la porte : sur les défenseurs des remparts)
           const [sx, sz] = wall === this.tower ? [gx, gz] : this.outside;
           if (melee.length) this.sim.order(melee.map((u) => u.id), { kind: 'attack', target: wall.id, x: gx, z: gz });
-          if (shoot.length) this.sim.order(shoot.map((u) => u.id), { kind: 'attack', x: sx, z: sz });
+          // (plus un fantassin debout : les tireurs visent la tour elle-même, sinon elle tenait seule jusqu'au bout)
+          const lone = wall === this.tower && !this.troops().some((u) => !archer(u)) && !this.allied().some((u) => !archer(u));
+          if (shoot.length) this.sim.order(shoot.map((u) => u.id), lone ? { kind: 'attack', target: wall.id, x: gx, z: gz } : { kind: 'attack', x: sx, z: sz });
         } else this.sim.order(idle.map((u) => u.id), { kind: 'attack', x: gx, z: gz });
       };
       go(this.allied());
@@ -651,6 +687,8 @@ export class RivalBattle {
   private gateSaid = false;
   /** l'avant-poste a appelé la ville à l'aide */
   private helped = 0;
+  /** l'heure où nos troupes arrivent en vue de l'avant-poste (-1 : pas encore) */
+  private near = -1;
   private towerSaid = false;
   private campSaid = false;
 
@@ -681,7 +719,12 @@ export class RivalBattle {
       this.news.push({ type: 'counter' });
     }
     // l'avant-poste attaqué appelle la ville : du renfort sort de la porte
-    if ((this.kind === 'port' || this.kind === 'tour') && g === this.kind && this.helped < OUTPOST_HELP_T.length && this.t >= OUTPOST_HELP_T[this.helped]) {
+    // (comptés de l'approche de nos troupes : la tête de pont est loin de la ville, le renfort n'attend pas qu'on arrive)
+    if ((this.kind === 'port' || this.kind === 'tour') && g === this.kind && this.near < 0) {
+      const [gx, gz] = this.goalAt[g];
+      if (this.troops().some((u) => Math.hypot(u.x - gx, u.z - gz) < APPROACH_R)) this.near = this.t;
+    }
+    if ((this.kind === 'port' || this.kind === 'tour') && g === this.kind && this.near >= 0 && this.helped < OUTPOST_HELP_T.length && this.t >= this.near + OUTPOST_HELP_T[this.helped]) {
       this.helped++;
       this.charge(g, OUTPOST_HELP, this.outside);
       this.news.push({ type: 'counter' });

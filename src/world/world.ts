@@ -11,6 +11,7 @@ import { ExpState, newExpState, readExpState } from '../sim/missions';
 import { GoalState, newGoalState, readGoalState } from '../sim/goals';
 import { TradeState, newTradeState, readTradeState, saveTradeState } from '../sim/trade';
 import { allyLand, awayWhy, tradepostWhy } from '../sim/allyLand';
+import { zoneWhy } from '../sim/concession';
 import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
 import { FleetState, newFleet, readFleet, saveFleet } from '../sim/fleet';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
@@ -420,6 +421,12 @@ export class World {
    * agrandie à l'archipel garde le climat, la rivière et les biomes de son île (`mainGenOf`)
    */
   mainGen = GEN_VAR;
+  /**
+   * La zone de chaque île rivale (concession, tête de pont) est dans le relief : 1 sur les cartes de l'archipel créées ou
+   * agrandies depuis le chantier C du nouveau monde (sauvegardé) ; 0 sur les anciennes, où elle est cherchée sur le relief
+   * existant et bornée par un décor (voir `world/concession.ts`)
+   */
+  zoneGen: 0 | 1 = 0;
   /** âge du village quand le joueur a accepté d'explorer le monde (sauvegardé) ; null sans archipel, ou sur une carte créée en archipel */
   exploredAt: number | null = null;
   /**
@@ -1385,6 +1392,9 @@ export class World {
     // le cosmodrome : sur l'île alliée quand l'archipel est accepté ; le comptoir : seulement sur l'île alliée
     const sp = kind === 'spaceport' ? spaceportWhy(this, x, z, s) : kind === 'tradepost' ? tradepostWhy(this, x, z, s) : null;
     if (sp) return sp;
+    // les zones des îles rivales : chaque liste dans la sienne, rien d'autre dans la tête de pont (`sim/concession.ts`)
+    const zw = zoneWhy(this, kind, x, z, s);
+    if (zw) return zw;
     // archipel : son île, et celle de l'allié hors de sa ville (les autres îles sont aux autres peuples)
     for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) { const why = this.playWhy(x + i, z + j); if (why) return why; }
     // l'île du portail : des défenses seulement (et les défenses au village aussi)
@@ -1932,6 +1942,7 @@ export class World {
       ...(this.isleName !== DEFAULT_ISLE ? { isleName: this.isleName } : {}),
       ...(this.exploredAt !== null ? { exploredAt: this.exploredAt } : {}),
       ...(this.coast ? { coast: 1 } : {}),
+      ...(this.zoneGen && this.isles ? { zoneGen: 1 } : {}),
       ...(this.modernSteps !== null ? { modern: this.modernSteps ? 1 : 0 } : {}),
       ...(this.ills.length ? { ills: this.ills.filter((i) => i.until > this.exp.clock) } : {}),
       ...(this.mourning.length ? { mourning: this.mourning.filter((i) => i.until > this.exp.clock) } : {}),
@@ -2087,6 +2098,7 @@ export class World {
     this.blasonSeen = d.blasonSeen === 1 || d.blason === undefined;
     this.exploredAt = Number.isInteger(d.exploredAt) && this.isles ? d.exploredAt : null;
     this.coast = d.coast === 1 ? 1 : 0;
+    this.zoneGen = d.zoneGen === 1 && this.isles ? 1 : 0;
     this.modernSteps = d.modern === 1 ? true : d.modern === 0 ? false : null;
     this.ills = readIlls(d.ills);
     this.mourning = readIlls(d.mourning);

@@ -30,7 +30,7 @@ describe('la feuille de route', () => {
     chooseAlly(w.diplo, 'orient');
     choosePath(w.diplo, 'war');
     let r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => [s.id, s.state, s.go])).toEqual([[WAR_MISSION, 'now', 'mission'], ['strait', 'next', 'wait'], ['plage', 'next', 'wait'], ['camp', 'next', 'wait'], ['blockade', 'next', 'wait'], ['port', 'next', 'wait'], ['tour', 'next', 'wait'], ['assault', 'next', 'wait']]);
+    expect(r.steps.map((s) => [s.id, s.state, s.go])).toEqual([[WAR_MISSION, 'now', 'mission'], ['strait', 'next', 'wait'], ['plage', 'next', 'wait'], ['camp', 'next', 'wait'], ['blockade', 'next', 'wait'], ['port', 'next', 'wait'], ['tour', 'next', 'wait'], ['fort', 'next', 'wait'], ['garrison', 'next', 'wait'], ['assault', 'next', 'wait']]);
     // (trois chapitres : le Médiéval déplié, les deux autres plus tard)
     expect(r.chapters.map((c) => [c.age, c.state])).toEqual([[2, 'now'], [3, 'later'], [4, 'later']]);
     // (pour la guerre, seulement les visites qui rapportent à la bataille ; le vol des semences n'y est pas)
@@ -77,7 +77,7 @@ describe('la feuille de route', () => {
     campaignResult(w.diplo, 'landing', true, [12, 9], 0, 100);
     let r = roadView(w, ctx())!;
     // (au Médiéval : la plage prise, reste à tenir le camp contre la première sortie, qui vient d'elle-même)
-    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'done', 'now', 'next', 'next', 'next', 'next']);
+    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'done', 'now', 'next', 'next', 'next', 'next', 'next', 'next']);
     expect(r.steps[3]).toMatchObject({ id: 'camp', go: 'wait' });
     expect(r.steps[3].sub).toBe('repousser la première sortie rivale');
     expect(r.notes.join(' ')).toMatch(/d’ici un jour/);
@@ -110,7 +110,7 @@ describe('la feuille de route', () => {
     chooseAlly(w.diplo, 'asie');
     choosePath(w.diplo, 'peace');
     let r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => [s.id, s.state])).toEqual([['convoy', 'now'], ['envoys', 'next'], ['truce', 'next'], ['post2', 'next'], ['embassy', 'next'], ['sign', 'next']]);
+    expect(r.steps.map((s) => [s.id, s.state])).toEqual([['convoy', 'now'], ['envoys', 'next'], ['truce', 'next'], ['harbor2', 'next'], ['commons', 'next'], ['embassy', 'next'], ['sign', 'next']]);
     // (l'escorte du premier convoi : un bouton qui la lance)
     expect(r.steps[0]).toMatchObject({ go: 'naval', title: 'L’escorte du premier convoi' });
     expect(r.prep.every((p) => p.gain === 'pourparlers plus sûrs')).toBe(true);
@@ -120,7 +120,7 @@ describe('la feuille de route', () => {
     expect(roadView(w, ctx())!.canChange).toBe(false);
     w.exp.done.push('envoys', 'isleFair');
     r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'now', 'next', 'next', 'next']);
+    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'now', 'next', 'next', 'next', 'next']);
     // (une visite faite passe en bas, cochée)
     expect(r.prep.at(-1)).toMatchObject({ id: 'isleFair', done: true });
     // la trêve : plus de changement de voie ; à l'Industriel, un second comptoir (bouton qui le prend en main)
@@ -128,15 +128,19 @@ describe('la feuille de route', () => {
     expect(roadView(w, ctx())!.canChange).toBe(false);
     // (plus de pourparlers : plus de visites pour les rendre plus sûrs)
     expect(roadView(w, ctx())!.prep).toEqual([]);
-    let n = 1;
-    const count = (k: string) => (k === 'tradepost' ? n : 0);
+    // (l'Industriel : le port marchand partagé, puis deux maisons communes, dans la concession)
+    let built: string[] = [];
+    const count = (k: string) => (built.includes(k) ? 1 : 0);
     r = roadView(w, { ...ctx([], 3), count })!;
-    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'post2', go: 'build', kind: 'tradepost' });
-    expect(roadHtml(r)).toContain('data-a="build" data-k="tradepost"');
-    n = 2;
+    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'harbor2', go: 'build', kind: 'merchantPort' });
+    expect(roadHtml(r)).toContain('data-a="build" data-k="merchantPort"');
+    built = ['merchantPort', 'commonSchool'];
+    r = roadView(w, { ...ctx([], 3), count })!;
+    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'commons', go: 'build', kind: 'exchangeHall', sub: '1/2 bâties : halle des échanges, école commune, dispensaire' });
+    built = ['merchantPort', 'commonSchool', 'dispensary'];
     r = roadView(w, { ...ctx([], 4), count })!;
     expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'embassy', go: 'build' });
-    r = roadView(w, { ...ctx([], 4), count: (k) => (k === 'embassy' ? 1 : 2) })!;
+    r = roadView(w, { ...ctx([], 4), count: (k) => (built.includes(k) || k === 'embassy' ? 1 : 0) })!;
     expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'sign', go: 'sign' });
     expect(roadHtml(r)).toContain('data-a="sign"');
   });

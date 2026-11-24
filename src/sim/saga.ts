@@ -3,6 +3,7 @@ import type { KindId } from '../build/catalog';
 import { archipelagoOn } from '../world/expand';
 import { PEACE_CHAIN, WAR_MISSION, type DiploState } from './diplomacy';
 import { RAID_FIRST, battleOpen } from './campaign';
+import { COMMON_KINDS, COMMONS_NEED, GARRISON_KINDS, garrisonBuilt, commonsCount, nextToBuild } from './concession';
 
 /**
  * Le fil des âges (chantier A du nouveau monde, décision de l'auteur du 24 nov. 2026) : le conflit des deux îles ne se règle
@@ -10,9 +11,10 @@ import { RAID_FIRST, battleOpen } from './campaign';
  * paix. Chaque chapitre fait est une condition du passage à l'âge suivant ; le dernier règle le conflit. Règles pures, état
  * sauvegardé dans `diplo.saga`. Voir `docs/diplomatie.md`, « Le fil des âges ».
  *
- * Contenu provisoire, en attendant les chantiers suivants (marqué `stub` dans les étapes) : la bataille navale et l'escorte
- * du convoi (chantier B) viendront avant le débarquement et les émissaires ; le fort, la ville de garnison et les bâtiments
- * de la concession (chantier C) au fil des chapitres ; la bataille épique et les Jeux des îles (chantier D) au Moderne.
+ * Les étapes navales (chantier B) viennent avant le débarquement, le port et les émissaires ; les bâtiments des zones
+ * (chantier C, `sim/concession.ts`) : le fort à l'Industriel, la ville de garnison au Moderne (guerre), le port marchand
+ * partagé et deux maisons communes à l'Industriel (paix). Contenu provisoire (marqué `stub`) : la bataille épique et les Jeux
+ * des îles (chantier D) au Moderne.
  */
 
 /** Les âges des chapitres : le Médiéval, l'Industriel, le Moderne. Le conflit s'ouvre au premier, se règle au dernier */
@@ -77,16 +79,18 @@ type Saga = Pick<World, 'isles' | 'diplo' | 'exp'>;
 
 /**
  * Les étapes de la voie prise, des trois chapitres, dans l'ordre (vide sans voie). Le conflit réglé : toutes faites.
- * - La guerre : au Médiéval, les éclaireurs, le débarquement, puis tenir le camp (repousser la première sortie) ; à
- *   l'Industriel, le port, puis la tour du rempart ; au Moderne, l'assaut de la ville.
- * - La paix : au Médiéval, les émissaires, puis l'ambassade de la paix (la trêve) ; à l'Industriel, un second comptoir chez
- *   l'allié (provisoire : le port marchand partagé, chantier C) ; au Moderne, l'ambassade bâtie puis la paix signée
+ * - La guerre : au Médiéval, les éclaireurs, la bataille du bras de mer, le débarquement, puis tenir le camp (repousser la
+ *   première sortie) ; à l'Industriel, le blocus, le port, la tour du rempart, puis le fort ; au Moderne, la ville de
+ *   garnison, puis l'assaut de la ville.
+ * - La paix : au Médiéval, l'escorte du convoi, les émissaires, puis l'ambassade de la paix (la trêve) ; à l'Industriel, le
+ *   port marchand partagé, puis deux des trois maisons communes ; au Moderne, l'ambassade bâtie puis la paix signée
  *   (provisoire : les Jeux des îles, chantier D).
  */
 export function sagaSteps(w: Saga, ctx: SagaCtx = {}): SagaStep[] {
   const d = w.diplo, over = d.conflict !== 'open', exp = (id: string) => w.exp.done.includes(id);
   const count = (k: KindId) => ctx.count?.(k) ?? 0;
   if (!d.path) return [];
+  const counts = (ks: KindId[]) => Object.fromEntries(ks.map((k) => [k, count(k)])) as Partial<Record<KindId, number>>;
   const held = d.camp.held, s: SagaStep[] = [];
   const sea = d.saga.sea;
   if (d.path === 'war') {
@@ -99,7 +103,12 @@ export function sagaSteps(w: Saga, ctx: SagaCtx = {}): SagaStep[] {
     s.push({ id: 'blockade', age: 3, go: 'naval', done: sea.includes('blockade') || held.includes('port') });
     s.push({ id: 'port', age: 3, go: 'battle', done: held.includes('port') });
     s.push({ id: 'tour', age: 3, go: 'battle', done: held.includes('tour') });
-    // (chantier C : la ville de garnison ; chantier D : la bataille des deux îles remplacera l'assaut)
+    // le fort : le camp de la plage devient un fort, bâti par le joueur dans la tête de pont (le port pris)
+    s.push({ id: 'fort', age: 3, go: 'build', kind: 'fort', done: count('fort') >= 1 });
+    // la ville de garnison grandit autour du fort : la caserne et deux autres de ses bâtiments
+    const gar = counts(GARRISON_KINDS);
+    s.push({ id: 'garrison', age: 4, go: 'build', kind: nextToBuild(gar, GARRISON_KINDS), done: garrisonBuilt(gar) });
+    // (chantier D : la bataille des deux îles remplacera l'assaut)
     s.push({ id: 'assault', age: 4, go: 'battle', done: d.conflict === 'won', stub: 'D' });
   } else {
     const [envoys, truce] = PEACE_CHAIN;
@@ -107,8 +116,10 @@ export function sagaSteps(w: Saga, ctx: SagaCtx = {}): SagaStep[] {
     s.push({ id: 'convoy', age: 2, go: 'naval', done: sea.includes('convoy') || exp(envoys) || d.saga.truce });
     s.push({ id: envoys, age: 2, go: 'mission', mission: envoys, done: exp(envoys) });
     s.push({ id: truce, age: 2, go: 'mission', mission: truce, done: d.saga.truce || exp(truce) });
-    // (provisoire : le port marchand partagé, les maisons communes et le sauvetage, chantiers B et C)
-    s.push({ id: 'post2', age: 3, go: 'build', kind: 'tradepost', done: count('tradepost') >= 2, stub: 'C' });
+    // le port marchand partagé et la ligne de vapeurs, puis deux des trois maisons communes, dans la concession
+    s.push({ id: 'harbor2', age: 3, go: 'build', kind: 'merchantPort', done: count('merchantPort') >= 1 });
+    const com = counts(COMMON_KINDS);
+    s.push({ id: 'commons', age: 3, go: 'build', kind: nextToBuild(com, COMMON_KINDS), done: commonsCount(com) >= COMMONS_NEED });
     // (provisoire : la candidature et les Jeux des îles, chantier D)
     s.push({ id: 'embassy', age: 4, go: 'build', kind: 'embassy', done: count('embassy') >= 1, stub: 'D' });
     s.push({ id: 'sign', age: 4, go: 'sign', done: d.conflict === 'peace', stub: 'D' });

@@ -152,6 +152,9 @@ import { OpeningFilm } from './ui/opening';
 import { VoyageFilm, clearFilmMark, readFilmMark } from './ui/voyage';
 import { WarmUp } from './render/warmup';
 import { CompileJob, compilePaced, representatives, firstUseAll } from './render/precompile';
+import { frontPerks, campPerks, isZoneKind, FRONT_KINDS, allyZone, rivalZone, frontOpen } from './sim/concession';
+import { setModelAlly } from './render/models';
+import { ConcessionView } from './render/concessionView';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
@@ -393,6 +396,8 @@ class Game implements UIHost {
   private retrySaid = false;
   /** la campagne de l'île rivale vue du village : le camp, la caserne avancée, nos drapeaux (voir `render/rivalCamp.ts`) */
   private rivalCamp: RivalCamp | null = null;
+  /** les bornes des zones des îles (concession, tête de pont) et leur contour doré */
+  private zonesView: ConcessionView | null = null;
   /** la sortie rivale dont la carte s'est ouverte (son heure) */
   private raidShown = 0;
   /** temps passé en jeu depuis la fin du dernier écran de chargement (s) : la carte du portail attend que le joueur soit arrivé */
@@ -558,6 +563,8 @@ class Game implements UIHost {
         w.mapId = save.map; w.seed = save.seed;
         // (une partie agrandie avant le 21 nov. 2026 : sa côte, abîmée près du bord de l'ancienne carte, est réparée une fois)
         w.fromJSON(repairCoast(save.world, save.map, save.seed));
+        // (la concession prend le style du peuple allié)
+        setModelAlly(w.diplo.ally);
         this.sim.age = save.age; this.sim.pop = save.pop;
         // (une partie d'avant les étapes de l'époque moderne, déjà à cette époque : elle en est dispensée)
         w.modernSteps = modernStepsFor(w.modernSteps, this.sim.age);
@@ -1456,6 +1463,15 @@ class Game implements UIHost {
     else this.cam.goTo(v.x, v.z, Math.min(Math.max(this.cam.dist, 34), 60));
   }
 
+  /** La vue va sur une zone des îles : la concession chez l'allié, ou la tête de pont chez le rival */
+  goZone(which: 'ally' | 'front') {
+    if (this.mode !== 'surface') { this.ensureSurface(() => this.goZone(which), true); return; }
+    const z = which === 'ally' ? allyZone(this.world) : rivalZone(this.world);
+    if (!z) return;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
+    this.cam.goTo(z.x, z.z, Math.min(Math.max(this.cam.dist, 34), 52));
+  }
+
   /** l'emplacement du port chez l'allié, gardé tant qu'il reste valable (sa recherche coûte quelques dizaines de ms) */
   private allySpot: { x: number; z: number; v: number } | null = null;
   /** Où poser le port chez l'allié (null : allié pas choisi, port déjà bâti, ou aucune rive) */
@@ -1547,7 +1563,7 @@ class Game implements UIHost {
     }
     // la campagne de l'île rivale : la caserne avancée refait le corps, la sortie qui vient s'annonce ; laissée trop longtemps
     // sans réponse, la garnison la règle seule. Sans étape en cours à cet âge, les sorties attendent
-    if (d.ally && stepCamp(d, w.exp.clock, this.time.dayLen, this.sim.age) === 'warn') this.ui.toast(tr('⚔️ {rival} préparent une sortie contre notre camp de la plage.', { rival: cap(peopleName(rivalOf(d.ally))) }), () => this.openDiploChoice(), 'action');
+    if (d.ally && stepCamp(d, w.exp.clock, this.time.dayLen, this.sim.age, campPerks(this.frontPerks())) === 'warn') this.ui.toast(tr('⚔️ {rival} préparent une sortie contre notre camp de la plage.', { rival: cap(peopleName(rivalOf(d.ally))) }), () => this.openDiploChoice(), 'action');
     if (!this.rivalBattle && !this.navalBattle && raidDue(d, w.exp.clock) && w.exp.clock >= d.camp.raid + RAID_GRACE * this.time.dayLen) { if (this.diploChoice.visible) this.diploChoice.hide(); this.holdCamp(); }
     // (un récit d'expédition en attente, sa cinématique de trophée : ils passent avant les cartes)
     if (this.rivalBattle || this.navalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine || this.reportsDue.size || this.lateReports.length || this.trophyStage.playing) return;
@@ -1597,6 +1613,7 @@ class Game implements UIHost {
   private allySeen: string | null | undefined = undefined;
   private watchAlly() {
     const ally = this.world.diplo.ally;
+    setModelAlly(ally);
     if (this.allySeen === undefined) { this.allySeen = ally; return; }
     if (ally === this.allySeen) return;
     this.allySeen = ally;
@@ -1690,7 +1707,7 @@ class Game implements UIHost {
     if (sea) return this.startNaval(sea);
     if (this.mode !== 'surface') { this.ui.toast(tr('Revenez au village pour mener la bataille.')); return false; }
     let b: RivalBattle;
-    try { b = this.campaignBattle(kind, corpsTroops(d, Math.max(1, this.sim.age))); } catch { return false; }
+    try { b = this.campaignBattle(kind, corpsTroops(d, Math.max(1, this.sim.age), campPerks(this.frontPerks()).bonus)); } catch { return false; }
     this.leaveIsle(true);
     this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.tools.setTool('none');
@@ -1727,9 +1744,14 @@ class Game implements UIHost {
 
   /** Une bataille de la campagne de l'île rivale (`sim/campaign.ts`), avec ces troupes */
   private campaignBattle(kind: BattleKind, troops: TroopKind[]) {
-    const w = this.world, d = w.diplo;
-    return new RivalBattle(w, rivalOf(d.ally!), Math.max(1, this.sim.age), w.difficulty === 'easy' || w.sandbox, troops, d.intel, d.boons, { kind, held: d.camp.held, raid: raidLevel(d) });
+    const w = this.world, d = w.diplo, p = this.frontPerks();
+    // (la base arrière : la caserne alliée envoie des renforts ; la tête de pont : le fort, la tour de guet, la forge du front)
+    const boons = p.allies ? { ...d.boons, allies: d.boons.allies + p.allies } : d.boons;
+    return new RivalBattle(w, rivalOf(d.ally!), Math.max(1, this.sim.age), w.difficulty === 'easy' || w.sandbox, troops, d.intel, boons, { kind, held: d.camp.held, raid: raidLevel(d), front: { fort: p.fort, tower: p.tower, forge: p.forge } });
   }
+
+  /** Ce que la tête de pont et la base arrière apportent à la campagne (`sim/concession.ts`) */
+  frontPerks() { return frontPerks(this.world, this.sim.counts); }
 
   /**
    * La garnison du camp tient seule (« Laisser la garnison tenir », ou une sortie restée trop longtemps sans réponse) : la
@@ -1739,13 +1761,14 @@ class Game implements UIHost {
   private holdCamp() {
     const w = this.world, d = w.diplo;
     if (this.rivalBattle || !raidDue(d, w.exp.clock)) return;
-    const all = corpsTroops(d, Math.max(1, this.sim.age)), sent = all.filter((_, i) => i % 5 < HOLD_SHARE * 5);
+    const cp = campPerks(this.frontPerks());
+    const all = corpsTroops(d, Math.max(1, this.sim.age), cp.bonus), sent = all.filter((_, i) => i % 5 < HOLD_SHARE * 5);
     let b: RivalBattle;
     try { b = this.campaignBattle('defend', sent); } catch { return; }
     for (let t = 0; t < BATTLE_LIMIT && !b.outcome; t += 0.5) b.step(0.5);
-    const [s0, a0] = corps(d, this.sim.age), sentA = sent.filter((k) => k === 'archer').length, up = b.survivors();
+    const [s0, a0] = corps(d, this.sim.age, cp.bonus), sentA = sent.filter((k) => k === 'archer').length, up = b.survivors();
     const left: [number, number] = [up[0] + (s0 - (sent.length - sentA)), up[1] + (a0 - sentA)];
-    const lost = campaignResult(d, 'defend', b.outcome === 'won', left, w.exp.clock, this.time.dayLen, this.sim.age);
+    const lost = campaignResult(d, 'defend', b.outcome === 'won', left, w.exp.clock, this.time.dayLen, this.sim.age, cp);
     if (b.outcome === 'won') this.ui.toast(tr('🛡️ La garnison a tenu le camp de la plage : la sortie rivale est repoussée.'), () => this.openDiploChoice(), 'notice');
     else this.ui.toast(tr('🔥 Le camp n’a pas tenu : nous perdons {what}. Cliquez ici.', { what: this.frontName(lost) }), () => this.openDiploChoice(), 'action');
     this.ui.update(); this.saveNow();
@@ -1902,7 +1925,7 @@ class Game implements UIHost {
     const rival = rivalOf(d.ally), kind = sea === 'convoy' ? 'convoy' : sea;
     const frame = navalFrame(w, kind, d.ally, rival);
     if (!frame) return false;
-    const b = new NavalBattle(kind, Math.max(2, this.sim.age), w.fleet.hulls, { allies: Math.min(2, Math.floor(d.boons.allies / 4)), foeCut: d.boons.foes >= 6 ? 1 : 0, gold: w.gold });
+    const b = new NavalBattle(kind, Math.max(2, this.sim.age), w.fleet.hulls, { allies: Math.min(2, Math.floor(d.boons.allies / 4)) + this.frontPerks().ships, foeCut: (d.boons.foes >= 6 ? 1 : 0) + (this.frontPerks().battery ? 1 : 0), gold: w.gold });
     this.leaveIsle(true);
     this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
     this.tools.setTool('none');
@@ -2053,7 +2076,7 @@ class Game implements UIHost {
     const b = this.rivalBattle, w = this.world;
     if (!b) return;
     // la campagne : ce qu'on tient, ce qui reste du corps, la sortie suivante (la défense perdue : ce qui est reperdu)
-    const kind = b.kind, lostFront = kind === 'full' ? null : campaignResult(w.diplo, kind, outcome === 'won', b.survivors(), w.exp.clock, this.time.dayLen, this.sim.age);
+    const kind = b.kind, lostFront = kind === 'full' ? null : campaignResult(w.diplo, kind, outcome === 'won', b.survivors(), w.exp.clock, this.time.dayLen, this.sim.age, campPerks(this.frontPerks()));
     this.rivalBattle = null;
     this.allyBattle = false;
     this.victoryT = 0;
@@ -2093,7 +2116,7 @@ class Game implements UIHost {
   }
 
   /** La feuille de route de la voie prise (voir `sim/diploRoad.ts`), null sans voie ou le conflit réglé */
-  road() { const f = this.world.fleet; return roadView(this.world, { running: (id) => this.expeditions.active.some((e) => e.m.id === id), dayLen: this.time.dayLen, age: this.sim.age, count: (k) => this.sim.counts[k] ?? 0, fleet: { afloat: afloat(f), arming: f.arming.length } }); }
+  road() { const f = this.world.fleet; return roadView(this.world, { running: (id) => this.expeditions.active.some((e) => e.m.id === id), dayLen: this.time.dayLen, age: this.sim.age, count: (k) => this.sim.counts[k] ?? 0, fleet: { afloat: afloat(f), arming: f.arming.length }, corpsBonus: campPerks(this.frontPerks()).bonus }); }
 
   /**
    * Une étape de construction de la feuille de route (la paix : le second comptoir, l'ambassade) : le bâtiment en main, et la
@@ -2102,6 +2125,8 @@ class Game implements UIHost {
   private buildForSaga(k: KindId) {
     if (this.mode !== 'surface') { this.ensureSurface(() => this.buildForSaga(k), true); return; }
     if (k === 'tradepost') this.goAlly();
+    // (un bâtiment des zones : la vue va sur sa zone, la tête de pont ou la concession)
+    else if (isZoneKind(k)) this.goZone(FRONT_KINDS.includes(k) ? 'front' : 'ally');
     // (comme un clic sur sa vignette : verrouillé, un message dit pourquoi et où aller)
     this.ui.pickBuild(k);
     this.ui.update();
@@ -2405,7 +2430,16 @@ class Game implements UIHost {
     // la campagne de l'île rivale : le camp et nos drapeaux sur l'île rivale (pas pendant une bataille, qui a ses troupes)
     const dip = this.world.diplo;
     if (dip.ally && dip.camp.held.length && !this.rivalCamp) { this.rivalCamp = new RivalCamp(this.world, rivalOf(dip.ally)); this.scene.add(this.rivalCamp.group); }
-    if (this.rivalCamp) { this.rivalCamp.sync(dip.conflict === 'open' ? dip.camp.held : [], this.sim.age); this.rivalCamp.group.visible = this.mode === 'surface'; }
+    if (this.rivalCamp) { this.rivalCamp.sync(dip.conflict === 'open' ? dip.camp.held : [], this.sim.age, (this.sim.counts.fort ?? 0) > 0); this.rivalCamp.group.visible = this.mode === 'surface'; }
+    // les zones des îles : leurs bornes, et le contour doré de celle où le bâtiment en main se pose (`render/concessionView.ts`)
+    if (this.world.isles && !this.zonesView) { this.zonesView = new ConcessionView(this.world); this.scene.add(this.zonesView.group); }
+    if (this.zonesView) {
+      const held = this.tools.tool === 'build' ? this.tools.kind : null, front = !!held && FRONT_KINDS.includes(held);
+      const ally = held && dip.ally && !front ? this.zonesView.indexOf(dip.ally) : null;
+      const fr = held && front && dip.ally && frontOpen(this.world) ? this.zonesView.indexOf(rivalOf(dip.ally)) : null;
+      this.zonesView.sync(this.sim.age, { ally, front: fr });
+      this.zonesView.group.visible = this.mode === 'surface';
+    }
     if (this.mode !== 'hell') w.hellFx.length = 0;
     this.kingStage.update(dt);
     this.voyageStage.update(dt);

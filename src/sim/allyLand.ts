@@ -4,6 +4,8 @@ import { tr } from '../i18n';
 import { KINDS } from '../build/catalog';
 import { archipelagoOn, isleOf, isleName, onRival } from './diplomacy';
 import { townCells, townPlan } from '../world/rivalTown';
+import { inAllyZone, inFront, rivalZone } from './concession';
+import { zoneOf } from '../world/concession';
 
 /**
  * Bâtir chez l'allié. Avec l'archipel et un allié choisi, le joueur bâtit aussi sur l'île de son allié, hors de la ville de
@@ -27,24 +29,34 @@ export function inAllyTown(w: Land, x: number, z: number) {
   return townCells(w as World, townPlan(w as World, isle)).has(w.ci(x, z));
 }
 
-/** La case est-elle sur l'île de l'allié, hors de sa ville ? (la terre est vérifiée à part) */
+/**
+ * La case est-elle jouable chez les autres peuples ? La concession de l'allié (la zone bornée qu'il nous cède, décision de
+ * l'auteur du 24 nov. 2026 : avant, toute son île hors de sa ville), et la tête de pont chez le rival une fois la plage prise
+ * (voir `sim/concession.ts`). La terre est vérifiée à part
+ */
 export function allyLand(w: Land, x: number, z: number) {
-  const isle = allyIsle(w);
-  return !!isle && onRival(isle, x + 0.5, z + 0.5) && !inAllyTown(w, x, z);
+  return inAllyZone(w as World, x, z) || inFront(w as World, x, z);
 }
 
 /** Pourquoi le joueur ne bâtit pas sur cette case hors de son île (null : il y bâtit) ; à n'appeler qu'hors de l'île principale */
 export function awayWhy(w: Land, x: number, z: number): string | null {
   const isle = allyIsle(w);
-  if (isle && onRival(isle, x + 0.5, z + 0.5)) return inAllyTown(w, x, z) ? tr('C’est la ville de vos alliés : bâtissez hors de ses murs, de ses champs et de ses rues') : null;
+  if (isle && onRival(isle, x + 0.5, z + 0.5)) {
+    if (inAllyZone(w as World, x, z)) return null;
+    return inAllyTown(w, x, z) ? tr('C’est la ville de vos alliés : on ne bâtit chez eux que dans la concession, la zone bornée qu’ils nous cèdent') : tr('Chez votre allié, on ne bâtit que dans la concession, la zone bornée qu’il nous cède');
+  }
+  const front = rivalZone(w as World);
+  if (front && w.inCells(x, z) && front.cells.has(w.ci(x, z))) return inFront(w as World, x, z) ? null : tr('La tête de pont s’ouvre une fois la plage de l’île rivale prise (la voie de la guerre)');
   if (archipelagoOn(w) && !w.diplo.ally && w.isles!.rivals.some((r) => onRival(r, x + 0.5, z + 0.5))) return tr('Choisissez d’abord votre allié : vous bâtirez sur son île');
   return tr('Hors de votre île : on ne bâtit pas sur les autres îles');
 }
 
-/** Un point de l'île alliée où poser la vue pour y bâtir : le centre de son lobe le plus loin de la ville */
+/** Un point de l'île alliée où poser la vue pour y bâtir : le milieu de la concession (ou le lobe le plus loin de la ville) */
 export function allyView(w: Pick<World, 'isles' | 'diplo'>): { x: number; z: number } | null {
   const isle = allyIsle(w);
   if (!isle) return null;
+  const zone = zoneOf(w as World, isle.people);
+  if (zone) return { x: zone.x, z: zone.z };
   const v = isle.village, lobe = [...isle.lobes].sort((a, b) => Math.hypot(b.x - v.x, b.z - v.z) - Math.hypot(a.x - v.x, a.z - v.z))[0];
   return lobe ? { x: lobe.x, z: lobe.z } : { x: v.x, z: v.z };
 }

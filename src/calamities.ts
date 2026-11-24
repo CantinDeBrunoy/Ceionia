@@ -12,6 +12,7 @@ import { MeteorView, FALL } from './render/meteors';
 import { sizeOf, type Building } from './build/catalog';
 import type { AudioEngine } from './audio/audio';
 import { tr, nplural } from './i18n';
+import { peacePerks, AID_REPAIR } from './sim/concession';
 
 /** Ce que les catastrophes demandent au jeu */
 export interface CalamityHost {
@@ -113,7 +114,8 @@ export class Calamities {
   damage(id: number) {
     const w = this.h.world, b = w.buildings.get(id);
     if (!b || w.damaged.has(id)) return false;
-    const T = this.h.time.dayLen * REPAIR_DAYS;
+    // (le dispensaire de la concession : l'allié envoie de l'aide, les réparations vont deux fois plus vite)
+    const T = this.h.time.dayLen * REPAIR_DAYS * (peacePerks(w, { dispensary: [...w.buildings.values()].some((x) => x.kind === 'dispensary') ? 1 : 0 }).aid ? AID_REPAIR : 1);
     w.damaged.set(id, { t: T, T });
     w.ageVersion++;
     const s = sizeOf(b);

@@ -202,6 +202,7 @@ const P: Record<string, string> = {
   paving: '<rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M3 15h18M9 3v6M15 9v6M9 15v6"/>',
   fountain: '<path d="M3 15h18l-2 5H5z"/><path d="M12 15V7"/><path d="M12 7c-3 0-5 2-5.5 5M12 7c3 0 5 2 5.5 5"/><path d="M9 7h6"/><path d="M12 7V3"/>',
   pond: '<ellipse cx="12" cy="17" rx="9" ry="4"/><path d="M8 17c1-.8 2-.8 3 0M13 18c1-.8 2-.8 3 0"/><path d="M5 15V7M7 15V5M18 14V8"/><path d="M5 7l-1 1M7 5l1 1.5M18 8l1-1"/>',
+  radar: '<path d="M4 20h16M12 20v-6"/><path d="M5 9a7 7 0 0 0 12 4.9L8.5 5.6A7 7 0 0 0 5 9z"/><path d="M12.5 9.5L18 4M16 3h3v3"/>',
   coral: '<path d="M3 21h18"/><path d="M12 21v-7M12 14l-3-4V7M12 14l3-5V6M9 10l-3-2M15 9l3-1"/><path d="M5 21v-3l-2-2M19 21v-4l2-2"/>',
 
 };
@@ -224,12 +225,14 @@ export const KIND_ICON: Record<KindId, string> = {
   concord: 'concord', tradepost: 'scales', triumph: 'arch', embassy: 'dome',
   hedge: 'hedge', fence: 'fence', flowerbed: 'flower', bench: 'bench', statue: 'statue', paving: 'paving', fountain: 'fountain', pond: 'pond', coralpool: 'coral',
   explorers: 'compass', racetrack: 'flag', powerplant: 'bulb', cemetery: 'stele',
+  frontTower: 'watchtower', frontInfirmary: 'cross', fort: 'castle', battery: 'flame', frontForge: 'anvil', garrison: 'shield', milHospital: 'hospital', soldierClub: 'mug', garrisonHouse: 'house', milHeliport: 'heli', radar: 'radar',
+  allyBarracks: 'shield', allyShipyard: 'ship', allyHospital: 'hospital', merchantPort: 'anchor', exchangeHall: 'scales', commonSchool: 'book', dispensary: 'cross', researchCenter: 'flask',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', deco: 'flower', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */
 export const SUB_ICON: Record<string, string> = {
   logis: 'house', eau: 'drop', lumiere: 'lamp', nourriture: 'bread', materiaux: 'rock', industrie: 'anvil', sante: 'heart', savoir: 'book',
   securite: 'shield', defense: 'sword', remparts: 'wall', transport: 'train', parcs: 'leaf', detente: 'smile', culte: 'columns', monuments: 'castle',
-  jardin: 'flower', mobilier: 'bench', ornements: 'statue',
+  jardin: 'flower', mobilier: 'bench', ornements: 'statue', front: 'flag', arriere: 'ship', concession: 'scales',
 };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

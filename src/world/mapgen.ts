@@ -5,7 +5,7 @@ import { Simplex } from './noise';
 import { mulberry32, smoothstep, clamp, lerp, hash2 } from '../core/rng';
 import { localize } from '../i18n';
 import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, GEN_ARCH, continentPlan, fixedHeight, plannedHeight, toPlan, fromPlan, mainFrame } from './continent';
-import { archLayout, addIsles, flattenVillages } from './archipelago';
+import { archLayout, addIsles, flattenVillages, addZones, clearZones, zoneReliefOn, type ArchLayout } from './archipelago';
 
 /**
  * Carte jouable : `size` cases de côté pour une nouvelle partie ; `sizes`, les tailles qu'une sauvegarde peut avoir (une
@@ -96,6 +96,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   world.seed = seed;
   world.gen = gen;
   world.isles = gen === GEN_ARCH ? archLayout(seed, N) : null;
+  world.zoneGen = world.isles && zoneReliefOn() ? 1 : 0;
   const plan = gen === GEN_FIXED ? null : continentPlan(seed, gen), v3 = gen >= GEN_VAR;
   const heights = genHeights(mapId, seed, gen, N);
   world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), cleared: new Uint8Array(N * N), rift: new Uint8Array(N * N), paving: new Uint8Array(N * N), buildings: [], nextId: 1 });
@@ -158,6 +159,21 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   // l'île du portail, au large, une fois le continent achevé (pas sur le continent figé de la version 1, qui ne change plus)
   if (plan) addPortalIsland(world, seed);
   if (v3) clearStart(world);
+  // la zone de chaque île rivale (concession, tête de pont), tout à la fin : les forêts, les étangs, le décor et l'île du
+  // portail se tirent sur le relief d'avant, et rien d'autre ne bouge sur la carte (`World.zoneGen`, `world/concession.ts`)
+  if (world.isles && world.zoneGen) shapeZones(world, seed, world.isles);
+}
+
+/** Pose la zone de chaque île dans le relief (son replat, sa limite), sans forêt ni rocher ni grotte dessus */
+function shapeZones(world: World, seed: number, lay: ArchLayout) {
+  addZones(world.heights, N, seed, lay);
+  for (const [x0, z0, x1, z1] of clearZones(world.veg, N, seed, lay)) {
+    for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) { const k = world.ci(x, z); if (world.veg[k] === 0) { world.decor[k] = 0; world.rift[k] = 0; } }
+    world.sanitize(x0, z0, x1, z1);
+    world.computeBiomes([x0, z0, x1, z1]);
+  }
+  world.markTerrainAll();
+  world.vegDirty = true;
 }
 
 /** La place du village (3 × 3, `startSpot`) et une case autour : ni arbres ni rochers à abattre au début d'une partie */

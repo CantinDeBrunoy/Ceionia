@@ -13,6 +13,8 @@ import { roadHtml } from '../src/ui/diploChoice';
 const DAY = 100;
 const world = (d: DiploState = newDiplo()) => ({ isles: {} as any, diplo: d, exp: { done: [] as string[], clock: 0 }, gold: 0 }) as any;
 const kinds = (c: Record<string, number> = {}): SagaCtx => ({ count: (k) => c[k] ?? 0 });
+/** Les bâtiments des zones (chantier C) : le fort ; le fort et la ville de garnison ; le port marchand et deux maisons communes */
+const FORT = { fort: 1 }, CONCESSION = { merchantPort: 1, exchangeHall: 1, commonSchool: 1 };
 
 /** Une partie au Médiéval, l'allié choisi, sur une voie */
 function onPath(path: 'war' | 'peace') {
@@ -66,7 +68,7 @@ describe('le fil des âges : la voie de la guerre', () => {
     expect(nextBattle(w.diplo, w.exp.clock, 3)).toBe('port');
     stepCamp(w.diplo, w.exp.clock, DAY, 3);
     expect(raidDue(w.diplo, w.exp.clock)).toBe(false);
-    expect(item(4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 3 });
+    expect(item(4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 4 });
     // (le blocus du port, avant sa prise)
     expect(stepNow(w, 3)).toMatchObject({ id: 'blockade', go: 'naval' });
     expect(seaBefore(w.diplo, 'port')).toBe('blockade');
@@ -74,9 +76,15 @@ describe('le fil des âges : la voie de la guerre', () => {
     expect(win(w, 3)).toBe('port');
     expect(win(w, 3)).toBe('tour');
     expect(nextBattle(w.diplo, w.exp.clock, 3)).toBeNull();
-    expect(stepSaga(w, 3)).toBe(3);
-    // au Moderne : l'assaut (provisoire : la bataille des deux îles du chantier D) règle le conflit
-    expect(item(5)).toMatchObject({ label: CONFLICT_LABEL, have: 0, need: 1 });
+    // (chantier C : le fort, bâti dans la tête de pont, finit le chapitre)
+    expect(stepNow(w, 3)).toMatchObject({ id: 'fort', go: 'build', kind: 'fort' });
+    expect(stepSaga(w, 3)).toBeNull();
+    expect(stepSaga(w, 3, kinds(FORT))).toBe(3);
+    // au Moderne : la ville de garnison autour du fort, puis l'assaut (provisoire : la bataille des deux îles du chantier D)
+    expect(chapterItem(w, 5, kinds(FORT))).toMatchObject({ label: CONFLICT_LABEL, have: 0, need: 2 });
+    expect(stepNow(w, 4, kinds(FORT))).toMatchObject({ id: 'garrison', go: 'build', kind: 'garrison' });
+    expect(stepNow(w, 4, kinds({ fort: 1, garrison: 1 }))).toMatchObject({ id: 'garrison', kind: 'milHospital' });
+    expect(chapterItem(w, 5, kinds({ fort: 1, garrison: 1, garrisonHouse: 2 }))).toMatchObject({ have: 1, need: 2 });
     expect(sagaSteps(w).find((s) => s.id === 'assault')!.stub).toBe('D');
     expect(win(w, 4)).toBe('assault');
     expect(w.diplo.conflict).toBe('won');
@@ -87,7 +95,7 @@ describe('le fil des âges : la voie de la guerre', () => {
     const w = onPath('war');
     w.diplo.battle = 'ready';
     w.diplo.camp.held = ['plage', 'port', 'tour'];
-    expect(stepSaga(w, 3)).toBe(3);
+    expect(stepSaga(w, 3, kinds(FORT))).toBe(3);
     campaignResult(w.diplo, 'defend', false, [0, 0], 0, DAY, 3);
     expect(w.diplo.camp.held).toEqual(['plage', 'port']);
     expect(chapterDone(w, 3)).toBe(true);
@@ -106,7 +114,7 @@ describe('le fil des âges : la voie de la guerre', () => {
 });
 
 describe('le fil des âges : la voie de la paix', () => {
-  it('se joue du Médiéval au Moderne : la trêve, un second comptoir, l’ambassade, puis la paix signée', () => {
+  it('se joue du Médiéval au Moderne : la trêve, le port marchand et deux maisons communes, l’ambassade, puis la paix signée', () => {
     const w = onPath('peace');
     expect(chapterItem(w, 3)).toMatchObject({ have: 0, need: 3 });
     // l'escorte du premier convoi (chantier B), puis les émissaires et l'ambassade
@@ -121,15 +129,18 @@ describe('le fil des âges : la voie de la paix', () => {
     expect(w.diplo.conflict).toBe('open');
     expect(conflictState(w)).toEqual({ kind: 'peace' });
     expect(stepSaga(w, 2)).toBe(2);
-    // à l'Industriel (provisoire : le port marchand partagé du chantier C) : un second comptoir chez l'allié
-    let c = kinds({ tradepost: 1 });
-    expect(stepNow(w, 3, c)).toMatchObject({ id: 'post2', go: 'build', kind: 'tradepost', stub: 'C' });
-    expect(chapterItem(w, 4, c)).toMatchObject({ have: 0, need: 1 });
-    c = kinds({ tradepost: 2 });
+    // à l'Industriel (chantier C) : le port marchand partagé, puis deux des trois maisons communes, dans la concession
+    let c = kinds({ tradepost: 2 });
+    expect(stepNow(w, 3, c)).toMatchObject({ id: 'harbor2', go: 'build', kind: 'merchantPort' });
+    expect(chapterItem(w, 4, c)).toMatchObject({ have: 0, need: 2 });
+    c = kinds({ merchantPort: 1, dispensary: 1 });
+    expect(stepNow(w, 3, c)).toMatchObject({ id: 'commons', go: 'build', kind: 'exchangeHall' });
+    expect(stepSaga(w, 3, c)).toBeNull();
+    c = kinds(CONCESSION);
     expect(stepSaga(w, 3, c)).toBe(3);
     // au Moderne (provisoire : les Jeux des îles, chantier D) : l'ambassade bâtie, puis la paix signée
     expect(signPeace(w, c)).toBe(false);
-    c = kinds({ tradepost: 2, embassy: 1 });
+    c = kinds({ ...CONCESSION, embassy: 1 });
     expect(stepNow(w, 4, c)).toMatchObject({ id: 'sign', go: 'sign' });
     expect(chapterItem(w, 5, c)).toMatchObject({ have: 1, need: 2 });
     expect(signPeace(w, c)).toBe(true);
@@ -142,7 +153,7 @@ describe('le fil des âges : la voie de la paix', () => {
     const w = onPath('peace');
     w.exp.done.push('envoys');
     applyDiplo(w.diplo, 'truce');
-    const c = kinds({ tradepost: 2 });
+    const c = kinds(CONCESSION);
     // (noté seulement à son âge)
     expect(stepSaga(w, 2, c)).toBe(2);
     expect(w.diplo.saga.done).toEqual([2]);
@@ -216,12 +227,15 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
     const w = world(readDiplo({ ally: 'orient', path: 'war', conflict: 'open', battle: 'ready', camp: { held: ['plage', 'port', 'tour'], raid: 500 } }));
     expect(chapterDone(w, 2)).toBe(true);
     expect(stepSaga(w, 2)).toBe(2);
-    expect(chapterDone(w, 3)).toBe(true);
+    // (il ne reste que le fort du chantier C pour l'Industriel)
+    expect(chapterDone(w, 3)).toBe(false);
+    expect(stepNow(w, 3)!.id).toBe('fort');
+    expect(chapterDone(w, 3, kinds(FORT))).toBe(true);
     // (le port est pris, rien à livrer au Médiéval : les sorties attendent)
     expect(nextBattle(w.diplo, 0, 2)).toBeNull();
     stepCamp(w.diplo, 600, DAY, 2);
     expect(raidDue(w.diplo, 600)).toBe(false);
-    expect(stepSaga(w, 3)).toBe(3);
+    expect(stepSaga(w, 3, kinds(FORT))).toBe(3);
     expect(nextBattle(w.diplo, 600, 4)).toBe('assault');
   });
 
@@ -255,8 +269,8 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
     expect(catchUp(war.diplo, 3, 1000, DAY)).toBe(false);
     expect(war.diplo.camp.held).toEqual([]);
     expect(stepNow(war, 3)!.id).toBe('allywar');
-    // (la condition vers le Moderne demande les deux chapitres : 4 étapes du Médiéval, 3 de l'Industriel)
-    expect(chapterItem(war, 4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 7 });
+    // (la condition vers le Moderne demande les deux chapitres : 4 étapes du Médiéval, 4 de l'Industriel)
+    expect(chapterItem(war, 4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 8 });
     war.exp.done.push('allywar'); applyDiplo(war.diplo, 'landing');
     seaWon(war.diplo, 'strait');
     expect(win(war, 3)).toBe('landing');
@@ -264,13 +278,13 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
     expect(win(war, 3)).toBe('port');
     expect(stepSaga(war, 3)).toBe(2);
     expect(win(war, 3)).toBe('tour');
-    expect(stepSaga(war, 3)).toBe(3);
+    expect(stepSaga(war, 3, kinds(FORT))).toBe(3);
     expect(chapterItem(war, 4)).toMatchObject({ have: 1, need: 1 });
     // la paix : les pourparlers d'abord, puis le second comptoir
     const peace = world(readDiplo({ ally: 'orient', path: 'peace', conflict: 'open' }));
     expect(stepNow(peace, 3)!.id).toBe('convoy');
-    // (deux comptoirs bâtis d'avance : reste le chapitre du Médiéval)
-    expect(chapterItem(peace, 4, kinds({ tradepost: 2 }))).toMatchObject({ have: 0, need: 3 });
+    // (la concession bâtie d'avance : reste le chapitre du Médiéval)
+    expect(chapterItem(peace, 4, kinds(CONCESSION))).toMatchObject({ have: 0, need: 3 });
     // sans voie : la carte du dénouement d'abord
     const none = world(readDiplo({ ally: 'orient', conflict: 'open' }));
     expect(chapterItem(none, 4)).toMatchObject({ have: 0, need: 1 });
@@ -279,7 +293,7 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
   it('archipel accepté au Moderne : les trois chapitres à la suite, le Moderne ne s’ouvre qu’après les autres', () => {
     const war = world(readDiplo({ ally: 'orient', path: 'war', conflict: 'open' }));
     war.exp.done.push('allywar'); applyDiplo(war.diplo, 'landing');
-    expect(chapterItem(war, 5)).toMatchObject({ label: CONFLICT_LABEL, have: 1, need: 8 });
+    expect(chapterItem(war, 5)).toMatchObject({ label: CONFLICT_LABEL, have: 1, need: 10 });
     for (const k of ['landing', 'port', 'tour', 'assault']) expect(win(war, 4)).toBe(k);
     expect(war.diplo.conflict).toBe('won');
     // la paix : la paix ne se signe qu'au bout des trois chapitres
@@ -288,8 +302,8 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
     expect(signPeace(peace, c)).toBe(false);
     peace.exp.done.push('envoys', 'truce'); applyDiplo(peace.diplo, 'truce');
     expect(signPeace(peace, c)).toBe(false);
-    expect(stepNow(peace, 4, c)!.id).toBe('post2');
-    const all = kinds({ embassy: 1, tradepost: 2 });
+    expect(stepNow(peace, 4, c)!.id).toBe('harbor2');
+    const all = kinds({ embassy: 1, ...CONCESSION });
     expect(stepNow(peace, 4, all)!.id).toBe('sign');
     expect(signPeace(peace, all)).toBe(true);
   });
@@ -322,7 +336,7 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
         expect(w.diplo.conflict).toBe('won');
       } else {
         w.exp.done.push('envoys', 'truce'); applyDiplo(w.diplo, 'truce');
-        const c = kinds({ embassy: 1, tradepost: 2 });
+        const c = kinds({ embassy: 1, ...CONCESSION });
         expect(stepSaga(w, 5, c)).toBe(3);
         expect(w.diplo.saga.done).toEqual([2, 3]);
         expect(stepNow(w, 5, c)!.id).toBe('sign');

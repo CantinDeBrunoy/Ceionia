@@ -13,3 +13,4 @@ import './expeditions';
 import './army';
 import './citizens';
 import './fleet';
+import './concession';

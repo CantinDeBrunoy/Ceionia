@@ -25,6 +25,7 @@ import { Expeditions, Report, ActiveExpedition } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
+import { zoneLock, peacePerks } from '../sim/concession';
 import { isleName, kindOffered, allyPostReadyNow, boonsMatter, talkRisk, TALK_RISK } from '../sim/diplomacy';
 import { peoplesView } from '../sim/peoples';
 import { peoplesHtml } from './peoples';
@@ -38,7 +39,7 @@ import { priceIn, canPay, costLabel, haveLabel, shortLabel, Resource, PRODUCERS,
 import { archipelagoOn } from '../world/expand';
 import { waysTabShown, type Way, type WayState } from '../sim/crossroads';
 import { waysHtml, type ConflictWay } from './ways';
-import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
+import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes, HALL_STEP, SAT_STEP } from '../sim/trade';
 import { flowOf, flowOfBuilding, ledgerOf, LedgerRow, Flow, refundTotal, shortText } from '../sim/ledger';
 import { gap, railBoost, railStation, railWant, freightBonus, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -1527,6 +1528,9 @@ export class UI {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
       return tr('Débloqué par l’expédition « {title} »', { title: tr(m?.title ?? d.reqMission) });
     }
+    // (les zones des îles : la tête de pont prise, le port pris pour le fort, le fort pour la ville de garnison)
+    const zl = zoneLock(h.world, k);
+    if (zl) return zl;
     if (d.reqKind && !h.sim.built(d.reqKind)) return tr('Il faut d’abord « {name} » au village', { name: h.sim.nameOf(d.reqKind) });
     if (k === 'tradepost' && !h.world.diplo.ally) return tr('Choisissez d’abord votre allié : le comptoir se bâtit chez lui');
     return null;
@@ -2603,6 +2607,8 @@ export class UI {
    * Comptoir des voisins (la fiche de l'or) : pour chaque ressource, son cours du moment (la saturation des ventes le fait
    * baisser, il remonte chaque jour), un bouton pour en vendre contre de l'or, un autre pour en acheter
    */
+  /** La saturation d'un or vendu (la halle des échanges de la concession la divise par deux) */
+  private satStep() { return peacePerks(this.host.world, this.host.sim.counts).trade ? HALL_STEP : SAT_STEP; }
   private renderTrade() {
     const h = this.host, w = h.world, lot = this.tradeLot, inf = w.unlimited, age = h.sim.age;
     if (!h.sim.tradeOpen) { this.renderTradeShut(); return; }
@@ -2610,7 +2616,7 @@ export class UI {
     // les ressources que le village connaît déjà (comme la barre des stocks : briques à l'âge industriel, carburant au moderne)
     const shown = TRADE_RES.filter((r) => (r !== 'brick' || age >= 3 || w.brick >= 1) && (r !== 'fuel' || age >= 4 || w.fuel >= 1));
     const rows = shown.map((r) => {
-      const sat = w.trade.sat[r] ?? 0, q = sellQuote(r, sat, lot), get = buyQuote(r, lot);
+      const sat = w.trade.sat[r] ?? 0, q = sellQuote(r, sat, lot, this.satStep()), get = buyQuote(r, lot);
       const canSell = inf || w[r] + 1e-9 >= q.cost, canBuy = inf || w.gold + 1e-9 >= lot;
       const drop = Math.round(sat * 100);
       return `<div class="trow"><span class="tn">${resPic(r, 22)}<span>${label[r]}<small>${inf ? '∞' : Math.floor(w[r])}${drop ? ` · <b class="warn">${tr('cours −{n} %', { n: drop })}</b>` : ''}</small></span></span>`
@@ -2653,7 +2659,7 @@ export class UI {
     const w = this.host.world, d = b.dataset;
     if (d.lot) { this.tradeLot = +d.lot; this.host.audio.sfxClick(); }
     else {
-      const r = (d.sell ?? d.buy) as TradeRes, done = d.sell ? sell(w, r, this.tradeLot) : buy(w, r, this.tradeLot);
+      const r = (d.sell ?? d.buy) as TradeRes, done = d.sell ? sell(w, r, this.tradeLot, this.satStep()) : buy(w, r, this.tradeLot);
       if (done) { this.host.audio.sfxClick(); this.resKey = ''; this.renderResources(); }
     }
     this.renderTrade();

@@ -5,6 +5,7 @@ import { tr } from '../i18n';
 import { archipelagoOn } from '../world/expand';
 import { newCamp, readCamp, type CampState } from './campaign';
 import { newSaga, readSaga, conflictAge, FIRST_CHAPTER, type SagaState } from './saga';
+import { isZoneKind, zoneKindOffered } from './concession';
 
 /**
  * La diplomatie de l'archipel (voir `docs/diplomatie.md`) : les deux peuples des îles rivales, l'allié qu'on choisit parmi eux
@@ -410,6 +411,8 @@ export const DIPLO_KINDS: Partial<Record<KindId, string>> = { concord: 'truce' }
 
 /** Le bâtiment est-il proposé dans cette partie ? (le monument de la concorde : seulement sur la voie de la paix) */
 export function kindOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, k: KindId) {
+  // les bâtiments des zones des îles (chantier C) : seulement sur leur voie (`sim/concession.ts`)
+  if (isZoneKind(k)) return zoneKindOffered(w, k);
   // l'obélisque de la victoire : seulement la guerre gagnée (il n'a pas d'expédition qui l'ouvre, c'est la bataille)
   if (k === 'triumph') return archipelagoOn(w) && w.diplo.conflict === 'won';
   // l'ambassade : la paix signée (« L'ambassade de la paix » réussie ; une mission ne débloque qu'un bâtiment, le monument)

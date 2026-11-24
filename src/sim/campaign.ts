@@ -44,10 +44,21 @@ export const RAID_FIRST = 1, RAID_EVERY = 3, RAID_WARN = 0.5, RAID_GRACE = 0.5;
  * l'Industriel, l'assaut au Moderne. Avant, la campagne attend le passage d'âge
  */
 export const BATTLE_AGE: Record<'landing' | 'port' | 'tour' | 'assault', number> = { landing: 2, port: 3, tour: 3, assault: 4 };
+/** Avec l'hôpital allié, la part des tombés qui reviennent au corps après une bataille */
+export const HOSPITAL_BACK = 1 / 3;
 /** La caserne avancée forme une recrue tous les `TRAIN_DAYS` jours de jeu */
 export const TRAIN_DAYS = 0.15;
 /** Laissée seule, la garnison du camp ne compte que cette part du corps (les autres sont ailleurs sur l’île) */
 export const HOLD_SHARE = 0.6;
+
+/**
+ * Ce que la tête de pont et la base arrière apportent à la campagne (chantier C, `sim/concession.ts` › `frontPerks`) :
+ * `bonus`, les hommes de la ville de garnison ; l'infirmerie de campagne (les pertes refaites deux fois plus vite) ; le radar
+ * (les sorties annoncées un jour à l'avance) ; l'hôpital allié (un tiers des tombés reviennent). Absent : rien
+ */
+export interface CampPerks { bonus?: number; infirmary?: boolean; radar?: boolean; hospital?: boolean }
+/** Le préavis d'une sortie avec le radar (jours de jeu) */
+export const RADAR_WARN = 1;
 
 export const newCamp = (): CampState => ({ held: [], lost: [0, 0], raid: 0, raids: 0, train: 0, warned: false });
 
@@ -69,17 +80,17 @@ export function readCamp(c: any): CampState {
 
 const engaged = (d: DiploState) => d.path === 'war' && d.conflict === 'open' && d.battle !== 'none';
 
-/** Le corps au complet à cet âge (les soldats armés chez l'allié en plus) */
-export function corpsMax(d: Pick<DiploState, 'boons'>, age = 2): [number, number] { const b = corpsBase(age); return [b[0] + Math.max(0, Math.floor(d.boons.ours)), b[1]]; }
+/** Le corps au complet à cet âge (les soldats armés chez l'allié en plus, et `bonus` : ceux de la ville de garnison) */
+export function corpsMax(d: Pick<DiploState, 'boons'>, age = 2, bonus = 0): [number, number] { const b = corpsBase(age); return [b[0] + Math.max(0, Math.floor(d.boons.ours)) + Math.max(0, Math.floor(bonus)), b[1]]; }
 /** Le corps debout : fantassins, archers. Avant le camp, il est toujours au complet (chaque débarquement part du village) */
-export function corps(d: Pick<DiploState, 'boons' | 'camp'>, age = 2): [number, number] {
-  const m = corpsMax(d, age);
+export function corps(d: Pick<DiploState, 'boons' | 'camp'>, age = 2, bonus = 0): [number, number] {
+  const m = corpsMax(d, age, bonus);
   if (!d.camp.held.length) return m;
   return [Math.max(0, m[0] - d.camp.lost[0]), Math.max(0, m[1] - d.camp.lost[1])];
 }
 /** Le corps en troupes de l'âge (le chevalier dès le Médiéval) ; au moins un homme, pour que la bataille ait lieu */
-export function corpsTroops(d: Pick<DiploState, 'boons' | 'camp'>, age: number): TroopKind[] {
-  const [s, a] = corps(d, age), melee: TroopKind = age >= 2 ? 'knight' : 'soldier';
+export function corpsTroops(d: Pick<DiploState, 'boons' | 'camp'>, age: number, bonus = 0): TroopKind[] {
+  const [s, a] = corps(d, age, bonus), melee: TroopKind = age >= 2 ? 'knight' : 'soldier';
   return [...Array(Math.max(s, s + a ? 0 : 1)).fill(melee), ...Array(a).fill('archer')];
 }
 
@@ -120,19 +131,19 @@ export function nextBattle(d: DiploState, clock: number, age = 4): BattleKind | 
  * une fois). Sans étape en cours à cet âge (`campaignBusy`), la sortie est repoussée : elle viendra `RAID_FIRST` jours après
  * la reprise
  */
-export function stepCamp(d: DiploState, clock: number, dayLen: number, age = 4): 'warn' | null {
+export function stepCamp(d: DiploState, clock: number, dayLen: number, age = 4, perks: CampPerks = {}): 'warn' | null {
   const c = d.camp;
   if (!engaged(d) || !c.held.includes('plage')) return null;
-  const every = TRAIN_DAYS * dayLen;
+  const every = TRAIN_DAYS * dayLen / (perks.infirmary ? 2 : 1), warn = perks.radar ? RADAR_WARN : RAID_WARN;
   if (c.lost[0] + c.lost[1] <= 0) c.train = clock;
   while (c.lost[0] + c.lost[1] > 0 && clock >= c.train + every) {
     c.train += every;
     // (le plus entamé d'abord, en part du corps)
-    const m = corpsMax(d, age), k = c.lost[0] / m[0] >= c.lost[1] / m[1] ? 0 : 1;
+    const m = corpsMax(d, age, perks.bonus), k = c.lost[0] / m[0] >= c.lost[1] / m[1] ? 0 : 1;
     c.lost[k]--;
   }
   if (!campaignBusy(d, age)) { c.raid = Math.max(c.raid, clock + RAID_FIRST * dayLen); c.warned = false; return null; }
-  if (c.raid > 0 && !c.warned && clock >= c.raid - RAID_WARN * dayLen && clock < c.raid) { c.warned = true; return 'warn'; }
+  if (c.raid > 0 && !c.warned && clock >= c.raid - warn * dayLen && clock < c.raid) { c.warned = true; return 'warn'; }
   return null;
 }
 
@@ -140,9 +151,11 @@ export function stepCamp(d: DiploState, clock: number, dayLen: number, age = 4):
  * L'issue d'une bataille de la campagne (sauf l'assaut gagné : `claimVictory`, et les autres perdues : `loseAllyBattle`, que
  * `Game` appelle) : ce qu'on tient, les pertes du corps, la prochaine sortie. Renvoie ce qui est reperdu (la défense perdue)
  */
-export function campaignResult(d: DiploState, kind: BattleKind, won: boolean, survivors: [number, number], clock: number, dayLen: number, age = 2): Front | null {
-  const c = d.camp, m = corpsMax(d, age);
+export function campaignResult(d: DiploState, kind: BattleKind, won: boolean, survivors: [number, number], clock: number, dayLen: number, age = 2, perks: CampPerks = {}): Front | null {
+  const c = d.camp, m = corpsMax(d, age, perks.bonus);
   c.lost = [Math.max(0, m[0] - survivors[0]), Math.max(0, m[1] - survivors[1])];
+  // (l'hôpital allié : un tiers des tombés reviennent au corps)
+  if (perks.hospital) c.lost = [c.lost[0] - Math.floor(c.lost[0] * HOSPITAL_BACK), c.lost[1] - Math.floor(c.lost[1] * HOSPITAL_BACK)];
   c.train = clock;
   if (kind === 'defend') {
     c.warned = false;

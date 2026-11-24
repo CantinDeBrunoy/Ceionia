@@ -89,6 +89,9 @@ export function townPlan(w: World, q: RivalIsle): TownPlan {
   return p;
 }
 
+/** Oublie les plans calculés (tests : une même graine, avec et sans la zone dans le relief) */
+export function forgetTowns() { plans.clear(); }
+
 /** Les plans des deux villes de la carte (aucun sans archipel) */
 export function townPlans(w: World): TownPlan[] {
   return w.isles ? w.isles.rivals.map((q) => townPlan(w, q)) : [];

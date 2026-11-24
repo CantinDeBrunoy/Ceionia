@@ -12,6 +12,7 @@ import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
 import { allyIsle, allyLand, allyPostReady, allyView, inAllyTown, onAllyIsle } from '../src/sim/allyLand';
 import { readTradeState, saveTradeState, tradeOpen, TRADE_V } from '../src/sim/trade';
+import { zoneOf } from '../src/world/concession';
 
 let cached: World | null = null;
 /** L'archipel de la graine 11 (carte de 384), sans allié */
@@ -51,13 +52,17 @@ describe('bâtir chez l’allié', () => {
     expect(w.canRoad(x, z)).toBe(false);
   });
 
-  it('avec un allié : son île se bâtit hors de sa ville, l’autre île reste interdite', () => {
+  it('avec un allié : seule sa concession se bâtit (décision de l’auteur, 24 nov. 2026), ni sa ville ni le reste de son île, l’autre île reste interdite', () => {
     const w = archipel();
     w.diplo.ally = 'orient';
-    const land = cellsOf(w, 'orient'), out = land.filter(([x, z]) => !inAllyTown(w, x, z)), town = land.filter(([x, z]) => inAllyTown(w, x, z));
-    expect(out.length).toBeGreaterThan(500);
+    const zone = zoneOf(w, 'orient')!;
+    const land = cellsOf(w, 'orient'), inZone = ([x, z]: readonly [number, number]) => zone.cells.has(w.ci(x, z));
+    const out = land.filter((c) => inZone(c)), rest = land.filter((c) => !inZone(c) && !inAllyTown(w, c[0], c[1])), town = land.filter(([x, z]) => inAllyTown(w, x, z));
+    expect(out.length).toBeGreaterThan(250);
+    expect(rest.length).toBeGreaterThan(500);
     expect(town.length).toBeGreaterThan(200);
     for (const [x, z] of out.slice(0, 50)) expect(w.playable(x, z), `${x},${z}`).toBe(true);
+    for (const [x, z] of rest.slice(0, 50)) { expect(w.playable(x, z)).toBe(false); expect(w.playWhy(x, z)).toMatch(/concession/); }
     for (const [x, z] of town.slice(0, 50)) { expect(w.playable(x, z)).toBe(false); expect(w.playWhy(x, z)).toMatch(/ville de vos alliés/); }
     // l'autre peuple
     for (const [x, z] of cellsOf(w, 'asie').slice(0, 50)) { expect(w.playable(x, z)).toBe(false); expect(w.playWhy(x, z)).toMatch(/Hors de votre île/); }
@@ -70,9 +75,10 @@ describe('bâtir chez l’allié', () => {
     const [tx, tz] = town[0];
     expect(w.canRoad(tx, tz)).toBe(false);
     expect(allyLand(w, ox, oz)).toBe(true);
-    // la vue de l'île : sur l'île, hors de la ville
+    // la vue de l'île : sur la concession
     const view = allyView(w)!;
     expect(onRival(isleOf(w, 'orient')!, view.x, view.z)).toBe(true);
+    expect(Math.hypot(view.x - zone.x, view.z - zone.z)).toBeLessThan(1);
   });
 
   it('une maison et un port se posent chez l’allié', () => {

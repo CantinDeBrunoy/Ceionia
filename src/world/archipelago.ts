@@ -1,5 +1,5 @@
 import { Simplex } from './noise';
-import { mulberry32, smoothstep, lerp } from '../core/rng';
+import { mulberry32, smoothstep, lerp, wrapAngle } from '../core/rng';
 
 /**
  * L'archipel (version 4 du générateur, carte de `ARCH_N` cases) : l'île principale garde le continent de la version 3 à sa
@@ -266,4 +266,141 @@ export function flattenVillages(hts: Float32Array, veg: Uint8Array, n: number, l
         if (x < n && z < n && d < v.r + 1) veg[z * n + x] = 0;
       }
   }
+}
+
+// ---------- La zone de chaque île : la concession (chez l'allié) ou la tête de pont (chez le rival) ----------
+
+/**
+ * Le nouveau monde (chantier C) : chaque île rivale reçoit une zone, sur la côte tournée vers notre île, à côté de la ville,
+ * séparée d'elle par une limite nette et un seul passage. Sur les cartes créées depuis (`World.zoneGen`), la limite est dans
+ * le relief : une ria (un bras de mer étroit, chez le peuple asiatique) ou une arête et son col (chez le peuple oriental), et
+ * la zone un replat doux, une presqu'île au besoin. Tout se tire d'un générateur à part : la place des îles et des villages ne
+ * bouge pas, ni le plan des villes (la limite passe au-delà de leurs champs). Les anciennes cartes gardent leur relief : la
+ * zone y est cherchée sur le relief existant et bornée par un décor (voir `world/concession.ts`)
+ */
+export interface ZoneSite {
+  /** centre et rayon de la zone (cases du monde) */
+  x: number; z: number; r: number;
+  /** direction de la ville vers la zone (vers notre île, tournée au besoin pour que l'île porte la limite) */
+  ux: number; uz: number;
+  /** la limite : à `d0` cases du centre du village, le long de la direction ; demi-longueur `half` ; le passage, à `pass` cases de son milieu */
+  d0: number; half: number; pass: number;
+  limit: 'ria' | 'ridge';
+}
+/** La limite passe à cette distance au-delà du rayon du village (ses champs, son usine et son arcologie restent en deçà) */
+export const ZONE_GAP = 21;
+/** Rayon de la zone (cases) */
+export const ZONE_R = 11;
+
+let zoneRelief = true;
+/** Pour les tests : générer une carte sans la zone dans le relief (une « ancienne » carte) */
+export function setZoneRelief(on: boolean) { zoneRelief = on; }
+export const zoneReliefOn = () => zoneRelief;
+
+/** La place de la zone d'une île rivale (pure : la graine et la place des îles ; son propre générateur) */
+export function zoneSite(seed: number, q: RivalIsle, main: Frame): ZoneSite {
+  const { s, s2 } = noises(seed), rnd = mulberry32(seed * 389 + (q.people === 'orient' ? 71 : 173));
+  const v = q.village, d0min = v.r + ZONE_GAP, a0 = Math.atan2(main.z + main.n / 2 - v.z, main.x + main.n / 2 - v.x);
+  const along = (a: number, t: number): [number, number] => [v.x + Math.cos(a) * t, v.z + Math.sin(a) * t];
+  /** la côte, dans la direction a, en partant de la limite */
+  const coast = (a: number) => { for (let t = d0min; t < 90; t += 0.5) if (lobeT(q.lobes, ...along(a, t), s, s2) >= 1) return t; return 90; };
+  // la mer la plus proche du village (à peu près celle que prend le plan de la ville : son port, sa plage à 60° au plus)
+  let sea = 0, sd = Infinity;
+  for (let i = 0; i < 72; i++) {
+    const b = (i / 72) * Math.PI * 2;
+    for (let t = 4; t < sd; t += 0.5) if (lobeT(q.lobes, ...along(b, t), s, s2) >= 1) { sd = t; sea = b; break; }
+  }
+  // vers notre île ; tournée (jusqu'à ±1,5 radian) si l'île n'y porte pas la limite, si la mer est trop loin, ou pour rester
+  // à l'écart de la plage et du port de la ville (le plan de la ville ne bouge pas)
+  let a = a0, best = Infinity, ct = coast(a0);
+  for (let k = 0; k <= 30; k++) {
+    const da = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.1, c = coast(a0 + da), off = Math.abs(wrapAngle(a0 + da - sea));
+    const sc = Math.abs(da) * 10 + (c < d0min + 8 ? 1000 : 0) + Math.max(0, c - d0min - 26) * 3 + Math.max(0, 1.6 - off) * 400;
+    if (sc < best) { best = sc; a = a0 + da; ct = c; }
+  }
+  const ux = Math.cos(a), uz = Math.sin(a), r = ZONE_R * (0.96 + rnd() * 0.1);
+  // la zone touche la côte (sa pointe s'avance un peu sur la mer : la plage, l'eau profonde) ; la limite la suit, au-delà des champs de la ville
+  const dc = Math.max(d0min + 9, ct - r * 0.75), d0 = Math.max(d0min, dc - r - 1.5);
+  // la limite barre toute la largeur de l'île à cet endroit : le passage est le seul chemin de la ville à la zone
+  let half = r + 5;
+  for (const sg of [-1, 1]) {
+    let t = 0;
+    while (t < 34 && lobeT(q.lobes, v.x + ux * d0 - uz * t * sg, v.z + uz * d0 + ux * t * sg, s, s2) < 1.02) t += 0.5;
+    half = Math.max(half, Math.min(34, t + 2));
+  }
+  // le passage : le point le plus intérieur de la limite, face à la zone (à 5 cases au plus de son axe)
+  let pass = 0, inner = Infinity;
+  for (let sd2 = -5; sd2 <= 5; sd2 += 0.5) {
+    const t = lobeT(q.lobes, v.x + ux * d0 - uz * sd2, v.z + uz * d0 + ux * sd2, s, s2) + rnd() * 0.04;
+    if (t < inner) { inner = t; pass = sd2; }
+  }
+  return { x: v.x + ux * dc, z: v.z + uz * dc, r, ux, uz, d0, half, pass, limit: q.people === 'asie' ? 'ria' : 'ridge' };
+}
+
+/** Le fond de la ria : une eau qu'on voit bien, qui ne se traverse pas */
+export const RIA_H = -0.75;
+/** Le replat de la zone, à cette hauteur */
+export const ZONE_H = 1.1;
+
+/**
+ * Pose la zone de chaque île rivale dans le relief (cartes neuves de l'archipel) : le replat (une presqu'île s'il déborde sur
+ * la mer, sa plage en pente douce), puis la limite, une ria ou une arête, coupée par un passage de trois cases
+ */
+export function addZones(hts: Float32Array, n: number, seed: number, lay: ArchLayout) {
+  if (!zoneRelief) return;
+  const { s } = noises(seed), S = n + 1;
+  for (const q of lay.rivals) {
+    const z0 = zoneSite(seed, q, lay.main), v = q.village, R = Math.ceil(z0.r * 1.4 + z0.half);
+    const wx = -z0.uz, wz = z0.ux;
+    for (let z = Math.max(0, Math.floor(z0.z - R)); z <= Math.min(n, Math.ceil(z0.z + R)); z++)
+      for (let x = Math.max(0, Math.floor(z0.x - R)); x <= Math.min(n, Math.ceil(z0.x + R)); x++) {
+        const i = z * S + x, along = (x - v.x) * z0.ux + (z - v.z) * z0.uz, side = (x - v.x) * wx + (z - v.z) * wz;
+        let h = hts[i];
+        const orig = h;
+        // le replat : un disque déformé, seulement au-delà de la limite (rien ne bouge du côté de la ville)
+        const dz = Math.hypot(x - z0.x, z - z0.z) / (z0.r * (1 + 0.12 * s.noise2(x * 0.09 + 17, z * 0.09 - 5)));
+        const wp = smoothstep(1.2, 0.8, dz) * smoothstep(z0.d0 + 0.5, z0.d0 + 3, along);
+        if (wp > 0) h = lerp(h, ZONE_H + 0.18 * s.fbm(x * 0.07 - 9, z * 0.07 + 3, 2), wp);
+        // la limite : une bande le long de la direction perpendiculaire, coupée au passage
+        if (Math.abs(side) <= z0.half) {
+          const end = smoothstep(z0.half, z0.half - 3, Math.abs(side)), gap = smoothstep(1.2, 2.2, Math.abs(side - z0.pass));
+          if (z0.limit === 'ria') {
+            // une vraie eau (le plan de la ville n'y regarde pas : la zone se tient loin de sa mer, de son port et de sa plage)
+            const k = smoothstep(2.3, 1.3, Math.abs(along - z0.d0)) * end * gap;
+            if (k > 0 && h > RIA_H) h = lerp(h, RIA_H, k);
+          } else {
+            // l'arête : une crête rocheuse, au moins à 4, un col au passage ; elle descend dans l'eau peu profonde en un cap
+            // rocheux (on ne la contourne pas par la plage)
+            const k = smoothstep(2.6, 0.2, Math.abs(along - z0.d0)) * end * gap * smoothstep(-0.7, 0.1, orig);
+            if (k > 0) h = lerp(h, Math.max(orig + 2.4, 4) + 0.5 * s.fbm(x * 0.2 + 3, z * 0.2 - 8, 2), k);
+            // (le col, sur une terre déjà haute : abaissé au niveau du replat)
+            const kc = smoothstep(2.6, 0.2, Math.abs(along - z0.d0)) * end * (1 - gap);
+            if (kc > 0 && h > ZONE_H + 0.6) h = lerp(h, ZONE_H + 0.6, kc);
+          }
+        }
+        hts[i] = h;
+      }
+  }
+}
+
+/**
+ * Ni forêt ni rocher sur le replat de la zone ni dans la ria (cartes neuves), une fois la végétation posée. Rend le carré
+ * retouché de chaque île (x0, z0, x1, z1, en cases)
+ */
+export function clearZones(veg: Uint8Array, n: number, seed: number, lay: ArchLayout): [number, number, number, number][] {
+  if (!zoneRelief) return [];
+  const out: [number, number, number, number][] = [];
+  for (const q of lay.rivals) {
+    const z0 = zoneSite(seed, q, lay.main), v = q.village, R = Math.ceil(z0.r * 1.4 + z0.half);
+    const x0 = Math.max(0, Math.floor(z0.x - R)), zz0 = Math.max(0, Math.floor(z0.z - R)), x1 = Math.min(n - 1, Math.ceil(z0.x + R)), zz1 = Math.min(n - 1, Math.ceil(z0.z + R));
+    out.push([x0, zz0, x1, zz1]);
+    for (let z = zz0; z <= zz1; z++)
+      for (let x = x0; x <= x1; x++) {
+        const along = (x + 0.5 - v.x) * z0.ux + (z + 0.5 - v.z) * z0.uz, side = (x + 0.5 - v.x) * -z0.uz + (z + 0.5 - v.z) * z0.ux;
+        const onZone = along > z0.d0 + 2 && Math.hypot(x + 0.5 - z0.x, z + 0.5 - z0.z) < z0.r * 1.2;
+        const inRia = z0.limit === 'ria' && Math.abs(along - z0.d0) < 2.4 && Math.abs(side) < z0.half;
+        if (onZone || inRia) veg[z * n + x] = 0;
+      }
+  }
+  return out;
 }

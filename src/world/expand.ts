@@ -97,6 +97,8 @@ export function expandWorld(old: any, map: number, seed: number): any {
     heights,
     // (agrandie avec la côte gardée telle quelle : `repairCoast` n'a rien à faire)
     coast: 1,
+    // (les îles viennent de la carte neuve : la zone de chaque île est dans leur relief, voir `world/concession.ts`)
+    ...(neu.zoneGen ? { zoneGen: 1 } : {}),
     roads: list(old.roads, neu.roads),
     veg: pairs(old.veg, neu.veg),
     biomes: pairs(old.biomes, neu.biomes),

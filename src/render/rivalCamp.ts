@@ -5,7 +5,8 @@ import type { Front } from '../sim/campaign';
 import { RivalBattle } from '../sim/rivalBattle';
 
 /**
- * Ce qu'on tient sur l'île rivale pendant la campagne (voir `sim/campaign.ts`), vu depuis le village : le camp de base et la
+ * Ce qu'on tient sur l'île rivale pendant la campagne (dans la tête de pont, la zone de l'île tournée vers notre île, voir
+ * `world/concession.ts`) (voir `sim/campaign.ts`), vu depuis le village : le camp de base et la
  * caserne avancée sur la plage (les modèles de la base des Enfers, à l'âge du village, ceux des vignettes de « Ma base »), et
  * nos drapeaux sur le port et la tour du rempart une fois pris. Leurs places sont celles de la bataille (`RivalBattle.goalAt`),
  * calculées une fois. Les modèles viennent du morceau des Enfers, chargé à la première pose
@@ -23,8 +24,8 @@ export class RivalCamp {
   constructor(private world: World, private rival: People) { this.group.name = 'rivalCamp'; }
 
   /** Pose ce qui est tenu (refait seulement quand ça change) */
-  sync(held: readonly Front[], age: number) {
-    const key = `${held.join(',')}|${age}`;
+  sync(held: readonly Front[], age: number, fort = false) {
+    const key = `${held.join(',')}|${age}|${+fort}`;
     if (key === this.key) return;
     this.key = key;
     if (!held.length) { this.clear(); return; }
@@ -44,8 +45,8 @@ export class RivalCamp {
         this.done.push(t.done);
       };
       const [cx, cz] = spots.camp, face = Math.atan2(spots.port[0] - cx, spots.port[1] - cz);
-      put('camp', spots.camp, face);
-      put('post', spots.barracks, face);
+      // (le fort bâti dans la tête de pont remplace le camp et la caserne avancée)
+      if (!fort) { put('camp', spots.camp, face); put('post', spots.barracks, face); }
       // (les avant-postes pris : notre drapeau, sur un brasero, comme aux Enfers)
       if (held.includes('port')) { put('brazier', spots.port, 0); this.flag(spots.port); }
       if (held.includes('tour')) { put('brazier', spots.tour, 0); this.flag(spots.tour); }

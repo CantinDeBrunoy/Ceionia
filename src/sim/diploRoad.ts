@@ -8,6 +8,7 @@ import { battleOpen, campaignNext, corps, corpsMax, raidDue } from './campaign';
 import { AGES, type KindId } from '../build/catalog';
 import { CHAPTERS, chapterDone, sagaSteps, stepSkipped, seaReady, isSeaStep, type Chapter, type SagaStep } from './saga';
 import { MIN_FLEET } from './fleet';
+import { GARRISON_KINDS, GARRISON_NEED, COMMON_KINDS, COMMONS_NEED } from './concession';
 
 /**
  * La feuille de route du conflit des deux îles (retour de joueurs, 22 nov. 2026 : après « Aider notre allié » ou « Négocier
@@ -69,6 +70,8 @@ export interface RoadCtx {
   count?(k: KindId): number;
   /** notre flotte : les navires à flot, ceux en chantier (absent : aucune) */
   fleet?: { afloat: number; arming: number };
+  /** les hommes de la ville de garnison (le corps grandit) */
+  corpsBonus?: number;
 }
 
 /** Le titre d'un chapitre, selon la voie */
@@ -85,13 +88,14 @@ export function stepTitle(id: string, d: Pick<DiploState, 'ally'>): string {
   const t: Record<string, () => string> = {
     plage: () => tr('Le débarquement'), camp: () => tr('Tenir le camp'), port: () => tr('Le port de {isle}', { isle: isleName(rival) }),
     tour: () => tr('La tour du rempart'), assault: () => tr('L’assaut'), post2: () => tr('Un second comptoir'),
+    fort: () => tr('Le fort'), garrison: () => tr('La ville de garnison'), harbor2: () => tr('Le port marchand partagé'), commons: () => tr('Les maisons communes'),
     strait: () => tr('La bataille du bras de mer'), blockade: () => tr('Le blocus du port'), convoy: () => tr('L’escorte du premier convoi'),
     embassy: () => tr('L’ambassade'), sign: () => tr('Signer la paix des îles'),
   };
   return t[id]?.() ?? id;
 }
 
-const ICON: Record<string, string> = { strait: '⚓', blockade: '⛓️', convoy: '🚢', plage: '⛵', camp: '🏕️', port: '⚓', tour: '🏰', assault: '⚔️', post2: '💰', embassy: '🌐', sign: '📜' };
+const ICON: Record<string, string> = { strait: '⚓', blockade: '⛓️', convoy: '🚢', plage: '⛵', camp: '🏕️', port: '⚓', tour: '🏰', assault: '⚔️', post2: '💰', embassy: '🌐', sign: '📜', fort: '🏰', garrison: '🪖', harbor2: '🛳️', commons: '🏫' };
 
 /** Le sous-titre d'une étape pas encore faite */
 function subOf(id: string, rival: People): string {
@@ -108,6 +112,10 @@ function subOf(id: string, rival: People): string {
     case 'envoys': return tr('ouvre leur comptoir et la discussion');
     case 'truce': return tr('une trêve signée : les combats cessent');
     case 'post2': return tr('chez notre allié : le commerce des deux îles grandit');
+    case 'fort': return tr('dans la tête de pont : le camp devient un fort');
+    case 'garrison': return tr('la caserne et deux autres bâtiments autour du fort');
+    case 'harbor2': return tr('dans la concession, au bord de l’eau : la ligne de vapeurs');
+    case 'commons': return tr('deux des trois : halle des échanges, école commune, dispensaire');
     case 'embassy': return tr('la maison des trois peuples, sur notre île');
     case 'sign': return tr('les deux chefs signent la paix chez nous');
   }
@@ -149,6 +157,10 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
     const now = s === first, m = s.mission ? MISSIONS.find((x) => x.id === s.mission) : undefined, run = !!s.mission && ctx.running(s.mission);
     const st: RoadStep = { id: s.id, icon: m?.icon ?? ICON[s.id] ?? '🧭', title: stepTitle(s.id, d), sub: subOf(s.id, rival), state: s.done ? 'done' : now ? 'now' : 'next', go: 'wait', age: s.age, kind: s.kind };
     if (s.done) { st.sub = tr('C’est fait'); return st; }
+    // (les étapes de construction à plusieurs bâtiments : où l'on en est)
+    const n = (ks: KindId[]) => ks.reduce((t, k) => t + Math.min(1, ctx.count?.(k) ?? 0), 0);
+    if (s.id === 'garrison') st.sub = tr('{n}/{m} bâtis : la caserne et deux autres bâtiments autour du fort', { n: Math.min(GARRISON_NEED, GARRISON_KINDS.reduce((t, k) => t + (ctx.count?.(k) ?? 0), 0)), m: GARRISON_NEED });
+    if (s.id === 'commons') st.sub = tr('{n}/{m} bâties : halle des échanges, école commune, dispensaire', { n: Math.min(COMMONS_NEED, n(COMMON_KINDS)), m: COMMONS_NEED });
     // (arrivée tardive : le camp se tiendra en prenant le port, pas en attendant une sortie)
     if (stepSkipped(w, s, age)) { st.sub = tr('se fait en prenant le port'); return st; }
     if (!now) return st;
@@ -185,7 +197,7 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
   if (path === 'war') {
     alert = raid ? tr('Une sortie rivale fond sur notre camp') : undefined;
     if (d.camp.held.length) {
-      const [s0, a0] = corps(d, age), [s1, a1] = corpsMax(d, age);
+      const [s0, a0] = corps(d, age, ctx.corpsBonus), [s1, a1] = corpsMax(d, age, ctx.corpsBonus);
       notes.push(tr('Notre corps : {n} soldats sur {m}', { n: s0 + a0, m: s1 + a1 }) + (s0 + a0 < s1 + a1 ? tr(' · la caserne avancée le refait') : ''));
       if (!raid && d.camp.raid > clock && open.size) { const n = Math.max(1, Math.ceil((d.camp.raid - clock) / ctx.dayLen)); notes.push(n === 1 ? tr('Prochaine sortie rivale d’ici un jour') : tr('Prochaine sortie rivale dans {n} jours', { n })); }
     }
