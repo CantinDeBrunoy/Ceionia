@@ -3,7 +3,7 @@ import { setMapSize, World, N } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { isleOrigins, zoneOrigins } from '../src/build/zones';
-import { War, START_TROOPS } from '../src/sim/war';
+import { War, startTroops } from '../src/sim/war';
 import { HELL_ZONES } from '../src/world/hell';
 
 /**
@@ -40,15 +40,15 @@ describe('le passage direct aux Enfers', () => {
     expect(b.camp(0)).not.toBeNull();
     expect(b.camp(0)!.site.z).toBeLessThan(HELL_ZONES[1].z0);
     expect(b.posts()).toBe(1);
-    expect(war.army.troops.map((t) => t.kind)).toEqual([...START_TROOPS]);
+    expect(war.army.troops.map((t) => t.kind)).toEqual(startTroops(1));
     expect(war.army.troops.every((t) => t.where === 'hell' && t.heal === 0)).toBe(true);
     expect([w.wood, w.stone, w.exp.gear.spear ?? 0]).toEqual([wood, stone, spear]);
     // une seule fois par partie
     expect(war.welcome(1)).toBe(false);
-    expect(war.army.troops.length).toBe(START_TROOPS.length);
+    expect(war.army.troops.length).toBe(startTroops(1).length);
     // elles prennent place dans les Enfers, et l'on peut y recruter (la caserne avancée)
     tick(war, 1);
-    expect(war.troopsIn(war.faction).length).toBe(START_TROOPS.length);
+    expect(war.troopsIn(war.faction).length).toBe(startTroops(1).length);
     expect(war.hellPresence()).toBe(true);
     w.exp.gear.spear = 1;
     expect(war.recruitHell('soldier', 1, 200)).toBeNull();
@@ -106,7 +106,7 @@ describe('le passage direct aux Enfers', () => {
     expect(old.recruitCtx(1, 200).barracks).toBeGreaterThanOrEqual(1);
     expect(old.welcome(1)).toBe(true);
     expect(old.base!.posts()).toBe(1);
-    expect(old.army.troops.length).toBe(START_TROOPS.length);
+    expect(old.army.troops.length).toBe(startTroops(1).length);
     // relu : les dons ne reviennent pas
     const again = new War(w);
     again.load(JSON.parse(JSON.stringify(old.save())));

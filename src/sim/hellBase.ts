@@ -1,6 +1,6 @@
 import { HellMap, HELL_ZONES, HELL_ZONE_N, Z_KINGDOM, ZONE_AGE, zoneOfZ, zoneOf, zoneThe } from '../world/hell';
-import { Hell, HellBuilding, HellEvent, BaseKind, DemonKind, demonStats, raidKinds, DEMON_POWER } from './hell';
-import { planWave, tierAge } from './hellBalance';
+import { Hell, HellBuilding, HellEvent, BaseKind, DemonKind, demonStats, raidKinds, DEMON_POWER, zoneTier } from './hell';
+import { planWave } from './hellBalance';
 import { tr, localize } from '../i18n';
 
 /**
@@ -49,6 +49,12 @@ export const PALISADE_SLOW = 0.55;
  * après la pose de son camp, puis une toutes les COUNTER_EVERY secondes une fois la précédente repoussée
  */
 export const COUNTER_FIRST = 180, COUNTER_EVERY = 300, COUNTER_MAX = 10;
+/**
+ * La première contre-attaque sur le camp du Seuil, offert à l'arrivée : SEUIL_FIRST secondes après sa pose, le temps de prendre
+ * la zone 1 et de recruter (retour de l'auteur, 24 nov. 2026). Aucune ne part tant que toutes nos troupes sont à terre : elle
+ * attend COUNTER_HOLD secondes de plus, encore et encore
+ */
+export const SEUIL_FIRST = 360, COUNTER_HOLD = 20;
 /** Un village en retard d'âge sur la zone d'après (ses démons y sont plus forts que lui) : deux démons de plus par âge de retard */
 export const LAG_BONUS = 2;
 /**
@@ -356,13 +362,15 @@ export class HellBase {
     const live = new Set<number>();
     for (const [id, zone] of this.attackers) { const u = h.units.get(id); if (u && u.hp > 0) live.add(zone); else this.attackers.delete(id); }
     // le front : l'assaut vise le poste le plus profond (son camp, ou à défaut les troupes qui le tiennent) ; les autres suivent
-    const deepest = this.deepestPost();
+    const deepest = this.deepestPost(), troopsUp = h.alive('player').length > 0;
     for (let zone = 0; zone < HELL_ZONE_N; zone++) {
       const camp = this.camp(zone), guarded = !!camp || (zone >= 1 && h.conquered[zone] && this.troopsIn(zone));
       const front = guarded && h.held(zone) && zone + 1 < HELL_ZONE_N && zone === deepest && !h.victory;
       if (this.next[zone] === -2 && !live.has(zone)) { this.events.push({ type: 'counterEnd', zone }); this.next[zone] = now + COUNTER_EVERY; this.warnedCounter[zone] = false; }
       if (!front) { if (!live.has(zone)) { this.next[zone] = -1; this.warnedCounter[zone] = false; } continue; }
-      if (this.next[zone] === -1) this.next[zone] = now + COUNTER_FIRST;
+      if (this.next[zone] === -1) this.next[zone] = now + (zone === 0 ? SEUIL_FIRST : COUNTER_FIRST);
+      // (toutes nos troupes à terre, en soins : les démons attendent leur retour, la base ne tombe pas d'un coup)
+      if (this.next[zone] >= 0 && now >= this.next[zone] - 1 && !troopsUp) this.next[zone] = now + COUNTER_HOLD;
       if (this.next[zone] >= 0 && !live.has(zone)) {
         // préavis : les démons se rassemblent avant de marcher
         if (!this.warnedCounter[zone] && now >= this.next[zone] - COUNTER_WARN) { this.warnedCounter[zone] = true; this.events.push({ type: 'counterWarn', zone }); }
@@ -434,7 +442,7 @@ export class HellBase {
     // village ; sans troupe sur place, le plancher (l'ancienne taille) tient
     const lv = zone + this.count[zone] + 1, legacy = raidKinds(lv, n0);
     const kinds: DemonKind[] = planWave({
-      level: lv, age: Math.min(5, Math.max(ZONE_AGE[from] ?? 1, tierAge(h.age) - 1)), power: h.playerPower(), legacy, powers: DEMON_POWER, balance: h.balance,
+      level: lv, age: zoneTier(from, h.age), power: h.playerPower(), legacy, powers: DEMON_POWER, balance: h.balance,
       losses: h.lossStreak,
     });
     const n = kinds.length, side = Math.ceil(Math.sqrt(n * 1.6));

@@ -188,6 +188,8 @@ export interface Troop {
   /** équipement pris à l'enrôlement (rendu au renvoi) : absent d'une ancienne sauvegarde (alors celui de la troupe d'origine) */
   gear?: GearId[];
   mount?: boolean;
+  /** offerte à l'arrivée aux Enfers, en plus des quatre premières : elle ne prend pas de place à la caserne (absent : faux) */
+  gift?: boolean;
   /** abattu : secondes de soins restantes à la caserne (0 : valide) */
   heal: number;
   /** position au dernier relevé (dans la carte de son lieu), pour la sauvegarde */
@@ -214,7 +216,7 @@ export interface RecruitCtx {
 }
 
 /** Troupes recrutées et en route */
-export const armySize = (a: Army) => a.troops.length + a.queue.length;
+export const armySize = (a: Army) => a.troops.filter((t) => !t.gift).length + a.queue.length;
 /** Plafond en vigueur : casernes et âge, et la part du village */
 export const armyCap = (c: RecruitCtx) => Math.min(troopCap(c.barracks, c.age), Math.floor(c.pop / POP_SHARE));
 
@@ -354,7 +356,7 @@ export function readArmy(d: unknown): Army {
     const maxHp = Math.max(1, +r.maxHp || TROOPS[r.kind as TroopKind].base.hp);
     a.troops.push({
       id, kind: r.kind, maxHp, hp: Math.min(maxHp, Math.max(0, +r.hp || 0)), where: r.where === 'hell' ? 'hell' : 'isle', heal: Math.max(0, +r.heal || 0),
-      ...gearField(r.gear), ...(r.mount === true ? { mount: true } : {}),
+      ...gearField(r.gear), ...(r.mount === true ? { mount: true } : {}), ...(r.gift === true ? { gift: true } : {}),
       ...(Number.isFinite(r.x) && Number.isFinite(r.z) ? { x: +r.x, z: +r.z } : {}),
     });
     a.nextId = Math.max(a.nextId, id + 1);
