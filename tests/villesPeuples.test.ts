@@ -4,7 +4,7 @@ import { World, setMapSize } from '../src/world/world';
 import { newWorld, CONTINENT } from '../src/world/mapgen';
 import { GEN_ARCH } from '../src/world/continent';
 import { ARCH_N } from '../src/world/archipelago';
-import { townPlans, lotsAt, inPoly, segDist, HOUSE_SHARE, type TownKind, type TownPlan } from '../src/world/rivalTown';
+import { townPlans, lotsAt, inPoly, segDist, HOUSE_SHARE, OUTSIDE, type TownKind, type TownPlan } from '../src/world/rivalTown';
 import { townModel, townWall, triCount } from '../src/render/townModels';
 
 const SEEDS = [11, 4242, 7];
@@ -85,6 +85,8 @@ describe('villes des peuples rivaux (archipel)', () => {
           if (l.kind === 'tower' || l.kind === 'gate') continue;
           if (l.kind === 'field') { expect(inPoly(l.x, l.z, p.wall)).toBe(false); expect(water(w, l.x, l.z)).toBe(false); continue; }
           if (l.kind === 'port') continue;
+          // l'usine, la gare et l'arcologie : hors les murs, sur la terre ferme
+          if (OUTSIDE.includes(l.kind)) { expect(inPoly(l.x, l.z, p.wall)).toBe(false); expect(water(w, l.x, l.z)).toBe(false); continue; }
           expect(inPoly(l.x, l.z, p.wall) || near(p, l.x, l.z)).toBe(true);
           expect(water(w, l.x, l.z)).toBe(false);
         }
@@ -111,12 +113,32 @@ describe('villes des peuples rivaux (archipel)', () => {
       }
   });
 
+  it('les repères des âges récents : usine et gare à l’Industriel, gratte-ciel au Moderne, arcologie au Futuriste, à la place de maisons et de champs', () => {
+    for (const seed of SEEDS)
+      for (const p of townPlans(archipel(seed))) {
+        const has = (k: TownKind, a: number) => lotsAt(p, a).some((l) => l.kind === k);
+        for (const [k, a] of [['factory', 3], ['station', 3], ['skyscraper', 4], ['arcology', 5]] as [TownKind, number][]) {
+          expect(has(k, a - 1), `${seed} ${p.people} ${k}`).toBe(false);
+          expect(has(k, a), `${seed} ${p.people} ${k}`).toBe(true);
+        }
+        // ce qu'un repère remplace a disparu quand il arrive
+        for (const a of [3, 4, 5]) {
+          const live = lotsAt(p, a), marks = live.filter((l) => ['factory', 'station', 'skyscraper', 'arcology'].includes(l.kind));
+          for (const m of marks)
+            for (const l of live)
+              if (l !== m && ['house', 'workshop', 'field', 'garden'].includes(l.kind)) expect(Math.hypot(l.x - m.x, l.z - m.z)).toBeGreaterThan(Math.hypot(m.w, m.d) / 2);
+        }
+      }
+  });
+
   it('les modèles des deux peuples, à chaque âge : propres, dans leur budget de triangles et dans leur lot', () => {
     const kinds: [TownKind, number, number, number][] = [
       ['house', 1.2, 1.1, 1300], ['workshop', 1.2, 1.1, 1300], ['garden', 2.2, 2.2, 2000], ['field', 3, 2.5, 1000], ['tower', 1.3, 1.3, 1000], ['gate', 2.4, 1.4, 1500],
       // les monuments couvrent 25 à 30 cases : 11 000 triangles au plus pour le temple et le palais (une pièce de chaque par ville)
       ['temple', 5, 5, 11000], ['palace', 6, 5, 11000], ['market', 4, 4, 6500], ['port', 4, 3.5, 6500], ['caravan', 4, 4, 6500], ['baths', 3, 2.6, 6500],
       ['teahouse', 1.8, 1.6, 3000], ['paifang', 1.8, 0.5, 1400],
+      // les repères : un de chaque par ville
+      ['factory', 3.2, 2.4, 6500], ['station', 3.6, 1.8, 6500], ['skyscraper', 2.4, 2.4, 6500], ['arcology', 5, 5, 11000],
     ];
     const box = new THREE.Box3();
     for (const people of ['orient', 'asie'] as const)

@@ -6,6 +6,10 @@ import type { TownKind } from '../world/rivalTown';
 import { orientModel, orientWall } from './models/oriental';
 import * as asian from './models/asian';
 import { withState, type TownState } from './townRuins';
+import { townLandmark, landmarkSmoke } from './models/landmarks';
+
+/** Les sommets des cheminées qui fument sur ce lot à cet âge (coordonnées du lot) ; vide sans fumée */
+export const townSmoke = (kind: TownKind, age: number) => landmarkSmoke(kind, Math.max(1, Math.min(5, age)));
 
 /**
  * Les modèles des villes des deux peuples rivaux (décor de l'archipel, voir `rivalTowns.ts` et `docs/iles.md`) : un jeu
@@ -52,7 +56,7 @@ export function townModel(people: People, kind: TownKind, age: number, v: number
   if (g) return g;
   const p = new Parts();
   // (une sorte que le peuple n'a pas : une dalle, pour garder une géométrie valable)
-  const drawn = people === 'orient' ? orientModel(p, kind, a, vv, qw, qd) : asianModel(p, kind, a, vv, qw, qd);
+  const drawn = townLandmark(p, people, kind, a, vv) || (people === 'orient' ? orientModel(p, kind, a, vv, qw, qd) : asianModel(p, kind, a, vv, qw, qd));
   if (!drawn) p.box(Math.max(0.2, qw * 0.5), 0.02, Math.max(0.2, qd * 0.5), 0, 0, 0, 0x9a968c);
   const built = p.build(), { body, glow } = withState(built.body, built.glow, state, vv * 13 + kind.length, false, people);
   g = mergeLit(body, glow) ?? body;

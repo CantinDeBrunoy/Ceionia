@@ -18,14 +18,19 @@ const angleDiff = (a: number, b: number) => wrapAngle(a - b);
 export type TownKind =
   | 'temple' | 'palace' | 'market' | 'port' | 'caravan' | 'baths' | 'garden' | 'house' | 'workshop' | 'field' | 'gate' | 'tower'
   // propres au peuple asiatique
-  | 'teahouse' | 'paifang';
+  | 'teahouse' | 'paifang'
+  // les repères des âges récents : usine et gare (Industriel), gratte-ciel (Moderne), arcologie (Futuriste)
+  | 'factory' | 'station' | 'skyscraper' | 'arcology';
 
 /**
  * Un lot : centre (cases du monde), emprise `w` × `d` (cases, avant rotation), rotation `rot` (la façade, +z du modèle, regarde
  * vers (sin rot, cos rot)), âge d'apparition `from` (1 : Antiquité … 5 : Futuriste ; le bourg de l'Antiquité sert aussi à la
- * Préhistoire), variante `v`
+ * Préhistoire), variante `v` ; `until` : l'âge où il disparaît (une maison ou un champ qui laisse la place à un repère)
  */
-export interface Lot { kind: TownKind; x: number; z: number; w: number; d: number; rot: number; from: number; v: number }
+export interface Lot { kind: TownKind; x: number; z: number; w: number; d: number; rot: number; from: number; v: number; until?: number }
+
+/** Le lot existe-t-il à l'âge `age` (âge des lots, au moins celui des modèles) ? `shown` : l'âge des modèles, pour `until` */
+export const lotLives = (l: Lot, age: number, shown = age) => l.from <= age && (l.until === undefined || shown < l.until);
 /** Rue : polyligne (cases), largeur, âge d'apparition */
 export interface Street { pts: [number, number][]; w: number; from: number }
 /** Place pavée ronde : centre, rayon */
@@ -69,7 +74,10 @@ export const HOUSE_SHARE = [0, 0.24, 0.45, 0.66, 0.85, 1];
 const SIZE: Partial<Record<TownKind, [number, number]>> = {
   temple: [5, 5], palace: [6, 5], market: [4, 4], port: [4, 3.5], caravan: [4, 4], baths: [3, 2.6], garden: [4, 4],
   teahouse: [1.8, 1.6], paifang: [1.8, 0.5],
+  factory: [3.2, 2.4], station: [3.6, 1.8], skyscraper: [2.4, 2.4], arcology: [5, 5],
 };
+/** Les sortes de lots posées hors des murs (les champs et le port aussi) */
+export const OUTSIDE: TownKind[] = ['field', 'port', 'factory', 'station', 'arcology'];
 
 const plans = new Map<string, TownPlan>();
 
@@ -388,6 +396,78 @@ function drawTown(w: World, q: RivalIsle): TownPlan {
   // (la façade d'une porte regarde au-dehors : on la retourne si elle regarde le centre)
   for (const l of lots) if (l.kind === 'gate' && Math.cos(l.rot) * (cz - l.z) + Math.sin(l.rot) * (cx - l.x) > 0) l.rot += Math.PI;
 
+  // ---------- Les repères des âges récents (tirage à part : le reste de la ville ne bouge pas) ----------
+  {
+    const rl = mulberry32(w.seed * 131 + (people === 'orient' ? 7 : 19));
+    /** l'emprise w × d tournée de rot tient-elle sur la terre ferme, assez plate, hors des murs et loin des autres lots ? */
+    const fitsOut = (x: number, z: number, lw: number, ld: number, rot: number, maxSlope: number) => {
+      const c = Math.cos(rot), s = Math.sin(rot), r = Math.hypot(lw, ld) / 2;
+      for (const [u, v] of [[0, 0], [-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5], [0, -0.5], [0, 0.5], [-0.5, 0], [0.5, 0]]) {
+        const px = x + u * lw * c + v * ld * s, pz = z - u * lw * s + v * ld * c;
+        if (!land(px, pz) || slope(px, pz) > maxSlope || height(px, pz) < 0.15) return false;
+        if (inPoly(px, pz, wall)) return false;
+      }
+      if (wall.some((p, j) => segDist(x, z, p, wall[(j + 1) % K]) < r + 0.8)) return false;
+      if (Math.hypot(plage[0] - x, plage[1] - z) < r + 3) return false;
+      if (lots.some((l) => l.kind !== 'field' && Math.hypot(l.x - x, l.z - z) < rad(l) * 0.86 + r + 0.6)) return false;
+      return nearStreet(x, z).d > r * 0.75;
+    };
+    /** les champs sous l'emprise cèdent la place à partir de l'âge `from` */
+    const evict = (x: number, z: number, r: number, from: number, kinds: TownKind[]) => {
+      for (const l of lots) if (kinds.includes(l.kind) && Math.hypot(l.x - x, l.z - z) < r + Math.max(l.w, l.d) * 0.5) l.until = Math.min(l.until ?? 9, from);
+    };
+    const add = (kind: TownKind, x: number, z: number, rot: number, from: number) => {
+      const [sw, sd] = SIZE[kind]!;
+      lots.push({ kind, x, z, w: sw, d: sd, rot, from, v: Math.floor(rl() * 1000) });
+      evict(x, z, Math.hypot(sw, sd) / 2, from, ['field', 'house', 'workshop', 'garden']);
+    };
+    // l'usine : hors les murs, du côté du port (à 30-90° de la route du port), au plus près
+    const [fw, fd] = SIZE.factory!;
+    search: for (let d = meanR + 3.5; d < meanR + 12; d += 0.5)
+      for (const da of [0.6, 0.8, 1.0, 1.2, 1.4, 1.6])
+        for (const s of rl() < 0.5 ? [1, -1] : [-1, 1]) {
+          const a = seaAng + s * da, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, rot = facing(x, z, cx, cz);
+          if (fitsOut(x, z, fw, fd, rot, 0.8)) { add('factory', x, z, rot, 3); break search; }
+        }
+    // la gare : devant une porte de terre, la façade tournée vers la porte, une rue jusqu'à elle
+    const [sw, sd] = SIZE.station!;
+    const gs = portes.length > 1 ? portes.slice(1) : portes;
+    search: for (let d = 2.6; d < 9; d += 0.4)
+      for (const g of gs)
+        for (const off of [0, 0.8, -0.8, 1.6, -1.6]) {
+          const gd = Math.hypot(g[0] - cx, g[1] - cz) || 1, ux = (g[0] - cx) / gd, uz = (g[1] - cz) / gd;
+          const x = g[0] + ux * d - uz * off, z = g[1] + uz * d + ux * off, rot = facing(x, z, g[0], g[1]);
+          if (!fitsOut(x, z, sw, sd, rot, 0.8)) continue;
+          add('station', x, z, rot, 3);
+          const fx = x + Math.sin(rot) * (sd / 2 + 0.3), fz = z + Math.cos(rot) * (sd / 2 + 0.3);
+          const road: [number, number][] = [[g[0] + ux * 0.4, g[1] + uz * 0.4], [fx, fz]];
+          streets.push({ pts: road, w: 1.05, from: 3 });
+          for (const l of lots) if (l.kind === 'field' && segDist(l.x, l.z, road[0], road[1]) < Math.max(l.w, l.d) * 0.5 + 0.7) l.until = Math.min(l.until ?? 9, 3);
+          break search;
+        }
+    // le gratte-ciel : dans les murs, à mi-chemin du rempart, à la place de quelques maisons
+    {
+      const [kw, kd] = SIZE.skyscraper!, r = Math.hypot(kw, kd) / 2;
+      let best: [number, number] | null = null, bs = Infinity;
+      for (const h of houses) {
+        const x = h.x, z = h.z, dc = Math.hypot(x - cx, z - cz);
+        if (!inWall(x, z, r + 0.6) || onPlazaAny(x, z, r) || !land(x, z) || slope(x, z) > 1) continue;
+        if (lots.some((l) => !['house', 'workshop', 'field'].includes(l.kind) && Math.hypot(l.x - x, l.z - z) < rad(l) * 0.86 + r + 0.3)) continue;
+        if (nearStreet(x, z).d < r * 0.7) continue;
+        const sc = Math.abs(dc / meanR - 0.5) + rl() * 0.15;
+        if (sc < bs) { bs = sc; best = [x, z]; }
+      }
+      if (best) { const ns = nearStreet(best[0], best[1]); add('skyscraper', best[0], best[1], facing(best[0], best[1], ns.sx, ns.sz), 4); }
+    }
+    // l'arcologie : hors les murs, du côté opposé à la mer, sur un replat
+    const [aw, ad] = SIZE.arcology!;
+    search: for (let d = meanR + 5; d < meanR + 16; d += 0.5)
+      for (let k = 0; k <= 12; k++) {
+        const a = seaAng + Math.PI + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.18, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, rot = facing(x, z, cx, cz);
+        if (fitsOut(x, z, aw, ad, rot, 1.1)) { add('arcology', x, z, rot, 5); break search; }
+      }
+  }
+
   return {
     people, x: cx, z: cz, seaAng, seaDist, r: meanR, lots, streets, plazas, wall, gates,
     points: { plage, port: quay, remparts: wall.map((p) => [p[0], p[1]]), portes, palais: pal, temple: [cx, cz], marche: mk },
@@ -397,5 +477,5 @@ function drawTown(w: World, q: RivalIsle): TownPlan {
 /** Les lots qui existent à l'âge `age` (la Préhistoire montre le bourg de l'Antiquité) */
 export function lotsAt(plan: TownPlan, age: number) {
   const a = Math.max(1, age);
-  return plan.lots.filter((l) => l.from <= a);
+  return plan.lots.filter((l) => lotLives(l, a));
 }

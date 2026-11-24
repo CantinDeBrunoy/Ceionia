@@ -3,9 +3,16 @@ import type { World } from '../world/world';
 import { N, VEG_FOREST, VEG_ROCKS } from '../world/world';
 import { GeoBatch } from './batch';
 import { mats, mergeLit } from './materials';
-import { townPlans, townCells, inPoly, type Lot, type TownPlan } from '../world/rivalTown';
-import { townModel, townWall, plinthGeo } from './townModels';
+import { townPlans, townCells, inPoly, lotLives, type Lot, type TownPlan } from '../world/rivalTown';
+import { townModel, townWall, plinthGeo, townSmoke } from './townModels';
+import { townProps } from './townProps';
+import { RuinSmoke } from './isleRuins';
 import { hash2 } from '../core/rng';
+
+/** Distance de la caméra à une ville (cases) sous laquelle ses détails fins (réverbères, véhicules) se montrent */
+export const FINE_DIST = 80;
+/** Au-delà, les fumées des cheminées ne se dessinent plus */
+const SMOKE_DIST = 300;
 
 /**
  * Les villes des deux peuples rivaux de l'archipel, en décor (voir `world/rivalTown.ts` pour le plan, `townModels.ts` pour les
@@ -46,14 +53,17 @@ export const rivalLotsAge = (age: number) => Math.max(RIVAL_DENSE_AGE, rivalAge(
 
 /** Sol de la ville dans les murs (terre battue, dallage), sous les rues : plus de pelouse entre les maisons */
 function townGroundColor(people: TownPlan['people'], age: number) {
-  if (people === 'orient') return [0xcdb488, 0xcdb488, 0xd2bc92, 0xcbb894, 0xc4bcaa, 0xe4e0d6][age];
-  return [0xa59a82, 0xa59a82, 0xa8a090, 0xa29c90, 0x9c9a94, 0xc8ccc8][age];
+  if (people === 'orient') return [0xcdb488, 0xcdb488, 0xd2bc92, 0xcbb894, 0xc9bea8, 0xd4d0c6][age];
+  return [0xa59a82, 0xa59a82, 0xa8a090, 0xa29c90, 0xa8a59e, 0xbcc0bc][age];
 }
 
-/** Couleur du sol des rues et des places, par peuple et par âge */
+/**
+ * Couleur du sol des rues et des places, par peuple et par âge : terre puis pavés, pavés sombres à l'Industriel, asphalte
+ * au Moderne, dalles claires au Futuriste (assez loin du sol de la ville pour qu'on lise le tracé des rues de loin)
+ */
 function streetColor(people: TownPlan['people'], age: number) {
-  if (people === 'orient') return [0xbfa478, 0xbfa478, 0xcbb68c, 0xc2b090, 0xa9a49a, 0xdedad2][age];
-  return [0xb8a888, 0xb8a888, 0xbab4a6, 0xaca89e, 0x9a9a98, 0xd8dcdc][age];
+  if (people === 'orient') return [0xbfa478, 0xbfa478, 0xcbb68c, 0x9c8a72, 0x6e6a66, 0xf2f0ea][age];
+  return [0xb8a888, 0xb8a888, 0xbab4a6, 0x7e7a74, 0x5e6066, 0xe8ecec][age];
 }
 
 export class RivalTowns {
@@ -63,12 +73,23 @@ export class RivalTowns {
   private items: Item[] = [];
   private walls: Piece[] = [];
   private grounds: Piece[] = [];
+  /**
+   * Le niveau de détail : les objets des rues (`townProps`), une géométrie par ville dans un lot à part, sans ombre, montré
+   * seulement quand la caméra est à moins de `FINE_DIST` de la ville
+   */
+  private fine = new GeoBatch(mats.lit, 4, 1 << 16);
+  private props: { inst: number; geo: THREE.BufferGeometry; x: number; z: number }[] = [];
+  /** fumées noires des cheminées (Industriel), vapeur blanche (Moderne) */
+  private smoke = [new RuinSmoke(0x5a5550), new RuinSmoke(0xe8e8e4)];
   private age = -1;
   private visVersion = -1;
 
   constructor(private world: World) {
     this.plans = townPlans(world);
     this.group.add(this.batch.mesh);
+    this.fine.mesh.castShadow = false;
+    this.group.add(this.fine.mesh);
+    for (const s of this.smoke) this.group.add(s.group);
     this.markGround();
   }
 
@@ -163,7 +184,7 @@ export class RivalTowns {
     const have = new Map(this.items.map((it) => [it.lot, it]));
     for (const plan of this.plans)
       for (const lot of plan.lots) {
-        const it = have.get(lot), want = lot.from <= dense;
+        const it = have.get(lot), want = lotLives(lot, dense, a);
         const geo = townModel(plan.people, lot.kind, a, lot.v, lot.w, lot.d);
         const delay = first || instant ? 0 : hash2(Math.round(lot.x * 7), Math.round(lot.z * 7), 41) * SPREAD;
         if (want && !it) {
@@ -183,6 +204,35 @@ export class RivalTowns {
       }
     this.buildWalls();
     this.buildGrounds();
+    this.buildProps();
+    this.buildSmoke();
+  }
+
+  /** Les objets des rues de chaque ville, pour l'âge des modèles */
+  private buildProps() {
+    for (const pr of this.props) { this.fine.remove(pr.inst, pr.geo); pr.geo.dispose(); }
+    this.props = [];
+    const dense = Math.max(3, this.age);
+    for (const plan of this.plans) {
+      const geo = townProps(plan, this.age, plan.lots.filter((l) => lotLives(l, dense, this.age)), (x, z) => this.h(x, z));
+      if (!geo) continue;
+      const inst = this.fine.add(geo);
+      if (inst < 0) { geo.dispose(); continue; }
+      this.fine.setMatrix(inst, _m.identity());
+      this.props.push({ inst, geo, x: plan.x, z: plan.z });
+    }
+  }
+
+  /** Les panaches des cheminées (usine, locomotive) à l'âge des modèles */
+  private buildSmoke() {
+    for (const s of this.smoke) s.clear();
+    const sm = this.age <= 3 ? this.smoke[0] : this.smoke[1];
+    let id = 0;
+    for (const it of this.items) {
+      if (it.leave) continue;
+      const l = it.lot, c = Math.cos(l.rot), s = Math.sin(l.rot), [y] = this.footing(l);
+      for (const [lx, ly, lz] of townSmoke(l.kind, this.age)) sm.start(id++, l.x + lx * c + lz * s, y + ly, l.z - lx * s + lz * c, 0.55);
+    }
   }
 
   /** Les pans de remparts, entre les tours, interrompus aux portes ; chaque pan suit le sol par marches */
@@ -277,14 +327,19 @@ export class RivalTowns {
     }
   }
 
-  update(dt: number, age: number) {
+  /** `eye` : la position de la caméra (détails fins de près, fumées pas trop loin) */
+  update(dt: number, age: number, eye?: THREE.Vector3) {
     this.setAge(age);
     // le relief a changé (sculpté) : tout se repose
     if (this.world.visVersion !== this.visVersion) {
       const first = this.visVersion < 0;
       this.visVersion = this.world.visVersion;
-      if (!first) { for (const it of this.items) this.place(it); this.buildWalls(); this.buildGrounds(); }
+      if (!first) { for (const it of this.items) this.place(it); this.buildWalls(); this.buildGrounds(); this.buildProps(); this.buildSmoke(); }
     }
+    let near = Infinity;
+    for (const pl of this.plans) if (eye) near = Math.min(near, Math.hypot(eye.x - pl.x, eye.y, eye.z - pl.z));
+    for (const pr of this.props) this.fine.mesh.setVisibleAt(pr.inst, !!eye && Math.hypot(eye.x - pr.x, eye.y, eye.z - pr.z) < FINE_DIST);
+    for (const s of this.smoke) { s.group.visible = near < SMOKE_DIST; if (s.group.visible) s.update(dt); }
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
       if (it.t < 0) continue;
@@ -310,7 +365,10 @@ export class RivalTowns {
   dispose() {
     this.group.remove(this.batch.mesh);
     this.batch.mesh.dispose();
+    this.fine.mesh.dispose();
+    for (const s of this.smoke) s.clear();
     for (const g of this.grounds) g.geo.dispose();
+    for (const pr of this.props) pr.geo.dispose();
     if (this.world.town) this.world.town = null;
   }
 }
