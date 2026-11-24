@@ -989,6 +989,14 @@ body.hell #resPanel { display: none !important; }
 #diploChoice .dcStep.done .dcNum { background: #5a9a4a; }
 #diploChoice .dcStep.next { opacity: 0.6; border-style: dashed; }
 #diploChoice .dcStep.now .dcNum { background: #c27a1a; }
+/* les chapitres, un par âge : celui de l'âge déplié, les autres sur une ligne (fait : coche verte ; plus tard : pâli) */
+#diploChoice .dcChap { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px; text-align: left; color: #4a2e16; }
+#diploChoice .dcChap i { flex: none; width: 18px; font-style: normal; font-weight: 800; color: #b08a55; }
+#diploChoice .dcChap b { font-family: var(--hSerif); font-size: 14.5px; font-weight: 800; }
+#diploChoice .dcChap small { font-family: var(--hSerif); font-style: italic; font-size: 12px; color: #6a5040; }
+#diploChoice .dcChap.done i { color: #5a9a4a; }
+#diploChoice .dcChap.done, #diploChoice .dcChap.later { opacity: 0.7; }
+#diploChoice .dcChap + .dcSteps { margin-bottom: 4px; }
 #diploChoice .dcPrep { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 #diploChoice .dcPrepIt { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 5px 10px 5px 8px; border-radius: 12px; text-align: left; cursor: pointer; color: #3A2213; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F5E6C8); }
 #diploChoice .dcPrepIt:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }

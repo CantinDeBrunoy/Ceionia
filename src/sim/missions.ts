@@ -701,20 +701,20 @@ export const MISSIONS: Mission[] = [
   {
     id: 'truce', age: 2, mandatory: false, talks: true, icon: '🕊️', title: 'L’ambassade de la paix', unlocks: 'concord',
     requires: { missions: ['envoys'] },
-    intro: 'Nos ambassadeurs vont réunir les chefs des deux îles autour d’une même table. S’ils signent, la guerre cesse, et les trois peuples feront la fête.',
+    intro: 'Nos ambassadeurs vont réunir les chefs des deux îles autour d’une même table. S’ils signent une trêve, les combats cessent, et les trois peuples feront la fête.',
     choices: [
       {
         label: 'Réunir les chefs sur une petite île', text: 'Terrain neutre : une tente, une table et trois chaises.',
         dest: 'river', sea: true, scene: 'voyage', variant: 'islet', doing: 'réunit les chefs des deux îles sous une tente', party: 4, work: 40, risk: 0, carry: 'guests',
         win: [{ t: 'diplo', act: 'truce' }, { t: 'diplo', act: 'feast' }, joy(3), food(3, 6)], lose: [],
-        winText: 'Sous la tente, les deux chefs ont signé la paix, et notre village en est le témoin. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.',
+        winText: 'Sous la tente, les deux chefs ont signé une trêve, et notre village en est le témoin. Les invités des deux îles viennent la fêter chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.',
         loseText: 'Les chefs ne sont pas venus.',
       },
       {
         label: 'Signer à bord de notre navire', text: 'Au milieu du bras de mer, sous notre pavillon.',
         dest: 'river', sea: true, scene: 'voyage', variant: 'ship', doing: 'accueille les chefs des deux îles à son bord', party: 4, work: 32, risk: 0, carry: 'guests',
         win: [{ t: 'diplo', act: 'truce' }, { t: 'diplo', act: 'feast' }, joy(4), jobs(1, 6)], lose: [],
-        winText: 'À notre bord, au milieu du bras de mer, les deux chefs ont signé la paix. Les invités des deux îles viennent fêter la paix chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.',
+        winText: 'À notre bord, au milieu du bras de mer, les deux chefs ont signé une trêve. Les invités des deux îles viennent la fêter chez nous. Pour s’en souvenir : un monument de la concorde et une ambassade à bâtir.',
         loseText: 'Les chefs ne sont pas venus.',
       },
     ],
@@ -1266,7 +1266,7 @@ PERK_NAME.satellites = 'des satellites : volcans et catastrophes annoncés plus 
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** Ce que la diplomatie gagne, en clair et en pastille */
-const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la paix des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', landing: 'la côte reconnue : la bataille peut commencer', victory: 'la guerre gagnée : butin et tribut d’or', scoutBeach: 'la plage de débarquement repérée', scoutGarrison: 'la garnison rivale comptée', scoutChief: 'le chef rival repéré', scoutGate: 'la porte faible repérée' };
+const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la trêve des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', landing: 'la côte reconnue : la bataille peut commencer', victory: 'la guerre gagnée : butin et tribut d’or', scoutBeach: 'la plage de débarquement repérée', scoutGarrison: 'la garnison rivale comptée', scoutChief: 'le chef rival repéré', scoutGate: 'la porte faible repérée' };
 const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', landing: '🔭', victory: '🏆', scoutBeach: '🏖️', scoutGarrison: '🛡️', scoutChief: '👑', scoutGate: '🚪' };
 
 /** Un avantage pour le dénouement, en clair (« +4 troupes alliées pour la bataille », « +10 % de chances pour la paix ») */

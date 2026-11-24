@@ -121,9 +121,11 @@ import { canExpand, expandWorld, repairCoast } from './world/expand';
 import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
 import type { ConflictWay } from './ui/ways';
-import { bindPostReady, pathDue, ENDGAME_AGE, CONFLICT_LABEL, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
+import { bindPostReady, pathDue, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
 import { RivalBattle, BattleGoal, BATTLE_LIMIT, type BattleKind } from './sim/rivalBattle';
 import { nextBattle, campaignResult, corps, corpsTroops, raidDue, raidLevel, stepCamp, RAID_GRACE, HOLD_SHARE, type Front } from './sim/campaign';
+import { chapterDone, chaptersUpTo, conflictAge, inSaga, isChapterLabel, signPeace, stepSaga, type SagaCtx } from './sim/saga';
+import { chapterTitle } from './sim/diploRoad';
 import { RivalCamp } from './render/rivalCamp';
 import type { TroopKind } from './sim/army';
 import { roadView } from './sim/diploRoad';
@@ -768,6 +770,7 @@ class Game implements UIHost {
     this.diploChoice = new DiploChoice(uiRoot, {
       diplo: () => this.world.diplo, why: () => endgameWhy(this.world, this.sim.age), click: () => audio.sfxClick(), battle: () => { this.startRivalBattle(); },
       road: () => this.road(), mission: (id) => this.ui.gotoMission(id), hold: () => this.holdCamp(),
+      build: (k) => this.buildForSaga(k), sign: () => this.signPeace(),
       ally: (p) => {
         if (!chooseAlly(this.world.diplo, p)) return;
         this.ui.banner(tr('Une alliance !'), tr('{people} sont nos alliés', { people: peopleName(p).replace(/^./, (c) => c.toUpperCase()) }));
@@ -1482,11 +1485,17 @@ class Game implements UIHost {
     if (!archipelagoOn(w)) return;
     const cs = conflictState(w);
     if (cs && cs.kind !== this.naval.state.kind) this.naval.state = cs;
-    // (une partie déjà au-delà du Médiéval : le conflit est réputé réglé, sans rien de plus)
-    settleLate(d, this.sim.age, true);
+    // le fil des âges : un chapitre fini se dit (une arrivée tardive joue les chapitres passés à la suite)
+    const fresh = stepSaga(w, this.sim.age, this.sagaCtx());
+    if (fresh && d.path) {
+      const next = AGES[fresh + 1]?.name;
+      const after = chaptersUpTo(this.sim.age).some((a) => !d.saga.done.includes(a));
+      this.ui.banner(tr('Chapitre fait : {title}', { title: chapterTitle(d.path, fresh) }), after ? tr('Le chapitre suivant vous attend') : next && fresh >= this.sim.age ? tr('Une condition de moins vers l’âge : {age}', { age: next }) : '');
+      this.ui.update(); this.saveNow();
+    }
     // la campagne de l'île rivale : la caserne avancée refait le corps, la sortie qui vient s'annonce ; laissée trop longtemps
-    // sans réponse, la garnison la règle seule
-    if (d.ally && stepCamp(d, w.exp.clock, this.time.dayLen) === 'warn') this.ui.toast(tr('⚔️ {rival} préparent une sortie contre notre camp de la plage.', { rival: cap(peopleName(rivalOf(d.ally))) }), () => this.openDiploChoice(), 'action');
+    // sans réponse, la garnison la règle seule. Sans étape en cours à cet âge, les sorties attendent
+    if (d.ally && stepCamp(d, w.exp.clock, this.time.dayLen, this.sim.age) === 'warn') this.ui.toast(tr('⚔️ {rival} préparent une sortie contre notre camp de la plage.', { rival: cap(peopleName(rivalOf(d.ally))) }), () => this.openDiploChoice(), 'action');
     if (!this.rivalBattle && raidDue(d, w.exp.clock) && w.exp.clock >= d.camp.raid + RAID_GRACE * this.time.dayLen) { if (this.diploChoice.visible) this.diploChoice.hide(); this.holdCamp(); }
     // (un récit d'expédition en attente, sa cinématique de trophée : ils passent avant les cartes)
     if (this.rivalBattle || this.popupBusy() || !this.popups.open || this.diploChoice.visible || this.voyageStage.playing || this.peaceCine || this.reportsDue.size || this.lateReports.length || this.trophyStage.playing) return;
@@ -1509,14 +1518,23 @@ class Game implements UIHost {
       else { this.popups.taken(); this.diploChoice.showBattle(); }
     }
     else if (d.battle === 'lost' && battleReady(d, w.exp.clock) && !this.retrySaid) { this.retrySaid = true; this.ui.toast(tr('⚔️ Nos troupes se sont refaites : la bataille peut reprendre. Cliquez ici.'), () => this.openDiploChoice(), 'action'); }
-    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone(), this.pathShown)) {
+    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone() || (this.sim.age > 4 && this.popups.open), this.pathShown)) {
       this.pathShown = d.asked = true;
       // pas encore installé chez l'allié : pas de carte aux voies grisées (l'auteur la trouvait « pas normale » à ce stade),
       // un message qui dit quoi faire, et la carte viendra une fois le port et le comptoir bâtis (une fois par session)
       const why = endgameWhy(w, this.sim.age);
-      if (why) { this.pathShown = false; if (!this.pathTold) { this.pathTold = true; this.ui.toast(tr('⚖️ Dernière étape vers l’Industriel : le conflit des deux îles. {why}', { why }), () => this.goAlly(), 'action'); } }
+      if (why) { this.pathShown = false; if (!this.pathTold) { this.pathTold = true; this.ui.toast(tr('⚖️ Dernière étape vers l’âge suivant : le conflit des deux îles. {why}', { why }), () => this.goAlly(), 'action'); } }
       else if (quiet) this.ui.toast(tr('⚖️ Le conflit des deux îles attend votre choix : la paix ou la guerre. Cliquez ici.'), () => this.openDiploChoice(), 'action');
       else { this.popups.taken(); this.diploChoice.showPath(); }
+    }
+    // la voie prise, le chapitre de l'âge est la dernière condition qui manque : la feuille de route, une fois par âge et par
+    // session (le passage d'âge n'est jamais bloqué sans qu'on sache quoi faire)
+    else if (!this.tutorial.active && d.path && d.conflict === 'open' && conflictAge(this.sim.age) && this.roadDueAge !== this.sim.age && (inSaga(this.sim.age) ? this.othersDone() && chaptersUpTo(this.sim.age).some((a) => !chapterDone(w, a, this.sagaCtx())) : quiet)) {
+      this.roadDueAge = this.sim.age;
+      // (au Futuriste, plus de passage d'âge : au chargement, un message rappelle le conflit à mener)
+      if (!inSaga(this.sim.age)) this.ui.toast(tr('⚖️ Le conflit des deux îles attend sa suite. Cliquez ici.'), () => this.openDiploChoice(), 'action');
+      else if (quiet) this.ui.toast(tr('⚖️ Dernière étape vers l’âge suivant : le chapitre du conflit des deux îles. Cliquez ici.'), () => this.openDiploChoice(), 'action');
+      else { this.popups.taken(); this.diploChoice.showRoad(); }
     }
   }
 
@@ -1535,6 +1553,10 @@ class Game implements UIHost {
 
   /** La carte du dénouement s'est ouverte d'elle-même dans cette session (voir `pathDue`) */
   private pathShown = false;
+  /** l'âge où la feuille de route s'est ouverte d'elle-même, le chapitre étant la dernière condition (une fois par âge) */
+  private roadDueAge = -1;
+  /** Ce que les chapitres lisent du village : le nombre de bâtiments d'un genre */
+  private sagaCtx(): SagaCtx { return { count: (k) => this.sim.counts[k] ?? 0 }; }
   /** le message « installez-vous chez l'allié » a été dit dans cette session */
   private pathTold = false;
   /** La carte « Lancer l'assaut » s'est ouverte d'elle-même dans cette session */
@@ -1550,7 +1572,7 @@ class Game implements UIHost {
   /** Les conditions du passage à l'âge suivant sont toutes remplies, sauf peut-être le conflit des deux îles */
   private othersDone() {
     const ap = this.sim.ageProgress();
-    return !!ap && ap.items.some((i) => i.label === CONFLICT_LABEL) && ap.items.every((i) => i.label === CONFLICT_LABEL || i.have >= i.need);
+    return !!ap && ap.items.some((i) => isChapterLabel(i.label)) && ap.items.every((i) => isChapterLabel(i.label) || i.have >= i.need);
   }
 
   /**
@@ -1564,7 +1586,7 @@ class Game implements UIHost {
       const how = d.conflict === 'peace' ? tr('La paix est signée entre les deux îles.') : d.conflict === 'won' ? tr('La guerre est gagnée : le rival paie son tribut.') : tr('Les deux îles ont fait la paix entre elles.');
       return { ally: d.ally, badge: 'taken', note: how };
     }
-    if (d.path === 'war' && d.battle !== 'none') return { ally: d.ally, badge: 'free', button: tr('À la bataille') };
+    if (d.path === 'war' && d.battle !== 'none') return { ally: d.ally, badge: 'free', button: nextBattle(d, w.exp.clock, this.sim.age) ? tr('À la bataille') : tr('Voir la suite') };
     const why = endgameWhy(w, this.sim.age);
     if (why) return { ally: d.ally, badge: 'wait', note: why };
     return { ally: d.ally, badge: 'free', button: d.path ? tr('Voir la suite') : tr('Choisir la paix ou la guerre') };
@@ -1589,9 +1611,9 @@ class Game implements UIHost {
     const ally = isleOf(w, d.ally)!, rival = isleOf(w, rivalOf(d.ally))!, back = this.cam.view();
     const home = this.villageCenter() ?? [back.x, back.z];
     const steps: [number, () => void][] = [
-      [0, () => { this.cam.goTo((ally.village.x + rival.village.x) / 2, (ally.village.z + rival.village.z) / 2, 120); this.ui.banner(tr('La paix des deux îles'), tr('Les deux chefs ont signé, les flottes se saluent')); }],
+      [0, () => { this.cam.goTo((ally.village.x + rival.village.x) / 2, (ally.village.z + rival.village.z) / 2, 120); this.ui.banner(tr('La trêve des deux îles'), tr('Les deux chefs ont signé une trêve, les flottes se saluent')); }],
       [5200, () => { this.cam.goTo(rival.village.x, rival.village.z, 70); this.ui.banner(cap(isleName(rivalOf(d.ally!))), tr('Son comptoir s’ouvre à nos marchands')); }],
-      [10200, () => { this.cam.goTo(ally.village.x, ally.village.z, 70); this.ui.banner(cap(isleName(d.ally!)), tr('Notre allié fête la paix')); }],
+      [10200, () => { this.cam.goTo(ally.village.x, ally.village.z, 70); this.ui.banner(cap(isleName(d.ally!)), tr('Notre allié fête la trêve')); }],
       [15200, () => { this.cam.goTo(home[0], home[1], VILLAGE_DIST); }],
       [17600, () => { this.festAt(home[0], home[1]); this.festAt(home[0], home[1]); this.ui.banner(tr('La fête des trois peuples'), tr('Un monument de la concorde à bâtir')); }],
       [19000, () => { this.peaceCine = false; this.saveNow(); this.ui.update(); }],
@@ -1608,7 +1630,7 @@ class Game implements UIHost {
    * recommence. On ne change pas d'âge pendant (`allyBattle`)
    */
   startRivalBattle() {
-    const w = this.world, d = w.diplo, kind = nextBattle(d, w.exp.clock);
+    const w = this.world, d = w.diplo, kind = nextBattle(d, w.exp.clock, this.sim.age);
     // (la défense du camp n'attend pas : une sortie vient quand elle vient ; les autres batailles, le délai d'une défaite)
     if (this.rivalBattle || !kind || (kind !== 'defend' && !battleReady(d, w.exp.clock)) || !d.ally) return false;
     if (this.mode !== 'surface') { this.ui.toast(tr('Revenez au village pour mener la bataille.')); return false; }
@@ -1666,9 +1688,9 @@ class Game implements UIHost {
     let b: RivalBattle;
     try { b = this.campaignBattle('defend', sent); } catch { return; }
     for (let t = 0; t < BATTLE_LIMIT && !b.outcome; t += 0.5) b.step(0.5);
-    const [s0, a0] = corps(d), sentA = sent.filter((k) => k === 'archer').length, up = b.survivors();
+    const [s0, a0] = corps(d, this.sim.age), sentA = sent.filter((k) => k === 'archer').length, up = b.survivors();
     const left: [number, number] = [up[0] + (s0 - (sent.length - sentA)), up[1] + (a0 - sentA)];
-    const lost = campaignResult(d, 'defend', b.outcome === 'won', left, w.exp.clock, this.time.dayLen);
+    const lost = campaignResult(d, 'defend', b.outcome === 'won', left, w.exp.clock, this.time.dayLen, this.sim.age);
     if (b.outcome === 'won') this.ui.toast(tr('🛡️ La garnison a tenu le camp de la plage : la sortie rivale est repoussée.'), () => this.openDiploChoice(), 'notice');
     else this.ui.toast(tr('🔥 Le camp n’a pas tenu : nous perdons {what}. Cliquez ici.', { what: this.frontName(lost) }), () => this.openDiploChoice(), 'action');
     this.ui.update(); this.saveNow();
@@ -1771,7 +1793,7 @@ class Game implements UIHost {
     const b = this.rivalBattle, w = this.world;
     if (!b) return;
     // la campagne : ce qu'on tient, ce qui reste du corps, la sortie suivante (la défense perdue : ce qui est reperdu)
-    const kind = b.kind, lostFront = kind === 'full' ? null : campaignResult(w.diplo, kind, outcome === 'won', b.survivors(), w.exp.clock, this.time.dayLen);
+    const kind = b.kind, lostFront = kind === 'full' ? null : campaignResult(w.diplo, kind, outcome === 'won', b.survivors(), w.exp.clock, this.time.dayLen, this.sim.age);
     this.rivalBattle = null;
     this.allyBattle = false;
     this.victoryT = 0;
@@ -1811,15 +1833,40 @@ class Game implements UIHost {
   }
 
   /** La feuille de route de la voie prise (voir `sim/diploRoad.ts`), null sans voie ou le conflit réglé */
-  road() { return roadView(this.world, { running: (id) => this.expeditions.active.some((e) => e.m.id === id), dayLen: this.time.dayLen }); }
+  road() { return roadView(this.world, { running: (id) => this.expeditions.active.some((e) => e.m.id === id), dayLen: this.time.dayLen, age: this.sim.age, count: (k) => this.sim.counts[k] ?? 0 }); }
+
+  /**
+   * Une étape de construction de la feuille de route (la paix : le second comptoir, l'ambassade) : le bâtiment en main, et la
+   * vue chez l'allié pour le comptoir (il ne se pose que là)
+   */
+  private buildForSaga(k: KindId) {
+    if (this.mode !== 'surface') { this.ensureSurface(() => this.buildForSaga(k), true); return; }
+    if (k === 'tradepost') this.goAlly();
+    // (comme un clic sur sa vignette : verrouillé, un message dit pourquoi et où aller)
+    this.ui.pickBuild(k);
+    this.ui.update();
+  }
+
+  /**
+   * La paix signée, au bout du chapitre du Moderne (provisoire : les Jeux des îles, chantier D) : le conflit est réglé, la
+   * fête des trois peuples éclate au village
+   */
+  private signPeace() {
+    if (!signPeace(this.world, this.sagaCtx())) return;
+    this.ui.banner(tr('La paix des îles'), tr('Les deux chefs ont signé la paix chez nous'));
+    audio.sfxAgeUp();
+    const c = this.villageCenter();
+    if (c) { this.festAt(c[0], c[1]); this.festAt(c[0], c[1]); }
+    this.ui.update(); this.saveNow();
+  }
 
   /** La ligne en tête du rayon Vie, à l'âge industriel : le conflit des deux îles, à régler (ou la voie à changer) */
   diploLine() {
     if (!endgameOpen(this.world, this.sim.age)) return null;
     const p = this.world.diplo.path;
     const now = p === 'peace' ? tr('la paix') : p === 'war' ? tr('la guerre') : null;
-    // (la bataille engagée : on ne change plus de voie, le bouton y mène)
-    const button = this.world.diplo.battle !== 'none' ? tr('À la bataille') : now ? tr('La suite…') : tr('Choisir…');
+    // (une bataille ouverte à cet âge : le bouton y mène ; sinon la feuille de route)
+    const button = this.world.diplo.battle !== 'none' && nextBattle(this.world.diplo, this.world.exp.clock, this.sim.age) ? tr('À la bataille') : now ? tr('La suite…') : tr('Choisir…');
     return { text: now ? tr('⚖️ Le conflit des deux îles : {path}', { path: now }) : tr('⚖️ Le conflit des deux îles'), button };
   }
   /**
@@ -1838,7 +1885,7 @@ class Game implements UIHost {
     if ((!change || d.battle !== 'none') && d.path && this.diploChoice.showRoad()) return;
     // (ce qui manque encore, le port et le comptoir chez l'allié : la carte le dit, ses deux voies grisées)
     const why = endgameWhy(w, this.sim.age);
-    if (why && !(d.ally && d.conflict === 'open' && this.sim.age === ENDGAME_AGE)) { this.ui.toast(why); return; }
+    if (why && !(d.ally && d.conflict === 'open' && conflictAge(this.sim.age))) { this.ui.toast(why); return; }
     this.diploChoice.showPath();
   }
 

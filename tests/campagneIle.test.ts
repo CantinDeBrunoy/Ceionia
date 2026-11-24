@@ -70,6 +70,21 @@ describe('la campagne de l’île rivale : l’état', () => {
     expect(back.camp).toEqual(d.camp);
   });
 
+  it('le fil des âges : chaque bataille à son âge (la plage au Médiéval, le port et la tour à l’Industriel, l’assaut au Moderne), le corps grandit', () => {
+    const d = war();
+    expect(nextBattle(d, 0, 2)).toBe('landing');
+    campaignResult(d, 'landing', true, [15, 10], 100, DAY, 2);
+    expect(nextBattle(d, 101, 2)).toBeNull();
+    expect(nextBattle(d, 101, 3)).toBe('port');
+    campaignResult(d, 'port', true, [18, 12], 120, DAY, 3);
+    campaignResult(d, 'tour', true, [18, 12], 140, DAY, 3);
+    expect(nextBattle(d, 141, 3)).toBeNull();
+    expect(nextBattle(d, 141, 4)).toBe('assault');
+    // (25 au Médiéval, 30 à l'Industriel, 35 au Moderne : les pertes restent, les recrues comblent les rangs)
+    expect([2, 3, 4].map((a) => corpsTroops(d, a).length)).toEqual([25, 30, 35]);
+    expect(corps(d, 3)).toEqual([18, 12]);
+  });
+
   it('se faire attaquer : la sortie vient, s’annonce, se repousse (la suivante plus forte) ; perdue, le dernier avant-poste est reperdu', () => {
     const d = war();
     campaignResult(d, 'landing', true, [15, 10], 0, DAY);

@@ -4,19 +4,21 @@ import type { KindId } from '../build/catalog';
 import { tr } from '../i18n';
 import { archipelagoOn } from '../world/expand';
 import { newCamp, readCamp, type CampState } from './campaign';
+import { newSaga, readSaga, conflictAge, FIRST_CHAPTER, type SagaState } from './saga';
 
 /**
  * La diplomatie de l'archipel (voir `docs/diplomatie.md`) : les deux peuples des îles rivales, l'allié qu'on choisit parmi eux
- * à la fin de la cinématique des îles, et leur conflit, qu'on règle au Médiéval par la paix (une ambassade, puis la
- * cinématique de la paix) ou par la guerre (une expédition militaire, puis la bataille) : il doit l'être pour passer à
- * l'Industriel. Rien de ceci n'existe sans l'archipel accepté (`archipelagoOn`)
+ * à la fin de la cinématique des îles, et leur conflit, qu'on choisit au Médiéval de régler par la paix (des pourparlers)
+ * ou par la guerre (des éclaireurs, puis la campagne de l'île rivale). Il s'étale sur trois chapitres, le Médiéval,
+ * l'Industriel et le Moderne (`sim/saga.ts`) : chacun est une condition du passage à l'âge suivant, le dernier règle le
+ * conflit. Rien de ceci n'existe sans l'archipel accepté (`archipelagoOn`)
  */
 
 /** Voie choisie pour le dénouement : la paix (une chaîne de pourparlers) ou la guerre aux côtés de l'allié */
 export type Path = 'peace' | 'war';
 /**
  * Le conflit entre les deux îles : en cours, réglé par notre paix, gagné par la guerre, ou réglé d'office par un traité
- * entre les deux îles (une partie déjà au Moderne ou au-delà, voir `settleLate`)
+ * entre les deux îles (une partie déjà au Futuriste, voir `settleLate`)
  */
 export type Conflict = 'open' | 'peace' | 'won' | 'treaty';
 
@@ -52,6 +54,8 @@ export interface DiploState {
   boons: Boons;
   /** guerre : la campagne de l'île rivale, après les éclaireurs (ce qu'on tient, le corps, les sorties ; voir `sim/campaign.ts`) */
   camp: CampState;
+  /** les chapitres du conflit, un par âge, du Médiéval au Moderne, et la trêve de la paix (voir `sim/saga.ts`) */
+  saga: SagaState;
 }
 
 /**
@@ -106,7 +110,7 @@ export function isleOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: strin
   return when === 'ally' || w.diplo.conflict === 'open';
 }
 
-export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [], boons: noBoons(), camp: newCamp() });
+export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [], boons: noBoons(), camp: newCamp(), saga: newSaga() });
 
 const PEOPLES: People[] = ['orient', 'asie'];
 const PATHS: Path[] = ['peace', 'war'];
@@ -135,6 +139,8 @@ export function readDiplo(d: any): DiploState {
   for (const k of BOON_KINDS) { const v = Math.round(+d.boons?.[k] || 0); s.boons[k] = Math.max(k === 'peace' ? PEACE_MIN : 0, Math.min(BOON_MAX[k], v)); }
   // (la campagne de l'île rivale : nouvelle le 23 nov. 2026 ; une ancienne partie aux éclaireurs revenus reprend au débarquement)
   s.camp = readCamp(d.camp);
+  // (les chapitres du fil des âges : nouveaux le 24 nov. 2026 ; une ancienne partie n'en a aucun de noté, voir `catchUp`)
+  s.saga = readSaga(d.saga);
   return s;
 }
 
@@ -184,8 +190,11 @@ export const PEACE_MISSION = 'truce';
 export const WAR_MISSION = 'allywar';
 const DIPLO_MISSIONS = new Set<string>([...PEACE_CHAIN, WAR_MISSION]);
 
-/** L'âge du dénouement : le Médiéval ; le conflit doit y être réglé pour passer à l'Industriel */
-export const ENDGAME_AGE = 2;
+/**
+ * L'âge où s'ouvre le dénouement : le Médiéval (on y choisit sa voie). Le conflit se joue ensuite en trois chapitres, jusqu'au
+ * Moderne (`sim/saga.ts`)
+ */
+export const ENDGAME_AGE = FIRST_CHAPTER;
 
 /**
  * Le crochet « port et comptoir installés chez l'allié » : `allyPostReady(world)` de `sim/allyLand.ts`, branché par `Game` au
@@ -238,7 +247,8 @@ export function applyDiplo(d: DiploState, act: DiploAct) {
   if (act === 'meet') d.met = [...PEOPLES];
   else if (act === 'post') d.post = true;
   // la paix signée : le conflit est réglé, la cinématique de la paix est à jouer (une fois)
-  else if (act === 'truce') { if (d.conflict === 'open') { d.conflict = 'peace'; d.cine = true; } d.path = 'peace'; }
+  // la trêve signée (le chapitre du Médiéval de la paix) : la cinématique est à jouer (une fois) ; la paix vient au Moderne
+  else if (act === 'truce') { if (d.conflict === 'open' && !d.saga.truce) { d.saga.truce = true; d.cine = true; } d.path = 'peace'; }
   else if (act === 'feast') d.feast = true;
   else if (act === 'landing') { if (d.path === 'war' && d.conflict === 'open') d.battle = 'ready'; }
   else if (act === 'victory') winAllyWar(d);
@@ -262,12 +272,12 @@ export function chooseAlly(d: DiploState, p: People) {
 }
 
 /**
- * Le dénouement est ouvert : un allié, le conflit en cours, au Médiéval, et le port et le comptoir installés chez l'allié
- * (`bindPostReady`). Au-delà du Médiéval, le conflit est réglé d'office (`settleLate`)
+ * Le dénouement est ouvert : un allié, le conflit en cours, dès le Médiéval et à tout âge ensuite (une arrivée tardive le mène
+ * jusqu'au bout, même au Futuriste), et le port et le comptoir installés chez l'allié (`bindPostReady`)
  */
 export function endgameOpen(w: World, age: number) {
   if (!archipelagoOn(w) || !w.diplo.ally || w.diplo.conflict !== 'open') return false;
-  return age === ENDGAME_AGE && postReady(w);
+  return conflictAge(age) && postReady(w);
 }
 
 /**
@@ -279,7 +289,7 @@ export function endgameOpen(w: World, age: number) {
  * l'onglet « Grands choix »
  */
 export function pathDue(w: World, age: number, othersDone: boolean, shown = false) {
-  return othersDone && !shown && archipelagoOn(w) && !!w.diplo.ally && w.diplo.conflict === 'open' && age === ENDGAME_AGE && (w.diplo.path !== 'war' || w.diplo.battle === 'none');
+  return othersDone && !shown && archipelagoOn(w) && !!w.diplo.ally && w.diplo.conflict === 'open' && conflictAge(age) && !w.diplo.path;
 }
 
 /** Pourquoi la carte du dénouement ne s'ouvre pas encore (null : elle peut) */
@@ -287,17 +297,18 @@ export function endgameWhy(w: World, age: number): string | null {
   if (!archipelagoOn(w)) return null;
   if (!w.diplo.ally) return tr('Il faut d’abord choisir votre allié.');
   if (w.diplo.conflict !== 'open') return tr('Le conflit des deux îles est déjà réglé.');
-  if (age !== ENDGAME_AGE) return tr('Le conflit des deux îles se règle au Médiéval.');
-  if (age === ENDGAME_AGE && !postReady(w)) return tr('Installez d’abord un port et un comptoir sur l’île de votre allié.');
+  if (age < FIRST_CHAPTER) return tr('Le conflit des deux îles s’ouvre au Médiéval.');
+  if (!postReady(w)) return tr('Installez d’abord un port et un comptoir sur l’île de votre allié.');
   return null;
 }
 
 /**
- * Choisir (ou changer) sa voie tant que le conflit dure et que la bataille n'est pas engagée : la paix ouvre l'ambassade, la
- * guerre l'expédition militaire
+ * Choisir (ou changer) sa voie tant que le conflit dure, que la bataille n'est pas engagée et que la trêve n'est pas signée :
+ * la paix ouvre les pourparlers, la guerre les éclaireurs
  */
+export const canChangePath = (d: DiploState) => d.battle === 'none' && !d.saga.truce;
 export function choosePath(d: DiploState, p: Path) {
-  if (!d.ally || d.conflict !== 'open' || !PATHS.includes(p) || d.battle !== 'none') return false;
+  if (!d.ally || d.conflict !== 'open' || !PATHS.includes(p) || !canChangePath(d)) return false;
   d.path = p;
   return true;
 }
@@ -306,27 +317,11 @@ export function choosePath(d: DiploState, p: Path) {
 export function warEngaged(d: DiploState) { return d.path === 'war' && d.conflict === 'open'; }
 
 /**
- * La condition du passage à l'Industriel, dans le panneau des âges (`Sim.ageProgress`) : le conflit des deux îles réglé, par
- * la paix (l'ambassade) ou par la guerre (la bataille gagnée). Seulement avec l'archipel. Son libellé la fait reconnaître
- * par le panneau (`reqOf` → `conflict` : un clic rouvre la carte) et par le conseil (`Sim.messageConflict`)
+ * Le règlement d'office d'un conflit ouvert à un âge avancé : il n'existe plus (bug de l'auteur, 24 nov. 2026 : « Explorer le
+ * monde » au Futuriste ne laissait plus aucun moyen de régler le conflit). Le conflit se mène à tout âge (`conflictAge`). Les
+ * parties déjà réglées ainsi gardent leur traité (`treaty`). Renvoie toujours faux, gardée pour qui l'appelle encore
  */
-export const CONFLICT_LABEL = 'le conflit des deux îles, réglé';
-export function conflictItem(w: Pick<World, 'isles' | 'diplo'>, next: number): { have: number; need: number } | null {
-  if (!archipelagoOn(w)) return null;
-  return next === ENDGAME_AGE + 1 ? { have: w.diplo.conflict === 'open' ? 0 : 1, need: 1 } : null;
-}
-
-/**
- * Une partie déjà au-delà du Médiéval avec un conflit ouvert (une ancienne partie, ou un archipel accepté tard) : le conflit
- * est réputé réglé, par un traité entre les deux îles, sans rien de plus (décision de l'auteur : le jeu est en bêta).
- * Renvoie vrai s'il vient de l'être
- */
-export function settleLate(d: DiploState, age: number, on: boolean) {
-  if (!on || age <= ENDGAME_AGE || d.conflict !== 'open') return false;
-  d.conflict = 'treaty';
-  d.battle = 'none';
-  return true;
-}
+export function settleLate(_d: DiploState, _age: number, _on: boolean) { return false; }
 
 /** Le passage d'âge peut-il se faire ? Pas pendant une bataille. Renvoie le refus, ou null */
 export function ageGate(battle: boolean): string | null {
@@ -346,7 +341,8 @@ export function conflictState(w: Pick<World, 'isles' | 'diplo'>): ConflictState 
   if (!archipelagoOn(w)) return null;
   const d = w.diplo;
   if (d.conflict === 'won' && d.ally) return { kind: 'won', winner: d.ally };
-  return d.conflict === 'peace' ? { kind: 'peace' } : d.conflict === 'treaty' ? { kind: 'treaty' } : { kind: 'war' };
+  // (la trêve signée : les combats cessent, les navires de commerce reviennent)
+  return d.conflict === 'peace' || d.saga.truce ? { kind: 'peace' } : d.conflict === 'treaty' ? { kind: 'treaty' } : { kind: 'war' };
 }
 
 // ---------------- La guerre : la bataille, les récompenses ----------------
@@ -435,3 +431,6 @@ export function spaceportWhy(w: Pick<World, 'isles' | 'diplo'>, x: number, z: nu
   if (!corners.every(([cx, cz]) => onRival(isle, cx + 0.5, cz + 0.5))) return tr('Le cosmodrome se bâtit sur l’île de votre allié ({isle}).', { isle: isleName(ally) });
   return null;
 }
+
+// (les chapitres : la condition du passage d'âge vit dans `sim/saga.ts`)
+export { CONFLICT_LABEL, chapterItem } from './saga';

@@ -30,7 +30,9 @@ describe('conflit vivant entre les îles rivales', () => {
     expect(conflictShown({ kind: 'war' }, false, 3)).toBeNull();
     expect(seaLife(conflictShown({ kind: 'war' }, false, 3))).toBeNull();
     expect(conflictShown({ kind: 'war' }, true, 3)).toEqual({ kind: 'war' });
-    expect(conflictShown({ kind: 'war' }, true, 4)).toEqual({ kind: 'treaty' });
+    // (le fil des âges : la guerre se voit tant qu'elle dure, même au Futuriste, où une arrivée tardive la mène encore)
+    expect(conflictShown({ kind: 'war' }, true, 4)).toEqual({ kind: 'war' });
+    expect(conflictShown({ kind: 'war' }, true, 5)).toEqual({ kind: 'war' });
     expect(conflictShown({ kind: 'won', winner: 'asie' }, true, 5)).toEqual({ kind: 'won', winner: 'asie' });
     expect(seaLife({ kind: 'war' })).toBe('skirmish');
     expect(seaLife({ kind: 'peace' })).toBe('trade');

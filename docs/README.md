@@ -50,7 +50,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 ### Expéditions
 - [expeditions.md](expeditions.md) : départ, déroulé, imprévus, retour, gains, suivi par la caméra, véhicules.
 - [equipement.md](equipement.md) : pièces, fabrication, exigences des missions.
-- [diplomatie.md](diplomatie.md) : les îles rivales (archipel accepté) : choix de l'allié après la cinématique ; au Médiéval, la paix (deux pourparlers, cinématique) ou la guerre (expédition, bataille jouée), à régler pour l'Industriel ; cosmodrome chez l'allié.
+- [diplomatie.md](diplomatie.md) : les îles rivales (archipel accepté) : choix de l'allié après la cinématique ; au Médiéval, la paix (pourparlers, trêve) ou la guerre (éclaireurs, campagne de l'île rivale), en trois chapitres du Médiéval au Moderne, chacun une condition d'âge (`sim/saga.ts`) ; cosmodrome chez l'allié.
 - [monde-souterrain.md](monde-souterrain.md) : retiré côté joueur ; ce qui en reste (moteur de rendu repris par les Enfers, données gardées pour les sauvegardes).
 
 ### La guerre

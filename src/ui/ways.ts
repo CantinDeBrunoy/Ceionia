@@ -56,7 +56,7 @@ export function waysHtml(ways: { hell: WayState; world: WayState }, conflict: Co
       <div class="wyArt wyCrests">${crest(conflict.ally, 96)}<span class="dcVs">⚔</span>${crest(conflict.ally === 'orient' ? 'asie' : 'orient', 96)}</div>
       <span class="wyState">${conflict.badge === 'taken' ? '✓ ' : ''}${tr(conflict.badge === 'taken' ? 'Choix fait' : conflict.badge === 'free' ? 'Disponible' : 'Pas encore')}</span>
       <h4>${tr('Le conflit des deux îles')}</h4>
-      <p class="wyPitch">${tr('La paix par deux pourparlers, ou la guerre aux côtés de notre allié. Il faut régler ce conflit pour passer à l’âge industriel.')}</p>
+      <p class="wyPitch">${tr('La paix par des pourparlers, ou la guerre aux côtés de notre allié, en trois chapitres du Médiéval au Moderne. Chacun est une condition du passage à l’âge suivant.')}</p>
       <ul class="wyGives"><li>${tr('Paix : un comptoir, une fête, un monument')}</li><li>${tr('Guerre : une bataille, butin et tribut d’or')}</li></ul>
       <div class="wyFoot">${conflict.button ? `<button class="wyGo" data-conflict="1">${hudPic('militaire', 26)}<span>${conflict.button}</span></button>` : `<p class="wyNote">${conflict.note ?? ''}</p>`}</div>
     </article>` : '';
