@@ -60,6 +60,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 ### Affichage
 - `#agePanel` : nom et devise, barre `ratio`, « Vers X » et « n/m conditions » ; clic : la liste dépliée (chaque ligne cliquable : bâtir le genre, ou ouvrir l'expédition / la fiche du minerai ou de l'or, le rail ; le geste de chaque ligne vient de `ageGo(item)` (`sim.ts`), d'après ses champs : `kind`, `missionId` (l'identifiant de l'expédition, posé en `data-m`), sinon le libellé interne ; les briques prennent la briqueterie en main dans le rayon du bas, comme une condition de bâtiment, au lieu d'ouvrir leur fiche en haut : deux conduites pour la même sorte de condition, 17 nov. 2026). Bouton `#ageGo` quand `Sim.ready`.
 - Les briques ne sont plus demandées pour passer à l'époque moderne (décision de l'auteur, 17 nov. 2026) : seulement pour l'âge futuriste (80).
+- Une briqueterie est demandée pour passer à l'époque moderne (`AGES[4].reqKinds.brickworks`, décision de l'auteur, 24 nov. 2026) : le bâtiment, pas un stock de briques.
 - Au dernier âge : « Dernier âge atteint », `ageProgress()` renvoie `null`, le conseil passe à la conquête de l'espace ([fin-de-partie.md](fin-de-partie.md)). Le panneau des âges déplié montre « Pour finir le jeu » (`UI.endRoad`) : le cosmodrome, le premier vol, la Lune, la centrale à fusion, la colonie, cochés au fur et à mesure et cliquables ; « profitez de votre village » seulement la colonie fondée (avant, il s'affichait dès l'âge atteint).
 
 ## Fonctionnement dans le code

@@ -84,3 +84,10 @@ describe('époque moderne : les étapes vers l’âge futuriste', () => {
     expect(legacy.modernSteps).toBeNull();
   });
 });
+
+describe('passer à l’époque moderne', () => {
+  it('demande une briqueterie, disponible dès l’âge industriel (décision de l’auteur, 24 nov. 2026)', () => {
+    expect(AGES[4].reqKinds.brickworks).toBe(1);
+    expect(KINDS.brickworks.minAge).toBeLessThanOrEqual(3);
+  });
+});
