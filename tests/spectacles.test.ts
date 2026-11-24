@@ -4,10 +4,11 @@ import { Sim } from '../src/sim/sim';
 import { mulberry32 } from '../src/core/rng';
 import {
   SHOWS, showOf, showFor, showBlock, showStarted, showReward, showJoy, showJoyFor, showRoom, showWait, waitLabel,
-  readShowState, newShowState, showStateEmpty, planMatch, matchK, MATCH_TIME,
+  readShowState, newShowState, showStateEmpty, planMatch, matchK, MATCH_TIME, planRace, raceRecord,
 } from '../src/sim/shows';
+import { RaceView } from '../src/render/shows/race';
 import { MatchView } from '../src/render/shows/football';
-import { footSpots, teamColors } from '../src/render/shows/common';
+import { footSpots, trackSpots, teamColors } from '../src/render/shows/common';
 import { DEFAULT_BLASON } from '../src/sim/blason';
 
 const DAY = 130;
@@ -150,6 +151,53 @@ describe('le match', () => {
       expect(goals).toEqual(plan.goals.map((g) => g.side));
       // coup d'envoi, mi-temps, reprise, fin
       expect(whistles).toBe(4);
+      v.dispose();
+    }
+  });
+});
+
+describe('la course', () => {
+  it('le stade d’athlétisme a son geste, la course', () => {
+    expect(showOf('stadium')!.id).toBe('race');
+  });
+
+  it('six temps de 44 à 52 s, au centième', () => {
+    for (let seed = 1; seed < 100; seed++) {
+      const t = planRace(mulberry32(seed));
+      expect(t.length).toBe(6);
+      for (const x of t) { expect(x).toBeGreaterThanOrEqual(44); expect(x).toBeLessThanOrEqual(52); expect(Math.round(x * 100)).toBeCloseTo(x * 100, 6); }
+    }
+  });
+
+  it('un record tombe à la première course, puis seulement s’il est battu ; il se sauvegarde', () => {
+    const s = newShowState();
+    expect(raceRecord(s, 47)).toBe(true);
+    s.record = 46.5;
+    expect(raceRecord(s, 47)).toBe(false);
+    expect(raceRecord(s, 46.2)).toBe(true);
+    expect(readShowState(JSON.parse(JSON.stringify(s))).record).toBe(46.5);
+  });
+
+  it('courue jusqu’au bout, chacun passe la ligne dans l’ordre de son temps, puis le podium, et la course se termine', () => {
+    for (const big of [true, false]) for (const seed of [5, 23]) {
+      const times = planRace(mulberry32(seed));
+      let guns = 0;
+      const v = new RaceView(times, big, { age: 4, seed, scale: 1, home: 0, homeB: 0, away: 0, awayB: 0, spots: trackSpots(big) }, { gun: () => guns++ });
+      const order: number[] = [];
+      let t = 0, podium = false;
+      while (!v.done && t < 120) {
+        const before = (v as any).finished;
+        v.update(1 / 30); t += 1 / 30;
+        if ((v as any).finished > before) for (const r of (v as any).runners) if (r.done && !order.includes(r.lane)) order.push(r.lane);
+        if (v.phase === 'podium') podium = true;
+      }
+      expect(v.done).toBe(true);
+      expect(guns).toBe(1);
+      expect(podium).toBe(true);
+      expect(order.length).toBe(6);
+      // dans l'ordre des temps (deux coureurs à moins d'une image l'un de l'autre passent la ligne ensemble)
+      for (let i = 1; i < order.length; i++) expect(times[order[i]] - times[order[i - 1]]).toBeGreaterThan(-0.1);
+      expect(v.winner().t).toBeCloseTo(Math.min(...times), 5);
       v.dispose();
     }
   });

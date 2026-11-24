@@ -1676,7 +1676,7 @@ button.round.off:hover { opacity: 0.85; }
   padding: 5px 12px 6px; border-radius: 14px; background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); color: var(--hInk);
   font: 600 12px/1.2 Manrope, system-ui, sans-serif; white-space: nowrap; pointer-events: none; z-index: 2; }
 .showBoard i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
-.showBoard b { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+.showBoard b.tm { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 .showBoard .sc { font-family: var(--hSerif); font-weight: 800; font-size: 19px; padding: 0 4px; letter-spacing: 0.02em; }
 .showBoard small { flex-basis: 100%; text-align: center; color: var(--hInk2); font-size: 11px; }
 .showBoard ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: auto auto auto; gap: 1px 8px; font-size: 11px; }

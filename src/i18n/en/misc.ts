@@ -209,4 +209,16 @@ registerDict('misc', {
   'Étoile du Nord': 'North Star',
   'Sporting des Falaises': 'Cliffs Sporting',
   'Athletic de la Plaine': 'Plains Athletic',
+  // la course au stade d'athlétisme
+  'Organiser une course': 'Hold a race',
+  'Course en cours': 'Race in progress',
+  'Six coureurs sur la ligne, le coup de pistolet, le sprint, le podium. Bien-être pour un jour et demi, le double si le record du village tombe.': 'Six runners on the line, the starting gun, the sprint, the podium. Happiness for a day and a half, twice as much if the village record falls.',
+  'Les coureurs entrent': 'The runners come out',
+  'À vos marques…': 'On your marks…',
+  '{n} arrivés sur {m}': '{n} of {m} finished',
+  'Record du village : {name} en {t} s !': 'Village record: {name} in {t} s!',
+  '{name} gagne en {t} s': '{name} wins in {t} s',
+  'l’ancien record était de {t} s': 'the old record was {t} s',
+  'record du village : {t} s': 'village record: {t} s',
+  ',': '.',
 });

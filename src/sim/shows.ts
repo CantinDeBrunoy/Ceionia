@@ -2,11 +2,11 @@ import { KINDS, sizeOf, type Building, type KindId } from '../build/catalog';
 import { tr, localize } from '../i18n';
 
 /**
- * Les gestes des bâtiments (« Lancer un match »…) : un bouton sur la fiche, le village qui vient,
+ * Les gestes des bâtiments (« Lancer un match », « Organiser une course »…) : un bouton sur la fiche, le village qui vient,
  * un spectacle sur le bâtiment, puis une récompense et un délai. Ici, les règles seules : lequel se lance où, quand on peut le
  * refaire, ce qu'il rapporte. La mise en scène est dans `src/shows.ts` et `src/render/shows/`
  */
-export type ShowId = 'match';
+export type ShowId = 'match' | 'race';
 
 export interface ShowDef {
   id: ShowId;
@@ -36,6 +36,10 @@ export const SHOWS: ShowDef[] = [
   {
     id: 'match', kind: 'football', icon: '⚽', act: 'Lancer un match', running: 'Match en cours', cooldown: 1, joyK: 1, joyDays: 2, fans: 12, newcomers: 2, dry: true,
     tip: 'Les supporters viennent des maisons, les deux équipes entrent sur la pelouse. Bien-être pour deux jours, plus fort si le village gagne. Une victoire attire de nouveaux habitants.',
+  },
+  {
+    id: 'race', kind: 'stadium', icon: '🏃', act: 'Organiser une course', running: 'Course en cours', cooldown: 1, joyK: 0.8, joyDays: 1.5, fans: 10, newcomers: 0, dry: true,
+    tip: 'Six coureurs sur la ligne, le coup de pistolet, le sprint, le podium. Bien-être pour un jour et demi, le double si le record du village tombe.',
   },
 ];
 
@@ -161,5 +165,15 @@ export function planMatch(rnd: () => number): MatchPlan {
 
 /** Le bien-être d'un match : ×1,5 si le village gagne, ×1 au nul, ×0,6 s'il perd (on est venu, on a chanté) */
 export const matchK = (score: [number, number]) => (score[0] > score[1] ? 1.5 : score[0] === score[1] ? 1 : 0.6);
+
+// ---------------- La course ----------------
+
+/** Les temps de la course (secondes, un tour de piste, au centième), des six coureurs : de 44 à 52 s */
+export function planRace(rnd: () => number, n = 6) {
+  return Array.from({ length: n }, () => Math.round((44 + rnd() * 8) * 100) / 100);
+}
+
+/** Un record tombe-t-il ? (le meilleur temps de la première course en est un) */
+export const raceRecord = (s: ShowState, best: number) => !s.record || best < s.record;
 
 for (const d of SHOWS) localize(d, ['act', 'running', 'tip']);

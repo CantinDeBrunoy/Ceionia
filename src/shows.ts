@@ -7,10 +7,12 @@ import { sizeOf, type Building } from './build/catalog';
 import { FRONT } from './build/placement';
 import { archipelagoOn } from './sim/diplomacy';
 import {
-  SHOWS, showFor, showBlock, showStarted, showReward, showJoyFor, showRoom, showScale, showWait, planMatch, matchK, type ShowDef,
+  SHOWS, showFor, showBlock, showStarted, showReward, showJoyFor, showRoom, showScale, showWait, planMatch, matchK,
+  planRace, raceRecord, type ShowDef,
 } from './sim/shows';
-import { teamColors, footSpots, type Kit, type ShowView } from './render/shows/common';
+import { teamColors, footSpots, trackSpots, type Kit, type ShowView } from './render/shows/common';
 import { MatchView } from './render/shows/football';
+import { RaceView } from './render/shows/race';
 import { tr } from './i18n';
 
 /** Ce que les spectacles demandent au jeu */
@@ -112,10 +114,31 @@ export class ShowDirector {
       const chip = (c: number) => `<i style="background:#${c.toString(16).padStart(6, '0')}"></i>`;
       return {
         view,
-        board: () => `${chip(kit.home)}<b>${esc(home)}</b><span class="sc">${view.score[0]} – ${view.score[1]}</span><b>${esc(away)}</b>${chip(kit.away)}<small>${view.phase === 'enter' ? tr('Entrée des équipes') : view.phase === 'half' ? tr('Mi-temps') : view.phase === 'end' ? tr('Fin du match') : `${view.minute}′`}</small>`,
+        board: () => `${chip(kit.home)}<b class="tm">${esc(home)}</b><span class="sc">${view.score[0]} – ${view.score[1]}</span><b class="tm">${esc(away)}</b>${chip(kit.away)}<small>${view.phase === 'enter' ? tr('Entrée des équipes') : view.phase === 'half' ? tr('Mi-temps') : view.phase === 'end' ? tr('Fin du match') : `${view.minute}′`}</small>`,
         result: () => {
           const [x, y] = view.score;
           return { k: matchK(view.score), newcomers: x > y, title: x > y ? tr('Victoire {a} – {b} !', { a: x, b: y }) : x === y ? tr('Match nul {a} – {b}', { a: x, b: y }) : tr('Défaite {a} – {b}', { a: x, b: y }) };
+        },
+      };
+    }
+    if (d.id === 'race') {
+      const big = sizeOf(b) >= 3;
+      // (le plan réduit d'un ancien stade a sa propre piste : pas d'échelle)
+      kit.spots = trackSpots(big);
+      kit.scale = 1;
+      const times = planRace(rng(kit.seed));
+      const view = new RaceView(times, big, kit, { gun: () => a.sfxClash('shot'), roar: (k) => a.sfxCrowd(k), whistle: () => a.sfxWhistle(false) });
+      return {
+        view,
+        board: () => view.board(),
+        result: () => {
+          const best = Math.min(...times), rec = raceRecord(w.shows, best), old = w.shows.record, win = view.winner();
+          if (rec) w.shows.record = best;
+          return {
+            k: rec ? 2 : 1, newcomers: false,
+            title: rec ? tr('Record du village : {name} en {t} s !', { name: win.name, t: secs(best) }) : tr('{name} gagne en {t} s', { name: win.name, t: secs(best) }),
+            line: rec && old ? tr('l’ancien record était de {t} s', { t: secs(old) }) : !rec && old ? tr('record du village : {t} s', { t: secs(old) }) : undefined,
+          };
         },
       };
     }
@@ -133,6 +156,9 @@ export class ShowDirector {
     this.hudT -= 1 / 60;
     // les spectateurs entrent à mesure qu'ils arrivent (ceux qui traînent entrent au bout d'un moment)
     for (const id of r.fans) if (!r.hidden.has(id) && (ag.memberDone(id) || r.t > GATHER_MAX)) { ag.partyHide([id], true); r.hidden.add(id); }
+    // le bâtiment peut être refait (passage d'âge, saison) : la scène suit son nouveau groupe, comme les bêtes du zoo
+    const g = h.buildings.entries.get(r.b.id)?.group;
+    if (g && r.act.view.group.parent !== g) g.add(r.act.view.group);
     r.act.view.update(dt);
     this.showBoard(r);
     if (r.act.view.done) this.finish();
@@ -207,6 +233,8 @@ export class ShowDirector {
 const AWAY_TEAMS = ['Racing des Collines', 'Union du Fleuve', 'Olympique des Marais', 'Étoile du Nord', 'Sporting des Falaises', 'Athletic de la Plaine'];
 
 const rng = (seed: number) => { let s = (seed % 2147483646) + 1; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; };
+/** « 46,12 » : un temps au centième, à la virgule française */
+const secs = (t: number) => t.toFixed(2).replace('.', tr(','));
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export { SHOWS };
