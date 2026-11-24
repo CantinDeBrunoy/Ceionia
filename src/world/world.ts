@@ -1654,6 +1654,20 @@ export class World {
    * âge, et les lignes de chemin de fer qui s'y arrêtaient s'arrêtent au nouveau. null s'il n'y a pas la place
    */
   upgrade(id: number, to: KindId): Building | null {
+    const b = this.buildings.get(id), spot = this.upgradeRoom(id, to);
+    if (!b || !spot) return null;
+    const stops = this.lines.filter((l) => l.stops.includes(id));
+    this.removeBuilding(id);
+    const nb = this.place(to, spot[0], spot[1], b.rot, b.auto, Math.max(b.age, KINDS[to].minAge), true);
+    for (const l of stops) l.stops = l.stops.map((s) => (s === id ? nb.id : s));
+    return nb;
+  }
+
+  /**
+   * Où se poserait l'amélioration (null : pas la place). Sans rien changer : la pastille d'amélioration ne se montre pas sur un
+   * bâtiment qui ne peut pas grandir (retour de l'auteur, 24 nov. 2026), la fiche le dit
+   */
+  upgradeRoom(id: number, to: KindId): [number, number] | null {
     const b = this.buildings.get(id);
     if (!b) return null;
     const s0 = sizeOf(b), s1 = KINDS[to].size, grow = Math.max(0, s1 - s0), f = [[0, 1], [1, 0], [0, -1], [-1, 0]][b.rot];
@@ -1667,12 +1681,7 @@ export class World {
     for (let j = 0; j < s0; j++) for (let i = 0; i < s0; i++) { const k = this.ci(b.x + i, b.z + j); cells.push(k); this.occ[k] = 0; }
     const spot = spots.find(([x, z]) => this.canPlace(to, x, z) === null);
     for (const k of cells) this.occ[k] = b.id;
-    if (!spot) return null;
-    const stops = this.lines.filter((l) => l.stops.includes(id));
-    this.removeBuilding(id);
-    const nb = this.place(to, spot[0], spot[1], b.rot, b.auto, Math.max(b.age, KINDS[to].minAge), true);
-    for (const l of stops) l.stops = l.stops.map((s) => (s === id ? nb.id : s));
-    return nb;
+    return spot ?? null;
   }
 
   /**

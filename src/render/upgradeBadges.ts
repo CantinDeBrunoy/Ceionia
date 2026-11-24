@@ -51,6 +51,8 @@ export class UpgradeBadges {
         if (age < to.minAge || (to.reqMission && !w.missionDone(to.reqMission))) continue;
         if (to.reqKind && ![...w.buildings.values()].some((o) => lineOf(to.reqKind!).includes(o.kind))) continue;
         if (!canPay(w, priceIn(w, u.to, age))) continue;
+        // (pas la place de grandir : pas de flèche)
+        if (!w.upgradeRoom(b.id, u.to)) continue;
         const s = sizeOf(b);
         out.push({ x: b.x + s / 2, y: w.flatTarget(b.x, b.z, s) + 1.3 + s * 0.55, z: b.z + s / 2 });
         break;

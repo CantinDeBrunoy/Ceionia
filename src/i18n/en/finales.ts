@@ -199,6 +199,9 @@ registerDict('finales', {
   'des expéditions facultatives sur les îles': 'optional expeditions to the islands',
   'Expédition · {gain}': 'Expedition · {gain}',
   'expédition en route': 'expedition under way',
+  // ---- l'amélioration sans la place ----
+  'Il faut {n} × {n} cases libres autour du bâtiment pour l’améliorer': 'The building needs {n} × {n} free tiles around it to be upgraded',
+  'pas la place autour': 'no room around it',
   // ---- les batailles : les derniers défenseurs ----
   '🎯 Le dernier défenseur est là.': '🎯 The last defender is here.',
   '🎯 Les {n} derniers défenseurs sont là.': '🎯 The last {n} defenders are here.',

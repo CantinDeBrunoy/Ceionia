@@ -1690,6 +1690,8 @@ export class UI {
       const locked = to.reqMission && !h.world.missionDone(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
       const first = !locked && !h.world.sandbox && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
       if (first) return `<button disabled title="${attr(tr('Il faut d’abord « {name} » au village', { name: first }))}">${ic('upgrade', 16, 2)} ${name} <small>${pic('🔒', 12)} ${tr('{name} d’abord', { name: first })}</small></button>`;
+      // (pas la place de grandir autour : le bouton le dit, et la flèche au-dessus du bâtiment ne se montre pas)
+      if (!locked && !h.world.upgradeRoom(b.id, u.to)) return `<button disabled title="${attr(tr('Il faut {n} × {n} cases libres autour du bâtiment pour l’améliorer', { n: to.size }))}">${ic('upgrade', 16, 2)} ${name} <small>${pic('🔒', 12)} ${tr('pas la place autour')}</small></button>`;
       return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: tr(locked) }))}">${ic('upgrade', 16, 2)} ${name} <small>${pic('🔒', 12)} ${tr(locked)}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} ${tr('Améliorer : {name}', { name })}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${canPay(h.world, c) ? costLabel(c) : shortLabel(h.world, c)}</small>` : ''}</button>`;
     }).join('');
