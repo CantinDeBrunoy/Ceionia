@@ -1141,7 +1141,8 @@ export class UI {
   private placeDock() {
     const top = $('#dockTop'), side = $('#dockSide'), modes = $('#modes'), ql = $('#quickL'), qr = $('#quickR');
     if (allege()) {
-      if (modes.parentElement !== top) { top.prepend(modes); top.insertBefore(ql, $('#bMore')); top.insertBefore(qr, $('#bMore')); }
+      // Bâtir et Paysage dans leur pastille, au-dessus de la bande (demande de l'auteur, 24 nov. 2026)
+      if (modes.parentElement !== $('#dockMain')) { $('#dockMain').prepend(modes); top.insertBefore(ql, $('#bMore')); top.insertBefore(qr, $('#bMore')); }
       this.syncFold();
     } else {
       if (modes.parentElement !== side) side.append(modes, ql, qr);

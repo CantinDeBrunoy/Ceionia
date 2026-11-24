@@ -162,8 +162,8 @@ body.allege #toasts .toast > .pic { width: 26px; height: 26px; padding: 4px; bac
 body.allege #toasts .toast.danger { color: #8f1d24; background: linear-gradient(180deg, #FFF1EC, #FCE0D8); }
 body.allege #toasts .toast.act:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
 
-/* ---------- la barre du bas : une seule bande de 46 px (les modes, les rayons, la loupe et les outils, que `UI.placeDock` range
-   dans `#dockTop`), les vignettes dessous, repliées tant qu'aucun outil n'est en main (`UI.syncFold`) ; à droite, la mini-carte de
+/* ---------- la barre du bas : une bande de 46 px (les rayons, la loupe et les outils, que `UI.placeDock` range dans `#dockTop`),
+   les modes dans leur pastille au-dessus, les vignettes dessous, repliées tant qu'aucun outil n'est en main (`UI.syncFold`) ; à droite, la mini-carte de
    124 px et ses deux boutons ---------- */
 body.allege #dock > #dockRow { grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr); gap: 10px; justify-content: stretch; }
 body.allege #dock #dockSide, body.allege #bFold { display: none; }
@@ -174,11 +174,15 @@ body.allege #dock #dockTop {
   position: static; display: flex; align-items: center; justify-content: flex-start; gap: 4px; box-sizing: border-box; height: 46px; padding: 0 7px;
   border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
 }
-body.allege #dockTop #modes { display: flex; flex-direction: row; gap: 4px; padding-right: 6px; border-right: 1.5px solid rgba(190, 145, 75, 0.38); }
-body.allege #dock #dockTop #modes button { flex: none; width: auto; height: 32px; padding: 0 11px 0 8px; gap: 7px; border-radius: 10px; font-size: 13.5px; }
-body.allege #dock #dockTop #modes button:not(.active) { background: transparent; border-color: transparent; box-shadow: none; }
-body.allege #dock #dockTop #modes button:not(.active):hover { background: rgba(255, 236, 190, 0.55); }
-body.allege #dock #dockTop #modes button b, body.allege #dock #dockTop #modes button b .pic { width: 20px; height: 20px; }
+/* Bâtir et Paysage : leur propre pastille, centrée au-dessus de la bande (l'auteur, 24 nov. 2026 : la place y était vide) */
+body.allege #dockMain > #modes {
+  display: flex; flex-direction: row; gap: 4px; box-sizing: border-box; height: 42px; padding: 0 4px; align-items: center;
+  border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow);
+}
+body.allege #dock #dockMain > #modes button { flex: none; width: auto; height: 32px; padding: 0 11px 0 8px; gap: 7px; border-radius: 10px; font-size: 13.5px; }
+body.allege #dock #dockMain > #modes button:not(.active) { background: transparent; border-color: transparent; box-shadow: none; }
+body.allege #dock #dockMain > #modes button:not(.active):hover { background: rgba(255, 236, 190, 0.55); }
+body.allege #dock #dockMain > #modes button b, body.allege #dock #dockMain > #modes button b .pic { width: 20px; height: 20px; }
 body.allege #dock #subcats { flex: 0 1 auto; gap: 2px; align-items: center; padding: 0 2px; overflow: visible; }
 body.allege #dock #subcats button {
   height: 32px; padding: 0 10px 0 7px; gap: 6px; border: 1.5px solid transparent; border-radius: 10px; font-size: 13.5px;
