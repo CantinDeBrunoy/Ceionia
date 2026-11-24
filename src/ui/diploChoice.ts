@@ -133,12 +133,12 @@ export class DiploChoice {
       <p class="pcSub">${tr('Nos alliés, {ally}, sont toujours en guerre contre {rival}. Que fera notre village ?', { ally: peopleName(ally), rival: peopleName(rival) })}</p>
       <div class="pcBtns dcCol">
         ${why ? `<p class="dcWhy">${why}</p>` : ''}
-        ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('deux pourparlers, {r} % d’échec chacun, pour une trêve, puis la paix au Moderne', { r: Math.round(talkRisk(d) * 100) }), d.path === 'peace', !!why)}
-        ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('des éclaireurs, puis une campagne jusqu’au Moderne : butin et tribut d’or'), d.path === 'war', !!why)}
+        ${choice('peace', 'pcGo', hudPic('parchemin', 34), tr('Négocier la paix'), tr('deux pourparlers, {r} % d’échec chacun, pour une trêve, puis la paix des îles', { r: Math.round(talkRisk(d) * 100) }), d.path === 'peace', !!why)}
+        ${choice('war', 'pcNo', hudPic('militaire', 34), tr('Aider notre allié'), tr('des éclaireurs, puis une campagne en trois chapitres : butin et tribut d’or'), d.path === 'war', !!why)}
         ${boonsNote(d)}
         ${choice('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('attendre et continuer à jouer'))}
       </div>
-      <small class="pcNote">${tr('Le conflit se joue en trois chapitres, du Médiéval au Moderne. Chacun est une condition du passage à l’âge suivant. Pour y revenir : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
+      <small class="pcNote">${tr('Le conflit se joue en trois chapitres, un par âge du Médiéval au Moderne, chacun une condition du passage d’âge. Arrivés plus tard, on les joue à la suite. Pour y revenir : la condition « le conflit des deux îles », ou l’onglet « Grands choix » des expéditions.')}</small>`;
   }
 
   hide() { this.el.style.display = 'none'; }
@@ -159,10 +159,13 @@ export function roadHtml(r: Road) {
     if (s.go === 'sign') return `<button data-a="sign" class="dcStep now pcGo">${body}</button>`;
     return `<button data-a="mission" data-id="${s.id}" class="dcStep now pcGo">${body}</button>`;
   };
-  // les chapitres : celui de l'âge est déplié (ses étapes), les autres tiennent sur une ligne
+  // les chapitres : celui de l'étape du moment est déplié (ses étapes), les autres tiennent sur une ligne (une arrivée tardive
+  // en a plusieurs à rattraper : la fenêtre doit tenir sur un petit écran)
+  const nowAge = r.steps.find((s) => s.state === 'now')?.age ?? r.chapters.find((c) => c.state === 'now')?.age;
   const chapter = (c: Road['chapters'][number]) => {
-    const head = `<div class="dcChap ${c.state}"><i aria-hidden="true">${c.state === 'done' ? '✓' : c.state === 'now' ? '▾' : '▸'}</i><b>${c.title}</b><small>${c.sub}</small></div>`;
-    if (c.state !== 'now') return head;
+    const open = c.state === 'now' && c.age === nowAge;
+    const head = `<div class="dcChap ${c.state}"><i aria-hidden="true">${c.state === 'done' ? '✓' : open ? '▾' : '▸'}</i><b>${c.title}</b><small>${c.sub}</small></div>`;
+    if (!open) return head;
     return head + `<div class="dcSteps">${r.steps.filter((s) => s.age === c.age).map(step).join('')}</div>`;
   };
   const prep = r.prep.map((p) => `<button data-a="mission" data-id="${p.id}" class="dcPrepIt${p.done ? ' done' : ''}"${p.done ? ' disabled' : ''}><em aria-hidden="true">${p.done ? '✓' : p.icon}</em><span><b>${p.title}</b><small>${p.running ? tr('en route') : p.gain}</small></span></button>`).join('');

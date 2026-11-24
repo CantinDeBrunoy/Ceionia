@@ -4,7 +4,7 @@ import type { KindId } from '../build/catalog';
 import { tr } from '../i18n';
 import { archipelagoOn } from '../world/expand';
 import { newCamp, readCamp, type CampState } from './campaign';
-import { newSaga, readSaga, inSaga, FIRST_CHAPTER, LAST_CHAPTER, type SagaState } from './saga';
+import { newSaga, readSaga, conflictAge, FIRST_CHAPTER, type SagaState } from './saga';
 
 /**
  * La diplomatie de l'archipel (voir `docs/diplomatie.md`) : les deux peuples des îles rivales, l'allié qu'on choisit parmi eux
@@ -272,12 +272,12 @@ export function chooseAlly(d: DiploState, p: People) {
 }
 
 /**
- * Le dénouement est ouvert : un allié, le conflit en cours, du Médiéval au Moderne (les chapitres), et le port et le comptoir
- * installés chez l'allié (`bindPostReady`). Au Futuriste, le conflit est réglé d'office (`settleLate`)
+ * Le dénouement est ouvert : un allié, le conflit en cours, dès le Médiéval et à tout âge ensuite (une arrivée tardive le mène
+ * jusqu'au bout, même au Futuriste), et le port et le comptoir installés chez l'allié (`bindPostReady`)
  */
 export function endgameOpen(w: World, age: number) {
   if (!archipelagoOn(w) || !w.diplo.ally || w.diplo.conflict !== 'open') return false;
-  return inSaga(age) && postReady(w);
+  return conflictAge(age) && postReady(w);
 }
 
 /**
@@ -289,7 +289,7 @@ export function endgameOpen(w: World, age: number) {
  * l'onglet « Grands choix »
  */
 export function pathDue(w: World, age: number, othersDone: boolean, shown = false) {
-  return othersDone && !shown && archipelagoOn(w) && !!w.diplo.ally && w.diplo.conflict === 'open' && inSaga(age) && !w.diplo.path;
+  return othersDone && !shown && archipelagoOn(w) && !!w.diplo.ally && w.diplo.conflict === 'open' && conflictAge(age) && !w.diplo.path;
 }
 
 /** Pourquoi la carte du dénouement ne s'ouvre pas encore (null : elle peut) */
@@ -298,7 +298,6 @@ export function endgameWhy(w: World, age: number): string | null {
   if (!w.diplo.ally) return tr('Il faut d’abord choisir votre allié.');
   if (w.diplo.conflict !== 'open') return tr('Le conflit des deux îles est déjà réglé.');
   if (age < FIRST_CHAPTER) return tr('Le conflit des deux îles s’ouvre au Médiéval.');
-  if (!inSaga(age)) return tr('Le conflit des deux îles est déjà réglé.');
   if (!postReady(w)) return tr('Installez d’abord un port et un comptoir sur l’île de votre allié.');
   return null;
 }
@@ -318,16 +317,11 @@ export function choosePath(d: DiploState, p: Path) {
 export function warEngaged(d: DiploState) { return d.path === 'war' && d.conflict === 'open'; }
 
 /**
- * Une partie déjà au Futuriste avec un conflit ouvert (un archipel accepté au Futuriste) : le conflit est réputé réglé, par
- * un traité entre les deux îles, sans rien de plus. Avant le fil des âges (24 nov. 2026), c'était dès l'Industriel : les
- * parties ainsi réglées gardent leur traité. Renvoie vrai s'il vient de l'être
+ * Le règlement d'office d'un conflit ouvert à un âge avancé : il n'existe plus (bug de l'auteur, 24 nov. 2026 : « Explorer le
+ * monde » au Futuriste ne laissait plus aucun moyen de régler le conflit). Le conflit se mène à tout âge (`conflictAge`). Les
+ * parties déjà réglées ainsi gardent leur traité (`treaty`). Renvoie toujours faux, gardée pour qui l'appelle encore
  */
-export function settleLate(d: DiploState, age: number, on: boolean) {
-  if (!on || age <= LAST_CHAPTER || d.conflict !== 'open') return false;
-  d.conflict = 'treaty';
-  d.battle = 'none';
-  return true;
-}
+export function settleLate(_d: DiploState, _age: number, _on: boolean) { return false; }
 
 /** Le passage d'âge peut-il se faire ? Pas pendant une bataille. Renvoie le refus, ou null */
 export function ageGate(battle: boolean): string | null {

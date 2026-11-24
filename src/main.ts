@@ -124,7 +124,7 @@ import type { ConflictWay } from './ui/ways';
 import { bindPostReady, pathDue, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, WAR_SPOILS, RETRY_DAYS } from './sim/diplomacy';
 import { RivalBattle, BattleGoal, BATTLE_LIMIT, type BattleKind } from './sim/rivalBattle';
 import { nextBattle, campaignResult, corps, corpsTroops, raidDue, raidLevel, stepCamp, RAID_GRACE, HOLD_SHARE, type Front } from './sim/campaign';
-import { catchUp, chapterDone, inSaga, isChapterLabel, signPeace, stepSaga, type SagaCtx } from './sim/saga';
+import { chapterDone, chaptersUpTo, conflictAge, inSaga, isChapterLabel, signPeace, stepSaga, type SagaCtx } from './sim/saga';
 import { chapterTitle } from './sim/diploRoad';
 import { RivalCamp } from './render/rivalCamp';
 import type { TroopKind } from './sim/army';
@@ -1485,14 +1485,12 @@ class Game implements UIHost {
     if (!archipelagoOn(w)) return;
     const cs = conflictState(w);
     if (cs && cs.kind !== this.naval.state.kind) this.naval.state = cs;
-    // (une partie déjà au Futuriste : le conflit est réputé réglé, sans rien de plus)
-    settleLate(d, this.sim.age, true);
-    // le fil des âges : la voie prise au-delà du Médiéval compte les chapitres passés ; un chapitre fini se dit
-    if (catchUp(d, this.sim.age, w.exp.clock, this.time.dayLen)) this.ui.update();
+    // le fil des âges : un chapitre fini se dit (une arrivée tardive joue les chapitres passés à la suite)
     const fresh = stepSaga(w, this.sim.age, this.sagaCtx());
     if (fresh && d.path) {
       const next = AGES[fresh + 1]?.name;
-      this.ui.banner(tr('Chapitre fait : {title}', { title: chapterTitle(d.path, fresh) }), next ? tr('Une condition de moins vers l’âge : {age}', { age: next }) : '');
+      const after = chaptersUpTo(this.sim.age).some((a) => !d.saga.done.includes(a));
+      this.ui.banner(tr('Chapitre fait : {title}', { title: chapterTitle(d.path, fresh) }), after ? tr('Le chapitre suivant vous attend') : next && fresh >= this.sim.age ? tr('Une condition de moins vers l’âge : {age}', { age: next }) : '');
       this.ui.update(); this.saveNow();
     }
     // la campagne de l'île rivale : la caserne avancée refait le corps, la sortie qui vient s'annonce ; laissée trop longtemps
@@ -1520,7 +1518,7 @@ class Game implements UIHost {
       else { this.popups.taken(); this.diploChoice.showBattle(); }
     }
     else if (d.battle === 'lost' && battleReady(d, w.exp.clock) && !this.retrySaid) { this.retrySaid = true; this.ui.toast(tr('⚔️ Nos troupes se sont refaites : la bataille peut reprendre. Cliquez ici.'), () => this.openDiploChoice(), 'action'); }
-    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone(), this.pathShown)) {
+    else if (!this.tutorial.active && pathDue(w, this.sim.age, this.othersDone() || (this.sim.age > 4 && this.popups.open), this.pathShown)) {
       this.pathShown = d.asked = true;
       // pas encore installé chez l'allié : pas de carte aux voies grisées (l'auteur la trouvait « pas normale » à ce stade),
       // un message qui dit quoi faire, et la carte viendra une fois le port et le comptoir bâtis (une fois par session)
@@ -1531,9 +1529,11 @@ class Game implements UIHost {
     }
     // la voie prise, le chapitre de l'âge est la dernière condition qui manque : la feuille de route, une fois par âge et par
     // session (le passage d'âge n'est jamais bloqué sans qu'on sache quoi faire)
-    else if (!this.tutorial.active && d.path && d.conflict === 'open' && inSaga(this.sim.age) && this.roadDueAge !== this.sim.age && this.othersDone() && !chapterDone(w, this.sim.age, this.sagaCtx())) {
+    else if (!this.tutorial.active && d.path && d.conflict === 'open' && conflictAge(this.sim.age) && this.roadDueAge !== this.sim.age && (inSaga(this.sim.age) ? this.othersDone() && chaptersUpTo(this.sim.age).some((a) => !chapterDone(w, a, this.sagaCtx())) : quiet)) {
       this.roadDueAge = this.sim.age;
-      if (quiet) this.ui.toast(tr('⚖️ Dernière étape vers l’âge suivant : le chapitre du conflit des deux îles. Cliquez ici.'), () => this.openDiploChoice(), 'action');
+      // (au Futuriste, plus de passage d'âge : au chargement, un message rappelle le conflit à mener)
+      if (!inSaga(this.sim.age)) this.ui.toast(tr('⚖️ Le conflit des deux îles attend sa suite. Cliquez ici.'), () => this.openDiploChoice(), 'action');
+      else if (quiet) this.ui.toast(tr('⚖️ Dernière étape vers l’âge suivant : le chapitre du conflit des deux îles. Cliquez ici.'), () => this.openDiploChoice(), 'action');
       else { this.popups.taken(); this.diploChoice.showRoad(); }
     }
   }
@@ -1885,7 +1885,7 @@ class Game implements UIHost {
     if ((!change || d.battle !== 'none') && d.path && this.diploChoice.showRoad()) return;
     // (ce qui manque encore, le port et le comptoir chez l'allié : la carte le dit, ses deux voies grisées)
     const why = endgameWhy(w, this.sim.age);
-    if (why && !(d.ally && d.conflict === 'open' && inSaga(this.sim.age))) { this.ui.toast(why); return; }
+    if (why && !(d.ally && d.conflict === 'open' && conflictAge(this.sim.age))) { this.ui.toast(why); return; }
     this.diploChoice.showPath();
   }
 

@@ -3,6 +3,8 @@ import { newDiplo, readDiplo, chooseAlly, choosePath, applyDiplo, claimVictory, 
 import { sagaSteps, chapterDone, chapterItem, stepSaga, catchUp, signPeace, stepNow, readSaga, CONFLICT_LABEL, CHAPTER_LABELS, isChapterLabel, type SagaCtx } from '../src/sim/saga';
 import { nextBattle, campaignResult, stepCamp, raidDue, corpsMax, corpsTroops, RAID_FIRST, BATTLE_AGE } from '../src/sim/campaign';
 import { ageGo } from '../src/sim/sim';
+import { roadView } from '../src/sim/diploRoad';
+import { roadHtml } from '../src/ui/diploChoice';
 
 /**
  * Le fil des âges (chantier A du nouveau monde, décision de l'auteur du 24 nov. 2026) : le conflit des deux îles en trois
@@ -213,40 +215,83 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
     expect(conflictState(old)).toEqual({ kind: 'peace' });
   });
 
-  it('archipel accepté tard, à l’Industriel : le chapitre du Médiéval est compté fait, avec ce qu’il donne', () => {
-    // la guerre : la plage prise (le camp et sa caserne), on commence au port
+  it('archipel accepté à l’Industriel : le chapitre du Médiéval se joue d’abord, sans attendre, puis celui de l’Industriel', () => {
+    // la guerre : rien n'est offert, le débarquement d'abord, puis le port et la tour
     const war = world(readDiplo({ ally: 'orient', path: 'war', conflict: 'open' }));
-    expect(catchUp(war.diplo, 3, 1000, DAY)).toBe(true);
-    expect(war.diplo.saga.done).toEqual([2]);
-    expect(war.diplo.camp.held).toEqual(['plage']);
-    expect(war.diplo.battle).toBe('ready');
-    expect(war.diplo.camp.raid).toBe(1000 + RAID_FIRST * DAY);
-    expect(nextBattle(war.diplo, 1000, 3)).toBe('port');
     expect(catchUp(war.diplo, 3, 1000, DAY)).toBe(false);
-    // la paix : la trêve
+    expect(war.diplo.camp.held).toEqual([]);
+    expect(stepNow(war, 3)!.id).toBe('allywar');
+    // (la condition vers le Moderne demande les deux chapitres : 3 étapes du Médiéval, 2 de l'Industriel)
+    expect(chapterItem(war, 4)).toMatchObject({ label: CHAPTER_LABELS[3], have: 0, need: 5 });
+    war.exp.done.push('allywar'); applyDiplo(war.diplo, 'landing');
+    expect(win(war, 3)).toBe('landing');
+    // (à l'Industriel, le port s'ouvre aussitôt : l'étape « Tenir le camp » se fait en le prenant)
+    expect(win(war, 3)).toBe('port');
+    expect(stepSaga(war, 3)).toBe(2);
+    expect(win(war, 3)).toBe('tour');
+    expect(stepSaga(war, 3)).toBe(3);
+    expect(chapterItem(war, 4)).toMatchObject({ have: 1, need: 1 });
+    // la paix : les pourparlers d'abord, puis le second comptoir
     const peace = world(readDiplo({ ally: 'orient', path: 'peace', conflict: 'open' }));
-    catchUp(peace.diplo, 3, 0, DAY);
-    expect(peace.diplo.saga).toEqual({ done: [2], truce: true });
-    expect(peace.diplo.post).toBe(true);
-    expect(stepNow(peace, 3)!.id).toBe('post2');
-    // sans voie : rien n'est compté tant qu'elle n'est pas prise
+    expect(stepNow(peace, 3)!.id).toBe('envoys');
+    // (deux comptoirs bâtis d'avance : reste le chapitre du Médiéval)
+    expect(chapterItem(peace, 4, kinds({ tradepost: 2 }))).toMatchObject({ have: 0, need: 2 });
+    // sans voie : la carte du dénouement d'abord
     const none = world(readDiplo({ ally: 'orient', conflict: 'open' }));
-    expect(catchUp(none.diplo, 3, 0, DAY)).toBe(false);
+    expect(chapterItem(none, 4)).toMatchObject({ have: 0, need: 1 });
   });
 
-  it('archipel accepté au Moderne : seulement le chapitre du Moderne', () => {
+  it('archipel accepté au Moderne : les trois chapitres à la suite, le Moderne ne s’ouvre qu’après les autres', () => {
     const war = world(readDiplo({ ally: 'orient', path: 'war', conflict: 'open' }));
-    catchUp(war.diplo, 4, 0, DAY);
-    expect(war.diplo.saga.done).toEqual([2, 3]);
-    expect(war.diplo.camp.held).toEqual(['plage', 'port', 'tour']);
-    expect(nextBattle(war.diplo, 0, 4)).toBe('assault');
-    expect(chapterItem(war, 5)).toMatchObject({ have: 0, need: 1 });
+    war.exp.done.push('allywar'); applyDiplo(war.diplo, 'landing');
+    expect(chapterItem(war, 5)).toMatchObject({ label: CONFLICT_LABEL, have: 1, need: 6 });
+    for (const k of ['landing', 'port', 'tour', 'assault']) expect(win(war, 4)).toBe(k);
+    expect(war.diplo.conflict).toBe('won');
+    // la paix : la paix ne se signe qu'au bout des trois chapitres
+    const peace = world(readDiplo({ ally: 'orient', path: 'peace', conflict: 'open' }));
+    const c = kinds({ embassy: 1 });
+    expect(signPeace(peace, c)).toBe(false);
+    peace.exp.done.push('envoys', 'truce'); applyDiplo(peace.diplo, 'truce');
+    expect(signPeace(peace, c)).toBe(false);
+    expect(stepNow(peace, 4, c)!.id).toBe('post2');
+    const all = kinds({ embassy: 1, tradepost: 2 });
+    expect(stepNow(peace, 4, all)!.id).toBe('sign');
+    expect(signPeace(peace, all)).toBe(true);
   });
 
-  it('archipel accepté au Futuriste : traité d’office', () => {
-    const w = world(readDiplo({ ally: 'orient', conflict: 'open' }));
-    expect(settleLate(w.diplo, 5, true)).toBe(true);
-    expect(w.diplo.conflict).toBe('treaty');
+  it('archipel accepté au Futuriste : plus de règlement d’office, le conflit se mène jusqu’au bout, sans bloquer d’âge', () => {
+    for (const path of ['war', 'peace'] as const) {
+      const w = world(readDiplo({ ally: 'orient', conflict: 'open' }));
+      expect(settleLate(w.diplo, 5, true)).toBe(false);
+      expect(w.diplo.conflict).toBe('open');
+      // (pas de passage d'âge au Futuriste : aucune condition)
+      expect(chapterItem(w, 6)).toBeNull();
+      choosePath(w.diplo, path);
+      if (path === 'war') {
+        expect(stepNow(w, 5)!.id).toBe('allywar');
+        w.exp.done.push('allywar'); applyDiplo(w.diplo, 'landing');
+        expect(win(w, 5)).toBe('landing');
+        // (pas d'attente : le port est ouvert, « Tenir le camp » se fera en le prenant ; la feuille de route le dit)
+        expect(stepNow(w, 5)!.id).toBe('port');
+        const r = roadView(w, { running: () => false, dayLen: DAY, age: 5 })!;
+        expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'port', go: 'battle' });
+        expect(r.steps.find((s) => s.id === 'camp')!.sub).toMatch(/port/);
+        expect(r.chapters.map((c) => c.state)).toEqual(['now', 'now', 'now']);
+        expect(r.notes.join(' ')).toMatch(/Arrivés tard/);
+        // (un seul chapitre déplié : la fenêtre tient sur un petit écran)
+        expect((roadHtml(r).match(/class="dcSteps"/g) ?? []).length).toBe(1);
+        for (const k of ['port', 'tour', 'assault']) expect(win(w, 5)).toBe(k);
+        expect(w.diplo.conflict).toBe('won');
+      } else {
+        w.exp.done.push('envoys', 'truce'); applyDiplo(w.diplo, 'truce');
+        const c = kinds({ embassy: 1, tradepost: 2 });
+        expect(stepSaga(w, 5, c)).toBe(3);
+        expect(w.diplo.saga.done).toEqual([2, 3]);
+        expect(stepNow(w, 5, c)!.id).toBe('sign');
+        expect(signPeace(w, c)).toBe(true);
+        expect(w.diplo.conflict).toBe('peace');
+      }
+    }
   });
 
   it('l’état des chapitres se relit, un champ abîmé donne l’état vierge', () => {

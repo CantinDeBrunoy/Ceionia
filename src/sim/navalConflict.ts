@@ -7,22 +7,15 @@ import type { People, RivalIsle, Isle } from '../world/archipelago';
  * stocks du joueur. L'état du conflit appartient à la diplomatie, qui le donne à la vue (`NavalConflict.state`)
  */
 
-/** L'état du conflit : en cours, paix signée par le joueur, guerre gagnée par un peuple, traité entre les îles (au Futuriste) */
+/** L'état du conflit : en cours, paix signée par le joueur, guerre gagnée par un peuple, traité entre les îles (anciennes parties) */
 export type ConflictState = { kind: 'war' } | { kind: 'peace' } | { kind: 'won'; winner: People } | { kind: 'treaty' };
 
 /**
- * Âge du Futuriste : la guerre qui dure encore s'y arrête d'elle-même, par un traité entre les deux îles. Avant le fil des
- * âges (24 nov. 2026), c'était le Moderne ; le conflit s'y règle désormais (`sim/saga.ts`) : la guerre se voit jusque-là
+ * Ce qui se voit en mer : rien sans l'archipel ; sinon l'état tel quel, à tout âge. Avant le fil des âges (24 nov. 2026), une
+ * guerre encore en cours au Moderne se montrait en traité ; le conflit se mène désormais jusqu'au bout, même au Futuriste
  */
-export const TREATY_AGE = 5;
-
-/**
- * Ce qui se voit en mer : rien sans l'archipel ; une guerre encore en cours au Futuriste devient un traité (les deux îles font
- * la paix entre elles). Les autres états se montrent tels quels
- */
-export function conflictShown(state: ConflictState, isles: boolean, age: number): ConflictState | null {
+export function conflictShown(state: ConflictState, isles: boolean, _age: number): ConflictState | null {
   if (!isles) return null;
-  if (state.kind === 'war' && age >= TREATY_AGE) return { kind: 'treaty' };
   return state;
 }
 

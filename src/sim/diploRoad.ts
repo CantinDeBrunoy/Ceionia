@@ -6,7 +6,7 @@ import { ISLE_MISSIONS } from './isleMissions';
 import { MISSIONS, type Mission } from './missions';
 import { battleOpen, campaignNext, corps, corpsMax, raidDue } from './campaign';
 import { AGES, type KindId } from '../build/catalog';
-import { CHAPTERS, chapterDone, sagaSteps, type Chapter, type SagaStep } from './saga';
+import { CHAPTERS, chapterDone, sagaSteps, stepSkipped, type Chapter, type SagaStep } from './saga';
 
 /**
  * La feuille de route du conflit des deux îles (retour de joueurs, 22 nov. 2026 : après « Aider notre allié » ou « Négocier
@@ -127,7 +127,9 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
   const chapters: RoadChapter[] = CHAPTERS.map((a): RoadChapter => {
     const title = chapterTitle(path, a);
     if (chapterDone(w, a, sctx)) return { age: a, title, state: 'done', sub: tr('Chapitre fait') };
-    if (a <= age) return { age: a, title, state: 'now', sub: tr('Le chapitre de l’âge : {age}', { age: AGES[a].name }) };
+    // (un chapitre d'un âge passé, pas encore fait : une arrivée tardive le rattrape maintenant)
+    if (a < age) return { age: a, title, state: 'now', sub: tr('Chapitre en retard (âge : {age}), à rattraper', { age: AGES[a].name }) };
+    if (a === age) return { age: a, title, state: 'now', sub: tr('Le chapitre de l’âge : {age}', { age: AGES[a].name }) };
     return { age: a, title, state: 'later', sub: tr('S’ouvre à l’âge : {age}', { age: AGES[a].name }) };
   });
   const open = new Set(chapters.filter((c) => c.state === 'now').map((c) => c.age));
@@ -135,11 +137,13 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
   // les étapes : celle du moment est la première pas faite d'un chapitre ouvert
   const clock = w.exp.clock, raid = path === 'war' && raidDue(d, clock);
   const wait = d.battle === 'lost' ? Math.max(0, d.retry - clock) : 0;
-  const all = sagaSteps(w, sctx), first = all.find((s) => !s.done && open.has(s.age));
+  const all = sagaSteps(w, sctx), first = all.find((s) => !s.done && open.has(s.age) && !stepSkipped(w, s, age));
   const view = (s: SagaStep): RoadStep => {
     const now = s === first, m = s.mission ? MISSIONS.find((x) => x.id === s.mission) : undefined, run = !!s.mission && ctx.running(s.mission);
     const st: RoadStep = { id: s.id, icon: m?.icon ?? ICON[s.id] ?? '🧭', title: stepTitle(s.id, d), sub: subOf(s.id, rival), state: s.done ? 'done' : now ? 'now' : 'next', go: 'wait', age: s.age, kind: s.kind };
     if (s.done) { st.sub = tr('C’est fait'); return st; }
+    // (arrivée tardive : le camp se tiendra en prenant le port, pas en attendant une sortie)
+    if (stepSkipped(w, s, age)) { st.sub = tr('se fait en prenant le port'); return st; }
     if (!now) return st;
     if (s.go === 'mission') { st.go = run ? 'wait' : 'mission'; if (run) st.sub = tr('L’expédition est en route'); }
     else if (s.go === 'battle') {
@@ -172,6 +176,9 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
   if (!open.size) {
     const next = chapters.find((c) => c.state === 'later');
     if (next) notes.push(tr('Chapitre fait. La suite, « {title} », s’ouvre à l’âge : {age}.', { title: next.title, age: AGES[next.age].name }));
+  } else if (open.size > 1 || [...open][0] < age) {
+    // (une arrivée tardive : les chapitres en retard se jouent à la suite, sans attendre d'âge)
+    notes.push(age > 4 ? tr('Arrivés tard dans l’archipel : les trois chapitres se jouent à la suite, jusqu’au règlement du conflit.') : tr('Arrivés tard dans l’archipel : les chapitres en retard se jouent à la suite, sans attendre d’âge.'));
   }
   return { path, ally, rival, prep, steps, chapters, canChange: canChangePath(d), alert, notes };
 }

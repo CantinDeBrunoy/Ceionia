@@ -104,10 +104,10 @@ describe('diplomatie : le dénouement (au Médiéval)', () => {
     bindPostReady((x) => x === w);
     expect(endgameOpen(w, 2)).toBe(true);
     expect(endgameWhy(w, 2)).toBeNull();
-    // le fil des âges : le conflit dure jusqu'au Moderne ; au Futuriste, il est réputé réglé (voir `settleLate`)
+    // le fil des âges : le conflit se mène à tout âge dès le Médiéval, même au Futuriste (une arrivée tardive)
     expect(endgameOpen(w, 3)).toBe(true);
     expect(endgameOpen(w, 4)).toBe(true);
-    expect(endgameOpen(w, 5)).toBe(false);
+    expect(endgameOpen(w, 5)).toBe(true);
     expect(choosePath(w.diplo, 'neutral' as never)).toBe(false);
     expect(w.diplo.path).toBeNull();
     w.diplo.ally = null;
@@ -126,9 +126,9 @@ describe('diplomatie : le dénouement (au Médiéval)', () => {
     bindPostReady(() => true);
     // montrée dans la session (puis « Plus tard ») : elle ne revient plus seule
     expect(pathDue(w, 2, true, true)).toBe(false);
-    // (l'archipel accepté tard : la voie se choisit à l'Industriel ou au Moderne ; au Futuriste, plus rien)
+    // (l'archipel accepté tard : la voie se choisit à l'Industriel, au Moderne, au Futuriste)
     expect(pathDue(w, 3, true)).toBe(true);
-    expect(pathDue(w, 5, true)).toBe(false);
+    expect(pathDue(w, 5, true)).toBe(true);
     // la voie prise : c'est sa feuille de route qui s'ouvre (`Game.stepDiplo`), pas la carte
     w.diplo.path = 'peace';
     expect(pathDue(w, 2, true)).toBe(false);
@@ -245,21 +245,17 @@ describe('diplomatie : le dénouement (au Médiéval)', () => {
     expect(winAllyWar(w.diplo)).toBe(false);
   });
 
-  it('une partie déjà au Futuriste avec un conflit ouvert : le conflit est réputé réglé, et la sauvegarde se relit', () => {
+  it('une partie au Futuriste avec un conflit ouvert : il n’est plus réglé d’office, et la sauvegarde se relit', () => {
     const w = allied();
-    expect(settleLate(w.diplo, 2, true)).toBe(false);
-    expect(settleLate(w.diplo, 3, true)).toBe(false);
-    expect(settleLate(w.diplo, 4, true)).toBe(false);
-    expect(settleLate(w.diplo, 5, true)).toBe(true);
-    expect(w.diplo.conflict).toBe('treaty');
-    expect(conflictState(w)).toEqual({ kind: 'treaty' });
-    expect(settleLate(w.diplo, 5, true)).toBe(false);
-    // (une sauvegarde d'avant, sur la voie de la guerre : elle se relit)
+    for (const age of [2, 3, 4, 5]) expect(settleLate(w.diplo, age, true)).toBe(false);
+    expect(w.diplo.conflict).toBe('open');
+    expect(conflictState(w)).toEqual({ kind: 'war' });
+    // (une sauvegarde d'avant, sur la voie de la guerre : elle se relit, la bataille reste prête)
     const r = new World();
     r.fromJSON(JSON.parse(JSON.stringify({ ...withIsles().toJSON(), diplo: { ally: 'orient', path: 'war', conflict: 'open', battle: 'ready' } })));
     expect(r.diplo.battle).toBe('ready');
-    expect(settleLate(r.diplo, 5, true)).toBe(true);
-    expect(r.diplo.battle).toBe('none');
+    expect(settleLate(r.diplo, 5, true)).toBe(false);
+    expect(r.diplo.battle).toBe('ready');
     const c = continent();
     expect(settleLate(c.diplo, 4, archipelagoOn(c))).toBe(false);
     expect(conflictState(c)).toBeNull();

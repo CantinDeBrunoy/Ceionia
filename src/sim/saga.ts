@@ -2,7 +2,7 @@ import type { World } from '../world/world';
 import type { KindId } from '../build/catalog';
 import { archipelagoOn } from '../world/expand';
 import { PEACE_CHAIN, WAR_MISSION, type DiploState } from './diplomacy';
-import { RAID_FIRST } from './campaign';
+import { RAID_FIRST, battleOpen } from './campaign';
 
 /**
  * Le fil des âges (chantier A du nouveau monde, décision de l'auteur du 24 nov. 2026) : le conflit des deux îles ne se règle
@@ -19,8 +19,16 @@ import { RAID_FIRST } from './campaign';
 export const FIRST_CHAPTER = 2, LAST_CHAPTER = 4;
 export type Chapter = 2 | 3 | 4;
 export const CHAPTERS: Chapter[] = [2, 3, 4];
-/** L'âge est-il celui d'un chapitre ? (au-delà, le conflit est réglé d'office : `settleLate`) */
+/** L'âge est-il celui d'un chapitre ? */
 export const inSaga = (age: number) => age >= FIRST_CHAPTER && age <= LAST_CHAPTER;
+/**
+ * Le conflit se mène-t-il à cet âge ? Dès le Médiéval, et sans fin : une arrivée tardive dans l'archipel (jusqu'au
+ * Futuriste) joue les chapitres passés à la suite (bug de l'auteur, 24 nov. 2026 : « Explorer le monde » au Futuriste ne
+ * laissait plus aucun moyen de régler le conflit)
+ */
+export const conflictAge = (age: number) => age >= FIRST_CHAPTER;
+/** Les chapitres ouverts à cet âge : le sien et ceux d'avant (au Futuriste, les trois) */
+export const chaptersUpTo = (age: number) => CHAPTERS.filter((a) => a <= age);
 
 export interface SagaState {
   /** les chapitres faits (leur âge) : gardés même si l'on reperd ensuite ce qu'on tenait */
@@ -121,35 +129,21 @@ export function stepSaga(w: Saga, age: number, ctx: SagaCtx = {}): Chapter | nul
 }
 
 /**
- * Une partie qui prend sa voie au-delà du Médiéval (l'archipel accepté tard, une partie d'avant les chapitres) : les chapitres
- * des âges passés sont comptés faits, avec ce qu'ils donnent (la guerre : la plage prise, son camp et sa caserne avancée, puis
- * le port et la tour à l'âge d'après ; la paix : le comptoir chez le rival et la trêve). On commence au chapitre de l'âge du
- * village. Renvoie vrai si quelque chose a été compté
+ * Une arrivée tardive dans l'archipel (à l'Industriel, au Moderne, au Futuriste) : rien n'est offert, les chapitres des âges
+ * passés se jouent à la suite, sans attendre d'âge (leurs batailles sont ouvertes : `BATTLE_AGE` ≤ l'âge du village). La
+ * condition du passage d'âge les demande avec celui de l'âge (`chapterItem`). Avant le 24 nov. 2026 au soir, `catchUp`
+ * comptait faits les chapitres passés : la fonction ne fait plus rien, gardée pour qui l'appelle encore
  */
-export function catchUp(d: DiploState, age: number, clock: number, dayLen: number): boolean {
-  if (!d.ally || !d.path || d.conflict !== 'open') return false;
-  let any = false;
-  for (const a of CHAPTERS) {
-    if (a >= age || d.saga.done.includes(a)) continue;
-    any = true;
-    d.saga.done.push(a);
-    if (d.path === 'war') {
-      const c = d.camp, want = a === 2 ? ['plage'] as const : ['plage', 'port', 'tour'] as const;
-      for (const f of want) if (!c.held.includes(f)) c.held.push(f);
-      if (d.battle === 'none') d.battle = 'ready';
-      if (!c.raid) c.raid = clock + RAID_FIRST * dayLen;
-    } else if (a === 2) { d.post = true; d.saga.truce = true; }
-  }
-  return any;
-}
+export function catchUp(_d: DiploState, _age: number, _clock: number, _dayLen: number): boolean { void RAID_FIRST; return false; }
 
 /** La paix signée, au bout du chapitre du Moderne (provisoire : les Jeux des îles, chantier D, la régleront) */
 export function signPeace(w: Saga, ctx: SagaCtx = {}): boolean {
   const d = w.diplo;
   if (d.path !== 'peace' || d.conflict !== 'open') return false;
-  const st = chapterSteps(w, LAST_CHAPTER, ctx).filter((x) => x.id !== 'sign');
-  if (!d.saga.done.includes(2) && !d.saga.truce) return false;
-  if (!st.every((x) => x.done)) return false;
+  // (toutes les étapes d'avant, chapitres passés compris : une arrivée tardive les fait à la suite)
+  const st = sagaSteps(w, ctx).filter((x) => x.id !== 'sign');
+  if (!d.saga.truce && !d.saga.done.includes(2)) return false;
+  if (!st.every((x) => x.done || d.saga.done.includes(x.age))) return false;
   d.conflict = 'peace';
   return true;
 }
@@ -166,20 +160,30 @@ export const CHAPTER_LABELS: Record<Chapter, string> = {
 };
 export const isChapterLabel = (l: string) => CHAPTERS.some((a) => CHAPTER_LABELS[a] === l);
 
-/** La condition du passage vers l'âge `next` (null : aucune, sans archipel ou hors des chapitres) ; have/need : les étapes */
+/**
+ * La condition du passage vers l'âge `next` (null : aucune, sans archipel ou hors des chapitres) : le chapitre de l'âge, et
+ * ceux d'avant pas encore faits (une arrivée tardive les rattrape à la suite) ; have/need : leurs étapes
+ */
 export function chapterItem(w: Saga, next: number, ctx: SagaCtx = {}): { label: string; have: number; need: number } | null {
   if (!archipelagoOn(w)) return null;
   const a = next - 1;
   if (!inSaga(a)) return null;
   const label = CHAPTER_LABELS[a as Chapter];
-  if (chapterDone(w, a, ctx)) return { label, have: 1, need: 1 };
-  const st = chapterSteps(w, a, ctx);
+  const late = chaptersUpTo(a).filter((c) => !chapterDone(w, c, ctx));
+  if (!late.length) return { label, have: 1, need: 1 };
+  const st = sagaSteps(w, ctx).filter((x) => late.includes(x.age));
   if (!st.length) return { label, have: 0, need: 1 };
   return { label, have: st.filter((x) => x.done).length, need: st.length };
 }
 
-/** L'étape du moment dans le chapitre de l'âge (la première pas faite), ou null */
+/**
+ * Une étape qu'on n'attend pas : « Tenir le camp » quand une bataille de la campagne est déjà ouverte à cet âge (une arrivée
+ * tardive). Le port pris, le camp compte pour tenu (`sagaSteps`) : le joueur n'attend pas une sortie pour avancer
+ */
+export const stepSkipped = (w: Saga, s: SagaStep, age: number) => s.id === 'camp' && battleOpen(w.diplo, age);
+
+/** L'étape du moment : la première pas faite des chapitres ouverts à cet âge (les chapitres en retard d'abord), ou null */
 export function stepNow(w: Saga, age: number, ctx: SagaCtx = {}): SagaStep | null {
-  if (chapterDone(w, age, ctx)) return null;
-  return chapterSteps(w, age, ctx).find((x) => !x.done) ?? null;
+  const open = chaptersUpTo(age).filter((c) => !chapterDone(w, c, ctx));
+  return sagaSteps(w, ctx).find((x) => !x.done && open.includes(x.age) && !stepSkipped(w, x, age)) ?? null;
 }

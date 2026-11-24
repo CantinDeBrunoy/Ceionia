@@ -101,10 +101,12 @@ describe('le panneau Peuples', () => {
     expect(g(after[1].gestures, 'peace').done).toBe(true);
   });
 
-  it('un traité (archipel accepté au Futuriste) : rien à faire, et la fiche le dit', () => {
+  it('un traité (une ancienne partie réglée d’office) : rien à faire, et la fiche le dit', () => {
     const w = world();
     chooseAlly(w.diplo, 'asie');
-    settleLate(w.diplo, 5, true);
+    // (plus de règlement d'office : le conflit se mène à tout âge ; les anciennes parties gardent leur traité)
+    expect(settleLate(w.diplo, 5, true)).toBe(false);
+    w.diplo.conflict = 'treaty';
     const rival = peoplesView(w, ctx({ age: 5 })).cards[0];
     expect(rival.status).toMatch(/traité/);
     expect(rival.gestures.every((x) => !x.on)).toBe(true);
