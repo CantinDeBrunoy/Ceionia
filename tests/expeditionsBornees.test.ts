@@ -41,6 +41,8 @@ function village(age: number) {
   w.diplo.met = ['orient', 'asie']; w.diplo.ally = 'orient'; w.diplo.path = 'peace';
   // (le premier convoi escorté : les émissaires peuvent partir, chantier B)
   w.diplo.saga.sea.push('convoy');
+  // (le chapitre de l'Industriel fait : la candidature des Jeux des îles peut partir, chantier D)
+  w.diplo.saga.done.push(2, 3);
   return { w, agents, ex, view: new ExpeditionView(w, agents, ex) };
 }
 

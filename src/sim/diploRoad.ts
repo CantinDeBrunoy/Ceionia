@@ -8,6 +8,7 @@ import { battleOpen, campaignNext, corps, corpsMax, raidDue } from './campaign';
 import { AGES, type KindId } from '../build/catalog';
 import { CHAPTERS, chapterDone, sagaSteps, stepSkipped, seaReady, isSeaStep, type Chapter, type SagaStep } from './saga';
 import { MIN_FLEET } from './fleet';
+import { DELIVERIES, DELIVERY_COST, TRIALS, hostShare, medals, welcomeScore } from './islandGames';
 import { GARRISON_KINDS, GARRISON_NEED, COMMON_KINDS, COMMONS_NEED } from './concession';
 
 /**
@@ -26,7 +27,7 @@ export interface RoadPrep { id: string; icon: string; title: string; gain: strin
  * l'expédition (`mission`), la bataille (`battle`), ou rien (`wait` : en cours, ou délai)
  */
 export interface RoadStep {
-  id: string; icon: string; title: string; sub: string; state: 'done' | 'now' | 'next'; go: 'mission' | 'battle' | 'naval' | 'fleet' | 'build' | 'sign' | 'wait';
+  id: string; icon: string; title: string; sub: string; state: 'done' | 'now' | 'next'; go: 'mission' | 'battle' | 'naval' | 'fleet' | 'build' | 'sign' | 'wait' | 'games';
   /** le chapitre de l'étape (son âge) */
   age: Chapter;
   /** le bâtiment à poser (`build`) */
@@ -87,7 +88,9 @@ export function stepTitle(id: string, d: Pick<DiploState, 'ally'>): string {
   if (m) return tr(m.title);
   const t: Record<string, () => string> = {
     plage: () => tr('Le débarquement'), camp: () => tr('Tenir le camp'), port: () => tr('Le port de {isle}', { isle: isleName(rival) }),
-    tour: () => tr('La tour du rempart'), assault: () => tr('L’assaut'), post2: () => tr('Un second comptoir'),
+    tour: () => tr('La tour du rempart'), assault: () => tr('La bataille des deux îles'), post2: () => tr('Un second comptoir'),
+    gamesSite: () => tr('Le site des Jeux'), deliver: () => tr('Le chantier des Jeux'), host: () => tr('L’accueil des visiteurs'),
+    trials: () => tr('Les épreuves'), ceremony: () => tr('La cérémonie et la paix'),
     fort: () => tr('Le fort'), garrison: () => tr('La ville de garnison'), harbor2: () => tr('Le port marchand partagé'), commons: () => tr('Les maisons communes'),
     strait: () => tr('La bataille du bras de mer'), blockade: () => tr('Le blocus du port'), convoy: () => tr('L’escorte du premier convoi'),
     embassy: () => tr('L’ambassade'), sign: () => tr('Signer la paix des îles'),
@@ -95,7 +98,7 @@ export function stepTitle(id: string, d: Pick<DiploState, 'ally'>): string {
   return t[id]?.() ?? id;
 }
 
-const ICON: Record<string, string> = { strait: '⚓', blockade: '⛓️', convoy: '🚢', plage: '⛵', camp: '🏕️', port: '⚓', tour: '🏰', assault: '⚔️', post2: '💰', embassy: '🌐', sign: '📜', fort: '🏰', garrison: '🪖', harbor2: '🛳️', commons: '🏫' };
+const ICON: Record<string, string> = { strait: '⚓', blockade: '⛓️', convoy: '🚢', plage: '⛵', camp: '🏕️', port: '⚓', tour: '🏰', assault: '⚔️', post2: '💰', embassy: '🌐', sign: '📜', bid: '🏟️', gamesSite: '🏟️', deliver: '🧱', host: '🎪', trials: '🏅', ceremony: '🎆', fort: '🏰', garrison: '🪖', harbor2: '🛳️', commons: '🏫' };
 
 /** Le sous-titre d'une étape pas encore faite */
 function subOf(id: string, rival: People): string {
@@ -108,7 +111,13 @@ function subOf(id: string, rival: People): string {
     case 'camp': return tr('repousser la première sortie rivale');
     case 'port': return tr('un avant-poste et sa garnison');
     case 'tour': return tr('une tour qui tire, et ses archers');
-    case 'assault': return tr('les remparts, puis le palais');
+    case 'assault': return tr('un plan, la mer, le passage et les remparts, puis le palais');
+    case 'bid': return tr('un pourparler à trois peuples : les Jeux chez notre allié');
+    case 'gamesSite': return tr('dans la concession : le stade des trois peuples');
+    case 'deliver': return tr('briques, minerai et or, en trois livraisons');
+    case 'host': return tr('les visiteurs arrivent : le village doit tenir');
+    case 'trials': return tr('la régate, la course, le tournoi');
+    case 'ceremony': return tr('le défilé des trois flottes, puis le traité ou l’union');
     case 'envoys': return tr('ouvre leur comptoir et la discussion');
     case 'truce': return tr('une trêve signée : les combats cessent');
     case 'post2': return tr('chez notre allié : le commerce des deux îles grandit');
@@ -161,6 +170,11 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
     const n = (ks: KindId[]) => ks.reduce((t, k) => t + Math.min(1, ctx.count?.(k) ?? 0), 0);
     if (s.id === 'garrison') st.sub = tr('{n}/{m} bâtis : la caserne et deux autres bâtiments autour du fort', { n: Math.min(GARRISON_NEED, GARRISON_KINDS.reduce((t, k) => t + (ctx.count?.(k) ?? 0), 0)), m: GARRISON_NEED });
     if (s.id === 'commons') st.sub = tr('{n}/{m} bâties : halle des échanges, école commune, dispensaire', { n: Math.min(COMMONS_NEED, n(COMMON_KINDS)), m: COMMONS_NEED });
+    // (les Jeux : les livraisons faites, la jauge de l'accueil, les épreuves jouées)
+    const g = d.games;
+    if (s.id === 'deliver') st.sub = tr('{n}/{m} livraisons : {b} briques, {o} minerai, {g} or chacune', { n: g.delivered, m: DELIVERIES, b: DELIVERY_COST.bricks, o: DELIVERY_COST.ore, g: DELIVERY_COST.gold });
+    if (s.id === 'host' && g.hostAt >= 0) st.sub = g.pending ? tr('une surprise attend votre choix') : tr('Accueil : {n} sur 100 · {p} % du séjour', { n: welcomeScore(g), p: Math.round(hostShare(g, w.exp.clock, ctx.dayLen) * 100) });
+    if (s.id === 'trials' && g.trials.length) st.sub = tr('{n}/{m} épreuves jouées · {k} médailles', { n: g.trials.length, m: TRIALS.length, k: medals(g) });
     // (arrivée tardive : le camp se tiendra en prenant le port, pas en attendant une sortie)
     if (stepSkipped(w, s, age)) { st.sub = tr('se fait en prenant le port'); return st; }
     if (!now) return st;
@@ -183,6 +197,9 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
     } else if (s.go === 'wait') {
       // (la première sortie rivale : elle vient d'elle-même, la ligne du corps dit quand ; arrivée, le bouton mène à la défense)
       if (raid) st.go = 'battle';
+    } else if (s.go === 'games') {
+      // (l'accueil en cours, sans surprise : il suffit d'attendre)
+      st.go = s.id === 'host' && d.games.hostAt >= 0 && !d.games.pending ? 'wait' : 'games';
     } else st.go = s.go;
     return st;
   };

@@ -3,6 +3,7 @@ import type { KindId } from '../build/catalog';
 import { archipelagoOn } from '../world/expand';
 import { PEACE_CHAIN, WAR_MISSION, type DiploState } from './diplomacy';
 import { RAID_FIRST, battleOpen } from './campaign';
+import { BID_MISSION, GAMES_SITE, DELIVERIES, TRIALS, hostDone } from './islandGames';
 import { COMMON_KINDS, COMMONS_NEED, GARRISON_KINDS, garrisonBuilt, commonsCount, nextToBuild } from './concession';
 
 /**
@@ -13,8 +14,8 @@ import { COMMON_KINDS, COMMONS_NEED, GARRISON_KINDS, garrisonBuilt, commonsCount
  *
  * Les étapes navales (chantier B) viennent avant le débarquement, le port et les émissaires ; les bâtiments des zones
  * (chantier C, `sim/concession.ts`) : le fort à l'Industriel, la ville de garnison au Moderne (guerre), le port marchand
- * partagé et deux maisons communes à l'Industriel (paix). Contenu provisoire (marqué `stub`) : la bataille épique et les Jeux
- * des îles (chantier D) au Moderne.
+ * partagé et deux maisons communes à l'Industriel (paix). Au Moderne (chantier D) : la bataille des deux îles (guerre), les
+ * Jeux des îles (paix, `sim/islandGames.ts`).
  */
 
 /** Les âges des chapitres : le Médiéval, l'Industriel, le Moderne. Le conflit s'ouvre au premier, se règle au dernier */
@@ -67,7 +68,7 @@ export interface SagaCtx { count?(k: KindId): number }
  * bras de mer, le blocus, l'escorte du convoi), un bâtiment à poser (`build`), la paix à signer (`sign`), ou rien qu'attendre
  * (`wait` : la première sortie rivale contre le camp)
  */
-export type StepGo = 'mission' | 'battle' | 'naval' | 'build' | 'sign' | 'wait';
+export type StepGo = 'mission' | 'battle' | 'naval' | 'build' | 'sign' | 'wait' | 'games';
 export interface SagaStep {
   id: string; age: Chapter; done: boolean; go: StepGo;
   mission?: string; kind?: KindId;
@@ -83,8 +84,8 @@ type Saga = Pick<World, 'isles' | 'diplo' | 'exp'>;
  *   première sortie) ; à l'Industriel, le blocus, le port, la tour du rempart, puis le fort ; au Moderne, la ville de
  *   garnison, puis l'assaut de la ville.
  * - La paix : au Médiéval, l'escorte du convoi, les émissaires, puis l'ambassade de la paix (la trêve) ; à l'Industriel, le
- *   port marchand partagé, puis deux des trois maisons communes ; au Moderne, l'ambassade bâtie puis la paix signée
- *   (provisoire : les Jeux des îles, chantier D).
+ *   port marchand partagé, puis deux des trois maisons communes ; au Moderne, les Jeux des îles (la candidature, le site et
+ *   son chantier, l'accueil, les épreuves, la cérémonie, puis le traité ou l'union).
  */
 export function sagaSteps(w: Saga, ctx: SagaCtx = {}): SagaStep[] {
   const d = w.diplo, over = d.conflict !== 'open', exp = (id: string) => w.exp.done.includes(id);
@@ -108,8 +109,8 @@ export function sagaSteps(w: Saga, ctx: SagaCtx = {}): SagaStep[] {
     // la ville de garnison grandit autour du fort : la caserne et deux autres de ses bâtiments
     const gar = counts(GARRISON_KINDS);
     s.push({ id: 'garrison', age: 4, go: 'build', kind: nextToBuild(gar, GARRISON_KINDS), done: garrisonBuilt(gar) });
-    // (chantier D : la bataille des deux îles remplacera l'assaut)
-    s.push({ id: 'assault', age: 4, go: 'battle', done: d.conflict === 'won', stub: 'D' });
+    // la bataille des deux îles (chantier D : le plan, la mer, le passage et les remparts, le palais ; l'id reste `assault`)
+    s.push({ id: 'assault', age: 4, go: 'battle', done: d.conflict === 'won' });
   } else {
     const [envoys, truce] = PEACE_CHAIN;
     // l'escorte du premier convoi, avant les émissaires (les émissaires déjà faits la comptent faite)
@@ -120,9 +121,15 @@ export function sagaSteps(w: Saga, ctx: SagaCtx = {}): SagaStep[] {
     s.push({ id: 'harbor2', age: 3, go: 'build', kind: 'merchantPort', done: count('merchantPort') >= 1 });
     const com = counts(COMMON_KINDS);
     s.push({ id: 'commons', age: 3, go: 'build', kind: nextToBuild(com, COMMON_KINDS), done: commonsCount(com) >= COMMONS_NEED });
-    // (provisoire : la candidature et les Jeux des îles, chantier D)
-    s.push({ id: 'embassy', age: 4, go: 'build', kind: 'embassy', done: count('embassy') >= 1, stub: 'D' });
-    s.push({ id: 'sign', age: 4, go: 'sign', done: d.conflict === 'peace', stub: 'D' });
+    // les Jeux des îles (chantier D, `sim/islandGames.ts`) : la candidature, le site et son chantier, l'accueil, les épreuves,
+    // la cérémonie et la dernière carte (le traité ou l'union : la paix)
+    const g = d.games, built = count(GAMES_SITE) >= 1 || g.delivered > 0;
+    s.push({ id: 'bid', age: 4, go: 'mission', mission: BID_MISSION, done: g.bid || exp(BID_MISSION) });
+    s.push({ id: 'gamesSite', age: 4, go: 'build', kind: GAMES_SITE, done: built || g.hostAt >= 0 });
+    s.push({ id: 'deliver', age: 4, go: 'games', done: g.delivered >= DELIVERIES });
+    s.push({ id: 'host', age: 4, go: 'games', done: hostDone(g) });
+    s.push({ id: 'trials', age: 4, go: 'games', done: g.trials.length >= TRIALS.length });
+    s.push({ id: 'ceremony', age: 4, go: 'games', done: d.conflict === 'peace' });
   }
   if (over) for (const x of s) x.done = true;
   return s;
@@ -162,12 +169,15 @@ export function stepSaga(w: Saga, age: number, ctx: SagaCtx = {}): Chapter | nul
  */
 export function catchUp(_d: DiploState, _age: number, _clock: number, _dayLen: number): boolean { void RAID_FIRST; return false; }
 
-/** La paix signée, au bout du chapitre du Moderne (provisoire : les Jeux des îles, chantier D, la régleront) */
+/**
+ * La paix signée, au bout du chapitre du Moderne : la dernière carte des Jeux des îles (le traité ou l'union, `Game.endGames`)
+ * l'appelle, une fois tout le reste fait
+ */
 export function signPeace(w: Saga, ctx: SagaCtx = {}): boolean {
   const d = w.diplo;
   if (d.path !== 'peace' || d.conflict !== 'open') return false;
   // (toutes les étapes d'avant, chapitres passés compris : une arrivée tardive les fait à la suite)
-  const st = sagaSteps(w, ctx).filter((x) => x.id !== 'sign');
+  const st = sagaSteps(w, ctx).filter((x) => x.id !== 'sign' && x.id !== 'ceremony');
   if (!d.saga.truce && !d.saga.done.includes(2)) return false;
   if (!st.every((x) => x.done || d.saga.done.includes(x.age))) return false;
   d.conflict = 'peace';

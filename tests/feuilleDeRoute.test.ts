@@ -110,7 +110,7 @@ describe('la feuille de route', () => {
     chooseAlly(w.diplo, 'asie');
     choosePath(w.diplo, 'peace');
     let r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => [s.id, s.state])).toEqual([['convoy', 'now'], ['envoys', 'next'], ['truce', 'next'], ['harbor2', 'next'], ['commons', 'next'], ['embassy', 'next'], ['sign', 'next']]);
+    expect(r.steps.map((s) => [s.id, s.state])).toEqual([['convoy', 'now'], ['envoys', 'next'], ['truce', 'next'], ['harbor2', 'next'], ['commons', 'next'], ['bid', 'next'], ['gamesSite', 'next'], ['deliver', 'next'], ['host', 'next'], ['trials', 'next'], ['ceremony', 'next']]);
     // (l'escorte du premier convoi : un bouton qui la lance)
     expect(r.steps[0]).toMatchObject({ go: 'naval', title: 'L’escorte du premier convoi' });
     expect(r.prep.every((p) => p.gain === 'pourparlers plus sûrs')).toBe(true);
@@ -120,7 +120,7 @@ describe('la feuille de route', () => {
     expect(roadView(w, ctx())!.canChange).toBe(false);
     w.exp.done.push('envoys', 'isleFair');
     r = roadView(w, ctx())!;
-    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'now', 'next', 'next', 'next', 'next']);
+    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'now', 'next', 'next', 'next', 'next', 'next', 'next', 'next', 'next']);
     // (une visite faite passe en bas, cochée)
     expect(r.prep.at(-1)).toMatchObject({ id: 'isleFair', done: true });
     // la trêve : plus de changement de voie ; à l'Industriel, un second comptoir (bouton qui le prend en main)
@@ -139,10 +139,14 @@ describe('la feuille de route', () => {
     expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'commons', go: 'build', kind: 'exchangeHall', sub: '1/2 bâties : halle des échanges, école commune, dispensaire' });
     built = ['merchantPort', 'commonSchool', 'dispensary'];
     r = roadView(w, { ...ctx([], 4), count })!;
-    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'embassy', go: 'build' });
-    r = roadView(w, { ...ctx([], 4), count: (k) => (built.includes(k) || k === 'embassy' ? 1 : 0) })!;
-    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'sign', go: 'sign' });
-    expect(roadHtml(r)).toContain('data-a="sign"');
+    // (le Moderne, chantier D : les Jeux des îles ; la candidature, puis le site, puis le chantier, un bouton vers la carte des Jeux)
+    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'bid', go: 'mission' });
+    applyDiplo(w.diplo, 'bid');
+    r = roadView(w, { ...ctx([], 4), count })!;
+    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'gamesSite', go: 'build', kind: 'gamesSite' });
+    r = roadView(w, { ...ctx([], 4), count: (k) => (built.includes(k) || k === 'gamesSite' ? 1 : 0) })!;
+    expect(r.steps.find((s) => s.state === 'now')).toMatchObject({ id: 'deliver', go: 'games', sub: '0/3 livraisons : 40 briques, 30 minerai, 25 or chacune' });
+    expect(roadHtml(r)).toContain('data-a="g:open"');
   });
 
   it('ce que rapporte chaque visite pour la guerre se lit dans ses gains', () => {

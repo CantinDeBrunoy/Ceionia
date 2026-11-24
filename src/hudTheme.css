@@ -1014,6 +1014,10 @@ body.hell #resPanel { display: none !important; }
 #diploChoice .dcAlert b { font-family: var(--hSerif); font-size: 16px; font-weight: 800; }
 #diploChoice .dcAlert small { font-family: var(--hSerif); font-style: italic; font-size: 12.5px; }
 @keyframes dcAlarm { 50% { box-shadow: 0 0 0 5px rgba(200, 70, 40, 0.12); } }
+/* les Jeux des îles : la jauge du chantier, de l'accueil, du séjour */
+#diploChoice .dcGauge { position: relative; height: 22px; margin: 6px 0; border-radius: 11px; background: rgba(255, 250, 238, 0.7); border: 1px solid rgba(200, 160, 95, 0.55); overflow: hidden; }
+#diploChoice .dcGauge i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #e8b84a, #f2d27a); }
+#diploChoice .dcGauge span { position: relative; display: block; text-align: center; font-size: 12.5px; line-height: 20px; color: var(--hInk); font-weight: 600; }
 #diploChoice .dcNotes { margin: 6px 0 0; padding: 6px 12px; border-radius: 10px; background: rgba(255, 250, 238, 0.6); border: 1px solid rgba(200, 160, 95, 0.45); font-size: 13px; line-height: 1.45; color: var(--hInk); text-align: left; }
 #diploChoice .dcFoot { display: flex; justify-content: center; gap: 22px; margin: 12px 0 8px; }
 #diploChoice .dcLink { padding: 4px 6px; border: 0; background: none; font-family: var(--hSerif); font-size: 14px; font-weight: 700; color: #8a5a2a; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

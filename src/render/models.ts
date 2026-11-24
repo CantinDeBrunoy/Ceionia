@@ -19,7 +19,7 @@ import { powerplant } from './powerplant';
 import { rampartWall, rampartGate } from './ramparts';
 import { rod, shipHull } from './models/orientShips';
 import { frontInfirmary, frontForge, fortModel, coastBattery, garrisonBarracks, milHospital, soldierClub, garrisonHouse, milHeliport, radarStation, type FrontKit } from './models/frontline';
-import { allyBarracks, allyShipyard, allyHospital, merchantPort, exchangeHall, commonSchool, dispensary, researchCenter, type ConcessionKit } from './models/concession';
+import { allyBarracks, allyShipyard, allyHospital, merchantPort, exchangeHall, commonSchool, dispensary, researchCenter, gamesSite, type ConcessionKit } from './models/concession';
 import type { People } from '../world/archipelago';
 
 /**
@@ -14533,10 +14533,11 @@ function zoneModel(p: Parts, kind: KindId, age: number, v: number): boolean {
     case 'commonSchool': sink(0.012); commonSchool(p, age, a, K); return true;
     case 'dispensary': sink(0.012); dispensary(p, age, a, K); return true;
     case 'researchCenter': sink(0.012); researchCenter(p, age, a, K); return true;
+    case 'gamesSite': sink(0.012); gamesSite(p, age, a, K); return true;
   }
   return false;
 }
-const ZONE_STYLED = new Set<KindId>(['allyBarracks', 'allyShipyard', 'allyHospital', 'merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter']);
+const ZONE_STYLED = new Set<KindId>(['allyBarracks', 'allyShipyard', 'allyHospital', 'merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter', 'gamesSite']);
 
 /** Les aides dont les décorations (decor.ts) ont besoin */
 const DECOR_KIT: DecorKit = { flame, waterPool, waterJet, sway };

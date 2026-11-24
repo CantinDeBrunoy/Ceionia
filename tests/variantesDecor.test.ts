@@ -13,6 +13,8 @@ describe('variantes de décor des choix', () => {
     // les pourparlers de la paix : par l'île alliée, sur la petite île, à bord (voir `tripSetup`)
     expect(of('envoys')).toEqual(['ally', null]);
     expect(of('truce')).toEqual(['islet', 'ship']);
+    // la candidature des Jeux des îles (chantier D) : sur la petite île, à bord
+    expect(of('gamesBid')).toEqual(['islet', 'ship']);
     // le volcan : la coulée tiède, le bord du lac de lave, la tranchée
     expect(of('obsidian')).toEqual([null, 'hot']);
     expect(of('ascent')).toEqual([null, 'lava']);
@@ -20,6 +22,6 @@ describe('variantes de décor des choix', () => {
     // le cerf blanc : la meute, ou l'affût
     expect(of('stag')).toEqual([null, 'stalk']);
     const all = MISSIONS.flatMap((m) => m.choices).filter((c) => c.variant);
-    expect(all).toHaveLength(11);
+    expect(all).toHaveLength(13);
   });
 });

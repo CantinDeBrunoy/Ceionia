@@ -4,6 +4,7 @@ import type { KindId } from '../build/catalog';
 import { tr } from '../i18n';
 import { archipelagoOn } from '../world/expand';
 import { newCamp, readCamp, type CampState } from './campaign';
+import { newGames, readGames, BID_MISSION, type GamesState } from './islandGames';
 import { newSaga, readSaga, conflictAge, FIRST_CHAPTER, type SagaState } from './saga';
 import { isZoneKind, zoneKindOffered } from './concession';
 
@@ -57,7 +58,17 @@ export interface DiploState {
   camp: CampState;
   /** les chapitres du conflit, un par âge, du Médiéval au Moderne, et la trêve de la paix (voir `sim/saga.ts`) */
   saga: SagaState;
+  /**
+   * guerre gagnée (chantier D) : la carte « La paix des vainqueurs » (`rebuild` : reconstruire leur ville ; `tribute` : le
+   * tribut ; null : pas encore choisie, ou une partie d'avant) et l'heure de la victoire (`exp.clock` ; -1 : inconnue, une
+   * partie d'avant : la ville rivale est déjà relevée)
+   */
+  victors: Victors | null;
+  wonAt: number;
+  /** paix : les Jeux des îles (chantier D, `sim/islandGames.ts`) */
+  games: GamesState;
 }
+export type Victors = 'rebuild' | 'tribute';
 
 /**
  * Les avantages des expéditions facultatives des îles (`ISLE_MISSIONS`), pour la voie qu'on choisira (demande de l'auteur,
@@ -111,7 +122,7 @@ export function isleOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: strin
   return when === 'ally' || w.diplo.conflict === 'open';
 }
 
-export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [], boons: noBoons(), camp: newCamp(), saga: newSaga() });
+export const newDiplo = (): DiploState => ({ met: [], ally: null, path: null, conflict: 'open', asked: false, post: false, feast: false, battle: 'none', retry: 0, cine: false, intel: [], boons: noBoons(), camp: newCamp(), saga: newSaga(), victors: null, wonAt: -1, games: newGames() });
 
 const PEOPLES: People[] = ['orient', 'asie'];
 const PATHS: Path[] = ['peace', 'war'];
@@ -142,6 +153,10 @@ export function readDiplo(d: any): DiploState {
   s.camp = readCamp(d.camp);
   // (les chapitres du fil des âges : nouveaux le 24 nov. 2026 ; une ancienne partie n'en a aucun de noté, voir `catchUp`)
   s.saga = readSaga(d.saga);
+  // (la fin de la guerre et les Jeux des îles : nouveaux le 24 nov. 2026, absents des anciennes parties)
+  s.victors = d.victors === 'rebuild' || d.victors === 'tribute' ? d.victors : null;
+  s.wonAt = Number.isFinite(+d.wonAt) && d.wonAt !== null ? Math.max(-1, +d.wonAt) : -1;
+  s.games = readGames(d.games);
   return s;
 }
 
@@ -189,7 +204,7 @@ export function onRival(isle: RivalIsle, x: number, z: number) {
 export const PEACE_CHAIN = ['envoys', 'truce'] as const;
 export const PEACE_MISSION = 'truce';
 export const WAR_MISSION = 'allywar';
-const DIPLO_MISSIONS = new Set<string>([...PEACE_CHAIN, WAR_MISSION]);
+const DIPLO_MISSIONS = new Set<string>([...PEACE_CHAIN, WAR_MISSION, BID_MISSION]);
 
 /**
  * L'âge où s'ouvre le dénouement : le Médiéval (on y choisit sa voie). Le conflit se joue ensuite en trois chapitres, jusqu'au
@@ -234,6 +249,8 @@ export function missionWhy(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string
   if (d.path !== 'peace') return tr('Il faut d’abord choisir la voie de la paix.');
   // (les émissaires partent avec le premier convoi escorté : chantier B)
   if (id === PEACE_CHAIN[0] && !d.saga.sea.includes('convoy') && !d.saga.truce) return tr('Il faut d’abord escorter le premier convoi (la feuille de route du conflit).');
+  // (la candidature des Jeux : après le chapitre de l'Industriel, le commerce des deux îles)
+  if (id === BID_MISSION && !d.saga.done.includes(3)) return tr('Il faut d’abord finir le chapitre de l’Industriel (la feuille de route du conflit).');
   return null;
 }
 
@@ -242,7 +259,7 @@ export function missionWhy(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string
  * le rival), `truce` (la paix signée), `feast` (la fête des trois peuples), `landing` (les troupes débarquées : la bataille
  * est prête). `meet` et `victory` ne servent plus qu'aux anciennes parties
  */
-export type DiploAct = 'meet' | 'post' | 'truce' | 'feast' | 'landing' | 'victory' | Intel;
+export type DiploAct = 'meet' | 'post' | 'truce' | 'feast' | 'landing' | 'victory' | 'bid' | Intel;
 /** Ce que les éclaireurs ont appris, pour la bataille : la plage, la garnison, le chef, la porte faible */
 export type Intel = 'scoutBeach' | 'scoutGarrison' | 'scoutChief' | 'scoutGate';
 const INTELS: Intel[] = ['scoutBeach', 'scoutGarrison', 'scoutChief', 'scoutGate'];
@@ -255,6 +272,8 @@ export function applyDiplo(d: DiploState, act: DiploAct) {
   else if (act === 'feast') d.feast = true;
   else if (act === 'landing') { if (d.path === 'war' && d.conflict === 'open') d.battle = 'ready'; }
   else if (act === 'victory') winAllyWar(d);
+  // la candidature des Jeux acceptée (chantier D)
+  else if (act === 'bid') { if (d.path === 'peace' && d.conflict === 'open') d.games.bid = true; }
   else if (!d.intel.includes(act)) d.intel.push(act);
 }
 
@@ -387,14 +406,41 @@ export function winAllyWar(d: DiploState) {
 }
 
 /** La victoire (la bataille gagnée) : le conflit réglé, et le butin d'or du vaincu versé une fois ; le tribut suit chaque jour */
-export function claimVictory(w: Pick<World, 'diplo' | 'gold'>) {
+export function claimVictory(w: Pick<World, 'diplo' | 'gold'>, clock?: number) {
   if (!winAllyWar(w.diplo)) return false;
   w.gold += WAR_SPOILS.loot;
+  if (clock !== undefined) w.diplo.wonAt = clock;
   return true;
 }
 
-/** Le tribut quotidien de l'île vaincue (or par jour de jeu ; zéro tant que la guerre n'est pas gagnée) */
-export function tributePerDay(d: DiploState) { return d.conflict === 'won' ? WAR_SPOILS.tribute : 0; }
+/**
+ * Le tribut quotidien de l'île vaincue (or par jour de jeu ; zéro tant que la guerre n'est pas gagnée) : « Le tribut » le
+ * double ; « Reconstruire leur ville » n'en garde qu'un peu (le commerce de la ville relevée)
+ */
+export function tributePerDay(d: DiploState) {
+  if (d.conflict !== 'won') return 0;
+  return d.victors === 'tribute' ? WAR_SPOILS.tribute * VICTORS_TRIBUTE : d.victors === 'rebuild' ? REBUILD_GOLD : WAR_SPOILS.tribute;
+}
+
+/**
+ * « La paix des vainqueurs » (la dernière carte de la guerre, chantier D) : le tribut est doublé et la ville reste en ruine
+ * plus longtemps ; reconstruire, elle se relève en quelques jours et devient Amicale, un peu d'or chaque jour
+ */
+export const VICTORS_TRIBUTE = 2, REBUILD_GOLD = 1;
+/** La ville rivale après la guerre : jours en ruine, puis en reconstruction (selon le choix des vainqueurs ; sans choix, le tribut) */
+export const RUIN_DAYS: Record<Victors, [number, number]> = { rebuild: [1, 2], tribute: [4, 3] };
+export function chooseVictors(d: DiploState, v: Victors) {
+  if (d.conflict !== 'won' || d.victors) return false;
+  d.victors = v;
+  return true;
+}
+/** L'état de la ville rivale vaincue (`exp.clock`, durée d'un jour) : en ruine, en reconstruction, relevée (null : pas vaincue) */
+export function rivalTownState(d: Pick<DiploState, 'conflict' | 'victors' | 'wonAt'>, clock: number, dayLen: number): 'ruin' | 'repair' | 'intact' | null {
+  if (d.conflict !== 'won') return null;
+  if (d.wonAt < 0) return 'intact';
+  const [r, p] = RUIN_DAYS[d.victors ?? 'tribute'], days = (clock - d.wonAt) / dayLen;
+  return days < r ? 'ruin' : days < r + p ? 'repair' : 'intact';
+}
 
 // ---------------- Les récompenses de la paix ----------------
 

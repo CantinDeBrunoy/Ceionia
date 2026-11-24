@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Parts } from '../src/render/parts';
 import type { People } from '../src/world/archipelago';
 import {
-  allyBarracks, allyShipyard, allyHospital, merchantPort, exchangeHall, commonSchool, dispensary, researchCenter, type ConcessionKit,
+  allyBarracks, allyShipyard, allyHospital, merchantPort, exchangeHall, commonSchool, dispensary, researchCenter, gamesSite, type ConcessionKit,
 } from '../src/render/models/concession';
 
 type V3 = [number, number, number];
@@ -13,7 +13,7 @@ type Draw = (p: Parts, age: number, people: People, kit: ConcessionKit) => void;
 const MODELS: [string, Draw, number, number][] = [
   ['allyBarracks', allyBarracks, 2, 2], ['allyShipyard', allyShipyard, 2, 2], ['allyHospital', allyHospital, 2, 2],
   ['merchantPort', merchantPort, 3, 3], ['exchangeHall', exchangeHall, 2, 3], ['commonSchool', commonSchool, 2, 3],
-  ['dispensary', dispensary, 2, 3], ['researchCenter', researchCenter, 2, 4],
+  ['dispensary', dispensary, 2, 3], ['researchCenter', researchCenter, 2, 4], ['gamesSite', gamesSite, 3, 4],
 ];
 /** Plafond de triangles selon l'emprise (comme `tests/rendu.test.ts`) */
 const CAP: Record<number, number> = { 2: 4500, 3: 6500 };

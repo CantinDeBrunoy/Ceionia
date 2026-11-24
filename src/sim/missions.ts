@@ -720,6 +720,27 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
+    // la candidature des Jeux des îles (chantier D, au Moderne, voie de la paix) : un pourparler à trois peuples, qui peut échouer
+    id: 'gamesBid', age: 4, mandatory: false, talks: true, icon: '🏟️', title: 'La candidature des Jeux',
+    intro: 'Les trois peuples pourraient fêter leur paix par de grands Jeux, chez notre allié. Encore faut-il que les deux chefs acceptent de concourir côte à côte.',
+    choices: [
+      {
+        label: 'Réunir les trois chefs sur une petite île', text: 'Terrain neutre : la tente blanche, la table ronde, trois chaises.',
+        dest: 'river', sea: true, scene: 'voyage', variant: 'islet', doing: 'défend la candidature des Jeux devant les deux chefs', party: 4, work: 38, risk: 0, carry: 'guests',
+        win: [{ t: 'diplo', act: 'bid' }, joy(2, 4)], lose: [],
+        winText: 'Les deux chefs ont dit oui : les Jeux des îles se tiendront dans notre concession. Il faut bâtir le site des Jeux et livrer son chantier.',
+        loseText: 'Les chefs n’ont pas voulu concourir côte à côte. La candidature pourra être présentée de nouveau.',
+      },
+      {
+        label: 'Les recevoir à bord de notre navire', text: 'Au milieu du bras de mer, sous les trois pavillons.',
+        dest: 'river', sea: true, scene: 'voyage', variant: 'ship', doing: 'reçoit les deux chefs à bord pour la candidature des Jeux', party: 4, work: 30, risk: 0, carry: 'guests',
+        win: [{ t: 'diplo', act: 'bid' }, jobs(1, 4)], lose: [],
+        winText: 'Sous les trois pavillons, les deux chefs ont dit oui : les Jeux des îles se tiendront dans notre concession. Il faut bâtir le site des Jeux et livrer son chantier.',
+        loseText: 'Les chefs n’ont pas voulu concourir côte à côte. La candidature pourra être présentée de nouveau.',
+      },
+    ],
+  },
+  {
     // (l'id `allywar` reste celui de l'ancienne expédition « Aux côtés de notre allié » : les sauvegardes et le diorama le lisent)
     id: 'allywar', age: 2, mandatory: false, icon: '🔭', title: 'Envoyer des éclaireurs',
     intro: 'Avant la bataille, il faut connaître la côte rivale. Ses défenses, la plage où débarquer, combien de soldats la gardent : une barque d’éclaireurs part de nuit, la longue-vue à la main.',
@@ -1266,8 +1287,8 @@ PERK_NAME.satellites = 'des satellites : volcans et catastrophes annoncés plus 
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** Ce que la diplomatie gagne, en clair et en pastille */
-const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la trêve des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', landing: 'la côte reconnue : la bataille peut commencer', victory: 'la guerre gagnée : butin et tribut d’or', scoutBeach: 'la plage de débarquement repérée', scoutGarrison: 'la garnison rivale comptée', scoutChief: 'le chef rival repéré', scoutGate: 'la porte faible repérée' };
-const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', landing: '🔭', victory: '🏆', scoutBeach: '🏖️', scoutGarrison: '🛡️', scoutChief: '👑', scoutGate: '🚪' };
+const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la trêve des deux îles : les combats cessent', feast: 'l’amitié des trois peuples', landing: 'la côte reconnue : la bataille peut commencer', victory: 'la guerre gagnée : butin et tribut d’or', bid: 'la candidature des Jeux des îles acceptée', scoutBeach: 'la plage de débarquement repérée', scoutGarrison: 'la garnison rivale comptée', scoutChief: 'le chef rival repéré', scoutGate: 'la porte faible repérée' };
+const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉', landing: '🔭', victory: '🏆', bid: '🏟️', scoutBeach: '🏖️', scoutGarrison: '🛡️', scoutChief: '👑', scoutGate: '🚪' };
 
 /** Un avantage pour le dénouement, en clair (« +4 troupes alliées pour la bataille », « +10 % de chances pour la paix ») */
 export function boonText(kind: BoonKind, n: number, short = false) {

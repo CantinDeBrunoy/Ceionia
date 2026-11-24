@@ -1503,3 +1503,94 @@ export function researchCenter(p: Parts, age: number, people: People, kit: Conce
     p.box(0.14, 0.03, 0.105, -0.66, 0.17, 0.82, c.glass, 0, true); p.box(0.24, 0.006, 0.02, -0.66, 0.1, 0.82, c.neon, 0, 'neon');
   }
 }
+
+/**
+ * Le site des Jeux des îles (chantier D, 3 × 3, au Moderne) : le stade des trois peuples. La piste rouge en anneau et ses
+ * couloirs, la pelouse et son aire de lancer, les tribunes des deux longs côtés avec leur foule (des spectateurs en blocs,
+ * colorés, dans la géométrie du modèle : une foule de décor, pas des habitants), l'auvent au style de l'allié (arcs blancs,
+ * ou toit courbe de tuiles), la vasque de la flamme sur sa colonne (la flamme danse), l'écran des résultats, les trois mâts
+ * des drapeaux des trois peuples, le podium à trois marches, l'arche d'entrée aux trois anneaux (les couleurs des trois
+ * peuples), les projecteurs (Moderne) ou les arches de lumière (Futuriste), les guichets
+ */
+export function gamesSite(p: Parts, age: number, people: People, kit: ConcessionKit) {
+  const a = Math.min(5, Math.max(4, age)), c = pal(people, a), o = ours(a), or = people === 'orient', other: People = or ? 'asie' : 'orient';
+  // la piste : un anneau elliptique rouge, la pelouse au milieu, les lignes des couloirs
+  const ring = (rx: number, rz: number, w: number, y: number, col: number) => p.add(new THREE.RingGeometry(1 - w, 1, 28, 1).rotateX(-PI / 2).scale(rx, 1, rz), 0, y, 0.05, col);
+  ring(1.15, 0.72, 0.2, 0.016, 0xb5523e);
+  for (const k of [0.94, 0.88]) ring(1.15 * k, 0.72 * k, 0.012, 0.018, 0xf4efe6);
+  p.add(new THREE.CircleGeometry(1, 24).rotateX(-PI / 2).scale(0.9, 1, 0.56), 0, 0.015, 0.05, 0x6fa84e);
+  // l'aire de lancer (javelot), les haies d'une ligne droite
+  p.add(new THREE.CircleGeometry(0.1, 10).rotateX(-PI / 2), -0.45, 0.018, 0.05, 0xd8cdb4);
+  for (let i = 0; i < 4; i++) p.add(new THREE.PlaneGeometry(0.004, 0.5 - i * 0.08).rotateX(-PI / 2).rotateY(0.4 - i * 0.2), -0.2 + i * 0.04, 0.019, 0.05, 0xf4efe6);
+  for (let i = 0; i < 5; i++) { const x = -0.6 + i * 0.3; p.box(0.004, 0.05, 0.004, x, 0.016, 0.69, 0xf4efe6); p.box(0.004, 0.05, 0.004, x, 0.016, 0.75, 0xf4efe6); p.box(0.006, 0.012, 0.07, x, 0.06, 0.72, 0xf4efe6); }
+  // les tribunes : trois gradins de chaque long côté, la foule, l'auvent
+  const CROWD = [0xd84a3e, 0xf2c23a, 0x3a5a9a, 0x2aa8a0, 0xf4f4f0, 0x6a8a4a, 0xc0392e, 0xe8b84a];
+  for (const s of [-1, 1]) {
+    const z0 = s * 0.98;
+    for (let r = 0; r < 3; r++) {
+      const zz = z0 + s * r * 0.13, y = r * 0.07;
+      p.box(2.3 - r * 0.08, 0.07, 0.13, 0, y, zz, r % 2 ? c.trim : c.wall);
+      // les spectateurs : un buste et une tête par place, aux couleurs des trois peuples
+      for (let i = 0; i < 11; i++) {
+        const x = -1.02 + i * 0.204 + (r % 2) * 0.1;
+        if (Math.abs(x) > 1.1) continue;
+        const col = pick(CROWD, i * 3 + r * 5 + (s > 0 ? 1 : 0)), up = (i + r) % 4 === 0 ? 0.02 : 0;
+        p.box(0.05, 0.06, 0.035, x, y + 0.07 + up, zz, col);
+        p.box(0.032, 0.032, 0.032, x, y + 0.13 + up, zz, pick(SKINS, i + r));
+      }
+    }
+    // le mur du fond et l'auvent : arcs (orient), ou le toit courbe (asie) ; un auvent de verre au Futuriste
+    const zb = z0 + s * 0.42;
+    p.box(2.34, 0.34, 0.04, 0, 0, zb, c.wall);
+    for (let i = 0; i < 6; i++) p.box(0.03, 0.46, 0.03, -1.1 + i * 0.44, 0, zb - s * 0.02, c.trim);
+    if (a >= 5) p.add(new THREE.BoxGeometry(2.36, 0.02, 0.5).rotateX(s * 0.18), 0, 0.5, z0 + s * 0.18, c.glass, 0, true);
+    else if (or) {
+      p.add(new THREE.BoxGeometry(2.36, 0.02, 0.5).rotateX(s * 0.16), 0, 0.48, z0 + s * 0.18, 0xf4f4f0);
+      for (let i = 0; i < 5; i++) p.add(new THREE.TorusGeometry(0.1, 0.012, 4, 10, PI), -0.88 + i * 0.44, 0.34, zb - s * 0.02, c.accent);
+    } else hipRoof(p, 2.4, 0.56, 0.12, 0, 0.44, z0 + s * 0.18, c.roof, 0, { lod: true, rows: 0, hips: false });
+    // quelques supporters debout au premier rang, qui acclament
+    who(p, kit, -0.5 + s * 0.2, z0 - s * 0.1, pick(CROWD, s + 3), s > 0 ? PI : 0, { pose: 'cheer' });
+    who(p, kit, 0.6 - s * 0.1, z0 - s * 0.1, pick(CROWD, s + 5), s > 0 ? PI : 0, { pose: 'cheer' });
+  }
+  // la vasque de la flamme : colonne, coupe de bronze, la flamme qui danse
+  const fx = 1.28, fz = 0.05;
+  p.cyl(0.05, 0.07, 0.5, 8, fx, 0, fz, c.trim);
+  p.cyl(0.12, 0.05, 0.08, 10, fx, 0.5, fz, 0xb08a3a);
+  const fl = kit.sway([fx, 0.58, fz], [1, 0, 0], 0.12, 2.6);
+  fl.cone(0.08, 0.22, 7, 0, 0, 0, 0xff8a2a, true);
+  fl.cone(0.05, 0.15, 6, 0.01, 0.02, 0, 0xffe08a, true);
+  kit.smoke(fx, 0.82, fz, 0);
+  // l'écran des résultats, de l'autre côté
+  const sx = -1.3;
+  for (const dz of [-0.14, 0.14]) p.box(0.03, 0.42, 0.03, sx, 0, fz + dz, c.metal);
+  p.box(0.05, 0.22, 0.4, sx, 0.4, fz, 0x2a2e34);
+  p.box(0.012, 0.18, 0.36, sx + 0.03, 0.42, fz, a >= 5 ? c.neon : 0x9fd8e6, 0, a >= 5 ? 'neon' : true);
+  // le podium à trois marches, sur la pelouse
+  p.box(0.12, 0.07, 0.1, 0.32, 0.015, 0.05, 0xf4efe6); p.box(0.12, 0.05, 0.1, 0.2, 0.015, 0.05, 0xd8d4cc); p.box(0.12, 0.035, 0.1, 0.44, 0.015, 0.05, 0xd8d4cc);
+  const medals: [number, number, number][] = [[0.32, 0.085, 0xe8b84a], [0.2, 0.065, 0xc8ccd0], [0.44, 0.05, 0xb5652a]];
+  for (const [x, y, col] of medals) p.cyl(0.014, 0.014, 0.004, 8, x, y + 0.03, 0.105, col);
+  // les trois mâts : l'allié, le nôtre (plus haut, au milieu), nos rivaux d'hier ; devant l'entrée
+  allyFlag(p, kit, people, -0.3, 1.38, 0.6, c.metal);
+  ourFlag(p, kit, 0, 1.4, 0.72, c.metal);
+  allyFlag(p, kit, other, 0.3, 1.38, 0.6, c.metal);
+  // l'arche d'entrée aux trois anneaux (les couleurs des trois peuples), les guichets
+  for (const s of [-1, 1]) p.box(0.06, 0.36, 0.06, s * 0.62, 0, 1.3, c.wall);
+  p.box(1.3, 0.06, 0.07, 0, 0.36, 1.3, c.trim);
+  const rings: [number, number][] = [[-0.11, pal(people, a).flag], [0, 0xe8b84a], [0.11, pal(other, a).flag]];
+  for (const [x, col] of rings) p.add(new THREE.TorusGeometry(0.05, 0.009, 4, 14), x, 0.46, 1.3, col);
+  for (const s of [-1, 1]) { p.box(0.16, 0.14, 0.12, s * 0.9, 0, 1.36, o.wall); p.box(0.18, 0.02, 0.14, s * 0.9, 0.14, 1.36, o.accent); p.box(0.1, 0.05, 0.004, s * 0.9, 0.07, 1.42, o.win, 0, true); }
+  // les projecteurs aux quatre coins (Moderne), ou les arches de lumière (Futuriste)
+  const corners: [number, number][] = [[-1.36, -1.36], [1.36, -1.36], [-1.36, 1.1], [1.36, 1.1]];
+  for (const [x, z] of corners) {
+    if (a >= 5) { p.add(new THREE.TorusGeometry(0.12, 0.012, 4, 12, PI), x, 0.3, z, c.neon, Math.atan2(x, z), 'neon'); continue; }
+    p.cyl(0.012, 0.018, 0.95, 5, x, 0, z, c.metal);
+    p.box(0.16, 0.1, 0.03, x, 0.95, z, 0x3a3e44, Math.atan2(-x, -z));
+    p.box(0.14, 0.08, 0.012, x - Math.sign(x) * 0.01, 0.95, z - Math.sign(z) * 0.02, 0xfff2c0, Math.atan2(-x, -z), true);
+  }
+  // (seconde passe) les allées pavées, les arbres de l'allié, nos arbres, les lampadaires, les bancs, les fanions de l'arche
+  tiles(p, -0.7, 1.2, 0.7, 1.48, 0.14, c.ground, c.ground2);
+  tree(p, people, -1.3, 1.3, 0.5, 1); tree(p, people, 1.3, 1.3, 0.5, 2); ourTree(p, -1.38, -0.5, 0.45); ourTree(p, 1.38, -0.6, 0.45);
+  lamp(p, people, a, -0.4, 1.2, 0.3); lamp(p, people, a, 0.4, 1.2, 0.3);
+  for (const s of [-1, 1]) { p.box(0.14, 0.02, 0.04, s * 1.18, 0.05, 0.7, O.wood); p.box(0.14, 0.04, 0.01, s * 1.18, 0.07, 0.72, O.wood); }
+  for (let i = 0; i < 8; i++) p.add(new THREE.ConeGeometry(0.02, 0.05, 3).rotateX(PI), -0.6 + i * 0.17, 0.4, 1.3, pick(CROWD, i));
+}

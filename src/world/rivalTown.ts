@@ -482,3 +482,13 @@ export function lotsAt(plan: TownPlan, age: number) {
   const a = Math.max(1, age);
   return plan.lots.filter((l) => lotLives(l, a));
 }
+
+/**
+ * Les casemates des remparts (la bataille des deux îles, au Moderne) : les deux sommets des remparts les plus proches de la
+ * porte principale (hors de la porte elle-même). La vue y pose ses casemates de béton, la bataille ses bâtiments qui tirent
+ */
+export function casemateSpots(plan: TownPlan): [number, number][] {
+  const g = plan.points.portes[0] ?? plan.points.remparts[0];
+  return plan.points.remparts.filter((q) => Math.hypot(q[0] - g[0], q[1] - g[1]) > 3)
+    .sort((a, b) => Math.hypot(a[0] - g[0], a[1] - g[1]) - Math.hypot(b[0] - g[0], b[1] - g[1])).slice(0, 2).map((q) => [q[0], q[1]]);
+}

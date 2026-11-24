@@ -226,7 +226,7 @@ export const KIND_ICON: Record<KindId, string> = {
   hedge: 'hedge', fence: 'fence', flowerbed: 'flower', bench: 'bench', statue: 'statue', paving: 'paving', fountain: 'fountain', pond: 'pond', coralpool: 'coral',
   explorers: 'compass', racetrack: 'flag', powerplant: 'bulb', cemetery: 'stele',
   frontTower: 'watchtower', frontInfirmary: 'cross', fort: 'castle', battery: 'flame', frontForge: 'anvil', garrison: 'shield', milHospital: 'hospital', soldierClub: 'mug', garrisonHouse: 'house', milHeliport: 'heli', radar: 'radar',
-  allyBarracks: 'shield', allyShipyard: 'ship', allyHospital: 'hospital', merchantPort: 'anchor', exchangeHall: 'scales', commonSchool: 'book', dispensary: 'cross', researchCenter: 'flask',
+  allyBarracks: 'shield', allyShipyard: 'ship', allyHospital: 'hospital', merchantPort: 'anchor', exchangeHall: 'scales', commonSchool: 'book', dispensary: 'cross', researchCenter: 'flask', gamesSite: 'stadium',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', deco: 'flower', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */
