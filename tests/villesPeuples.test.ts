@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import * as THREE from 'three';
 import { World, setMapSize } from '../src/world/world';
 import { newWorld, CONTINENT } from '../src/world/mapgen';
@@ -6,6 +6,8 @@ import { GEN_ARCH } from '../src/world/continent';
 import { ARCH_N } from '../src/world/archipelago';
 import { townPlans, lotsAt, inPoly, segDist, HOUSE_SHARE, OUTSIDE, type TownKind, type TownPlan } from '../src/world/rivalTown';
 import { townModel, townWall, triCount } from '../src/render/townModels';
+import { campaignLots, campLotsAt, townRoles, townLotState } from '../src/world/townCampaign';
+import { WAR_LOTS, type WarLot } from '../src/render/models/townWar';
 
 const SEEDS = [11, 4242, 7];
 /** Budgets de triangles des modèles du peuple asiatique (`models/asian.ts`), quand ils diffèrent des autres */
@@ -181,5 +183,111 @@ describe('villes des peuples rivaux (archipel)', () => {
       // des brèches : le haut du pan ne tient plus partout
       for (const g of br) expect(top(g)).toBeLessThan(top(ok) - 0.05);
     }
+  });
+});
+
+/**
+ * Les villes qui suivent la campagne (chantier D, plan partie 4) : des lots en plus du plan, selon le rôle de la ville (le
+ * rival en guerre, vaincu ; l'allié, en paix), chacun à son âge ; le plan de la ville ne change pas
+ */
+describe('les villes qui suivent la campagne du nouveau monde', () => {
+  // (la carte de l'archipel : le bloc d'avant l'a remise à 192 en sortant)
+  beforeAll(() => setMapSize(ARCH_N));
+  afterAll(() => setMapSize(192));
+  const plansOf = (seed: number) => { const w = archipel(seed); return { w, plans: townPlans(w) }; };
+  const diplo = (o: Partial<{ ally: 'orient' | 'asie'; path: 'war' | 'peace' | null; conflict: 'open' | 'peace' | 'won' | 'treaty' }>) => ({ ally: o.ally ?? 'orient', path: o.path ?? null, conflict: o.conflict ?? 'open', victors: null, wonAt: -1 } as const);
+
+  it('le plan de la ville ne change pas : les lots de campagne sont à part, et une ville sans rôle n’en montre aucun', () => {
+    for (const seed of SEEDS) {
+      const { w, plans } = plansOf(seed);
+      for (const p of plans) {
+        const before = JSON.stringify(p.lots);
+        campaignLots(w, p);
+        expect(JSON.stringify(p.lots)).toBe(before);
+        expect(campLotsAt(campaignLots(w, p), 5, new Set())).toEqual([]);
+      }
+    }
+  });
+
+  it('chez le rival en guerre : les bastions et la batterie du quai à l’Industriel, puis casemates, canons, barbelés et radar au Moderne', () => {
+    for (const seed of SEEDS) {
+      const { w, plans } = plansOf(seed);
+      for (const p of plans) {
+        const ally = p.people === 'orient' ? 'asie' : 'orient', roles = townRoles(diplo({ ally, path: 'war' }), p.people);
+        expect([...roles]).toEqual(['war']);
+        const lots = campaignLots(w, p), at = (age: number) => campLotsAt(lots, age, roles).map((l) => l.kind);
+        expect(at(2)).toEqual([]);
+        expect(at(3)).toContain('bastion');
+        expect(at(3)).not.toContain('casemate');
+        for (const k of ['casemate', 'wire', 'radarMast'] as const) expect(at(4), `${seed} ${p.people} ${k}`).toContain(k);
+        expect(at(4).filter((k) => k === 'casemate')).toHaveLength(2);
+        // (sur la terre, hors des murs, sauf la tour du radar posée sur le palais)
+        for (const l of campLotsAt(lots, 4, roles)) if (l.kind !== 'radarMast') expect(w.cellAvg(Math.floor(l.x), Math.floor(l.z)), `${l.kind}`).toBeGreaterThan(0.12);
+        // la guerre finie : plus de défenses, nos drapeaux
+        const won = townRoles(diplo({ ally, path: 'war', conflict: 'won' }), p.people);
+        expect(campLotsAt(lots, 4, won).map((l) => l.kind)).toEqual(['ourFlags', 'ourFlags']);
+      }
+    }
+  });
+
+  it('chez l’allié : le poste de garde et le ponton au Médiéval, le pont et le faubourg à l’Industriel, le quartier moderne et l’avenue au Moderne, le mât aux trois drapeaux en paix', () => {
+    for (const seed of SEEDS) {
+      const { w, plans } = plansOf(seed);
+      for (const p of plans) {
+        const lots = campaignLots(w, p), war = townRoles(diplo({ ally: p.people, path: 'war' }), p.people), peace = townRoles(diplo({ ally: p.people, path: 'peace' }), p.people);
+        const at = (age: number, r = war) => campLotsAt(lots, age, r).map((l) => l.kind);
+        expect(at(2)).toContain('guardPost');
+        expect(at(2)).not.toContain('bridge');
+        expect(at(3)).toContain('bridge');
+        expect(at(3).filter((k) => k === 'house').length, `${seed} ${p.people} faubourg`).toBeGreaterThanOrEqual(2);
+        expect(at(4)).toContain('avenue');
+        expect(at(4)).not.toContain('mast3');
+        expect(at(4, peace)).toContain('mast3');
+        // (le faubourg est hors les murs, jamais dans la concession)
+        for (const l of campLotsAt(lots, 5, peace).filter((x) => x.kind === 'house')) expect(inPoly(l.x, l.z, p.wall)).toBe(false);
+      }
+    }
+  });
+
+  it('la ville vaincue : ruines puis reconstruction, autour de la porte et pour une partie des maisons ; le temple reste debout', () => {
+    const { plans } = plansOf(11), p = plans[0], ally = p.people === 'orient' ? 'asie' : 'orient', DAY = 100;
+    const d = { ally, conflict: 'won' as const, victors: 'rebuild' as const, wonAt: 0 };
+    const gate = p.lots.find((l) => l.kind === 'gate')!, temple = p.lots.find((l) => l.kind === 'temple')!;
+    expect(townLotState(p, gate, d, 10, DAY)).toBe('ruin');
+    expect(townLotState(p, temple, d, 10, DAY)).toBeNull();
+    expect(townLotState(p, gate, d, 1.5 * DAY, DAY)).toBe('repair');
+    expect(townLotState(p, gate, d, 9 * DAY, DAY)).toBeNull();
+    const houses = p.lots.filter((l) => l.kind === 'house'), hit = houses.filter((l) => townLotState(p, l, d, 10, DAY)).length;
+    expect(hit).toBeGreaterThan(houses.length * 0.3);
+    expect(hit).toBeLessThan(houses.length);
+    // l'allié ne passe jamais par la ruine
+    expect(townLotState(p, gate, { ...d, ally: p.people }, 10, DAY)).toBeNull();
+  });
+
+  it('les modèles de campagne des deux peuples, à chaque âge : propres, dans leur budget, dans leur lot, et différents d’un peuple à l’autre', () => {
+    const kinds: [WarLot, number, number, number][] = [
+      ['bastion', 2, 1.8, 3000], ['quayBattery', 1.8, 1, 2000], ['casemate', 1.3, 1.1, 2500], ['coastGun', 1.6, 1.6, 2500], ['wire', 2.2, 0.6, 2500],
+      ['radarMast', 0.8, 0.8, 1500], ['pontoon', 0.8, 2.2, 2000], ['guardPost', 1.2, 1, 2000], ['bridge', 3, 0.8, 3000], ['avenue', 8, 0.9, 3500],
+      ['mast3', 1, 1, 1500], ['ourFlags', 0.4, 0.4, 600],
+    ];
+    expect(kinds.map((k) => k[0]).sort()).toEqual([...WAR_LOTS].sort());
+    const box = new THREE.Box3();
+    for (const [kind, w, d, cap] of kinds)
+      for (let age = 2; age <= 5; age++) {
+        const g = { orient: townModel('orient', kind, age, 1, w, d), asie: townModel('asie', kind, age, 1, w, d) };
+        for (const people of ['orient', 'asie'] as const) {
+          const pos = g[people].attributes.position.array as Float32Array;
+          expect(pos.every((x) => Number.isFinite(x))).toBe(true);
+          expect(triCount(g[people]), `${people} ${kind} ${age}`).toBeLessThanOrEqual(cap);
+          expect(triCount(g[people])).toBeGreaterThan(20);
+          box.setFromBufferAttribute(g[people].attributes.position as THREE.BufferAttribute);
+          // (dans leur lot, à une demi-case près : le pont et le ponton plongent leurs piles, les drapeaux flottent)
+          expect(box.max.x - box.min.x, `${kind} large`).toBeLessThanOrEqual(w + 1.2);
+          expect(box.max.z - box.min.z, `${kind} profond`).toBeLessThanOrEqual(d + 1.2);
+        }
+        // (deux styles : les couleurs des sommets diffèrent)
+        const col = (x: THREE.BufferGeometry) => Array.from((x.attributes.color?.array ?? []) as Float32Array).join(',');
+        if (kind !== 'ourFlags') expect(col(g.orient)).not.toBe(col(g.asie));
+      }
   });
 });

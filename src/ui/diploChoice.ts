@@ -341,7 +341,7 @@ function epicHtml(ally: People, e: EpicInfo) {
     <h4>${tr('La bataille des deux îles')}</h4>
     <p class="pcSub">${nb(tr('Le fort et la ville de garnison sont prêts. Il est temps de prendre {isle}. Quel plan ?', { isle: isleName(rival) }))}</p>
     <div class="pcBtns dcCol">
-      ${btn('plan', 'pcGo', hudPic('militaire', 34), tr('Débarquer en force'), tr('deux plages : {ally} prend le passage à revers', { ally: peopleName(ally) }), 'force')}
+      ${btn('plan', 'pcGo', hudPic('militaire', 34), tr('Débarquer en force'), tr('deux plages : {ally} prennent le passage à revers', { ally: peopleName(ally) }), 'force')}
       ${btn('plan', 'pcNo', pic('💥', 34), tr('Le siège'), tr('bombarder d’abord : plus long, moins de pertes'), 'siege')}
       ${btn('plan', 'pcNo', hudPic('longue-vue', 34), tr('Le coup de main'), tr('de nuit, par le col : moins d’hommes, mais la porte surprise'), 'raid')}
       ${btn('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('préparer encore la tête de pont : la bataille attendra'))}
@@ -442,7 +442,7 @@ function gamesHtml(ally: People, g: GamesView) {
       <div class="pcBtns dcCol">${opts}</div><small class="pcNote">${tr('Médailles : {n}', { n: g.medals })}</small>`;
   }
   const end: GamesEnd[] = ['treaty', 'union'];
-  if (g.stage === 'ceremony' && !g.ceremony) return `${head}<p class="pcSub">${nb(tr('Les épreuves sont jouées : {n} médailles pour nous. Reste la cérémonie de clôture.', { n: g.medals }))}</p>
+  if (g.stage === 'ceremony' && !g.ceremony) return `${head}<p class="pcSub">${nb(g.medals === 0 ? tr('Les épreuves sont jouées, sans médaille pour nous. Reste la cérémonie de clôture.') : g.medals === 1 ? tr('Les épreuves sont jouées : une médaille pour nous. Reste la cérémonie de clôture.') : tr('Les épreuves sont jouées : {n} médailles pour nous. Reste la cérémonie de clôture.', { n: g.medals }))}</p>
     <div class="pcBtns dcCol">${btn('g:ceremony', 'pcGo', pic('🎆', 34), tr('La cérémonie de clôture'), tr('le défilé des trois flottes, les feux d’artifice, les trois drapeaux'))}</div>${foot}`;
   if (g.stage === 'ceremony') return `${head}<p class="pcSub">${nb(tr('Les deux chefs se tiennent sous les trois drapeaux. Que signeront-ils ?'))}</p>
     <div class="pcBtns dcCol">

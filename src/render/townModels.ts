@@ -7,6 +7,7 @@ import { orientModel, orientWall } from './models/oriental';
 import * as asian from './models/asian';
 import { withState, type TownState } from './townRuins';
 import { townLandmark, landmarkSmoke } from './models/landmarks';
+import { campaignModel, type WarLot } from './models/townWar';
 
 /** Les sommets des cheminées qui fument sur ce lot à cet âge (coordonnées du lot) ; vide sans fumée */
 export const townSmoke = (kind: TownKind, age: number) => landmarkSmoke(kind, Math.max(1, Math.min(5, age)));
@@ -47,7 +48,7 @@ const cache = new Map<string, THREE.BufferGeometry>();
  * Géométrie (corps et lumières fondus, voir `mergeLit`) d'un lot de la ville, à l'âge `age` (1 à 5), intact, en ruine ou en
  * reconstruction (`townRuins.ts`)
  */
-export function townModel(people: People, kind: TownKind, age: number, v: number, w: number, d: number, state: TownState = 'intact'): THREE.BufferGeometry {
+export function townModel(people: People, kind: TownKind | WarLot, age: number, v: number, w: number, d: number, state: TownState = 'intact'): THREE.BufferGeometry {
   const a = Math.max(1, Math.min(5, age));
   const qw = Math.round(w * 5) / 5, qd = Math.round(d * 5) / 5;
   const vv = kind === 'house' || kind === 'workshop' ? v % 12 : kind === 'garden' || kind === 'field' ? v % 4 : v % 3;
@@ -56,7 +57,9 @@ export function townModel(people: People, kind: TownKind, age: number, v: number
   if (g) return g;
   const p = new Parts();
   // (une sorte que le peuple n'a pas : une dalle, pour garder une géométrie valable)
-  const drawn = townLandmark(p, people, kind, a, vv) || (people === 'orient' ? orientModel(p, kind, a, vv, qw, qd) : asianModel(p, kind, a, vv, qw, qd));
+  // (les lots de la campagne du nouveau monde d'abord : `models/townWar.ts`)
+  const tk = kind as TownKind;
+  const drawn = campaignModel(p, people, kind, a, qw) || townLandmark(p, people, tk, a, vv) || (people === 'orient' ? orientModel(p, tk, a, vv, qw, qd) : asianModel(p, tk, a, vv, qw, qd));
   if (!drawn) p.box(Math.max(0.2, qw * 0.5), 0.02, Math.max(0.2, qd * 0.5), 0, 0, 0, 0x9a968c);
   const built = p.build(), { body, glow } = withState(built.body, built.glow, state, vv * 13 + kind.length, false, people);
   g = mergeLit(body, glow) ?? body;

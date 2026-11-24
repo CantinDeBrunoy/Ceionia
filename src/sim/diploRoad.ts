@@ -174,7 +174,7 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
     const g = d.games;
     if (s.id === 'deliver') st.sub = tr('{n}/{m} livraisons : {b} briques, {o} minerai, {g} or chacune', { n: g.delivered, m: DELIVERIES, b: DELIVERY_COST.bricks, o: DELIVERY_COST.ore, g: DELIVERY_COST.gold });
     if (s.id === 'host' && g.hostAt >= 0) st.sub = g.pending ? tr('une surprise attend votre choix') : tr('Accueil : {n} sur 100 · {p} % du séjour', { n: welcomeScore(g), p: Math.round(hostShare(g, w.exp.clock, ctx.dayLen) * 100) });
-    if (s.id === 'trials' && g.trials.length) st.sub = tr('{n}/{m} épreuves jouées · {k} médailles', { n: g.trials.length, m: TRIALS.length, k: medals(g) });
+    if (s.id === 'trials' && g.trials.length) st.sub = medals(g) === 1 ? tr('{n}/{m} épreuves jouées · une médaille', { n: g.trials.length, m: TRIALS.length }) : tr('{n}/{m} épreuves jouées · {k} médailles', { n: g.trials.length, m: TRIALS.length, k: medals(g) });
     // (arrivée tardive : le camp se tiendra en prenant le port, pas en attendant une sortie)
     if (stepSkipped(w, s, age)) { st.sub = tr('se fait en prenant le port'); return st; }
     if (!now) return st;

@@ -1541,13 +1541,14 @@ export function gamesSite(p: Parts, age: number, people: People, kit: Concession
     }
     // le mur du fond et l'auvent : arcs (orient), ou le toit courbe (asie) ; un auvent de verre au Futuriste
     const zb = z0 + s * 0.42;
-    p.box(2.34, 0.34, 0.04, 0, 0, zb, c.wall);
+    p.box(2.34, 0.28, 0.04, 0, 0, zb, c.wall);
     for (let i = 0; i < 6; i++) p.box(0.03, 0.46, 0.03, -1.1 + i * 0.44, 0, zb - s * 0.02, c.trim);
-    if (a >= 5) p.add(new THREE.BoxGeometry(2.36, 0.02, 0.5).rotateX(s * 0.18), 0, 0.5, z0 + s * 0.18, c.glass, 0, true);
+    // (l'auvent ne couvre que l'arrière des gradins : la foule se voit d'en haut)
+    if (a >= 5) p.add(new THREE.BoxGeometry(2.36, 0.02, 0.3).rotateX(s * 0.18), 0, 0.5, z0 + s * 0.3, c.glass, 0, true);
     else if (or) {
-      p.add(new THREE.BoxGeometry(2.36, 0.02, 0.5).rotateX(s * 0.16), 0, 0.48, z0 + s * 0.18, 0xf4f4f0);
+      p.add(new THREE.BoxGeometry(2.36, 0.02, 0.3).rotateX(s * 0.16), 0, 0.48, z0 + s * 0.3, 0xf4f4f0);
       for (let i = 0; i < 5; i++) p.add(new THREE.TorusGeometry(0.1, 0.012, 4, 10, PI), -0.88 + i * 0.44, 0.34, zb - s * 0.02, c.accent);
-    } else hipRoof(p, 2.4, 0.56, 0.12, 0, 0.44, z0 + s * 0.18, c.roof, 0, { lod: true, rows: 0, hips: false });
+    } else hipRoof(p, 2.4, 0.34, 0.1, 0, 0.44, z0 + s * 0.3, c.roof, 0, { lod: true, rows: 0, hips: false });
     // quelques supporters debout au premier rang, qui acclament
     who(p, kit, -0.5 + s * 0.2, z0 - s * 0.1, pick(CROWD, s + 3), s > 0 ? PI : 0, { pose: 'cheer' });
     who(p, kit, 0.6 - s * 0.1, z0 - s * 0.1, pick(CROWD, s + 5), s > 0 ? PI : 0, { pose: 'cheer' });

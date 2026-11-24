@@ -2266,6 +2266,8 @@ class Game implements UIHost {
     this.ui.update(); this.saveNow();
   }
 
+  /** Ce que le chantier des Jeux peut prendre (au bac à sable, sans fin) */
+  private gamesStock() { const w = this.world; return w.sandbox ? { bricks: 1e9, ore: 1e9, gold: 1e9 } : { bricks: w.brick, ore: w.ore, gold: w.gold }; }
   /** Le site des Jeux est-il bâti ? */
   private gamesBuilt() { return (this.sim.counts[GAMES_SITE] ?? 0) > 0; }
   /** Ce que lit l'accueil des Jeux : les besoins du village (logement, nourriture, bien-être) et ses transports */
@@ -2281,7 +2283,7 @@ class Game implements UIHost {
   private gamesView(): GamesView | null {
     const w = this.world, d = w.diplo, g = d.games;
     if (!archipelagoOn(w) || d.path !== 'peace' || d.conflict !== 'open' || !g.bid) return null;
-    const built = this.gamesBuilt(), stage = gamesStage(g, built), why = gamesDeliverWhy(g, built, { bricks: w.brick, ore: w.ore, gold: w.gold });
+    const built = this.gamesBuilt(), stage = gamesStage(g, built), why = gamesDeliverWhy(g, built, this.gamesStock());
     const trial = stage === 'trials' ? TRIALS[g.trials.length] ?? null : null, c = this.trialCtx();
     const chances = { fair: trial ? trialChance(trial, 'fair', c) : 0, bold: trial ? trialChance(trial, 'bold', c) : 0, guest: 0 };
     return {
@@ -2297,9 +2299,10 @@ class Game implements UIHost {
     if (a === 'open') { this.diploChoice.showGames(); return; }
     if (a === 'site') { this.buildForSaga(GAMES_SITE); return; }
     if (a === 'deliver') {
-      const st = { bricks: w.brick, ore: w.ore, gold: w.gold };
+      const st = this.gamesStock();
       if (gamesDeliver(g, this.gamesBuilt(), st)) {
-        w.brick = st.bricks; w.ore = st.ore; w.gold = st.gold;
+        // (au bac à sable, les stocks sont sans fin : rien ne se paie)
+        if (!w.sandbox) { w.brick = st.bricks; w.ore = st.ore; w.gold = st.gold; }
         audio.sfxClick();
         this.ui.toast(g.delivered >= 3 ? tr('🏟️ Le chantier des Jeux est livré : le stade est prêt.') : tr('🧱 Une livraison au chantier des Jeux ({n}/3).', { n: g.delivered }), undefined, 'notice');
         this.ui.update(); this.saveNow();
@@ -2348,7 +2351,8 @@ class Game implements UIHost {
     const w = this.world, d = w.diplo, g = d.games;
     if (d.path !== 'peace' || d.conflict !== 'open' || g.hostAt < 0) return;
     const s = stepHost(g, w.exp.clock, this.time.dayLen, this.hostNeeds(), gdt);
-    if (s) this.saveNow();
+    // (une surprise : un message qui mène à sa carte ; la carte s'ouvre aussi d'elle-même au calme)
+    if (s) { this.saveNow(); this.ui.toast(tr('🎪 Une surprise aux Jeux des îles : votre choix est attendu. Cliquez ici.'), () => this.diploChoice.showGames(), 'action'); }
     // (l'accueil fini : on le dit, et la carte des épreuves s'ouvre)
     if (g.hosted && !g.pending && !this.hostSaid && g.trials.length === 0) {
       this.hostSaid = true;
@@ -2380,7 +2384,7 @@ class Game implements UIHost {
       [9000, () => { this.ui.banner(tr('Les trois flottes'), tr('{ally}, puis {rival}, pavoisés', { ally: cap(peopleName(d.ally!)), rival: peopleName(rival) })); }],
       [17000, () => { this.cam.goTo(at[0], at[1], 26); this.ui.banner(tr('Les trois drapeaux'), tr('Sur le site des Jeux, côte à côte')); }],
       [20000, () => { this.festAt(at[0], at[1]); this.festAt(z.x, z.z); }],
-      [23500, () => { this.festAt(at[0], at[1]); this.ui.banner(tr('Les feux d’artifice'), tr('{n} médailles pour nos couleurs', { n: medals(g) })); }],
+      [23500, () => { this.festAt(at[0], at[1]); this.ui.banner(tr('Les feux d’artifice'), medals(g) === 1 ? tr('Une médaille pour nos couleurs') : medals(g) ? tr('{n} médailles pour nos couleurs', { n: medals(g) }) : tr('Les trois peuples applaudissent ensemble')); }],
       [26500, () => { this.festAt(z.x, z.z); }],
     ];
     for (const [t, f] of steps) setTimeout(f, t);
@@ -2690,7 +2694,11 @@ class Game implements UIHost {
     this.isleRuins.group.visible = this.mode === 'surface';
     // les villes des peuples rivaux : créées dès que la carte a son archipel (aussi après un agrandissement en cours de partie)
     if (archipelagoOn(this.world) && !this.rivalTowns) { this.rivalTowns = new RivalTowns(this.world); this.scene.add(this.rivalTowns.group); }
-    if (this.rivalTowns) { this.rivalTowns.update(dt, this.sim.age, this.cam.camera.position); this.rivalTowns.group.visible = this.mode === 'surface'; }
+    if (this.rivalTowns) {
+      // (les villes suivent la campagne : défenses, ruines, faubourg et pont chez l'allié ; chantier D)
+      this.rivalTowns.setCampaign(this.world.diplo, this.world.exp.clock, this.time.dayLen);
+      this.rivalTowns.update(dt, this.sim.age, this.cam.camera.position); this.rivalTowns.group.visible = this.mode === 'surface';
+    }
     // la campagne de l'île rivale : le camp et nos drapeaux sur l'île rivale (pas pendant une bataille, qui a ses troupes)
     const dip = this.world.diplo;
     if (dip.ally && dip.camp.held.length && !this.rivalCamp) { this.rivalCamp = new RivalCamp(this.world, rivalOf(dip.ally)); this.scene.add(this.rivalCamp.group); }

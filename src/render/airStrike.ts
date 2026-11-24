@@ -31,10 +31,10 @@ function jet(): { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null 
   p.box(0.012, 0.06, 0.012, 0, 0.16, 0.24, dark);
   p.sphere(0.035, 0, 0.12, 0.3, 0x2a2a30);
   // les ailes en flèche (un trapèze extrudé), leurs bords et la cocarde à nos couleurs
-  const wing = new THREE.Shape([new THREE.Vector2(0, 0.28), new THREE.Vector2(0.78, -0.14), new THREE.Vector2(0.78, -0.3), new THREE.Vector2(0, -0.26)]);
+  // (la forme dans le plan x-y, y vers le nez ; l'aile gauche, dessinée à l'envers du même tracé : un miroir inverserait ses faces)
+  const pts = (s: number) => { const q = [[0, 0.28], [0.78, -0.14], [0.78, -0.3], [0, -0.26]].map(([x, y]) => new THREE.Vector2(s * x, y)); return s < 0 ? q.reverse() : q; };
   for (const s of [-1, 1]) {
-    const g = new THREE.ExtrudeGeometry(wing, { depth: 0.025, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, 0.012, 0);
-    if (s < 0) g.scale(-1, 1, 1);
+    const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts(s)), { depth: 0.025, bevelEnabled: false }).rotateX(Math.PI / 2).translate(0, 0.025, 0);
     p.add(g, s * 0.08, -0.04, -0.02, grey);
     p.box(0.06, 0.03, 0.2, s * 0.84, -0.035, -0.22, dark);
     p.cyl(0.075, 0.075, 0.008, 12, s * 0.5, -0.006, -0.12, TEAM_A);
@@ -126,7 +126,7 @@ export class AirStrike {
       // (la route : on arrive de loin et haut, on pique sur la cible, on largue, on remonte en virant)
       const ox = -uz * off, oz = ux * off, g = this.ground(x, z);
       const path = (t: number): V3 => {
-        const s = (t - 0.5) * 70, alt = g + 6.5 + Math.abs(t - 0.5) * 26 + (t > 0.5 ? (t - 0.5) * 20 : 0);
+        const s = (t - 0.5) * 70, alt = g + 4.2 + Math.abs(t - 0.5) * 22 + (t > 0.5 ? (t - 0.5) * 18 : 0);
         const turn = t > 0.55 ? (t - 0.55) * (t - 0.55) * 60 * side : 0;
         return [x + ux * s + ox - uz * turn, alt, z + uz * s + oz + ux * turn];
       };
@@ -144,7 +144,7 @@ export class AirStrike {
       rot.add(blade, disc); rot.position.set(0, 0.24, 0); root.add(rot);
       const tail = new THREE.Group(); tail.add(new THREE.Mesh(tailRotor!, mats.body)); tail.rotation.z = Math.PI / 2; tail.position.set(0.04, 0.14, -1.06); root.add(tail);
       // (ils arrivent de la tête de pont)
-      root.position.set(this.from[0] + side * 3, this.ground(this.from[0], this.from[1]) + 8, this.from[1]);
+      root.position.set(this.from[0] + side * 3, this.ground(this.from[0], this.from[1]) + 6, this.from[1]);
       this.helis.push({ root, rotor: rot, tail, ang: side > 0 ? 0 : Math.PI, r: 5, cx: at[0], cz: at[1], fire: 1 + side, side });
     }
   }
@@ -223,7 +223,7 @@ export class AirStrike {
       const going = h.r < 0;
       h.ang += dt * 0.45 * h.side;
       const tx = going ? this.from[0] + h.side * 2 : h.cx + Math.cos(h.ang) * h.r, tz = going ? this.from[1] - 6 : h.cz + Math.sin(h.ang) * h.r;
-      const ty = this.ground(tx, tz) + (going ? 12 : 5 + Math.sin(this.t * 1.3 + h.side) * 0.3);
+      const ty = this.ground(tx, tz) + (going ? 10 : 3.2 + Math.sin(this.t * 1.3 + h.side) * 0.3);
       const p = h.root.position, dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz), sp = Math.min(d, dt * 7);
       if (d > 0.01) { p.x += (dx / d) * sp; p.z += (dz / d) * sp; }
       p.y += (ty - p.y) * Math.min(1, dt * 1.5);
@@ -242,7 +242,7 @@ export class AirStrike {
         }
       }
     }
-    for (const h of this.helis.filter((q) => q.r < 0 && q.root.position.y > this.ground(q.root.position.x, q.root.position.z) + 11)) this.group.remove(h.root);
+    for (const h of this.helis.filter((q) => q.r < 0 && q.root.position.y > this.ground(q.root.position.x, q.root.position.z) + 9)) this.group.remove(h.root);
     this.helis = this.helis.filter((q) => q.root.parent);
   }
 
