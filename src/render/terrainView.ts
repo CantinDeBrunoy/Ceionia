@@ -7,6 +7,7 @@ import { Blight, blightAt, purityAt } from '../world/blight';
 import { SeasonState, seasonOf } from './season';
 import { SNOW_COLORS, ICE_COLOR } from './seasonConfig';
 import { SNOW_U } from './snow';
+import { WATER_ICE } from './buildingWater';
 
 /** Teintes de saison du sol et de l'eau : l'état de saison complet (seasonConfig.ts) */
 export type GroundPalette = SeasonState;
@@ -909,6 +910,8 @@ ${BLIGHT_GLSL}
     const u = this.waterU, w = s.water;
     u.uShallow.value = w.shallow; u.uDeep.value = w.deep; u.uFloat.value = w.float;
     u.uClarity.value = w.clarity; u.uSparkle.value = w.sparkle; u.uFloatK.value = w.floatK; u.uIce.value = s.iceNow;
+    // l'eau des bâtiments (fontaines, bassins) gèle avec la mer
+    WATER_ICE.value = s.iceNow;
     this.waterMat.roughness = w.roughness;
     this.sideMat.color.copy(w.deep);
   }

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-import { addSnow } from './snow';
+import { addSnow, SNOW_U } from './snow';
+import { WATER_MAX, WATER_ICE } from './buildingWater';
 
 export const mats = {
   body: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 }),
@@ -35,8 +36,10 @@ function addLights(mat: THREE.Material, lit = false) {
     // maillage `lit` : le corps (graine nulle) ne luit pas, une lumière fixe (LIT_FIXED) luit toujours ; `vLit` les distingue
     sh.vertexShader = 'attribute float aLight;\nuniform float uLightHour;\nuniform float uLightTime;\nuniform float uLightNight;\nvarying vec3 vLightK;\nvarying float vLit;\n' +
       sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-  vLit = aLight != 0.0 ? 1.0 : 0.0;
-  vLightK = vec3(${lit ? 'vLit' : '1.0'});
+  // l'eau (graine sous WATER_MAX, voir buildingWater.ts) est rangée avec les lumières mais ne luit pas
+  float lWater = aLight <= ${WATER_MAX.toFixed(1)} ? 1.0 : 0.0;
+  vLit = aLight != 0.0 ? 1.0 - lWater : 0.0;
+  vLightK = vec3(${lit ? 'vLit' : '1.0 - lWater'});
   if (aLight != 0.0 && aLight > ${LIT_FIXED / 2}.0) {
     // la place du bâtiment (dans un lot, celle de son instance)
     vec2 lPos = modelMatrix[3].xz;
@@ -70,15 +73,50 @@ addLights(mats.glow);
 addLights(mats.lit, true);
 
 /**
- * L'eau des bâtiments (fontaines, piscines, bassins, abreuvoirs, puits) : les faces horizontales d'un bleu d'eau se rident et
- * scintillent, des vaguelettes qui passent et des reflets qui s'allument et s'éteignent, chacune à sa place
+ * L'eau des bâtiments (fontaines, puits, thermes, piscines, bassins, abreuvoirs) : les sommets marqués d'une graine d'eau
+ * (`buildingWater.ts`, rangés avec les lumières) se rident sous de petites vagues croisées qui filent, reflètent le ciel en
+ * rasant (la couleur de la brume : bleu le jour, sombre la nuit), prennent les reflets du soleil (surface lisse), s'éclaircissent
+ * et moussent contre le bord, s'assombrissent au milieu ; l'écume tourne en anneaux là où l'eau retombe ; jets et cascades
+ * filent en stries dans le sens du courant. L'hiver, l'eau gèle là où la neige tient (`WATER_ICE`). Un seul matériau pour
+ * tout le village : aucun coût par bâtiment, et les autres pixels ne paient qu'un test
  */
-function addWater(mat: THREE.Material, lit = false) {
+const WATER_GLSL = `
+uniform float uWaterT;
+uniform float uWaterIce;
+uniform float uWaterNight;
+uniform sampler2D uWaterSnow;
+uniform float uWaterSnowSize;
+varying vec3 vWaterPos;
+varying vec2 vWater;
+// une vaguelette : hauteur et pente ; elle s'efface quand elle devient plus fine que quelques pixels (pas de grésillement au loin)
+vec3 wWave(vec2 q, vec2 dir, float f, float sp, float a, float t, float px) {
+  a *= 1.0 - smoothstep(0.12, 0.3, px * f);
+  float ph = dot(q, dir) * f + t * sp;
+  return vec3(a * sin(ph), a * f * cos(ph) * dir);
+}
+float wHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float wNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(wHash(i), wHash(i + vec2(1.0, 0.0)), f.x), mix(wHash(i + vec2(0.0, 1.0)), wHash(i + 1.0), f.x), f.y);
+}
+`;
+function addWater(mat: THREE.Material) {
   const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
   mat.onBeforeCompile = (sh, r) => {
     prev.call(mat, sh, r);
-    sh.uniforms.uWaterT = LIGHTS.time;
-    sh.vertexShader = 'varying vec3 vWaterPos;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+    Object.assign(sh.uniforms, { uWaterT: LIGHTS.time, uWaterNight: LIGHTS.night, uWaterIce: WATER_ICE, uWaterSnow: SNOW_U.uSnowMap, uWaterSnowSize: SNOW_U.uSnowSize });
+    sh.vertexShader = 'uniform float uWaterT;\nvarying vec3 vWaterPos;\nvarying vec2 vWater;\n' + sh.vertexShader
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+  // x : 0 sec, 1 surface, 2 écume, 3 chute ; y : distance au bord, rayon de l'écume ou avancée le long du jet
+  vWater = vec2(0.0);
+  if (aLight <= ${WATER_MAX.toFixed(1)}) {
+    float wu = -aLight - 200.0, wk = floor(wu / 200.0 + 1e-4);
+    vWater = vec2(wk + 1.0, (wu - wk * 200.0) / 100.0);
+    // un jet ondule un peu, d'autant plus loin de sa source
+    if (wk > 1.5) transformed.xz += vec2(sin(uWaterT * 9.0 + transformed.y * 70.0), cos(uWaterT * 7.3 + transformed.y * 61.0)) * 0.0016 * vWater.y;
+  }`)
+      .replace('#include <project_vertex>', `#include <project_vertex>
   vec4 wW = vec4(transformed, 1.0);
   #ifdef USE_BATCHING
   wW = batchingMatrix * wW;
@@ -87,37 +125,86 @@ function addWater(mat: THREE.Material, lit = false) {
   wW = instanceMatrix * wW;
   #endif
   vWaterPos = (modelMatrix * wW).xyz;`);
-    sh.fragmentShader = 'uniform float uWaterT;\nvarying vec3 vWaterPos;\n' + sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-  {
-    vec3 wc = vColor.rgb;
-    float wUp = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
-    float wMask = step(0.3, (wc.b - wc.r) / max(wc.b, 0.01)) * step(0.22, (wc.g - wc.r) / max(wc.g, 0.01)) * step(0.45, wc.b) * step(0.8, wUp)${lit ? ' * (1.0 - vLit)' : ''};
-    if (wMask > 0.0) {
-      vec2 q = vWaterPos.xz;
-      float t = uWaterT;
-      // deux trains de vaguelettes croisés et un clapot fin : la surface penche (la lumière du soleil y joue) et se nuance
-      float a1 = q.x * 9.0 + q.y * 3.0 + t * 1.6, a2 = q.y * 8.0 - q.x * 2.5 - t * 1.3, a3 = (q.x - q.y) * 17.0 + t * 2.6;
-      float rip = 0.5 * sin(a1) + 0.5 * sin(a2) + 0.35 * sin(a3);
-      vec2 sl = vec2(4.5 * cos(a1) - 1.25 * cos(a2) + 5.95 * cos(a3), 1.5 * cos(a1) + 4.0 * cos(a2) - 5.95 * cos(a3)) * 0.014;
-      normal = normalize((viewMatrix * vec4(-sl.x, 1.0, -sl.y, 0.0)).xyz);
-      // des eaux plus ou moins profondes, en grandes taches lentes
-      float deep = 0.5 + 0.5 * sin(q.x * 2.3 + sin(q.y * 1.7) + t * 0.15) * sin(q.y * 2.1 - t * 0.12);
-      // caustiques : des lignes claires qui serpentent au fond
-      float ca = abs(sin(q.x * 13.0 + sin(q.y * 7.0 + t) * 1.5 + t * 0.7) + sin(q.y * 12.0 + sin(q.x * 6.0 - t * 0.8) * 1.5 - t * 0.6));
-      float caus = smoothstep(1.5, 1.95, ca);
-      float glint = smoothstep(0.86, 1.0, sin(q.x * 23.0 + t * 2.1) * sin(q.y * 21.0 - t * 1.8));
-      diffuseColor.rgb = diffuseColor.rgb * (0.84 + 0.1 * rip + 0.12 * deep) + vec3(0.2, 0.28, 0.3) * caus + vec3(0.6) * glint;
-      // vue en rasant, l'eau reflète le ciel
-      float fr = pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 3.0);
-      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.72, 0.86, 0.97), fr * 0.5);
-      roughnessFactor = 0.3;
+    sh.fragmentShader = WATER_GLSL + sh.fragmentShader
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  vec3 wRefl = vec3(0.0);
+  if (vWater.x > 0.5) {
+    vec2 q = vWaterPos.xz;
+    float t = uWaterT, kind = vWater.x, wv = vWater.y;
+    vec3 base = vColor.rgb;
+    float px = length(fwidth(q));
+    // glace : là où la neige tient, l'hiver ; elle fige aussi les jets
+    float ice = uWaterIce > 0.01 ? uWaterIce * smoothstep(0.3, 0.8, texture2D(uWaterSnow, q / uWaterSnowSize).r) : 0.0;
+    ice = smoothstep(0.35, 0.6, ice);
+    float tm = t * (1.0 - ice);
+    vec3 upV = (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
+    vec3 col;
+    if (kind < 2.5) {
+      // la surface : quatre trains de vaguelettes croisés, plus forts par risées qui passent lentement
+      float breeze = 0.65 + 0.35 * sin(q.x * 2.1 + q.y * 1.3 + tm * 0.5);
+      vec3 w = wWave(q, vec2(0.8, 0.6), 23.0, 1.9, 0.0055, tm, px) + wWave(q, vec2(-0.5, 0.866), 31.0, 2.4, 0.0042, tm, px)
+        + wWave(q, vec2(0.95, -0.31), 47.0, 3.2, 0.0026, tm, px) + wWave(q, vec2(-0.24, -0.97), 73.0, 4.1, 0.0016, tm, px);
+      w *= breeze * (1.0 - ice);
+      float d = kind < 1.5 ? wv : 1.0;
+      // l'écume tourne en anneaux qui s'éloignent du point de chute, bouillonne au centre ; elle trouble la surface
+      float splash = 0.0;
+      if (kind > 1.5) {
+        float s = wv, ring = fract(s * 2.6 - tm * 0.9);
+        float bub = wNoise(q * 140.0 + vec2(tm * 3.0, -tm * 2.4));
+        splash = (smoothstep(0.0, 0.12, ring) * smoothstep(0.42, 0.14, ring) * 0.7 + smoothstep(0.55, 0.0, s) * (0.55 + 0.45 * bub)) * (1.0 - smoothstep(0.6, 1.0, s));
+        splash *= 1.0 - ice;
+        w.yz += vec2(sin(s * 30.0 - tm * 6.0)) * 0.05 * (1.0 - s) * (1.0 - ice);
+      }
+      normal = normalize((viewMatrix * vec4(-w.y, 1.0, -w.z, 0.0)).xyz);
+      // clair et turquoise près du bord, plus sombre au milieu (un petit bassin reste clair)
+      float deep = smoothstep(0.0, 0.06, d);
+      vec3 shallowC = base * vec3(1.12, 1.2, 1.12) + vec3(0.03, 0.08, 0.07);
+      vec3 deepC = base * vec3(0.42, 0.62, 0.8);
+      // (la tache d'écume a déjà la teinte de la nappe autour d'elle, voir waterTint)
+      col = (kind > 1.5 ? base : mix(shallowC, deepC, deep)) * (0.94 + w.x * 22.0);
+      // caustiques qui serpentent au fond, là où l'eau est peu profonde
+      float ca = abs(sin(q.x * 31.0 + sin(q.y * 17.0 + tm) * 1.6 + tm * 0.8) + sin(q.y * 29.0 + sin(q.x * 15.0 - tm * 0.9) * 1.6 - tm * 0.7));
+      col += vec3(0.1, 0.15, 0.15) * smoothstep(1.45, 1.95, ca) * (1.0 - deep * 0.8) * (1.0 - smoothstep(0.05, 0.12, px * 31.0));
+      // l'eau lèche le bord : un liseré d'écume qui respire et s'effiloche
+      float rimW = max(0.012, px * 1.5) * (1.0 + 0.35 * sin(tm * 1.7 + q.x * 37.0 + q.y * 29.0));
+      float rim = (1.0 - smoothstep(rimW * 0.35, rimW, d)) * (0.55 + 0.45 * wNoise(q * 90.0 + tm * 0.6));
+      col = mix(col, vec3(0.9, 0.96, 0.98), max(rim * 0.85, splash) * (1.0 - ice));
+      roughnessFactor = mix(0.1, 0.55, max(splash, rim));
+    } else {
+      // jet, filet ou cascade : des stries claires qui filent dans le sens du courant, un peu de mousse au bout
+      // (un bruit continu, étiré dans le sens du courant : pas de damier sur les rideaux d'eau)
+      float across = (q.x - q.y) * 70.0 + vWaterPos.y * 13.0;
+      float streak = smoothstep(0.45, 0.8, wNoise(vec2(across, wv * 4.0 - tm * 3.2)) * 0.7 + wNoise(vec2(across * 2.3, wv * 9.0 - tm * 5.0)) * 0.3);
+      col = mix(base * vec3(0.55, 0.75, 0.9), vec3(0.97, 0.99, 1.0), streak * 0.75 + smoothstep(0.75, 1.0, wv) * 0.25);
+      roughnessFactor = 0.25;
     }
-  }`);
+    // la glace : terne, blanchie, fendillée ; rien ne bouge
+    if (ice > 0.0) {
+      float crack = 1.0 - smoothstep(0.0, 0.06, abs(wNoise(q * 26.0) - 0.5));
+      vec3 iceC = mix(vec3(0.78, 0.87, 0.93), vec3(0.93, 0.96, 0.98), wNoise(q * 9.0)) * (1.0 - crack * 0.12);
+      col = mix(col, iceC, ice * 0.9);
+      roughnessFactor = mix(roughnessFactor, 0.45, ice);
+      if (kind < 2.5) normal = normalize(mix(normal, normalize(upV), ice));
+    }
+    // la nuit, l'eau s'assombrit et la lune n'y fait qu'un reflet doux (la scène reste éclairée d'un bleu de nuit)
+    col *= 1.0 - 0.3 * uWaterNight;
+    roughnessFactor = mix(roughnessFactor, max(roughnessFactor, 0.4), uWaterNight);
+    diffuseColor.rgb = col;
+    // vue en rasant, l'eau reflète le ciel : la couleur de la brume (bleu clair le jour, sombre la nuit)
+    vec3 sky = vec3(0.72, 0.85, 0.95);
+    #ifdef USE_FOG
+    sky = fogColor;
+    #endif
+    float fr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 4.0);
+    wRefl = sky * (0.06 + 0.55 * fr) * (kind < 2.5 ? 1.0 : 0.4) * (1.0 - ice * 0.7);
+  }`)
+      .replace('#include <lights_fragment_begin>', 'totalEmissiveRadiance += wRefl;\n#include <lights_fragment_begin>');
   };
-  mat.customProgramCacheKey = () => `${key}|water`;
+  mat.customProgramCacheKey = () => `${key}|water2`;
 }
-addWater(mats.body);
-addWater(mats.lit, true);
+// l'eau est rangée avec les lumières : le maillage `lit` des bâtiments, et `glow` quand un modèle ne s'y fond pas
+addWater(mats.glow);
+addWater(mats.lit);
 
 // neige sur les toits, les rebords et le dessus de tout ce qui est bâti ou posé dehors
 addSnow(mats.body);
