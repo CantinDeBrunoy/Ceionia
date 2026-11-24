@@ -148,7 +148,7 @@ import { SaveData, Settings, Quality, saveSlot, loadSlot, openSlot, setAside, ex
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
-import { LoadingScreen, painted } from './ui/loading';
+import { LoadingScreen, MODELS_K, painted } from './ui/loading';
 import { whenIdle } from './ui/preload';
 import { VoyageStage } from './voyageStage';
 import { OpeningStage } from './openingStage';
@@ -936,7 +936,9 @@ class Game implements UIHost {
       };
       // un trophée rejoint la place : sa cinématique d'abord (avec son carillon), le récit ensuite
       // (une chasse refaite, le trophée déjà sur la place, y a droit aussi : il remonte de terre)
-      if (r.ok && this.trophyStage.report(show, r.redo ? trophyOfMission(r.m) : null)) return;
+      // (et tout récit, réussi ou non, attend la fin d'une cinématique de trophée qui joue déjà : il s'ouvrait par-dessus)
+      const own = r.ok ? trophyOfMission(r.m) : null;
+      if (r.ok ? this.trophyStage.report(show, r.redo ? own : null, own) : this.trophyStage.afterCurrent(show)) return;
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       show();
     };
@@ -966,7 +968,8 @@ class Game implements UIHost {
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
       // (au bac à sable, tout est déjà ouvert : pas de liste)
-      if (!this.world.sandbox) setTimeout(() => this.ui.showNewAge(age), 3600);
+      // (une cinématique en cours, celle du trophée d'une chasse qui vient de finir l'âge par exemple : la fenêtre attend sa fin)
+      if (!this.world.sandbox) setTimeout(() => this.afterCinematics(() => this.ui.showNewAge(age)), 3600);
       audio.sfxAgeUp();
       this.propsDirty = true;
     };
@@ -2581,7 +2584,7 @@ class Game implements UIHost {
    */
   private popupBusy() {
     return !!document.getElementById('loadScreen') || !!uiRoot.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible
-      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.openingStage?.playing || this.mode !== 'surface'
+      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.openingStage?.playing || this.trophyStage?.playing || this.voyageStage?.playing || this.mode !== 'surface'
       || document.body.classList.contains('photo');
   }
 
@@ -2627,12 +2630,23 @@ class Game implements UIHost {
 
   /** Le survol en direct de la cinématique « Explorer le monde » : les îles découvertes, puis le premier contact */
   private revealIsles() {
-    if (!this.world.isles) return;
+    const ends = () => { for (const f of this.voyageEnds.splice(0)) f(); };
+    if (!this.world.isles) { this.voyage = false; ends(); return; }
     this.revealing = true;
     const fromMist = this.voyage;
     this.voyage = false;
-    this.voyageStage.play(fromMist, () => { clearFilmMark(); this.revealing = false; this.onIslesRevealed?.(); this.saveNow(); });
+    this.voyageStage.play(fromMist, () => { clearFilmMark(); this.revealing = false; ends(); this.onIslesRevealed?.(); this.saveNow(); });
   }
+  private voyageEnds: (() => void)[] = [];
+  /** Une cinématique joue (trophée, traversée, portail, ouverture, royaume) : les fenêtres qui s'ouvrent seules l'attendent */
+  cinematicPlaying() { return this.trophyStage.playing || this.voyageStage.playing || this.revealing || !!this.portalStage?.playing || !!this.openingStage?.playing || this.kingStage.playing; }
+  /** `f` tout de suite, ou à la fin de la cinématique en cours */
+  afterCinematics(f: () => void) { if (!this.cinematicPlaying()) f(); else setTimeout(() => this.afterCinematics(f), 250); }
+  /**
+   * Tenu quand la cinématique « Explorer le monde » de ce lancement est finie (tout de suite s'il n'y en a pas). Le choix des
+   * contrôles et le blason l'attendent : la fenêtre des contrôles s'ouvrait par-dessus le survol des îles
+   */
+  voyageDone(): Promise<void> { return this.voyage || this.voyageStage.playing ? new Promise((r) => this.voyageEnds.push(r)) : Promise.resolve(); }
 
   /** Ce que regardent les aides du volet militaire */
   private warTipState(): WarTipState {
@@ -4135,7 +4149,7 @@ async function boot() {
   const opensNow = !!autoFresh && autoFresh[1] === 'fresh' && openingFor(+autoFresh[0], 'new', isDifficulty(autoFresh[2]) ? autoFresh[2] : undefined, +autoFresh[3] || 0);
   let screen: LoadingScreen | null = new LoadingScreen(app, voyage || (opensNow ? 'opening' : false));
   const models = screen;
-  await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * 0.2, `${done}/${total}`));
+  await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * MODELS_K, `${done}/${total}`));
 
   let started = false;
   const start = async (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty, age?: number) => {
@@ -4149,6 +4163,9 @@ async function boot() {
     if (screen && opening !== screen.film instanceof OpeningFilm) { screen.done(true); screen = null; }
     const ld = screen ?? new LoadingScreen(app, opening ? 'opening' : false);
     screen = null;
+    // (le film d'abord, une fois chargé : le monde ne se bâtit qu'avec ses premières images à l'écran, sinon la vidéo
+    // restait figée sur sa première image le temps de la construction, puis sautait ; voir `ui/filmLoad.ts`)
+    if (ld.film) await ld.film.roll();
     ld.step('Construction du monde…', 0.22);
     await painted();
     // l'accueil peut avoir été redessiné (changement de langue) : on retire celui qui est à l'écran
@@ -4168,9 +4185,10 @@ async function boot() {
     if (film instanceof OpeningFilm) game.openingStage.prepare(() => film.wasSkipped);
     ld.done();
     game.warnLoadError();
-    // la cinématique d'ouverture d'abord (le tutoriel attend sous elle), puis, au premier lancement, le choix des contrôles
-    // de la vue, et le blason
+    // la cinématique d'ouverture ou celle de la traversée d'abord (le tutoriel attend sous elle), puis, au premier lancement,
+    // le choix des contrôles de la vue, et le blason
     await game.openingStage.finished();
+    await game.voyageDone();
     void game.askControls().then(() => game.askBlason());
   };
   let menu: HTMLElement | null = null;

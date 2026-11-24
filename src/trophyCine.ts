@@ -64,6 +64,12 @@ export function cineCalm(s: CineScene, banner = true) {
 
 export interface TrophyEntry { id: string; t: number; after?: () => void; held?: number }
 
+/** Ajoute `after` à ce qui attend déjà la fin de cette cinématique */
+function chain(e: TrophyEntry, after: () => void) {
+  const prev = e.after;
+  e.after = prev ? () => { prev(); after(); } : after;
+}
+
 /** La file des trophées à montrer, un à la fois */
 export class TrophyCineQueue {
   private known: Set<string>;
@@ -79,9 +85,12 @@ export class TrophyCineQueue {
    * (le récit de l'expédition) ; on ne le garde que si elle peut partir sous peu (ready : rien qui retienne le joueur, et
    * aucune cinématique en cours) : rend vrai dans ce cas, sinon c'est à l'appelant de le faire. Gardé, il est rendu au plus
    * tard au bout de `HOLD_MAX` s (voir `update`). replay : le trophée d'une expédition refaite, déjà sur la place, qui a droit
-   * lui aussi à sa cinématique (il remonte de terre)
+   * lui aussi à sa cinématique (il remonte de terre). own : le trophée que rapporte l'expédition de ce récit, s'il y en a un.
+   * Le récit attend aussi, quoi qu'il arrive, une cinématique déjà en cours, ou celle de son propre trophée déjà relevé par
+   * `update` (retour de l'auteur, 24 nov. 2026 : le récit « Chasser le mammouth » s'ouvrait par-dessus la cinématique du
+   * trophée, quand le jeu avait vu le trophée avant que le récit n'arrive, par exemple pendant qu'on tournait la vue)
    */
-  detect(won: readonly string[], after?: () => void, ready = false, replay: string | null = null): boolean {
+  detect(won: readonly string[], after?: () => void, ready = false, replay: string | null = null, own: string | null = null): boolean {
     const fresh: TrophyEntry[] = [];
     for (const id of won) {
       if (this.known.has(id)) continue;
@@ -92,11 +101,23 @@ export class TrophyCineQueue {
     for (const id of [...this.known]) if (!won.includes(id)) this.known.delete(id);
     if (replay && !fresh.length && CINE.has(replay) && won.includes(replay) && this.cur?.id !== replay && !this.hidden(replay)) fresh.push({ id: replay, t: 0 });
     this.queue.push(...fresh);
-    if (!after || !fresh.length || !ready || this.cur) return false;
-    const e = fresh[fresh.length - 1];
-    e.after = after;
+    if (!after) return false;
+    // (une cinématique joue : le récit attend sa fin)
+    if (this.cur) { chain(this.cur, after); return true; }
+    // (son trophée attend déjà son tour, relevé avant le récit : le récit le suit, comme s'il venait de le rapporter)
+    const mine = !fresh.length && own ? this.queue.find((e) => e.id === own) : undefined;
+    if (!ready || (!fresh.length && !mine)) return false;
+    const e = mine ?? fresh[fresh.length - 1];
+    chain(e, after);
     e.held = 0;
     this.calmT = CALM_DELAY;
+    return true;
+  }
+
+  /** `after` attend la fin de la cinématique en cours ; rend faux s'il n'y en a pas (à l'appelant de le faire tout de suite) */
+  afterCurrent(after: () => void): boolean {
+    if (!this.cur) return false;
+    chain(this.cur, after);
     return true;
   }
 

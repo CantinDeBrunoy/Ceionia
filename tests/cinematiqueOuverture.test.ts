@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { OPEN_FILM, OPEN_FALLBACK, OPEN_LIVE, OPEN_LIFT, OPEN_LIVE_CAPTION, openFilmCaptionAt, openFallbackPlan, openLiveCaptionAt, openCloudAt, openViewAt, openingDue } from '../src/openingCine';
+import { fetchFilm, filmOrder, FILM_WAIT } from '../src/ui/filmLoad';
 import { tr, setLang } from '../src/i18n';
 import '../src/i18n/en';
 
@@ -64,10 +65,57 @@ describe('la cinématique d’ouverture : la partition', () => {
   });
 
   it('les textes affichés ont leur anglais, sans point-virgule', () => {
-    const texts = [...OPEN_FILM.captions.flatMap((c) => [c.text, c.sub!]), OPEN_LIVE_CAPTION.text];
+    const texts = [...OPEN_FILM.captions.flatMap((c) => [c.text, c.sub!]), OPEN_LIVE_CAPTION.text, 'Chargement de la cinématique…'];
     for (const t of texts) expect(t).not.toContain(';');
     setLang('en', false);
     for (const t of texts) expect(tr(t)).not.toBe(t);
     setLang('fr', false);
+  });
+});
+
+describe('les films des cinématiques : un vrai chargement avant la lecture', () => {
+  const files = { webm: './f.webm', mp4: './f.mp4' };
+  /** un faux réseau : chaque fichier, sa taille (absent : 404), lu en quatre morceaux */
+  const net = (sizes: Record<string, number>, seen: string[] = []) => (async (url: string, init?: { signal?: AbortSignal }) => {
+    seen.push(url);
+    if (init?.signal?.aborted) throw new Error('coupé');
+    const n = sizes[url];
+    if (n === undefined) return new Response(null, { status: 404 });
+    const part = new Uint8Array(n / 4);
+    const body = new ReadableStream({ start(c) { for (let i = 0; i < 4; i++) c.enqueue(part); c.close(); } });
+    return new Response(body, { headers: { 'content-length': String(n) } });
+  }) as unknown as typeof fetch;
+
+  it('la WebM d’abord quand le navigateur la lit, sinon le MP4 seul', () => {
+    expect(filmOrder(files, (t) => (t.includes('webm') ? 'probably' : 'maybe'))).toEqual(['./f.webm', './f.mp4']);
+    expect(filmOrder(files, (t) => (t.includes('webm') ? '' : 'maybe'))).toEqual(['./f.mp4']);
+  });
+
+  it('le film entier en mémoire, avec son avancée jusqu’au bout ; la WebM absente, le MP4', async () => {
+    const real = globalThis.fetch, seen: string[] = [];
+    globalThis.fetch = net({ './f.mp4': 400 }, seen);
+    try {
+      const ks: number[] = [];
+      const url = await fetchFilm(['./f.webm', './f.mp4'], (k) => ks.push(k), new AbortController().signal);
+      expect(url).toMatch(/^blob:/);
+      expect(seen).toEqual(['./f.webm', './f.mp4']);
+      expect(ks[ks.length - 1]).toBe(1);
+      for (let i = 1; i < ks.length; i++) expect(ks[i]).toBeGreaterThanOrEqual(ks[i - 1]);
+      URL.revokeObjectURL(url!);
+    } finally { globalThis.fetch = real; }
+  });
+
+  it('rien de lisible, ou trop lent (arrêté) : pas de film, l’image de remplacement le remplace', async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = net({});
+    try {
+      expect(await fetchFilm(['./f.webm', './f.mp4'], () => {}, new AbortController().signal)).toBeNull();
+      globalThis.fetch = net({ './f.webm': 400 });
+      const stop = new AbortController();
+      stop.abort();
+      expect(await fetchFilm(['./f.webm'], () => {}, stop.signal)).toBeNull();
+    } finally { globalThis.fetch = real; }
+    // (au plus une vingtaine de secondes d'attente : au-delà, le fondu de remplacement)
+    expect(FILM_WAIT).toBeLessThanOrEqual(25000);
   });
 });

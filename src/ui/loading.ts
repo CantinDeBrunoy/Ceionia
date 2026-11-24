@@ -41,6 +41,8 @@ export const LOAD_TIPS = [
   'Cliquez sur une condition de l’âge suivant pour trouver ce qui manque.',
   'Sculptez le relief, creusez des lacs, faites naître des montagnes.',
 ];
+/** L'avancée de la barre une fois les modèles chargés (le reste : le monde, les shaders, les premières images) */
+export const MODELS_K = 0.2;
 /** Temps d'affichage d'un conseil (ms) */
 const TIP_MS = 4500;
 
@@ -73,7 +75,7 @@ export class LoadingScreen {
     el.setAttribute('role', 'status');
     if (voyage === 'opening') {
       el.className = 'opening';
-      this.film = new OpeningFilm(el);
+      this.film = new OpeningFilm(el, `${LOGO_PEAKS}<h1>Ceionia</h1>`);
       this.label = el.querySelector('.ldStep')!;
       this.bar = el.querySelector('.ldBar i')!;
       root.appendChild(el);
@@ -81,7 +83,8 @@ export class LoadingScreen {
     }
     if (voyage) {
       el.className = 'voyage';
-      this.film = new VoyageFilm(el, hold);
+      const film = (this.film = new VoyageFilm(el, hold));
+      film.onProgress = () => this.draw();
       this.label = el.querySelector('.ldStep')!;
       this.bar = el.querySelector('.ldBar i')!;
       root.appendChild(el);
@@ -104,7 +107,15 @@ export class LoadingScreen {
     const text = detail ? `${tr(label)} ${detail}` : tr(label);
     if (this.label.textContent !== text) this.label.textContent = text;
     this.k = Math.max(this.k, Math.min(1, k));
-    this.bar.style.width = `${Math.round(this.k * 1000) / 10}%`;
+    this.draw();
+    // (l'ouverture : avant le film, son vrai chargement montre les modèles, qui vont jusqu'à `MODELS_K`)
+    if (this.film instanceof OpeningFilm) this.film.models(text, this.k / MODELS_K);
+  }
+
+  /** La barre ; la traversée, tant que son film n'est pas parti : les modèles et le téléchargement du film ensemble */
+  private draw() {
+    const f = this.film, k = f instanceof VoyageFilm && !f.rolled ? (MODELS_K * (Math.min(1, this.k / MODELS_K) + f.fileK)) / 2 : this.k;
+    this.bar.style.width = `${Math.round(k * 1000) / 10}%`;
   }
 
   /** La scène est prête : l'écran s'efface en fondu, puis disparaît (`now` : tout de suite, sans fondu) */

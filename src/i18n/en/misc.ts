@@ -186,6 +186,7 @@ registerDict('misc', {
   'Un fer céleste à ramasser': 'A piece of sky iron to pick up',
   'Cliquez dessus au fond du cratère': 'Click it at the bottom of the crater',
   // la cinématique d'ouverture (openingCine.ts) et son réglage
+  'Chargement de la cinématique…': 'Loading the cinematic…',
   'Il y a très longtemps…': 'Long, long ago…',
   'La terre était sauvage': 'The land was wild',
   'Un peuple errait': 'A people wandered',
