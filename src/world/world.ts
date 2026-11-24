@@ -34,6 +34,11 @@ const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill'
 const GREW3: KindId[] = ['gather', 'forum'];
 /** Marque des sauvegardes où places et forums sont déjà en 3 × 3 */
 const PLAZA3 = 1;
+/**
+ * Le fort de la tête de pont, passé de 3 × 3 à 6 × 6 (demande de l'auteur, 24 nov. 2026) : les sauvegardes d'avant (sans la
+ * marque `fort6`) le font grandir autour de son ancienne emprise, s'il a la place ; sinon il garde ses 3 × 3 (`small`)
+ */
+const FORT6 = 1;
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
@@ -1978,6 +1983,7 @@ export class World {
       nextId: this.nextId,
       ...(this.wishesMet ? { wishes: this.wishesMet } : {}),
       plaza3: PLAZA3,
+      fort6: FORT6,
       torches: [...this.torches],
       basalt: lavaFields(this.basalt),
       ash: [...this.ash.keys()].filter((k) => this.ash[k]),
@@ -2025,10 +2031,10 @@ export class World {
    * des sauvegardes d'avant (`plaza3` absent) : leur nouvelle emprise entoure l'ancienne, centrée sur elle de préférence ;
    * sans place, ils gardent l'ancienne taille, sans chevaucher personne
    */
-  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array, veg: Uint8Array, plaza3: boolean) {
+  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array, veg: Uint8Array, plaza3: boolean, fort6 = true) {
     const owner = new Int32Array(N * N);
     const mark = (b: Building) => { const s = sizeOf(b); for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) if (this.inCells(b.x + i, b.z + j)) owner[this.ci(b.x + i, b.z + j)] = b.id; };
-    const grows = (b: Building) => GREW.includes(b.kind) || (GREW3.includes(b.kind) && (!plaza3 || !!b.small));
+    const grows = (b: Building) => GREW.includes(b.kind) || (GREW3.includes(b.kind) && (!plaza3 || !!b.small)) || (b.kind === 'fort' && (!fort6 || !!b.small));
     const grow = buildings.filter(grows);
     for (const b of buildings) if (!grows(b)) mark(b);
     // l'ancienne emprise de chacun lui appartient d'office : un voisin qui grandit ne la prend pas
@@ -2094,7 +2100,7 @@ export class World {
     const stops = new Set<number>();
     for (const l of Array.isArray(d.lines) ? d.lines : []) for (const i of Array.isArray(l?.s) ? l.s : []) if (ids[i] > 0) stops.add(ids[i]);
     for (const b of buildings) if (b.kind === 'landmark' && b.age >= 3 && stops.has(b.id)) b.kind = 'terminal';
-    this.growLarge(buildings, heights, road, veg, d.plaza3 === PLAZA3);
+    this.growLarge(buildings, heights, road, veg, d.plaza3 === PLAZA3, d.fort6 === FORT6);
     // les sauvegardes d'avant le plan du continent n'ont pas de version : leur climat reste celui de la version 1
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     // (la place des îles se tire de la graine : celle de la sauvegarde n'est là que pour qui la lit au dehors)

@@ -33,7 +33,7 @@ export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'deco' | 'war';
 
 export interface KindDef {
   id: KindId;
-  size: 1 | 2 | 3 | 4;
+  size: 1 | 2 | 3 | 4 | 6;
   minAge: number;
   /** dernier âge où on peut le bâtir : après, tant pis (ceux déjà bâtis restent) */
   maxAge?: number;
@@ -561,7 +561,7 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Dans la tête de pont. Les pertes du corps expéditionnaire se refont deux fois plus vite.',
   },
   fort: {
-    id: 'fort', size: 3, minAge: 3, icon: '🏰', cat: 'war',
+    id: 'fort', size: 6, minAge: 3, icon: '🏰', cat: 'war',
     names: ['', '', '', 'Fort de la tête de pont', 'Fort de la tête de pont', 'Citadelle de la tête de pont'],
     desc: 'Le camp de la plage devient un fort : une enceinte basse en étoile, ses bastions, ses casemates et notre drapeau au mât.',
     perk: 'Dans la tête de pont, une fois le port pris. Le chapitre de l’Industriel le demande. Le camp a deux fois plus de vie quand la ville rivale fait une sortie.',
@@ -933,11 +933,11 @@ export interface Building {
  * Ancienne emprise des bâtiments qui ont grandi depuis les premières parties : une case de moins, sauf la place du village,
  * passée de 1 × 1 à 3 × 3 (le forum, son amélioration, de 2 × 2 à 3 × 3 avec elle)
  */
-const OLD_SIZE: Partial<Record<KindId, number>> = { gather: 1 };
-export const smallSize = (kind: KindId) => (OLD_SIZE[kind] ?? KINDS[kind].size - 1) as 1 | 2 | 3;
+const OLD_SIZE: Partial<Record<KindId, number>> = { gather: 1, fort: 3 };
+export const smallSize = (kind: KindId) => (OLD_SIZE[kind] ?? KINDS[kind].size - 1) as 1 | 2 | 3 | 4 | 6;
 
 /** Emprise d'un bâtiment : celle de son genre, l'ancienne s'il est resté à l'ancienne taille (`small`) */
-export const sizeOf = (b: Building) => (b.small ? smallSize(b.kind) : KINDS[b.kind].size) as 1 | 2 | 3 | 4;
+export const sizeOf = (b: Building) => (b.small ? smallSize(b.kind) : KINDS[b.kind].size) as 1 | 2 | 3 | 4 | 6;
 
 /** Bâtiments sans porte ni chemin d'accès : les décorations (lampadaire compris), la place du village (qu'on rejoint de tous côtés), les remparts */
 export const hasDoor = (kind: KindId) => !isDecor(kind) && kind !== 'gather' && !isRampart(kind);

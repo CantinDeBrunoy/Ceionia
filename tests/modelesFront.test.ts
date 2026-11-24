@@ -31,7 +31,9 @@ function draw(fn: (p: Parts, kit: FrontKit) => void) {
 const MODELS: [string, number, number[], (age: number) => (p: Parts, kit: FrontKit) => void][] = [
   ['infirmerie', 2, [2, 3, 4, 5], (a) => (p, k) => front.frontInfirmary(p, a, k)],
   ['forge', 2, [3, 4, 5], (a) => (p, k) => front.frontForge(p, a, k)],
-  ['fort', 3, [3, 4, 5], (a) => (p, k) => front.fortModel(p, a, k)],
+  // (le fort en 6 × 6 depuis le 24 nov. 2026 ; un ancien fort resté à sa taille garde le modèle de 3 × 3)
+  ['fort', 6, [3, 4, 5], (a) => (p, k) => front.fortModel(p, a, k)],
+  ['fort ancien', 3, [3, 4, 5], (a) => (p, k) => front.fortModel(p, a, k, 3)],
   ['batterie', 2, [3, 4, 5], (a) => (p, k) => front.coastBattery(p, a, k)],
   ['caserne', 2, [4, 5], (a) => (p, k) => front.garrisonBarracks(p, a, k)],
   ['hôpital', 2, [4, 5], (a) => (p, k) => front.milHospital(p, a, k)],
@@ -40,7 +42,7 @@ const MODELS: [string, number, number[], (age: number) => (p: Parts, kit: FrontK
   ['héliport', 2, [4, 5], (a) => (p, k) => front.milHeliport(p, a, k)],
   ['radar', 2, [4, 5], (a) => (p, k) => front.radarStation(p, a, k)],
 ];
-const CAP: Record<number, number> = { 1: 3000, 2: 4500, 3: 6500 };
+const CAP: Record<number, number> = { 1: 3000, 2: 4500, 3: 6500, 6: 13000 };
 
 describe('modèles de la tête de pont', () => {
   it('chaque modèle, à chaque âge, est sans NaN, sur sa parcelle, sous son plafond de triangles, sans socle plat', () => {

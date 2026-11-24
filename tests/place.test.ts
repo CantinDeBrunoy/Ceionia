@@ -130,3 +130,40 @@ describe('les âges et les améliorations', () => {
     for (const k of ['acropolis', 'forum', 'senate'] as const) expect(KINDS[k].maxAge).toBe(1);
   });
 });
+
+describe('le fort en 6 × 6 (24 nov. 2026)', () => {
+  it('un ancien fort de 3 × 3 grandit en 6 × 6 autour de lui s’il a la place ; sinon il garde sa taille, sans chevaucher personne', () => {
+    const w = continent();
+    const [x, z] = plazaSpot(w, 4);
+    const d = w.toJSON();
+    // une ancienne sauvegarde : sans la marque du fort en 6 × 6, le fort en 3 × 3 au milieu d'une place libre
+    delete d.fort6;
+    d.buildings.push(['fort', x + 2, z + 2, 0, 0, 3]);
+    const w2 = new World();
+    w2.fromJSON(JSON.parse(JSON.stringify(d)));
+    const f = [...w2.buildings.values()].find((b) => b.kind === 'fort')!;
+    expect(f.small).toBeUndefined();
+    expect(sizeOf(f)).toBe(6);
+    expect(cellsOf(w2, f.id).length).toBe(36);
+    // (son ancienne emprise est dans la nouvelle)
+    expect(f.x <= x + 2 && f.z <= z + 2 && f.x + 6 >= x + 5 && f.z + 6 >= z + 5).toBe(true);
+    // relu tel quel, il ne bouge plus
+    const w3 = new World();
+    w3.fromJSON(JSON.parse(JSON.stringify(w2.toJSON())));
+    const f3 = [...w3.buildings.values()].find((b) => b.kind === 'fort')!;
+    expect([f3.x, f3.z, sizeOf(f3)]).toEqual([f.x, f.z, 6]);
+    // cerné de maisons : il reste en 3 × 3
+    const c = continent();
+    const [cx, cz] = plazaSpot(c, 4);
+    for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) if (i < 2 || j < 2 || i > 4 || j > 4) c.place('house', cx + i, cz + j, 0, true, 0, false);
+    const dc = c.toJSON();
+    delete dc.fort6;
+    dc.buildings.push(['fort', cx + 2, cz + 2, 0, 0, 3]);
+    const w4 = new World();
+    w4.fromJSON(JSON.parse(JSON.stringify(dc)));
+    const f4 = [...w4.buildings.values()].find((b) => b.kind === 'fort')!;
+    expect(f4.small).toBe(true);
+    expect(sizeOf(f4)).toBe(3);
+    expect(cellsOf(w4, f4.id).length).toBe(9);
+  });
+});

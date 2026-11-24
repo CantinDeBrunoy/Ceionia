@@ -114,7 +114,7 @@ Chantier C du nouveau monde (plan `.claude/plan-nouveau-monde.md`, partie 3 ; r�
 |---|---|---|---|
 | tête de pont | Médiéval | tour de guet du camp (`frontTower`) | tire pendant une sortie (une tour au combat dans la défense) |
 | tête de pont | Médiéval | infirmerie de campagne (`frontInfirmary`) | les pertes se refont deux fois plus vite |
-| tête de pont | Industriel | **le fort** (`fort`, 3 × 3, le port pris) | condition du chapitre ; le camp deux fois plus solide (`FORT_HP`) ; il remplace le camp et la caserne avancée à l'écran |
+| tête de pont | Industriel | **le fort** (`fort`, 6 × 6 depuis le 24 nov. 2026, demande de l'auteur ; un ancien fort grandit au chargement s'il a la place, sinon garde ses 3 × 3, marque `fort6` ; le port pris) | condition du chapitre ; le camp deux fois plus solide (`FORT_HP`) ; il remplace le camp et la caserne avancée à l'écran |
 | tête de pont | Industriel | batterie côtière (`battery`) | un navire rival de moins dans les batailles en mer |
 | tête de pont | Industriel | forge du front (`frontForge`) | nos coups × `FORGE_DMG` = 1,2 |
 | tête de pont | Moderne | **la ville de garnison** : caserne (`garrison`), hôpital militaire, foyer du soldat, maisons (après le fort) | la caserne et deux autres font le chapitre ; le corps grandit de `GARRISON_MEN` = 8 |
