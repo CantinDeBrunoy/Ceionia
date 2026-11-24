@@ -65,6 +65,51 @@ export const CHAPTER_TEXT = {
       how: 'Un clic sur l’or ouvre le comptoir : vendez-y du bois, de la pierre ou du minerai pour en gagner.',
     },
   },
+  // la première ligne de train (voir `tutorialRail.ts`) : {terminal}, {station}, {kiln}, {n} remplis selon la partie
+  rail: {
+    title: 'La première ligne',
+    forMe: 'Relier pour moi',
+    resume: 'Reprendre le tracé',
+    follow: 'Suivre le train',
+    place: 'Un clic pour l’endroit, un second pour le côté de l’entrée (vers la route).',
+    stuck: 'Vous bloquez ? « Relier pour moi » choisit les deux gares les plus proches et prépare la ligne.',
+    terminal: {
+      title: 'La gare centrale',
+      text: 'Les trains partent de {terminal}, la grande gare : posez-la près du village.',
+      tasks: ['Bâtir {terminal}'],
+      kiln: 'Il faut d’abord {kiln} : ses briques bâtissent les gares.',
+      bricks: 'Il faut {n} briques : la briqueterie en fait chaque jour.',
+    },
+    station: {
+      title: 'Une deuxième gare',
+      text: 'Le train fera la navette : posez {station} un peu plus loin, là où il doit aller.',
+      tasks: ['Bâtir {station}'],
+    },
+    open: {
+      title: 'L’outil des lignes',
+      text: 'Cliquez sur la gare centrale, entourée d’or, puis sur « Nouvelle ligne » dans sa fiche.',
+      tasks: ['Ouvrir la fiche de la gare', 'Cliquer « Nouvelle ligne »'],
+    },
+    pick: {
+      title: 'Les gares à relier',
+      text: 'Cliquez sur les gares à relier, l’une après l’autre : l’anneau doré montre la suivante.',
+      tasks: ['Une première gare', 'Une deuxième gare'],
+      closed: 'Le tracé s’est fermé : « Reprendre le tracé » le rouvre.',
+    },
+    track: {
+      title: 'La voie',
+      text: 'La voie prévue se dessine en couleur : validez-la, ou glissez-la pour la faire passer ailleurs.',
+      tasks: ['Valider la ligne'],
+      helped: 'Le jeu a choisi les deux gares les plus proches : il ne reste qu’à valider.',
+      bad: 'En rouge, la voie ne passe pas : « Tracé auto » la repose d’elle-même.',
+    },
+    train: {
+      title: 'Le premier train',
+      text: 'La ligne est ouverte : le train attend ses voyageurs en gare, puis part vers l’autre gare.',
+      tasks: ['Voir partir le train'],
+      done: 'Les autres lignes se tracent de la même façon, depuis la fiche d’une gare.',
+    },
+  },
   hell: {
     title: 'Les Enfers',
     goal: {
@@ -162,7 +207,7 @@ export interface ChapterHost {
 const step = (id: string, t: StepText, s: Omit<Step, 'id' | 't'>): Step => ({ id, t, ...s });
 
 /** Les deux chapitres */
-export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<ChapterId, Chapter> {
+export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Exclude<ChapterId, 'rail'>, Chapter> {
   const P = CHAPTER_TEXT.pve, E = CHAPTER_TEXT.hell, q = (s: string) => h.root.querySelector(s);
   const name = (k: 'watchtower' | 'barracks') => tr('« {name} »', { name: KINDS[k].names[Math.max(h.age(), KINDS[k].minAge)] });
   const names = (s: string) => fmt(s, { barracks: name('barracks') });

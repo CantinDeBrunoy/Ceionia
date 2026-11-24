@@ -1,7 +1,7 @@
 # Tutoriel
 
-> Fichiers : `src/ui/tutorial.ts` (la bulle, la suite principale, l'état enregistré, le moteur des chapitres), `src/ui/tutorialChapters.ts` (les chapitres de l'île du portail, des Enfers et de l'archipel), `src/ui/portalChoice.ts` (la carte du choix PvE), `src/main.ts` (création, déclencheurs, messages sans tutoriel), `src/style.css` (bloc « Tutoriel guidé »), `src/i18n/en/tutorial.ts` (anglais)
-> Tests : `tests/tutoriel.test.ts`, `tests/bulleTutoriel.test.ts`, `tests/tutorielChapitres.test.ts`, `tests/invasion.test.ts` (le tutoriel ne lit pas le PvE)
+> Fichiers : `src/ui/tutorial.ts` (la bulle, la suite principale, l'état enregistré, le moteur des chapitres), `src/ui/tutorialChapters.ts` (les chapitres de l'île du portail, des Enfers et de l'archipel, et les textes de tous), `src/ui/tutorialRail.ts` (le chapitre de la première ligne de train), `src/ui/portalChoice.ts` (la carte du choix PvE), `src/main.ts` (création, déclencheurs, messages sans tutoriel), `src/style.css` (bloc « Tutoriel guidé »), `src/i18n/en/tutorial.ts` (anglais)
+> Tests : `tests/tutoriel.test.ts`, `tests/bulleTutoriel.test.ts`, `tests/tutorielChapitres.test.ts`, `tests/guidePremiereLigne.test.ts`, `tests/invasion.test.ts` (le tutoriel ne lit pas le PvE)
 > Voir aussi : [interface.md](interface.md), [portail-ile.md](portail-ile.md), [enfers.md](enfers.md), [armee-combat.md](armee-combat.md), [sauvegarde.md](sauvegarde.md), [traduction.md](traduction.md)
 
 ## En bref
@@ -11,7 +11,7 @@ Rien n'est bloqué : « Suivant » passe toujours, « Passer le tutoriel » le m
 Un « Suivant » qui arrive moins de 0,9 s après un passage automatique (`LATE_MS`), ou enfoncé sur l'étape d'avant (`downOn`),
 est ignoré : il visait l'étape qui vient de se cocher et sautait la suivante (étapes 4 et 6 jamais vues, testeur v6).
 Plus tard dans la partie, des chapitres courts se lancent sur un événement : la première entrée dans les Enfers, le choix
-de l'allié. Ils ne se montrent qu'une fois.
+de l'allié, la première ligne de train. Ils ne se montrent qu'une fois.
 
 ## Règles du jeu
 - **Activation** (`startsOn`) : chaque **nouvelle partie** (hors bac à sable) relance la suite principale depuis la première
@@ -98,6 +98,14 @@ de l'allié. Ils ne se montrent qu'une fois.
   Aux étapes 1 à 3, la bulle montre l'onglet Bâtir, le rayon Production, puis la vignette ; une vignette cachée hors de la rangée qui défile (le port, le comptoir, au bout du rayon) : la flèche › (ou ‹), et une ligne dit « Cliquez sur la flèche › pour faire venir « Port », puis sur sa vignette. ». Le surlignage passe à la vignette dès qu'elle est visible. C'est `UI.buildAnchor(genre)` (`ui.ts`), qui sert à tout tutoriel qui fait poser un bâtiment.
   4. `archGold` « L'or » (à lire) : l'or fait passer les âges (20, 50, 100 : lus dans `AGES[n].reqGold`), et un clic sur l'or ouvre le comptoir pour vendre bois, pierre ou minerai. La bulle montre l'or de la barre des stocks.
   Il s'achève si l'archipel ou l'allié manque (`live`), se cache hors de la surface (`away`). Toute bulle se tait pendant la bataille de l'archipel (`body.rivalWar`, dans `Tutorial.update`) : celle-ci couvrait son bandeau.
+- **Chapitre « La première ligne »** (`rail`, 6 étapes, 24 nov. 2026 : l'auteur trouvait l'outil des lignes trop compliqué pour qui le découvre ; voir [chemin-de-fer.md](chemin-de-fer.md)). `Game.watchRail` le lance une fois (`railWanted`) : âge industriel, village sans ligne qui a sa briqueterie (ou une gare), à la surface, sans fenêtre ouverte ni autre chapitre. Une partie qui a déjà une ligne ne le voit pas. Chaque étape attend son geste :
+  1. `railTerminal` « La gare centrale » : poser la gare centrale (la vignette montrée par `UI.buildAnchor` ; sans briqueterie, c'est elle qui est montrée ; la note dit les briques qui manquent, puis la pose en deux clics quand la gare est en main).
+  2. `railStation` « Une deuxième gare » : poser une petite gare. Déjà bâties, les étapes 1 et 2 passent d'elles-mêmes.
+  3. `railOpen` « L'outil des lignes » : la vue va sur la gare centrale, marquée d'or (`#railPin`, que l'anneau entoure) ; sa fiche ouverte, l'anneau passe à « Nouvelle ligne ». Le bâtiment encore en main rentre.
+  4. `railPick` « Les gares à relier » : le marqueur passe à la gare suivante, la vue cadre les deux. Tracé refermé : « Reprendre le tracé ».
+  5. `railTrack` « La voie » : l'anneau entoure « Valider » ; voie rouge : la note propose « Tracé auto ».
+  6. `railTrain` « Le premier train » (à lire) : la vue suit le train, la tâche se coche quand il part ; « Terminer ».
+  Bloqué 12 s sur les étapes 3 et 4 (`STUCK_MS`), ou voie rouge à l'étape 5 : « Relier pour moi » prépare la ligne entre les deux gares les plus proches et saute à l'étape 5 (`Tutorial.jump`), où la bulle dit que le jeu a choisi. Il se lance même le tutoriel passé (`ALWAYS`), pas s'il est désactivé à l'accueil. Rejoué par « Me guider pas à pas » de l'onglet Chemin de fer (`Tutorial.replay` : même vu, même le tutoriel mis de côté ; rejoué avec une ligne déjà là, l'étape 5 attend une ligne de plus). Pendant le tracé, la bulle évite le panneau `#railEdit`.
 - **Quand les chapitres se lancent** : une seule fois chacun, même le tutoriel fini, même s'il est en cours (la suite
   principale reprend après le chapitre). Jamais si le joueur a mis le tutoriel de côté (« Passer le tutoriel », ou
   désactivé à l'accueil ou dans les réglages). Sauf « L'or des voisins » (`ALWAYS`, `chapterDue`) : un mécanisme neuf que le joueur ne connaît pas ; il ne se tait que si le tutoriel est désactivé à l'accueil (`off`). « Passer ce chapitre » ne passe que le chapitre. « Recommencer » les réarme.
@@ -193,6 +201,7 @@ Clé `village-lowpoly:v1:tutorial` du `localStorage`, lue par `parseState`, écr
   3. si c'est une pose de bâtiment : `make(id, [kinds])`, et `GATE` / `GUIDED` si le verrou doit la suivre ;
   4. l'anglais dans `src/i18n/en/tutorial.ts` ;
   5. la liste `IDS` de `tests/tutorielChapitres.test.ts`. Ne pas toucher `LEGACY`.
+- **Rejouer un chapitre à la demande** : `Tutorial.replay(id)` (le retire de `seen` et l'ouvre au début) ; aller à une étape du chapitre en cours : `Tutorial.jump(idÉtape)`.
 - **Ajouter un chapitre déclenché par un événement** :
   1. son identifiant dans `ChapterId` et `CHAPTERS` (`tutorial.ts`) ;
   2. ses textes dans `CHAPTER_TEXT` et ses étapes dans `chapters()` (`tutorialChapters.ts`), avec `live` / `away` ;
