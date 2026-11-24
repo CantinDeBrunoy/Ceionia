@@ -1,8 +1,8 @@
 import type { World } from '../world/world';
 import type { People } from '../world/archipelago';
 import { tr } from '../i18n';
-import { archipelagoOn, ENDGAME_AGE, PEACE_CHAIN, PEACE_MISSION, peopleName as name, rivalOf, WAR_MISSION, WAR_SPOILS, talkRisk, isleOffered, isleWhy, boonsMatter } from './diplomacy';
-import { ISLE_MISSIONS } from './isleMissions';
+import { archipelagoOn, ENDGAME_AGE, PEACE_CHAIN, PEACE_MISSION, peopleName as name, rivalOf, WAR_MISSION, talkRisk, isleOffered, isleWhy, boonsMatter, rivalTownState, tributePerDay } from './diplomacy';
+import { ISLE_OFFERED } from './isleMissions';
 
 /**
  * Le panneau « Peuples » (voir `docs/diplomatie.md`, idée de Margot, testeuse v6 : « une diplomatie que je ne vois pas
@@ -64,6 +64,8 @@ export interface PeoplesCtx {
   age: number; tradeOpen: boolean; postReady: boolean; canExplore: boolean;
   /** l'onglet « Grands choix » des expéditions existe (le grand choix est fait : « Explorer le monde » s'y prend encore) */
   waysTab?: boolean;
+  /** la durée d'un jour de jeu (s) : la ville rivale vaincue se relève en quelques jours (130 par défaut) */
+  dayLen?: number;
 }
 
 const ORDER: People[] = ['orient', 'asie'];
@@ -126,9 +128,12 @@ function rivalCard(w: Pick<World, 'isles' | 'diplo' | 'exp'>, c: PeoplesCtx, p: 
   const d = w.diplo, done = (id: string) => w.exp.done.includes(id);
   // l'humeur et l'état
   let mood: Mood, moodWhy: string, status: string, tone: PeopleCard['tone'];
-  if (d.conflict === 'peace') { mood = 3; moodWhy = tr('La paix est signée : vos marchands sont les bienvenus.'); status = tr('En paix avec vous'); tone = 'peace'; }
+  if (d.conflict === 'peace' && d.games.end === 'union') { mood = 4; moodWhy = tr('L’union des îles : les trois peuples sont frères.'); status = tr('Unis avec vous'); tone = 'peace'; }
+  else if (d.conflict === 'peace') { mood = 3; moodWhy = tr('La paix est signée : vos marchands sont les bienvenus.'); status = tr('En paix avec vous'); tone = 'peace'; }
   else if (d.conflict === 'treaty') { mood = 2; moodWhy = tr('Un traité a fini la guerre entre les deux îles.'); status = tr('En paix (traité)'); tone = 'peace'; }
-  else if (d.conflict === 'won') { mood = 1; moodWhy = tr('Vaincus, ils vous paient tribut.'); status = tr('Vaincus : {n} or de tribut par jour', { n: WAR_SPOILS.tribute }); tone = 'calm'; }
+  // (la paix des vainqueurs : leur ville reconstruite, ils deviennent neutres, puis amicaux une fois relevés ; le tribut les laisse méfiants)
+  else if (d.conflict === 'won' && d.victors === 'rebuild') { const up = rivalTownState(d, w.exp.clock, c.dayLen ?? 130) === 'intact'; mood = up ? 3 : 2; moodWhy = up ? tr('Leur ville est relevée, avec votre aide.') : tr('Vous les aidez à relever leur ville.'); status = tr('Vaincus, leur ville se relève'); tone = 'calm'; }
+  else if (d.conflict === 'won') { mood = 1; moodWhy = tr('Vaincus, ils vous paient tribut.'); status = tr('Vaincus : {n} or de tribut par jour', { n: tributePerDay(d) }); tone = 'calm'; }
   else if (d.saga.truce) { mood = 3; moodWhy = tr('Une trêve est signée : les combats ont cessé.'); status = tr('En trêve avec votre allié'); tone = 'peace'; }
   else if (d.path === 'war') { mood = 0; moodWhy = tr('Vous préparez la guerre contre eux.'); status = tr('En guerre contre vous'); tone = 'war'; }
   else if (d.post) { mood = 2; moodWhy = tr('Vos émissaires les ont apaisés : ils écoutent.'); status = tr('En guerre contre votre allié'); tone = 'war'; }
@@ -191,7 +196,7 @@ function isles(w: Pick<World, 'isles' | 'diplo' | 'exp'>, c: PeoplesCtx, to: 'al
   if (c.age < ENDGAME_AGE) return { id: 'isles', label, on: false, why: tr('Au Médiéval') };
   // (chez le rival, le conflit réglé : rien à y gagner)
   if (to === 'rival' && w.diplo.conflict !== 'open') return { id: 'isles', label, on: false, why: tr('Le conflit est réglé') };
-  const all = ISLE_MISSIONS.filter((m) => m.isle!.to === to), offered = all.filter((m) => isleOffered(w, m.id, m.isle!.when));
+  const all = ISLE_OFFERED.filter((m) => m.isle!.to === to), offered = all.filter((m) => isleOffered(w, m.id, m.isle!.when));
   const todo = offered.filter((m) => !w.exp.done.includes(m.id));
   if (todo.length) return { id: 'isles', label, on: true, go: 'mission', mission: todo[0].id, why: to === 'ally' ? tr('{n} à faire : des renforts pour la bataille, de la bonne volonté pour la paix', { n: todo.length }) : tr('{n} à faire : affaiblir leur flotte, plaider la paix… ou les voler', { n: todo.length }) };
   if (offered.length) return { id: 'isles', label, on: false, done: true, why: tr('Toutes faites') };

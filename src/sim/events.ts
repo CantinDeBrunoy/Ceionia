@@ -165,7 +165,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'seat', where: ['river'], missions: ['truce'], water: 'sea', title: 'Qui s’assied où ?',
+    id: 'seat', where: ['river'], missions: ['truce', 'gamesBid'], water: 'sea', title: 'Qui s’assied où ?',
     text: 'Les deux chefs refusent de s’asseoir l’un en face de l’autre.',
     options: [
       { label: 'Une table ronde', risk: 1, text: 'Une table ronde, et plus personne en face de personne.' },
@@ -183,7 +183,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'music', where: ['river'], missions: ['truce'], water: 'sea', title: 'Trois musiques',
+    id: 'music', where: ['river'], missions: ['truce', 'gamesBid'], water: 'sea', title: 'Trois musiques',
     text: 'Chaque peuple a amené ses musiciens. Qui jouera ce soir ?',
     options: [
       { label: 'Tous ensemble', risk: 1, bonus: [joy(1, 4)], text: 'Les trois orchestres ont joué ensemble : un drôle de mélange, et tout le monde a dansé.' },

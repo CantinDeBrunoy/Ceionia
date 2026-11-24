@@ -23,6 +23,8 @@ describe('guidage : menu et équipement', () => {
   });
 });
 
+const KINDS_SIZE = (k: keyof typeof KINDS) => KINDS[k].size;
+
 describe('pastille d’évolution', () => {
   it('un puits peut évoluer en château d’eau à l’âge industriel, s’il y a de quoi payer', async () => {
     const { World, N, setMapSize } = await import('../src/world/world');
@@ -42,5 +44,18 @@ describe('pastille d’évolution', () => {
     expect(UpgradeBadges.upgradable(w, 3).length).toBe(1);
     // l'âge d'avant le château d'eau : rien à proposer
     expect(UpgradeBadges.upgradable(w, 2).length).toBe(0);
+    // pas la place de grandir : pas de flèche (retour de l'auteur, 24 nov. 2026). Une maison devient manoir (2 × 2) : entourée
+    // de puits, elle ne peut pas ; une case libre suffit à rendre la flèche
+    const w2 = new World();
+    newWorld(w2, 3, 2026);
+    w2.updateVis();
+    let h: [number, number] | null = null;
+    for (let z = 12; z < N - 12 && !h; z++) for (let x = 12; x < N - 12 && !h; x++) if ([-1, 0, 1].every((dz) => [-1, 0, 1].every((dx) => w2.canPlace('well', x + dx, z + dz) === null))) h = [x, z];
+    const house = w2.place('house', h![0], h![1], 0, true, 2, false);
+    w2.wood = 5000; w2.stone = 5000; w2.unlimited = true;
+    expect(w2.upgradeRoom(house.id, 'manor')).not.toBeNull();
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (dx || dz) w2.place('well', h![0] + dx, h![1] + dz, 0, true, 2, false);
+    expect(w2.upgradeRoom(house.id, 'manor')).toBeNull();
+    expect(UpgradeBadges.upgradable(w2, 2).length).toBe(0);
   });
 });

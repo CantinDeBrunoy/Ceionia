@@ -20,6 +20,7 @@ import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
 import { tr, plural } from '../i18n';
 import { peacePerks, SCHOOL_ISLE_RISK, RESEARCH_RISK } from './concession';
+import { gamesGold } from './islandGames';
 
 /**
  * Étapes d'une expédition : aller, travail sur place, retour, fête (ou mine déconfite) au village ; « gather » (le rassemblement
@@ -297,7 +298,7 @@ const AUTO_DECIDE = 90;
  * l'île ») : en part du travail, la traversée (`TRIP_OUT`), la marche jusqu'au lieu de la rencontre (`TRIP_MEET`), le départ
  * (`TRIP_LEAVE`), le rembarquement (`TRIP_BOARD`), le retour au quai (`TRIP_HOME`). `TRIP_SAIL` : l'allure du bateau (cases/s)
  */
-export const PEACE_TRIPS = new Set(['envoys', 'truce']);
+export const PEACE_TRIPS = new Set(['envoys', 'truce', 'gamesBid']);
 export const TRIP_OUT = 0.3, TRIP_MEET = 0.38, TRIP_LEAVE = 0.66, TRIP_BOARD = 0.72, TRIP_HOME = 0.93, TRIP_SAIL = 4;
 const OUT_MAX = 480;
 /**
@@ -404,7 +405,9 @@ export class Expeditions {
       * this.legacyK(c)
       // la concession de la paix : l'école commune rend les visites sur les îles plus sûres, le centre de recherche commun toutes les expéditions
       * (this.has('commonSchool') && peacePerks(this.world, { commonSchool: 1 }).school && isleChoice(c) ? SCHOOL_ISLE_RISK : 1)
-      * (this.has('researchCenter') && peacePerks(this.world, { researchCenter: 1 }).research ? RESEARCH_RISK : 1);
+      * (this.has('researchCenter') && peacePerks(this.world, { researchCenter: 1 }).research ? (this.world.diplo.games.end === 'union' ? RESEARCH_RISK * RESEARCH_RISK : RESEARCH_RISK) : 1)
+      // l'union des îles (la fin des Jeux) : les visites des îles toujours sûres
+      * (this.world.diplo.games.end === 'union' && isleChoice(c) ? 0 : 1);
   }
 
   /** Ce que les savoir-faire des expéditions retirent au risque d'un choix (chiens de garde, station météo, satellites) */
@@ -1103,6 +1106,8 @@ export class Expeditions {
     w.gold += tributePerDay(w.diplo) * day;
     // la ligne de vapeurs du port marchand partagé (la concession de la paix)
     if (this.has('merchantPort')) w.gold += peacePerks(w, { merchantPort: 1 }).gold * day;
+    // la fin des Jeux des îles : le traité (le commerce libre) ou l'union
+    w.gold += gamesGold(w.diplo.games) * day;
     for (const r of ['wood', 'stone', 'ore', 'brick', 'crude'] as Resource[]) {
       if (!rate[r]) continue;
       // bois, pierre, minerai et briques arrivent au fil des heures, en petites parts (l'affichage arrondit), et non d'un coup chaque

@@ -7,6 +7,7 @@ import { rampartTower } from '../build/rampart';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
 import { Sim, NeedId, ageGo } from '../sim/sim';
 import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
+import { hasCemetery, recentDeaths, MOURN, UNBURIED_HEALTH, DEATH_LOG_DAYS, NATURAL } from '../sim/mishaps';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
@@ -356,6 +357,12 @@ const ALLEGE = `(min-width: ${ONE_LINE_MIN}px) and (min-height: 521px)`;
 const allege = () => document.body.classList.contains('allege');
 /** marge de sécurité de la barre du haut sur une ligne (arrondis, bordures des pilules) */
 const FIT_SLACK = 8;
+/**
+ * Ce qui reste de cette marge pour garder le nombre de stocks et de besoins déjà montré : sans elle, quand la place était
+ * juste, un rien (l'heure, l'objectif, un chiffre) faisait passer la barre de quatre stocks à trois et ses flèches, puis
+ * revenir, image après image (vidéo de l'auteur, 24 nov. 2026)
+ */
+const FIT_KEEP = 6;
 /** durée de la pastille dorée d'un objectif atteint */
 const GOAL_WIN_MS = 5000;
 /**
@@ -1684,6 +1691,8 @@ export class UI {
       const locked = to.reqMission && !h.world.missionDone(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
       const first = !locked && !h.world.sandbox && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
       if (first) return `<button disabled title="${attr(tr('Il faut d’abord « {name} » au village', { name: first }))}">${ic('upgrade', 16, 2)} ${name} <small>${pic('🔒', 12)} ${tr('{name} d’abord', { name: first })}</small></button>`;
+      // (pas la place de grandir autour : le bouton le dit, et la flèche au-dessus du bâtiment ne se montre pas)
+      if (!locked && !h.world.upgradeRoom(b.id, u.to)) return `<button disabled title="${attr(tr('Il faut {n} × {n} cases libres autour du bâtiment pour l’améliorer', { n: to.size }))}">${ic('upgrade', 16, 2)} ${name} <small>${pic('🔒', 12)} ${tr('pas la place autour')}</small></button>`;
       return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: tr(locked) }))}">${ic('upgrade', 16, 2)} ${name} <small>${pic('🔒', 12)} ${tr(locked)}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} ${tr('Améliorer : {name}', { name })}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${canPay(h.world, c) ? costLabel(c) : shortLabel(h.world, c)}</small>` : ''}</button>`;
     }).join('');
@@ -1935,6 +1944,10 @@ export class UI {
    * (deux de chaque au moins) ; plus étroit, ils passent à la ligne comme avant (demande de l'auteur, 20 nov. 2026)
    */
   private fitKey = '';
+  /** le nombre de stocks et de besoins montrés au dernier calcul (gardé tant qu'il tient, à `FIT_KEEP` près) */
+  private fitPrev: [number, number] | null = null;
+  /** l'objectif était resserré au dernier calcul (`compact`, `mini`) */
+  private fitPrevBox: '' | 'compact' | 'mini' = '';
   private fitHud() {
     const one = innerWidth >= ONE_LINE_MIN, rv = $('#resView'), nv = $('#needView'), box = $('#goalBox');
     const nRes = rv.querySelectorAll('.res').length, nNeed = nv.querySelectorAll('.need').length;
@@ -1974,23 +1987,27 @@ export class UI {
       return w;
     };
     const chromeR = chrome(rp, rv), chromeN = lite ? nb.offsetWidth : chrome(nb, nv), nN = lite ? 0 : nNeed;
-    const fitIn = (goalW: number) => {
-      const free = hud.clientWidth - $('#hudL').offsetWidth - $('#hudR').offsetWidth - 3 * gap - (goalW ? goalW + gap : 0) - chromeR - chromeN - FIT_SLACK;
+    const fitIn = (goalW: number, extra = 0) => {
+      const free = hud.clientWidth - $('#hudL').offsetWidth - $('#hudR').offsetWidth - 3 * gap - (goalW ? goalW + gap : 0) - chromeR - chromeN - FIT_SLACK - extra;
       const cost = (r: number, n: number) => span(resWs, r) + span(needWs, n) + (r < nRes ? navW : 0) + (n < nN ? navW : 0);
+      // (ce qui était déjà montré se garde avec un peu de la marge : la barre ne bat plus entre deux tailles)
+      const prev = this.fitPrev, fits = (r: number, n: number) => cost(r, n) <= free + (prev && r <= prev[0] && n <= prev[1] ? FIT_KEEP : 0);
       let r = Math.min(2, nRes), n = Math.min(2, nN);
-      if (cost(r, n) > free) return null;
+      if (!fits(r, n)) return null;
       // une ressource, puis un besoin, tant qu'il reste de la place
       for (let grew = true; grew;) {
         grew = false;
-        if (r < nRes && cost(r + 1, n) <= free) { r++; grew = true; }
-        if (n < nN && cost(r, n + 1) <= free) { n++; grew = true; }
+        if (r < nRes && fits(r + 1, n)) { r++; grew = true; }
+        if (n < nN && fits(r, n + 1)) { n++; grew = true; }
       }
       return [r, n];
     };
-    let fit = fitIn(box.hidden ? 0 : box.offsetWidth);
+    // (l'objectif ne regrandit que s'il reste `FIT_KEEP` de marge de plus : sinon il battait entre deux tailles, lui aussi)
+    const was = this.fitPrevBox;
+    let fit = fitIn(box.hidden ? 0 : box.offsetWidth, was ? FIT_KEEP : 0);
     // pas la place : l'objectif se resserre (sans sa jauge, puis sans sa récompense), puis les fenêtres ne gardent qu'un besoin,
     // et enfin qu'une ressource
-    if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth); }
+    if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth, was === 'mini' ? FIT_KEEP : 0); }
     if (!fit && !box.hidden) { box.classList.add('mini'); fit = fitIn(box.offsetWidth); }
     let [r, n] = fit ?? [Math.min(2, nRes), Math.min(1, nN)];
     const apply = () => {
@@ -2014,6 +2031,8 @@ export class UI {
       else break;
       apply();
     }
+    this.fitPrev = [r, n];
+    this.fitPrevBox = box.classList.contains('mini') ? 'mini' : box.classList.contains('compact') ? 'compact' : '';
     rv.scrollLeft = keep[0]; nv.scrollLeft = keep[1];
     this.syncResNav(); this.syncNeedNav();
   }
@@ -2695,9 +2714,29 @@ export class UI {
       <div class="crow total"><span>${tr(housing ? 'Places' : 'Disponible')}</span><em>${num(d.cap)}</em></div>
       <div class="crow total"><span>${housing ? tr('Habitants') : tr('Nécessaire ({p} habitants)', { p })}</span><em>${num(housing ? p : d.demand)}</em></div>
       <p class="hint ${state}">${tip}</p>
-      ${d.per > 0 && (!d.ok || housing) ? `<button class="primary" data-kind="${d.kind}" title="${where}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>` : ''}`;
+      ${d.per > 0 && (!d.ok || housing) ? `<button class="primary" data-kind="${d.kind}" title="${where}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>` : ''}
+      ${k === 'health' ? this.cemeteryHtml() : ''}`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
+  }
+
+  /**
+   * La partie Cimetière de la fiche Santé : le cimetière du village (ou aucun), les décès des derniers jours et ceux restés
+   * sans sépulture, ce qu'un défunt sans cimetière coûte, et le bouton pour en bâtir un
+   */
+  private cemeteryHtml(): string {
+    const { sim, world } = this.host, has = hasCemetery(world), name = sim.nameOf('cemetery');
+    const r = recentDeaths(world, this.host.time.dayLen);
+    const note = r.n ? (r.unburied ? tr('dont {n} sans sépulture', { n: r.unburied }) : tr('tous reposent au cimetière')) : tr('aucun pour l’instant');
+    const rule = has ? tr('Les défunts y reposent, menés par un petit cortège. Le village n’en porte pas le deuil.')
+      : tr('Sans cimetière, chaque défunt reste sans sépulture et coûte {j} de bien-être et {h} de soins, jusqu’à ce qu’un cimetière l’accueille.', { j: MOURN.n, h: UNBURIED_HEALTH });
+    const left = world.unburied;
+    return `
+      <h5>${ic('stele', 16, 2)} ${tr('Cimetière')}<em class="${has ? 'ok' : left ? 'warn' : 'full'}">${has ? name : tr('aucun')}</em></h5>
+      <div class="crow"><span>${tr('Décès ces {n} derniers jours', { n: DEATH_LOG_DAYS })}<small>${note}</small></span><em>${r.n}</em></div>
+      ${left ? `<div class="crow"><span>${tr('Défunts sans sépulture')}<small>${tr('bien-être −{j}, soins −{h}', { j: left * MOURN.n, h: left * UNBURIED_HEALTH })}</small></span><em class="neg">${left}</em></div>` : ''}
+      <p class="hint ${has ? 'ok' : left ? 'warn' : ''}">${rule} ${tr('Des anciens s’éteignent aussi de vieillesse, dès {n} habitants.', { n: NATURAL.minPop })}</p>
+      ${has ? '' : `<button data-kind="cemetery" title="${sim.whereOf('cemetery')}">${ic('hammer', 14, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}`;
   }
 
   /** Fiche du besoin Sécurité : couverture des pompiers et de la police, rayons, conseils, et le bouton de surbrillance sur la carte */
@@ -2705,7 +2744,7 @@ export class UI {
     const { sim, world } = this.host, c = sim.coverage, pc = (v: number) => pctText(Math.round(v * 100));
     const all = [...world.buildings.values()], on = this.host.tools.coverage.active;
     const state = c.share >= 0.8 ? 'ok' : c.share >= 0.4 ? 'full' : 'warn';
-    const tips = coverageTips(c, all);
+    const tips = coverageTips(c, all, sim.age);
     const row = (icon: string, label: string, v: string, note = '') => `<div class="crow"><b>${ic(icon, 16, 2)}</b><span>${tr(label)}${note ? `<small>${note}</small>` : ''}</span><em>${v}</em></div>`;
     const html = `
       <h4>${ic(SECURITY_NEED.icon, 18, 2)} ${tr(SECURITY_NEED.label)}<em class="${state}">${pc(c.share)}</em></h4>

@@ -20,7 +20,7 @@ export const GARRISON_NEED = 3;
 /** La base arrière de la guerre, dans la concession alliée */
 export const BACK_KINDS: KindId[] = ['allyBarracks', 'allyShipyard', 'allyHospital'];
 /** La concession de la paix, chez l'allié */
-export const PEACE_KINDS: KindId[] = ['merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter'];
+export const PEACE_KINDS: KindId[] = ['merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter', 'gamesSite'];
 /** Les maisons communes de la paix (à l'Industriel, deux des trois font le chapitre) */
 export const COMMON_KINDS: KindId[] = ['exchangeHall', 'commonSchool', 'dispensary'];
 export const COMMONS_NEED = 2;
@@ -63,6 +63,8 @@ export function zoneLock(w: Pick<World, 'isles' | 'diplo' | 'buildings'>, k: Kin
     if (k === 'fort' && !w.diplo.camp.held.includes('port') && w.diplo.conflict !== 'won') return tr('Le fort se bâtit une fois le port de l’île rivale pris');
     if (GARRISON_KINDS.includes(k) && ![...w.buildings.values()].some((b) => b.kind === 'fort')) return tr('La ville de garnison grandit autour du fort : bâtissez d’abord le fort de la tête de pont');
   }
+  // (le site des Jeux des îles : une fois la candidature acceptée, ou les Jeux déjà tenus)
+  if (k === 'gamesSite' && !w.diplo.games.bid && w.diplo.conflict === 'open') return tr('Le site des Jeux se bâtit une fois la candidature des îles acceptée');
   return null;
 }
 
@@ -127,6 +129,8 @@ export const commonsCount = (c: Counts) => COMMON_KINDS.filter((k) => has(c, k))
  * campagne ; tout à faux sans ces bâtiments)
  */
 export interface FrontPerks {
+  /** l'héliport militaire : l'appui aérien de la bataille des deux îles */
+  heliport?: boolean;
   /** l'infirmerie de campagne : les pertes se refont deux fois plus vite */
   infirmary: boolean;
   /** le fort : le camp a deux fois plus de vie dans la défense */
@@ -158,7 +162,7 @@ export function frontPerks(w: W, c: Counts): FrontPerks {
   if (!archipelagoOn(w) || !warPath(w)) return NO_PERKS;
   return {
     infirmary: has(c, 'frontInfirmary'), fort: has(c, 'fort'), tower: has(c, 'frontTower'), forge: has(c, 'frontForge'),
-    garrison: garrisonBuilt(c), radar: has(c, 'radar'), battery: has(c, 'battery'),
+    garrison: garrisonBuilt(c), radar: has(c, 'radar'), battery: has(c, 'battery'), heliport: has(c, 'milHeliport'),
     allies: has(c, 'allyBarracks') ? ALLY_BARRACKS_MEN : 0, ships: has(c, 'allyShipyard') ? 1 : 0, hospital: has(c, 'allyHospital'),
   };
 }

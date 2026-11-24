@@ -8,7 +8,7 @@ import { KIND_ICON, ic } from '../src/ui/icons';
 import { getModel } from '../src/render/models';
 import { costOf } from '../src/sim/economy';
 import { Funeral } from '../src/render/funeral';
-import { applyMourning, grief, hasCemetery, sickNews, sickToll, MOURN } from '../src/sim/mishaps';
+import { applyMourning, buryAll, grief, hasCemetery, sickNews, sickToll, MOURN, unburied, UNBURIED_HEALTH, naturalRate, naturalNews, NATURAL, logDeath, recentDeaths, DEATH_LOG_DAYS } from '../src/sim/mishaps';
 import { setLang, i18nEntries } from '../src/i18n';
 import '../src/i18n/en';
 
@@ -78,7 +78,7 @@ describe('le cimetière', () => {
     expect(en.get(KINDS.cemetery.desc)).toBeTruthy();
     expect(en.get(KINDS.cemetery.perk!)).toBeTruthy();
     expect(en.get(KIND_LABEL.cemetery)).toBe('cemeteries');
-    expect(en.get('Deuil (aucun cimetière)')).toBeTruthy();
+    expect(en.get('Défunts sans sépulture (aucun cimetière)')).toBeTruthy();
   });
 
   it('a un modèle distinct et détaillé à chaque âge, qui tient dans sa parcelle ; des lumières au futur', () => {
@@ -110,7 +110,7 @@ describe('un décès, avec ou sans cimetière', () => {
     for (const r of [0, 0.1, 0.99]) expect(sickToll(w, () => r).dies).toBe(false);
   });
 
-  it('sans cimetière, le deuil coûte un peu de bien-être deux jours ; la fiche le dit ; la sauvegarde le garde', () => {
+  it('sans cimetière, un défunt coûte 2 de bien-être tant qu’aucun cimetière ne l’accueille ; la fiche le dit ; la sauvegarde le garde', () => {
     const w = continent();
     w.difficulty = 'normal';
     const [x, z] = spot(w, 'temple', 30, 30);
@@ -121,40 +121,114 @@ describe('un décès, avec ou sans cimetière', () => {
     sim.update(0.1);
     const full = sim.joy.cap;
     expect(hasCemetery(w)).toBe(false);
-    applyMourning(w, 100);
-    expect(grief(w)).toBe(MOURN.n);
+    applyMourning(w);
+    applyMourning(w);
+    expect(grief(w)).toBe(2 * MOURN.n);
     sim.update(0.1);
-    expect(sim.joy.cap).toBeCloseTo(full - MOURN.n, 5);
-    expect(sim.needDetail('joy').rows.some((r) => r.v === -MOURN.n)).toBe(true);
-    // mesuré : un deuil pèse moins qu'un lieu de culte n'apporte
-    expect(MOURN.n).toBeLessThan(KINDS.temple.joy![3] / 4);
+    expect(sim.joy.cap).toBeCloseTo(full - 2 * MOURN.n, 5);
+    expect(sim.needDetail('joy').rows.some((r) => r.v === -2 * MOURN.n && r.n === 2)).toBe(true);
+    // pas de fin de délai : dix jours plus tard, rien n'a changé
+    for (let i = 0; i < 1000; i++) sim.update(1);
+    expect(grief(w)).toBe(2 * MOURN.n);
     // relu d'une sauvegarde
     const back = new World();
     back.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
-    expect(grief(back)).toBe(MOURN.n);
-    // deux jours plus tard, le deuil est passé
-    for (let i = 0; i < MOURN.days * 100 + 10; i++) sim.update(1);
-    expect(grief(w)).toBe(0);
-    expect(w.mourning).toEqual([]);
-    expect(sim.joy.cap).toBeCloseTo(full, 5);
-    // une ancienne sauvegarde n'a pas de deuil
+    expect(back.unburied).toBe(2);
+    // une ancienne sauvegarde : ses deuils à durée encore en cours deviennent des défunts sans sépulture
     const old = JSON.parse(JSON.stringify(w.toJSON()));
-    delete old.mourning;
+    delete old.unburied;
+    old.mourning = [{ n: 2, until: w.exp.clock + 50 }, { n: 2, until: w.exp.clock - 5 }];
     const legacy = new World();
     legacy.fromJSON(old);
-    expect(legacy.mourning).toEqual([]);
+    expect(legacy.unburied).toBe(1);
+    delete old.mourning;
+    const older = new World();
+    older.fromJSON(old);
+    expect(older.unburied).toBe(0);
+    // un cimetière bâti : ils y reposent tous, le coût s'efface, et on le dit
+    const [cx, cz] = spot(w, 'cemetery', 60, 60);
+    w.place('cemetery', cx, cz, 0, true, 3, false);
+    sim.recalc();
+    sim.update(0.1);
+    expect(w.unburied).toBe(0);
+    expect(grief(w)).toBe(0);
+    expect(sim.news.some((m) => /reposent enfin au cimetière/.test(m))).toBe(true);
+    expect(buryAll(w)).toBeNull();
   });
 
   it('le message dit ce qui aurait évité le décès, puis que le défunt repose au cimetière, ou le deuil', () => {
     const t = { n: 3, days: 2, dies: true };
     expect(sickNews(t, true, true)).toMatch(/pas survécu.*hôpital.*cimetière.*repose/);
-    expect(sickNews(t, true, false)).toMatch(/pas survécu.*hôpital.*Faute de cimetière.*2 jours.*bien-être −2/);
+    expect(sickNews(t, true, false)).toMatch(/pas survécu.*hôpital.*Faute de cimetière.*sans sépulture.*bien-être −2 et soins −1 tant que/);
     for (const m of [sickNews(t, true, true), sickNews(t, true, false)]) expect(m).not.toContain(';');
     const en = i18nEntries();
     setLang('en', false);
     expect(sickNews(t, true, true)).toMatch(/cemetery/);
-    expect(sickNews(t, true, false)).toMatch(/no cemetery.*2 days/);
+    expect(sickNews(t, true, false)).toMatch(/no cemetery.*unburied.*until/);
     expect(en.size).toBeGreaterThan(0);
+  });
+});
+
+describe('les morts dans la fiche Santé, et les morts naturelles', () => {
+  it('un défunt sans sépulture pèse aussi sur les soins, la fiche Santé le dit', () => {
+    const w = continent();
+    w.difficulty = 'normal';
+    const [x, z] = spot(w, 'health', 30, 30);
+    w.place('health', x, z, 0, true, 3, false);
+    const sim = new Sim(w);
+    sim.age = 3;
+    sim.recalc();
+    sim.update(0.1);
+    const full = sim.health.cap;
+    expect(full).toBeGreaterThan(0);
+    applyMourning(w);
+    expect(unburied(w)).toBe(UNBURIED_HEALTH);
+    sim.update(0.1);
+    expect(sim.health.cap).toBeCloseTo(full - UNBURIED_HEALTH, 5);
+    expect(sim.needDetail('health').rows.some((r) => r.v === -UNBURIED_HEALTH && /sépulture/.test(r.label))).toBe(true);
+    for (let i = 0; i < 500; i++) sim.update(1);
+    expect(unburied(w)).toBe(UNBURIED_HEALTH);
+  });
+
+  it('les anciens s’éteignent de vieillesse : jamais au bac à sable ni dans un petit village, moitié moins en Facile', () => {
+    const w = continent();
+    w.difficulty = 'normal';
+    expect(naturalRate(w, NATURAL.minPop - 1)).toBe(0);
+    expect(naturalRate(w, 50)).toBeCloseTo(0.5, 5);
+    expect(naturalRate(w, 1000)).toBe(NATURAL.max);
+    w.difficulty = 'easy';
+    expect(naturalRate(w, 50)).toBeCloseTo(0.25, 5);
+    w.difficulty = 'sandbox';
+    expect(naturalRate(w, 50)).toBe(0);
+  });
+
+  it('le registre des décès : les derniers jours seulement, ceux sans sépulture à part, gardé par la sauvegarde', () => {
+    const w = continent();
+    logDeath(w, true, 100);
+    logDeath(w, false, 100);
+    expect(recentDeaths(w, 100)).toEqual({ n: 2, unburied: 1 });
+    const back = new World();
+    back.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(recentDeaths(back, 100)).toEqual({ n: 2, unburied: 1 });
+    w.exp.clock += DEATH_LOG_DAYS * 100 + 1;
+    expect(recentDeaths(w, 100)).toEqual({ n: 0, unburied: 0 });
+    logDeath(w, true, 100);
+    expect(w.deaths.length).toBe(1);
+    // une ancienne sauvegarde n'a pas de registre
+    const old = JSON.parse(JSON.stringify(w.toJSON()));
+    delete old.deaths;
+    const legacy = new World();
+    legacy.fromJSON(old);
+    expect(legacy.deaths).toEqual([]);
+  });
+
+  it('le message d’un ancien qui s’éteint, en français et en anglais', () => {
+    expect(naturalNews(true)).toMatch(/vieillesse.*cimetière.*repose/);
+    expect(naturalNews(false)).toMatch(/vieillesse.*Faute de cimetière.*bien-être −2 et soins −1 tant que/);
+    for (const m of [naturalNews(true), naturalNews(false)]) expect(m).not.toContain(';');
+    setLang('en', false);
+    expect(naturalNews(true)).toMatch(/old age.*cemetery/);
+    expect(naturalNews(false)).toMatch(/no cemetery.*care −1 until/);
   });
 });
 

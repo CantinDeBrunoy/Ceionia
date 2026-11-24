@@ -6,6 +6,18 @@ import type { Road } from '../sim/diploRoad';
 import type { KindId } from '../build/catalog';
 import { PAY_GOLD, type NavalChoice, type NavalKind, type NavalOption } from '../sim/navalBattle';
 import { MIN_FLEET } from '../sim/fleet';
+import type { Scheme, Tactic3 } from '../sim/rivalBattle';
+import { DELIVERIES, DELIVERY_COST, SURPRISE_CHOICES, TRIALS, type GamesStage, type SurpriseId, type TrialId, type TrialPick, type GamesEnd } from '../sim/islandGames';
+import type { Victors } from '../sim/diplomacy';
+
+/** Ce que la carte du plan de la bataille des deux îles montre : notre flotte, l'héliport, la batterie */
+export interface EpicInfo { ships: number; air: boolean; battery: boolean }
+/** Ce que la carte des Jeux des îles montre, à l'étape du moment */
+export interface GamesView {
+  stage: GamesStage; site: boolean; delivered: number; deliverWhy: string | null;
+  welcome: number; share: number; hosting: boolean; pending: SurpriseId | null;
+  trial: TrialId | null; chances: Record<TrialPick, number>; medals: number; ceremony: boolean; gold: number;
+}
 
 /**
  * Les cartes de la diplomatie de l'archipel, dans le style de la carte du choix du portail (parchemin bordé d'or, titre en
@@ -21,19 +33,24 @@ import { MIN_FLEET } from '../sim/fleet';
  */
 export class DiploChoice {
   private el: HTMLElement;
-  private mode: 'ally' | 'path' | 'tactic' | 'battle' | 'road' | 'raid' | 'naval' = 'ally';
+  private mode: 'ally' | 'path' | 'tactic' | 'battle' | 'road' | 'raid' | 'naval' | 'epic' | 'victors' | 'games' = 'ally';
+  private epic: EpicInfo = { ships: 0, air: false, battery: false };
   /** la carte de choix de la bataille navale : le temps (1, 2, 3), la bataille, l'âge, les options */
   private nav: { step: 1 | 2 | 3; kind: NavalKind; age: number; options: NavalOption[] } | null = null;
   /** la sortie en cours : ce qui serait reperdu si le camp tombait */
   private stake = '';
   /** le choix tactique en cours de la bataille (1 : les remparts ; 2 : l'assaut final) */
-  private step: 1 | 2 = 1;
+  private step: 1 | 2 | 3 = 1;
 
   constructor(root: HTMLElement, private host: { diplo(): DiploState; why?(): string | null; click(): void; ally(p: People): void; path(p: Path): void; tactic?(c: string): void; battle?(): void; road?(): Road | null; mission?(id: string): void; hold?(): void; build?(k: KindId): void; sign?(): void;
     /** la bataille navale du moment (le bras de mer, le blocus, l'escorte), un choix tactique pendant, le chantier naval pour armer des navires */
     naval?(): void; navalTactic?(c: NavalChoice): void; fleet?(): void;
     /** la flotte : navires à flot (pour la carte des éclaireurs revenus) ; la bataille navale attend-elle avant le débarquement ? */
-    afloat?(): number; seaFirst?(): boolean }) {
+    afloat?(): number; seaFirst?(): boolean;
+    /** la bataille des deux îles : le plan choisi ; la paix des vainqueurs */
+    epicPlan?(s: Scheme): void; victors?(v: Victors): void;
+    /** les Jeux des îles : ce qu'on montre, et un geste (livrer, ouvrir, une surprise, une épreuve, la cérémonie, la fin) */
+    games?(): GamesView | null; gamesAct?(a: string, id?: string): void }) {
     this.el = document.createElement('div');
     this.el.id = 'diploChoice';
     this.el.className = 'panel';
@@ -45,6 +62,9 @@ export class DiploChoice {
       const a = b.dataset.a!;
       this.hide();
       if (b.dataset.nav) this.host.navalTactic?.(b.dataset.nav as NavalChoice);
+      else if (a === 'plan' && b.dataset.id) this.host.epicPlan?.(b.dataset.id as Scheme);
+      else if (a === 'victors' && b.dataset.id) this.host.victors?.(b.dataset.id as Victors);
+      else if (a.startsWith('g:')) this.host.gamesAct?.(a.slice(2), b.dataset.id);
       else if (b.dataset.tac) this.host.tactic?.(b.dataset.tac);
       else if (a === 'naval') this.host.naval?.();
       else if (a === 'fleet') this.host.fleet?.();
@@ -84,7 +104,13 @@ export class DiploChoice {
   /** Un choix tactique de la bataille navale (le jeu est en pause tant qu'il attend) */
   showNaval(step: 1 | 2 | 3, kind: NavalKind, age: number, options: NavalOption[]) { this.mode = 'naval'; this.nav = { step, kind, age, options }; this.render(); this.el.style.display = ''; }
   /** Un choix tactique de la bataille de l'archipel (le jeu est en pause tant qu'il attend) */
-  showTactic(step: 1 | 2) { this.mode = 'tactic'; this.step = step; this.render(); this.el.style.display = ''; }
+  showTactic(step: 1 | 2 | 3, info?: EpicInfo) { this.mode = 'tactic'; this.step = step; if (info) this.epic = info; this.render(); this.el.style.display = ''; }
+  /** La bataille des deux îles : le plan, avant tout (la mer vient ensuite) */
+  showEpicPlan(info: EpicInfo) { this.mode = 'epic'; this.epic = info; this.render(); this.el.style.display = ''; }
+  /** La guerre gagnée : « La paix des vainqueurs », reconstruire leur ville ou le tribut */
+  showVictors() { this.mode = 'victors'; this.render(); this.el.style.display = ''; }
+  /** Les Jeux des îles : la carte de l'étape du moment (rien à montrer : rien ne s'ouvre) */
+  showGames() { if (!this.host.games?.()) return false; this.mode = 'games'; this.render(); this.el.style.display = ''; return true; }
 
   private render() {
     const d = this.host.diplo();
@@ -99,6 +125,17 @@ export class DiploChoice {
         <p class="pcSub">${tr('Les Sablais et les Jadéens se font la guerre. Avec lequel de ces peuples ferez-vous alliance ?')}</p>
         <div class="pcBtns dcCol">${card('orient')}${card('asie')}</div>
         <small class="pcNote">${tr('Ce choix est définitif. Votre allié accueillera votre cosmodrome.')}</small>`;
+      return;
+    }
+    if (this.mode === 'epic' || this.mode === 'victors' || this.mode === 'games') {
+      const ally = d.ally ?? 'orient';
+      if (this.mode === 'epic') this.el.innerHTML = epicHtml(ally, this.epic);
+      else if (this.mode === 'victors') this.el.innerHTML = victorsHtml(ally);
+      else { const g = this.host.games?.(); if (g) this.el.innerHTML = gamesHtml(ally, g); }
+      return;
+    }
+    if (this.mode === 'tactic' && this.step === 3) {
+      this.el.innerHTML = rampartsHtml(d.ally ?? 'orient', this.epic);
       return;
     }
     if (this.mode === 'tactic') {
@@ -178,6 +215,7 @@ export function roadHtml(r: Road) {
     if (s.go === 'fleet') return `<button data-a="fleet" class="dcStep now pcGo">${body}</button>`;
     if (s.go === 'build') return `<button data-a="build" data-k="${s.kind}" class="dcStep now pcGo">${body}</button>`;
     if (s.go === 'sign') return `<button data-a="sign" class="dcStep now pcGo">${body}</button>`;
+    if (s.go === 'games') return `<button data-a="g:open" class="dcStep now pcGo">${body}</button>`;
     return `<button data-a="mission" data-id="${s.id}" class="dcStep now pcGo">${body}</button>`;
   };
   // les chapitres : celui de l'étape du moment est déplié (ses étapes), les autres tiennent sur une ligne (une arrivée tardive
@@ -189,7 +227,7 @@ export function roadHtml(r: Road) {
     if (!open) return head;
     return head + `<div class="dcSteps">${r.steps.filter((s) => s.age === c.age).map(step).join('')}</div>`;
   };
-  const prep = r.prep.map((p) => `<button data-a="mission" data-id="${p.id}" class="dcPrepIt${p.done ? ' done' : ''}"${p.done ? ' disabled' : ''}><em aria-hidden="true">${p.done ? '✓' : p.icon}</em><span><b>${p.title}</b><small>${p.running ? tr('en route') : p.gain}</small></span></button>`).join('');
+  const prep = r.prep.map((p) => `<button data-a="mission" data-id="${p.id}" class="dcPrepIt${p.done ? ' done' : ''}"${p.done ? ' disabled' : ''}><em aria-hidden="true">${p.done ? '✓' : p.icon}</em><span><b>${p.title}</b><small>${p.running ? tr('expédition en route') : tr('Expédition · {gain}', { gain: p.gain })}</small></span></button>`).join('');
   return `<div class="dcCrests">${crest(r.ally, 56)}<span class="dcVs">${war ? '⚔' : '🕊'}</span>${crest(r.rival, 56)}</div>
     <h4>${war ? tr('La voie de la guerre') : tr('La voie de la paix')}</h4>
     <p class="pcSub">${war ? tr('Avec {ally}, contre {rival}.', { ally: peopleName(r.ally), rival: peopleName(r.rival) }) : tr('Réconcilier {ally} et {rival}.', { ally: peopleName(r.ally), rival: peopleName(r.rival) })}</p>
@@ -197,7 +235,7 @@ export function roadHtml(r: Road) {
     <h5 class="dcH">${tr('La suite')}</h5>
     ${r.chapters.map(chapter).join('')}
     ${r.notes.length ? `<p class="dcNotes">${r.notes.join('<br>')}</p>` : ''}
-    ${prep ? `<h5 class="dcH">${tr('Pour se préparer')} <small>${tr('facultatif')}</small></h5><div class="dcPrep">${prep}</div>` : ''}
+    ${prep ? `<h5 class="dcH">${tr('Pour se préparer')} <small>${tr('des expéditions facultatives sur les îles')}</small></h5><div class="dcPrep">${prep}</div>` : ''}
     <div class="dcFoot">${r.canChange ? `<button data-a="change" class="dcLink">${tr('Changer de voie')}</button>` : ''}<button data-a="later" class="dcLink">${tr('Fermer')}</button></div>
     <small class="pcNote">${tr('Pour revoir cette fenêtre : le bouton des Peuples, en haut.')}</small>`;
 }
@@ -273,7 +311,7 @@ function navalHtml(n: { step: 1 | 2 | 3; kind: NavalKind; age: number; options: 
   const esc = n.kind === 'convoy', rival = rivalOf(ally);
   const head = n.step === 1 ? tr('L’approche') : n.step === 2 ? (esc ? tr('Les pirates attaquent') : tr('L’engagement')) : tr('La flotte rivale rompt');
   const sub = n.step === 1
-    ? esc ? tr('Le convoi lève l’ancre. Des voiles noires rôdent au large. Comment l’escorter ?') : n.kind === 'blockade' ? tr('L’escadre du port de {isle} sort à notre rencontre. Dans quel ordre l’aborder ?', { isle: isleName(rival) }) : tr('{rival} sortent leur flotte à notre rencontre. Dans quel ordre l’aborder ?', { rival: cap(peopleName(rival)) })
+    ? esc ? tr('Le convoi lève l’ancre. Des voiles noires rôdent au large. Comment l’escorter ?') : n.kind === 'blockade' ? tr('L’escadre du port de {isle} sort à notre rencontre. Dans quel ordre l’aborder ?', { isle: isleName(rival) }) : n.kind === 'isles' ? tr('Leurs vedettes et leurs batteries côtières gardent {isle}. Dans quel ordre les aborder ?', { isle: isleName(rival) }) : tr('{rival} sortent leur flotte à notre rencontre. Dans quel ordre l’aborder ?', { rival: cap(peopleName(rival)) })
     : n.step === 2 ? esc ? tr('Les pirates fondent sur le convoi. Que faire ?') : tr('Les deux lignes sont à portée de canon. Comment combattre ?')
       : tr('Leurs navires tournent la poupe. Les poursuivre, ou rentrer ?');
   const opts = n.options.map((o, i) => {
@@ -286,4 +324,130 @@ function navalHtml(n: { step: 1 | 2 | 3; kind: NavalKind; age: number; options: 
     <p class="pcSub">${sub.replace(/ ([?!:])/g, '\u00a0$1')}</p>
     <div class="pcBtns dcCol">${opts}</div>
     <small class="pcNote">${tr('La bataille attend votre choix.')}</small>`;
+}
+
+// ---------- Le Moderne : la bataille des deux îles et les Jeux des îles (chantier D) ----------
+
+const btn = (a: string, cls: string, icon: string, title: string, sub: string, id?: string, off = false) =>
+  `<button data-a="${a}"${id ? ` data-id="${id}"` : ''} class="${cls}"${off ? ' disabled' : ''}>${icon}<span><b>${title}</b><small>${sub}</small></span></button>`;
+const nb = (t: string) => t.replace(/ ([?!:])/g, ' $1');
+
+/** La carte du plan de la bataille des deux îles : débarquer en force, le siège, le coup de main ; puis la mer */
+function epicHtml(ally: People, e: EpicInfo) {
+  const rival = rivalOf(ally);
+  const sea = e.ships >= MIN_FLEET ? tr('Ensuite la mer : nos {n} navires de guerre contre leurs vedettes et leurs batteries côtières.', { n: e.ships })
+    : tr('Sans flotte ({n} navires sur {m}), la mer est à eux : leurs batteries côtières tireront sur nos troupes.', { n: e.ships, m: MIN_FLEET });
+  return `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rival, 64)}</div>
+    <h4>${tr('La bataille des deux îles')}</h4>
+    <p class="pcSub">${nb(tr('Le fort et la ville de garnison sont prêts. Il est temps de prendre {isle}. Quel plan ?', { isle: isleName(rival) }))}</p>
+    <div class="pcBtns dcCol">
+      ${btn('plan', 'pcGo', hudPic('militaire', 34), tr('Débarquer en force'), tr('deux plages : {ally} prennent le passage à revers', { ally: peopleName(ally) }), 'force')}
+      ${btn('plan', 'pcNo', pic('💥', 34), tr('Le siège'), tr('bombarder d’abord : plus long, moins de pertes'), 'siege')}
+      ${btn('plan', 'pcNo', hudPic('longue-vue', 34), tr('Le coup de main'), tr('de nuit, par le col : moins d’hommes, mais la porte surprise'), 'raid')}
+      ${btn('later', 'pcNo dcLater', hudPic('sablier', 34), tr('Plus tard'), tr('préparer encore la tête de pont : la bataille attendra'))}
+    </div>
+    <small class="pcNote">${sea}</small>`;
+}
+
+/** Le choix des remparts : l'appui aérien (l'héliport), la batterie qui pilonne (la batterie côtière), le bélier blindé */
+function rampartsHtml(ally: People, e: EpicInfo) {
+  const opt = (id: Tactic3, icon: string, title: string, sub: string, why: string | null, first: boolean) =>
+    `<button data-a="tac" data-tac="${id}" class="${first ? 'pcGo' : 'pcNo'}"${why ? ' disabled' : ''}>${icon}<span><b>${title}</b><small>${why ? `🔒 ${why}` : sub}</small></span></button>`;
+  const airWhy = e.air ? null : tr('il faut l’héliport militaire de la tête de pont'), batWhy = e.battery ? null : tr('il faut la batterie côtière de la tête de pont');
+  const first = !airWhy ? 'air' : !batWhy ? 'pound' : 'armor';
+  return `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">⚔</span>${crest(rivalOf(ally), 64)}</div>
+    <h4>${tr('Les remparts')}</h4>
+    <p class="pcSub">${nb(tr('Le passage est à nous. La porte est fermée et les casemates tirent. Comment prendre les remparts ?'))}</p>
+    <div class="pcBtns dcCol">
+      ${opt('air', hudPic('eclair', 34), tr('Appui aérien'), tr('nos avions bombardent les casemates, puis les défenseurs'), airWhy, first === 'air')}
+      ${opt('pound', pic('💥', 34), tr('La batterie pilonne'), tr('30 secondes d’obus sur les casemates, puis sur la porte'), batWhy, first === 'pound')}
+      ${opt('armor', hudPic('militaire', 34), tr('Le bélier blindé'), tr('nos blindés foncent sur la porte, qui en sort entamée'), null, first === 'armor')}
+    </div>
+    <small class="pcNote">${tr('La bataille attend votre choix.')}</small>`;
+}
+
+/** La dernière carte de la guerre : reconstruire leur ville, ou le tribut */
+function victorsHtml(ally: People) {
+  const rival = rivalOf(ally);
+  return `<div class="dcCrests">${crest(ally, 64)}<span class="dcVs">🏆</span>${crest(rival, 64)}</div>
+    <h4>${tr('La paix des vainqueurs')}</h4>
+    <p class="pcSub">${nb(tr('{rival} ont déposé les armes. Que faire de leur ville ?', { rival: cap(peopleName(rival)) }))}</p>
+    <div class="pcBtns dcCol">
+      ${btn('victors', 'pcGo', hudPic('village', 34), tr('Reconstruire leur ville'), tr('elle se relève en quelques jours et devient amicale : un peu d’or chaque jour'), 'rebuild')}
+      ${btn('victors', 'pcNo', pic('💰', 34), tr('Le tribut'), tr('deux fois plus d’or chaque jour, mais leur ville reste en ruine plus longtemps, et méfiante'), 'tribute')}
+    </div>
+    <small class="pcNote">${tr('Ce choix est définitif.')}</small>`;
+}
+
+/** Les titres des épreuves et des surprises des Jeux */
+const TRIAL_NAME: Record<TrialId, () => [string, string]> = {
+  regatta: () => [tr('La régate'), tr('dans le bras de mer, les voiliers des trois peuples. Nos navires de guerre comptent')],
+  race: () => [tr('La course'), tr('autour du stade et par les routes de la concession. Nos transports comptent')],
+  tourney: () => [tr('Le tournoi'), tr('lutte et javelot, entre les meilleurs des trois peuples. Nos soldats comptent')],
+};
+const PICK_TEXT: Record<TrialPick, () => [string, string]> = {
+  fair: () => [tr('Le jeu d’équipe'), tr('prudent et régulier')],
+  bold: () => [tr('Tout pour la victoire'), tr('plus risqué, mais la médaille d’or au bout')],
+  guest: () => [tr('Laisser gagner l’invité'), tr('pas de médaille, mais l’accueil y gagne')],
+};
+const SURPRISE_TEXT: Record<SurpriseId, () => [string, string]> = {
+  storm: () => [tr('Un orage sur le stade'), tr('Le ciel se fend au-dessus des tribunes pleines.')],
+  late: () => [tr('Un pavillon en retard'), tr('Le pavillon de nos rivaux d’hier n’est pas fini, et la foule arrive.')],
+  guest: () => [tr('Un visiteur de marque'), tr('Un grand voyageur d’au-delà des mers débarque pour les Jeux.')],
+};
+const SURPRISE_PICK: Record<string, () => [string, string]> = {
+  shelter: () => [tr('Abriter la foule'), tr('des toiles sur les tribunes')],
+  wait: () => [tr('Attendre qu’il passe'), tr('la foule se mouille')],
+  help: () => [tr('Nos ouvriers l’aident'), tr('il sera prêt à temps')],
+  open: () => [tr('Ouvrir sans lui'), tr('le pavillon suivra')],
+  receive: () => [tr('Le recevoir au palais'), tr('une fête en son honneur')],
+  crowd: () => [tr('Le laisser dans la foule'), tr('il verra les Jeux comme tout le monde')],
+};
+
+/** La carte des Jeux des îles, à l'étape du moment */
+function gamesHtml(ally: People, g: GamesView) {
+  const rival = rivalOf(ally);
+  const head = `<div class="dcCrests">${crest(ally, 56)}<span class="dcVs">🏟</span>${crest(rival, 56)}</div><h4>${tr('Les Jeux des îles')}</h4>`;
+  const bar = (v: number, label: string) => `<div class="dcGauge"><i style="width:${Math.round(Math.max(0, Math.min(1, v)) * 100)}%"></i><span>${label}</span></div>`;
+  const foot = `<div class="dcFoot"><button data-a="later" class="dcLink">${tr('Fermer')}</button></div>`;
+  if (g.stage === 'build') {
+    const c = DELIVERY_COST;
+    const go = !g.site ? btn('g:site', 'pcGo', pic('🏟️', 34), tr('Bâtir le site des Jeux'), tr('dans la concession de notre allié'))
+      : btn('g:deliver', 'pcGo', pic('🧱', 34), tr('Livrer au chantier'), g.deliverWhy ? `🔒 ${g.deliverWhy}` : tr('{b} briques, {o} minerai, {g} or', { b: c.bricks, o: c.ore, g: c.gold }), undefined, !!g.deliverWhy);
+    return `${head}<p class="pcSub">${nb(tr('La candidature est acceptée. Le chantier se livre en trois fois.'))}</p>
+      ${bar(g.delivered / DELIVERIES, tr('Chantier : {n}/{m} livraisons', { n: g.delivered, m: DELIVERIES }))}
+      <div class="pcBtns dcCol">${go}</div>${foot}`;
+  }
+  if (g.stage === 'host' && g.pending) {
+    const [t, sub] = SURPRISE_TEXT[g.pending]();
+    const opts = SURPRISE_CHOICES[g.pending].map((o, i) => {
+      const [a, b] = SURPRISE_PICK[o.id](), cost = o.gold ? tr(' · {n} or', { n: o.gold }) : '', off = (o.gold ?? 0) > g.gold;
+      return btn('g:surprise', i ? 'pcNo' : 'pcGo', pic(i ? '🙂' : '🎪', 34), a, off ? `🔒 ${tr('pas assez d’or')}` : b + cost, o.id, off);
+    }).join('');
+    return `${head}<p class="pcSub"><b>${t}</b> · ${nb(sub)}</p><div class="pcBtns dcCol">${opts}</div>`;
+  }
+  if (g.stage === 'host') {
+    if (!g.hosting) return `${head}<p class="pcSub">${nb(tr('Le stade est prêt. Les visiteurs des trois peuples n’attendent que l’ouverture.'))}</p>
+      <div class="pcBtns dcCol">${btn('g:host', 'pcGo', pic('🎪', 34), tr('Ouvrir les Jeux'), tr('un jour et demi d’accueil : logements, nourriture, transports'))}</div>${foot}`;
+    return `${head}<p class="pcSub">${nb(tr('Les visiteurs sont là. La jauge lit le village : logements, nourriture, bien-être, transports.'))}</p>
+      ${bar(g.welcome / 100, tr('Accueil : {n} sur 100', { n: g.welcome }))}${bar(g.share, tr('Le séjour : {p} %', { p: Math.round(g.share * 100) }))}${foot}`;
+  }
+  if (g.stage === 'trials' && g.trial) {
+    const [t, sub] = TRIAL_NAME[g.trial](), n = TRIALS.indexOf(g.trial) + 1;
+    const opts = (['fair', 'bold', 'guest'] as TrialPick[]).map((p, i) => {
+      const [a, b] = PICK_TEXT[p]();
+      return btn('g:trial', i ? 'pcNo' : 'pcGo', pic(p === 'guest' ? '🤝' : p === 'bold' ? '🥇' : '🏅', 34), a, p === 'guest' ? b : tr('{b} · {c} % de chances', { b, c: Math.round(g.chances[p] * 100) }), p);
+    }).join('');
+    return `${head}<p class="pcSub"><b>${tr('Épreuve {n}/{m} : {t}', { n, m: TRIALS.length, t })}</b> · ${nb(sub)}</p>
+      <div class="pcBtns dcCol">${opts}</div><small class="pcNote">${tr('Médailles : {n}', { n: g.medals })}</small>`;
+  }
+  const end: GamesEnd[] = ['treaty', 'union'];
+  if (g.stage === 'ceremony' && !g.ceremony) return `${head}<p class="pcSub">${nb(g.medals === 0 ? tr('Les épreuves sont jouées, sans médaille pour nous. Reste la cérémonie de clôture.') : g.medals === 1 ? tr('Les épreuves sont jouées : une médaille pour nous. Reste la cérémonie de clôture.') : tr('Les épreuves sont jouées : {n} médailles pour nous. Reste la cérémonie de clôture.', { n: g.medals }))}</p>
+    <div class="pcBtns dcCol">${btn('g:ceremony', 'pcGo', pic('🎆', 34), tr('La cérémonie de clôture'), tr('le défilé des trois flottes, les feux d’artifice, les trois drapeaux'))}</div>${foot}`;
+  if (g.stage === 'ceremony') return `${head}<p class="pcSub">${nb(tr('Les deux chefs se tiennent sous les trois drapeaux. Que signeront-ils ?'))}</p>
+    <div class="pcBtns dcCol">
+      ${btn('g:end', 'pcGo', hudPic('parchemin', 34), tr('Le traité des îles'), tr('le commerce libre entre les trois peuples : plus d’or chaque jour'), end[0])}
+      ${btn('g:end', 'pcNo', hudPic('equipe', 34), tr('L’union des îles'), tr('les trois peuples fraternels : les visites des îles toujours sûres, le centre de recherche commun double'), end[1])}
+    </div><small class="pcNote">${tr('Ce choix est définitif.')}</small>`;
+  return `${head}<p class="pcSub">${tr('Les Jeux des îles ont eu lieu.')}</p>${foot}`;
 }

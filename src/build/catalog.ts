@@ -26,14 +26,14 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   | 'frontTower' | 'frontInfirmary' | 'fort' | 'battery' | 'frontForge' | 'garrison' | 'milHospital' | 'soldierClub' | 'garrisonHouse' | 'milHeliport' | 'radar'
   // la base arrière de la guerre et la concession de la paix, chez l'allié
   | 'allyBarracks' | 'allyShipyard' | 'allyHospital'
-  | 'merchantPort' | 'exchangeHall' | 'commonSchool' | 'dispensary' | 'researchCenter';
+  | 'merchantPort' | 'exchangeHall' | 'commonSchool' | 'dispensary' | 'researchCenter' | 'gamesSite';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'deco' | 'war';
 
 export interface KindDef {
   id: KindId;
-  size: 1 | 2 | 3 | 4;
+  size: 1 | 2 | 3 | 4 | 6;
   minAge: number;
   /** dernier âge où on peut le bâtir : après, tant pis (ceux déjà bâtis restent) */
   maxAge?: number;
@@ -265,7 +265,7 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Le village y garde la mémoire des siens, entre les fleurs et les arbres. On y vient se recueillir.',
     // un peu de bien-être, comme un petit jardin ; son vrai rôle vient avec les décès (voir mishaps.ts)
     joy: [1, 1, 2, 2, 3, 3], jobs: [0, 0, 1, 1, 1, 2],
-    perk: 'Un habitant qui meurt y est mené par un petit cortège et y repose. Sans cimetière, chaque décès coûte un peu de bien-être pendant deux jours. Un seul suffit.',
+    perk: 'Un habitant qui meurt y est mené par un petit cortège et y repose. Sans cimetière, chaque défunt coûte un peu de bien-être et de soins, jusqu’à ce qu’un cimetière l’accueille. Les anciens finissent aussi par s’éteindre. Un seul suffit.',
   },
   mill: {
     id: 'mill', size: 2, minAge: 2, icon: '🌬️', cat: 'prod',
@@ -561,7 +561,7 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Dans la tête de pont. Les pertes du corps expéditionnaire se refont deux fois plus vite.',
   },
   fort: {
-    id: 'fort', size: 3, minAge: 3, icon: '🏰', cat: 'war',
+    id: 'fort', size: 6, minAge: 3, icon: '🏰', cat: 'war',
     names: ['', '', '', 'Fort de la tête de pont', 'Fort de la tête de pont', 'Citadelle de la tête de pont'],
     desc: 'Le camp de la plage devient un fort : une enceinte basse en étoile, ses bastions, ses casemates et notre drapeau au mât.',
     perk: 'Dans la tête de pont, une fois le port pris. Le chapitre de l’Industriel le demande. Le camp a deux fois plus de vie quand la ville rivale fait une sortie.',
@@ -667,6 +667,12 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', '', '', 'Centre de recherche commun', 'Centre de recherche commun'],
     desc: 'Les savants des trois peuples y travaillent ensemble : laboratoires, verrière et antennes.',
     perk: 'Dans la concession, sur la voie de la paix. Les expéditions sont un peu plus sûres (risque −10 %).',
+  },
+  gamesSite: {
+    id: 'gamesSite', size: 3, minAge: 4, icon: '🏟️', cat: 'service',
+    names: ['', '', '', '', 'Site des Jeux des îles', 'Site des Jeux des îles'],
+    desc: 'Le stade des trois peuples : sa piste, ses tribunes, la vasque de la flamme et les trois mâts de leurs drapeaux.',
+    perk: 'Dans la concession, sur la voie de la paix, une fois la candidature acceptée. Les Jeux des îles s’y tiennent : le chantier se livre en trois fois.',
   },
   // les bâtiments militaires : au village comme sur l'île du portail (où l'on ne bâtit qu'eux, voir `World.portalRule`)
   watchtower: {
@@ -776,7 +782,7 @@ export const DECOR_JOY_MAX = 3;
 
 export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'powerplant', 'brickworks', 'harbor', 'tradepost', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'explorers', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'racetrack', 'circus', 'zoo', 'alpine', 'temple', 'cemetery', 'acropolis', 'landmark', 'concord', 'triumph', 'embassy', 'station', 'terminal', 'maglev',
   'frontTower', 'frontInfirmary', 'fort', 'battery', 'frontForge', 'garrison', 'milHospital', 'soldierClub', 'garrisonHouse', 'milHeliport', 'radar',
-  'allyBarracks', 'allyShipyard', 'allyHospital', 'merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
+  'allyBarracks', 'allyShipyard', 'allyHospital', 'merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter', 'gamesSite', 'hedge', 'fence', 'flowerbed', 'paving', 'bench', 'statue', 'fountain', 'pond', 'coralpool'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -814,7 +820,7 @@ export const KIND_SUB: Record<KindId, string> = {
   temple: 'culte', cemetery: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments', concord: 'monuments', triumph: 'monuments', embassy: 'monuments',
   frontTower: 'front', frontInfirmary: 'front', fort: 'front', battery: 'front', frontForge: 'front', garrison: 'front', milHospital: 'front', soldierClub: 'front', garrisonHouse: 'front', milHeliport: 'front', radar: 'front',
   allyBarracks: 'arriere', allyShipyard: 'arriere', allyHospital: 'arriere',
-  merchantPort: 'concession', exchangeHall: 'concession', commonSchool: 'concession', dispensary: 'concession', researchCenter: 'concession',
+  merchantPort: 'concession', exchangeHall: 'concession', commonSchool: 'concession', dispensary: 'concession', researchCenter: 'concession', gamesSite: 'concession',
 };
 
 export interface AgeDef {
@@ -874,7 +880,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   frontTower: 'tours de guet du camp', frontInfirmary: 'infirmeries de campagne', fort: 'forts', battery: 'batteries côtières', frontForge: 'forges du front',
   garrison: 'casernes de la garnison', milHospital: 'hôpitaux militaires', soldierClub: 'foyers du soldat', garrisonHouse: 'maisons de la garnison', milHeliport: 'héliports militaires', radar: 'stations radar',
   allyBarracks: 'casernes alliées', allyShipyard: 'chantiers navals alliés', allyHospital: 'hôpitaux alliés',
-  merchantPort: 'ports marchands partagés', exchangeHall: 'halles des échanges', commonSchool: 'écoles communes', dispensary: 'dispensaires', researchCenter: 'centres de recherche communs',
+  merchantPort: 'ports marchands partagés', exchangeHall: 'halles des échanges', commonSchool: 'écoles communes', dispensary: 'dispensaires', researchCenter: 'centres de recherche communs', gamesSite: 'sites des Jeux des îles',
 };
 
 /**
@@ -927,11 +933,11 @@ export interface Building {
  * Ancienne emprise des bâtiments qui ont grandi depuis les premières parties : une case de moins, sauf la place du village,
  * passée de 1 × 1 à 3 × 3 (le forum, son amélioration, de 2 × 2 à 3 × 3 avec elle)
  */
-const OLD_SIZE: Partial<Record<KindId, number>> = { gather: 1 };
-export const smallSize = (kind: KindId) => (OLD_SIZE[kind] ?? KINDS[kind].size - 1) as 1 | 2 | 3;
+const OLD_SIZE: Partial<Record<KindId, number>> = { gather: 1, fort: 3 };
+export const smallSize = (kind: KindId) => (OLD_SIZE[kind] ?? KINDS[kind].size - 1) as 1 | 2 | 3 | 4 | 6;
 
 /** Emprise d'un bâtiment : celle de son genre, l'ancienne s'il est resté à l'ancienne taille (`small`) */
-export const sizeOf = (b: Building) => (b.small ? smallSize(b.kind) : KINDS[b.kind].size) as 1 | 2 | 3 | 4;
+export const sizeOf = (b: Building) => (b.small ? smallSize(b.kind) : KINDS[b.kind].size) as 1 | 2 | 3 | 4 | 6;
 
 /** Bâtiments sans porte ni chemin d'accès : les décorations (lampadaire compris), la place du village (qu'on rejoint de tous côtés), les remparts */
 export const hasDoor = (kind: KindId) => !isDecor(kind) && kind !== 'gather' && !isRampart(kind);

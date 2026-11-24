@@ -15,7 +15,8 @@ import { mulberry32 } from '../core/rng';
  * (graine fixe), un peu de hasard en jeu (le feu de chaque navire varie de ±15 %). Voir `docs/flotte.md`.
  */
 
-export type NavalKind = 'strait' | 'blockade' | 'convoy';
+/** `isles` : la mer de la bataille des deux îles (chantier D, au Moderne) : comme le bras de mer, contre leurs vedettes */
+export type NavalKind = 'strait' | 'blockade' | 'convoy' | 'isles';
 export type NavalSide = 'ours' | 'ally' | 'foe' | 'merchant';
 
 /** Les choix : l'approche (1), l'engagement (2), la fin (3 ; pas pour l'escorte) */

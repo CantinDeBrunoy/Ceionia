@@ -141,7 +141,8 @@ function door(f: Fr, u: number, v: number, w: number, h: number, leaf: number, f
 
 /** Soldat figé (garde-à-vous, l'arme à l'épaule ou au salut) en (u, v) du repère, face à +z une fois tourné de ry */
 function trooper(f: Fr, u: number, v: number, ry: number, coat: number, helm: number, o: { legs?: number; rifle?: boolean; salute?: boolean; band?: boolean; y?: number } = {}) {
-  const g = f.sub(u, v, ry, o.y ?? 0), legs = o.legs ?? GREY_LEGS;
+  // (le grand fort : le soldat garde sa taille, à sa place agrandie)
+  const g = BIG ? new Fr(BIG.p, f.X(u, v) * BIG.s, f.Z(u, v) * BIG.s, f.ry + ry, G + (f.y0 + (o.y ?? 0) - G) * BIG.sy) : f.sub(u, v, ry, o.y ?? 0), legs = o.legs ?? GREY_LEGS;
   g.box(0.02, 0.072, 0.024, -0.014, 0, 0.002, legs); g.box(0.02, 0.072, 0.024, 0.014, 0, 0.002, legs);
   g.box(0.056, 0.074, 0.036, 0, 0.068, 0, coat);
   g.box(0.058, 0.01, 0.038, 0, 0.078, 0, 0x3a3028);
@@ -1223,12 +1224,45 @@ function fortFuture(f: Fr, kit: FrontKit) {
   tufts(f, 10, 391, 1.45, [[-1.05, -1.05, 1.05, 1.05], [0.75, 0.75, 1.45, 1.45], [-1.45, 0.75, -0.75, 1.45], [0.75, -1.45, 1.45, -0.75], [-1.45, -1.45, -0.75, -0.75], [-0.4, 0.95, 0.4, 1.45]], false);
 }
 
-/** Le fort de la tête de pont (3 × 3), de l'âge industriel (3) au futuriste (5) */
-export function fortModel(p: Parts, age: number, kit: FrontKit) {
-  const f = new Fr(p, 0, 0);
-  if (age <= 3) fortIndustrial(f, kit);
-  else if (age === 4) fortModern(f, kit);
-  else fortFuture(f, kit);
+/**
+ * Le grand fort (6 × 6 depuis le 24 nov. 2026, demande de l'auteur) : le fort dessiné pour 3 × 3, agrandi deux fois en plan et
+ * de `FORT_UP` en hauteur ; ses soldats, ses personnages, ses drapeaux et ses fumées gardent leur taille (`BIG` détourne les
+ * soldats vers les pièces du modèle, aux places agrandies)
+ */
+const FORT_UP = 1.4;
+let BIG: { p: Parts; s: number; sy: number } | null = null;
+
+/** Le fort de la tête de pont (6 × 6 ; 3 × 3 pour un ancien fort resté à sa taille), de l'âge industriel (3) au futuriste (5) */
+export function fortModel(p: Parts, age: number, kit: FrontKit, size = 6) {
+  const draw = (f: Fr, k: FrontKit) => { if (age <= 3) fortIndustrial(f, k); else if (age === 4) fortModern(f, k); else fortFuture(f, k); };
+  if (size <= 3) { draw(new Fr(p, 0, 0), kit); return; }
+  const s = size / 3, sy = FORT_UP, q = new Parts();
+  const at = (v: V3): V3 => [v[0] * s, G + (v[1] - G) * sy, v[2] * s];
+  const big: FrontKit = {
+    ...kit,
+    sway: (pv, ax, a, fq) => kit.sway(at(pv), ax, a, fq),
+    turn: (pv, ax, sp) => kit.turn(at(pv), ax, sp),
+    smoke: (x, y, z, k) => kit.smoke(...at([x, y, z]), k),
+    figure: (_q, x, z, body, ry, sit, hair, pose, up) => kit.figure(p, x * s, z * s, body, ry, sit, hair, pose, (up ?? 0) * sy),
+  };
+  BIG = { p, s, sy };
+  try { draw(new Fr(q, 0, 0), big); } finally { BIG = null; }
+  // les pièces agrandies (les normales refaites : l'agrandissement n'est pas le même en hauteur)
+  for (const [from, to] of [[q.body, p.body], [q.glow, p.glow]] as const)
+    for (const g of from) { g.translate(0, -G, 0).scale(s, sy, s).translate(0, G, 0); g.computeVertexNormals(); to.push(g); }
+  // (seconde passe, à taille réelle) la vie de la grande cour : une section à l'exercice et son sergent, deux tentes, les
+  // caisses et les tonneaux du ravitaillement, les râteliers d'armes
+  const f = new Fr(p, 0, 0), coat = team(TEAM_A, 0.9), helm = age >= 5 ? 0xdfe6ec : 0x2a2a30, legs = age >= 5 ? 0x8a96a4 : 0x4a4a5a;
+  for (let r = 0; r < 2; r++) for (let i = 0; i < 6; i++) trooper(f, -1.05 + i * 0.11, 0.72 + r * 0.12, PI, coat, helm, { legs, rifle: true });
+  trooper(f, -0.78, 0.5, 0, team(TEAM_A, 1.0), helm, { legs, salute: true });
+  for (const [u, v] of [[1.05, 0.55], [1.35, 0.55]] as const) {
+    const t = f.sub(u, v);
+    t.add(new THREE.ConeGeometry(0.17, 0.2, 4).rotateY(PI / 4), 0, 0.1, 0, age >= 5 ? 0xd8dee4 : age === 4 ? 0x6a7a4a : 0xe8e0c8);
+    t.box(0.06, 0.1, 0.004, 0, 0, 0.12, 0x3a3028);
+  }
+  for (let i = 0; i < 4; i++) crate(f, 0.95 + (i % 2) * 0.12, (i >> 1) * 0.1, 0.95, 0.1, 0.1 * i);
+  for (const [u, v] of [[1.25, 0.95], [1.32, 1.02], [1.18, 1.04]] as const) barrel(f, u, v, 0.9);
+  for (const u of [-1.2, -0.95]) { f.box(0.18, 0.012, 0.03, u, 0.12, 1.05, DWOOD); for (let k = 0; k < 5; k++) f.box(0.008, 0.15, 0.012, u - 0.07 + k * 0.035, 0, 1.06, 0x3a3028); }
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */

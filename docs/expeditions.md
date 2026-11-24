@@ -36,6 +36,8 @@ Une mission = plusieurs **choix** (en général deux, parfois trois, un seul pou
 ### Les visites sur les îles (expéditions facultatives de l'archipel)
 Demande de l'auteur (20 nov. 2026) : des expéditions en plus du parcours obligatoire, sur les îles des deux peuples, chacune avec **un avantage concret pour la voie du dénouement**. Toutes au Médiéval (l'âge où le conflit se règle : plus tard, aucune ne servirait la bataille ni la paix), facultatives, dans `isleMissions.ts` (`ISLE_MISSIONS`, glissées dans `MISSIONS` après `allywar`).
 
+**Quatre sont retirées** (retour de l'auteur, 24 nov. 2026 : toutes faites, la guerre devenait bien trop facile) : rebâtir après la tempête, la régate, le transfuge et le sabotage (`RETIRED_ISLE`). Elles restent dans la liste pour les anciennes parties (une équipe en route, l'id dans `exp.done`), mais ne sont plus proposées (`isleOffered` rend faux, `ISLE_OFFERED` pour la feuille de route et le panneau « Peuples »). Il reste une visite par avantage : la foire (des alliés), les maîtres artisans (des soldats), l'espionnage du port (des ennemis en moins), plus les semences. Les plafonds `BOON_MAX` passent à +4 alliés, +3 soldats, −5 ennemis : une ancienne partie au-delà est ramenée au plafond au chargement. Le tableau ci-dessous garde les huit.
+
 | Mission | Chez | Proposée | Choix (prudent / audacieux) | Avantage | En plus | Imprévu |
 |---|---|---|---|---|---|---|
 | `isleFair` La foire de nos alliés | allié, place du marché | allié choisi | troquer les étoffes / parier aux dés | +2 troupes alliées, +5 % paix | or, joie | `pickpocket` |

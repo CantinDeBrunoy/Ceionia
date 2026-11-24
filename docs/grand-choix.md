@@ -50,7 +50,7 @@ Elle fait office de chargement. Décision de l'auteur (15 nov. 2026), après une
 
    À la fin, l'interface revient et la carte du choix de l'allié s'ouvre (`onIslesRevealed`, voir [diplomatie.md](diplomatie.md)). `VOY_CONTACT` (l'ancienne bannière du premier contact) n'est plus affichée.
 
-- **La vidéo** : `public/voyage/traversee.webm` (VP9, ≈ 7 Mo) et `traversee.mp4` (H.264 de secours, ≈ 10 Mo), 1920 × 1080 (agrandie en lanczos depuis les 1280 × 720 de Gemini, peu compressée : VP9 crf 24, H.264 crf 19, comme l'ouverture et le portail, 22 nov. 2026), 24 images/s, sans son. C'est bien sous la limite de taille par fichier des ressources statiques de Cloudflare Workers (25 Mio). Une WebM illisible bascule sur le MP4 au même moment ; illisible aussi, ou introuvable, la brume seule, rien ne bloque.
+- **La vidéo** : `public/voyage/traversee.webm` (VP9, ≈ 7 Mo) et `traversee.mp4` (H.264 de secours, ≈ 10 Mo), 1920 × 1080 (agrandie depuis les 1280 × 720 de Gemini, par IA depuis le 24 nov. 2026 : voir [ouverture.md](ouverture.md), « Agrandis par IA » ; peu compressée : VP9 crf 24, H.264 crf 19, comme l'ouverture et le portail, 22 nov. 2026), 24 images/s, sans son. C'est bien sous la limite de taille par fichier des ressources statiques de Cloudflare Workers (25 Mio). Une WebM illisible bascule sur le MP4 au même moment ; illisible aussi, ou introuvable, la brume seule, rien ne bloque.
 - **Fabriquer la vidéo** (pour la refaire) :
   - dans une partie agrandie, en build de production, qualité « Élevée », fenêtre de 1280 × 720 ;
   - placer la caravelle (celle du survol) en pleine mer, loin de toute terre (une case dont la terre la plus proche est à plus de 80 cases), cap à l'ouest vers le bord de la carte ;

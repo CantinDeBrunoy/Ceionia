@@ -1,6 +1,7 @@
 import type { ActiveExpedition } from '../sim/expeditions';
 import { L_GONE } from '../render/expeditionScenes';
 import { drawVoyage } from './voyageArt';
+import { END_FILM, END_FILM_SRC, endFilmCaptionAt } from '../endFilm';
 import { ic } from './icons';
 import { tr } from '../i18n';
 import { BLASON_COLORS, Blason, DEFAULT_BLASON, EMBLEM_HOLE, EMBLEM_PATH, SHAPE_PATH, hex } from '../sim/blason';
@@ -253,27 +254,58 @@ export const VOYAGE_S = 24;
  */
 export function showVoyage(root: HTMLElement, jump: boolean, onDone: () => void) {
   const ov = document.createElement('div');
-  ov.className = 'overlay voyage';
-  ov.innerHTML = `<canvas width="960" height="540"></canvas><p class="cap"></p><button class="skip">${tr('Passer ›')}</button>`;
+  ov.className = 'overlay voyage film';
+  // d'abord le film (Flow, voir `endFilm.ts`) ; s'il ne se lit pas, le voyage dessiné prend sa place
+  const sources = END_FILM_SRC.map((s) => `<source src="${s.src}" type="${s.type}">`).join('');
+  ov.innerHTML = `<video class="vfilm" muted playsinline preload="auto" disablepictureinpicture aria-hidden="true">${sources}</video>
+    <canvas width="960" height="540" hidden></canvas><p class="cap"><b></b><small></small></p><button class="skip">${tr('Passer ›')}</button>`;
   root.appendChild(ov);
-  const cv = ov.querySelector('canvas')!, c = cv.getContext('2d'), cap = ov.querySelector('.cap')!, t0 = performance.now();
-  let raf = 0, ended = false;
+  const video = ov.querySelector('video')!, cv = ov.querySelector('canvas')!, capEl = ov.querySelector('.cap') as HTMLElement;
+  const capB = capEl.querySelector('b')!, capS = capEl.querySelector('small')!;
+  let raf = 0, ended = false, drawn = false, t0 = 0, safety = 0;
   const end = () => {
     if (ended) return;
     ended = true;
     cancelAnimationFrame(raf);
+    clearTimeout(safety);
+    video.pause();
     ov.classList.add('out');
     setTimeout(() => { ov.remove(); onDone(); }, 600);
   };
-  const frame = () => {
+  const say = (text: string, sub = '', alpha = 1) => { capB.textContent = text; capS.textContent = sub; capEl.style.opacity = String(alpha); };
+  // le secours : le voyage dessiné, 24 s
+  const drawLoop = () => {
     if (!ov.isConnected || ended) return;
-    const t = (performance.now() - t0) / 1000;
-    if (c) cap.textContent = drawVoyage(c, Math.min(1, t / VOYAGE_S), t, jump);
-    else cap.textContent = tr('Le vaisseau colonial file vers l’étoile voisine…');
-    if (t >= VOYAGE_S) end(); else raf = requestAnimationFrame(frame);
+    const t = (performance.now() - t0) / 1000, c = cv.getContext('2d');
+    say(c ? drawVoyage(c, Math.min(1, t / VOYAGE_S), t, jump) : tr('Le vaisseau colonial file vers l’étoile voisine…'));
+    if (t >= VOYAGE_S) end(); else raf = requestAnimationFrame(drawLoop);
   };
-  frame();
-  // onglet en arrière-plan (plus d'images) : le voyage se termine quand même
-  setTimeout(end, VOYAGE_S * 1000 + 1500);
+  const toDrawn = () => {
+    if (drawn || ended) return;
+    drawn = true;
+    cancelAnimationFrame(raf);
+    clearTimeout(safety);
+    video.pause();
+    video.remove();
+    ov.classList.remove('film');
+    cv.hidden = false;
+    t0 = performance.now();
+    drawLoop();
+    // onglet en arrière-plan (plus d'images) : le voyage se termine quand même
+    safety = window.setTimeout(end, VOYAGE_S * 1000 + 1500);
+  };
+  const filmLoop = () => {
+    if (!ov.isConnected || ended || drawn) return;
+    const c = endFilmCaptionAt(video.currentTime || 0);
+    if (c) say(c.text, c.sub, c.alpha); else say('', '', 0);
+    raf = requestAnimationFrame(filmLoop);
+  };
+  video.addEventListener('ended', end);
+  // (la dernière source en erreur : plus rien à essayer)
+  video.querySelector('source:last-of-type')!.addEventListener('error', toDrawn);
+  video.addEventListener('error', toDrawn);
+  // rien ne démarre en 5 s (réseau lent, format refusé) : le voyage dessiné
+  safety = window.setTimeout(() => { if (!(video.currentTime > 0)) toDrawn(); else safety = window.setTimeout(end, (END_FILM.dur + 4) * 1000); }, 5000);
+  video.play().then(filmLoop, toDrawn);
   (ov.querySelector('.skip') as HTMLButtonElement).onclick = end;
 }

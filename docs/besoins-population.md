@@ -19,8 +19,8 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 | Nourriture `food` | bâtiments + champs + bonus d'expédition | `up((n+1) × foodK)` | `cap >= demand` |
 | Eau `water` | bâtiments + maisons au bord de l'eau + bonus | `n + 1` | `cap >= demand` |
 | Travail `jobs` | bâtiments + `floor(champs/2)` + bonus | `up(n × 0,5)` si `n >= 6`, sinon 0 | `cap >= demand` |
-| Bien-être `joy` | bâtiments + forêts + sécurité + bonus, moins le deuil d'un défunt sans cimetière (`grief`) | `pop × 0,3` si `pop >= 6`, sinon 0 | `cap >= demand` (pas d'arrondi) |
-| Santé `health` | somme des `health`, moins les malades restés sans soins (`ailing`, voir [incidents.md](incidents.md)) | `up(n × 0,2)` si `n >= 15`, sinon 0 | `cap >= demand` |
+| Bien-être `joy` | bâtiments + forêts + sécurité + bonus, moins 2 par défunt sans sépulture (`grief`, jusqu'au premier cimetière) | `pop × 0,3` si `pop >= 6`, sinon 0 | `cap >= demand` (pas d'arrondi) |
+| Santé `health` | somme des `health`, moins les malades restés sans soins (`ailing`, voir [incidents.md](incidents.md)) et les défunts sans sépulture (`unburied`) | `up(n × 0,2)` si `n >= 15`, sinon 0 | `cap >= demand` |
 
 - `foodK` vient de `difficulty.ts` : 1 en Facile et Bac à sable, 1,25 en Normal. Le « +1 » de nourriture et d'eau est une part de réserve pour le village.
 - Les valeurs par bâtiment sont des tableaux indexés par âge dans `KINDS` (`catalog.ts`). Un bâtiment compte avec **son** `b.age` (l'âge de son modèle), pas avec l'âge du village. Les tableaux plus courts que `AGES` sont prolongés par leur dernière valeur (boucle en bas de `catalog.ts`).
@@ -42,7 +42,9 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 - **Disette** (Normal seulement, `famine = 0,004`) : si la nourriture manque, `pop` baisse de `dt × famine × manque × pop` avec `manque = 1 − cap/demand` ; les partants s'accumulent dans `fled` (remis à 0 quand la nourriture revient). Facile et Bac à sable : `famine = 0`, personne ne part.
 - **Convalescence** : si l'un de nourriture, eau, travail, bien-être ou santé manque (le logement ne compte pas), `recovering = recoverT` (100 s de jeu en Normal) ; sinon il redescend de `dt`. Pendant `recovering > 0`, la croissance est multipliée par `recoverK` (0,5 en Normal). Facile : `recoverT = 0`, aucun effet.
 - Un manque d'eau, de travail, de bien-être ou de santé **ne fait partir personne** : il bloque seulement la croissance.
-- Les malaises et cambriolages restés sans secours ont des conséquences mesurées (voir [incidents.md](incidents.md)) : soins en moins un temps, en Normal parfois un décès (un habitant de moins), et sans cimetière un deuil qui coûte un peu de bien-être deux jours.
+- Les malaises et cambriolages restés sans secours ont des conséquences mesurées (voir [incidents.md](incidents.md)) : soins en moins un temps, en Normal parfois un décès (un habitant de moins), et sans cimetière un défunt sans sépulture qui coûte 2 de bien-être et 1 de soins jusqu'à ce qu'un cimetière soit bâti.
+- **Les morts naturelles** (`naturalRate`, `Game.stepElders`, demande de l'auteur du 24 nov. 2026) : dès `NATURAL.minPop` = 15 habitants, les anciens s'éteignent de vieillesse, à peu près `pop / 100` par jour de jeu (au plus 1,5), moitié moins en Facile, jamais au bac à sable. Un habitant de moins (`loseOne(15)`), que le village remplace s'il a ce qu'il faut. Avec un cimetière, le cortège part d'une maison prise au hasard ; sans, un défunt sans sépulture de plus (bien-être −2 et soins −1 jusqu'au premier cimetière). L'échéance n'est pas sauvegardée (elle repart d'un tirage entre 0 et 0,5).
+- **La fiche Santé** finit par sa partie **Cimetière** (`UI.cemeteryHtml`) : le cimetière du village ou « aucun », les décès des deux derniers jours (`world.deaths`, `logDeath`, `recentDeaths`, sauvegardé, absent des anciennes sauvegardes : vide) et ceux restés sans sépulture, les défunts sans sépulture et ce qu'ils coûtent, et le bouton pour en bâtir un.
 
 ### La Sécurité (indicateur, jamais un blocage)
 `computeCoverage` (`coverage.ts`) : part des habitations (bâtiments avec `housing > 0` à leur âge, donc les maisons, manoirs, arcologies **et la place du village**) à portée d'un poste, mesurée du centre du poste au centre de l'habitation.
@@ -76,7 +78,7 @@ Affichage (`ui.ts` › `renderMessage`) : ton `warn` (un besoin hors logement ma
 - `Sim.update(dt, realDt)` : `dt` est le temps de jeu (nul en pause, ×vitesse), `realDt` sert au minuteur de recalcul. Ordre : recalcul, fondateurs, plafond de logement, horloge des expéditions, humidité, `evaluate`, `hardship`, croissance, `computeMessage`. Appelé par `Game.frame` (`main.ts`) avec `sim.rain` et `sim.season` mis à jour juste avant.
 - `Sim.needDetail(k)` : alimente la fiche d'un besoin (`ui.ts` › `renderNeed`) : lignes triées par apport, bâtiment qui comble le mieux (`house, farm, well, workshop, gather, health`) et son apport `per` à l'âge du village.
 - `ui.ts` › `census()` : fiche des habitants. Travailleurs `round(p × 0,5)`, employés `min(travailleurs, jobs.cap)`, malades `round(health.demand)`, affamés / assoiffés `ceil((demande − cap) / 1)`, mécontents `ceil((demande − cap) / 0,3)`. Le compteur `#pop` montre l'alerte la plus pressante : sans soins, faim, soif, sans emploi, blessés.
-- Sécurité : `Sim.coverage` alimente la jauge `#n-security`, la fiche `renderSecurity` (avec `coverageTips`) et la surbrillance `CoverageView` (cercles verts à la portée de chaque poste, pastille orange sous une maison mal couverte, rouge si aucune des deux).
+- Sécurité : `Sim.coverage` alimente la jauge `#n-security`, la fiche `renderSecurity` (avec `coverageTips`, qui nomme les bâtiments à l'âge du village : « Poste des vigiles » à l'Antiquité, « Centre de secours » au Moderne) et la surbrillance `CoverageView` (cercles verts à la portée de chaque poste, pastille orange sous une maison mal couverte, rouge si aucune des deux).
 - `fields.ts` : n'intervient pas dans le calcul des besoins (qui compte seulement les cases de champ) ; il règle les « bras » visibles aux champs (`fieldHands`) et les engins agricoles.
 
 ## Liens avec les autres systèmes

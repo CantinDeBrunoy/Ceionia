@@ -4,6 +4,9 @@ import { N, VEG_FOREST, VEG_ROCKS } from '../world/world';
 import { GeoBatch } from './batch';
 import { mats, mergeLit } from './materials';
 import { townPlans, townCells, inPoly, lotLives, type Lot, type TownPlan } from '../world/rivalTown';
+import { campaignLots, campLotsAt, townRoles, townLotState, type CampLot, type TownWhen } from '../world/townCampaign';
+import type { DiploState } from '../sim/diplomacy';
+import { SEA } from '../world/world';
 import { townModel, townWall, plinthGeo, townSmoke } from './townModels';
 import { townProps } from './townProps';
 import { RuinSmoke } from './isleRuins';
@@ -31,13 +34,18 @@ interface Piece {
   x: number; y: number; z: number; rot: number; sx: number; sy: number; sz: number;
 }
 interface Item {
-  lot: Lot; plan: TownPlan;
+  lot: Lot | CampLot; plan: TownPlan;
+  /** l'état du lot (la ville vaincue : en ruine, puis en reconstruction) */
+  state: 'intact' | 'ruin' | 'repair';
   body: Piece | null; plinth: Piece | null;
   /** modèle à prendre (au milieu de l'animation), départ différé, temps de l'animation (-1 : au repos) */
   next: THREE.BufferGeometry | null; delay: number; t: number;
   /** le lot quitte la ville (rien ne le fait aujourd'hui, mais l'âge peut redescendre au bac à sable) */
   leave: boolean;
 }
+
+/** Les lots sans socle (posés à même le sol, sur l'eau, ou qui suivent la pente) */
+const NO_PLINTH = new Set<string>(['field', 'port', 'tower', 'gate', 'paifang', 'pontoon', 'bridge', 'avenue', 'wire', 'ourFlags']);
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
@@ -114,7 +122,7 @@ export class RivalTowns {
   private h(x: number, z: number) { return this.world.hAt(x, z); }
 
   /** Hauteur où poser un lot, et le bas de son socle (le point le plus bas de son emprise) */
-  private footing(l: Lot): [number, number] {
+  private footing(l: Lot | CampLot): [number, number] {
     const c = Math.cos(l.rot), s = Math.sin(l.rot), hs: number[] = [];
     for (const [u, v] of [[0, 0], [-0.45, -0.45], [0.45, -0.45], [-0.45, 0.45], [0.45, 0.45], [0, -0.45], [0, 0.45], [-0.45, 0], [0.45, 0]]) {
       const lx = u * l.w, lz = v * l.d;
@@ -128,6 +136,10 @@ export class RivalTowns {
       return [Math.max(0.16, Math.min(back, 0.6)), lo];
     }
     if (l.kind === 'field') return [mid - 0.01, mid];
+    // (le ponton sur l'eau ; le pont à mi-hauteur de ses deux rives ; l'avenue et les barbelés à même le sol)
+    if (l.kind === 'pontoon') return [SEA - 0.06, SEA - 0.06];
+    if (l.kind === 'bridge') { const e1 = this.h(l.x - c * l.w * 0.55, l.z + s * l.w * 0.55), e2 = this.h(l.x + c * l.w * 0.55, l.z - s * l.w * 0.55); return [Math.max(SEA - 0.1, (e1 + e2) / 2 - 0.4), lo]; }
+    if (l.kind === 'avenue' || l.kind === 'wire') return [mid, mid];
     if (l.kind === 'tower' || l.kind === 'gate' || l.kind === 'paifang') return [mid, mid];
     // au-dessus de la plupart de l'emprise, sans flotter de toute la pente : un socle comble le reste
     return [Math.max(mid, hi - 0.25), lo - 0.08];
@@ -155,7 +167,7 @@ export class RivalTowns {
   private place(it: Item) {
     const [y, low] = this.footing(it.lot);
     if (it.body) it.body.y = y;
-    const need = it.lot.kind !== 'field' && it.lot.kind !== 'port' && it.lot.kind !== 'tower' && it.lot.kind !== 'gate' && it.lot.kind !== 'paifang' && y - low > 0.03;
+    const need = !NO_PLINTH.has(it.lot.kind) && y - low > 0.03;
     if (need && !it.plinth) it.plinth = this.addPiece(plinthGeo(it.plan.people), it.lot.x, low, it.lot.z, it.lot.rot, it.lot.w * 0.94, y - low + 0.02, it.lot.d * 0.94);
     else if (need && it.plinth) { Object.assign(it.plinth, { y: low, sy: y - low + 0.02 }); this.setPiece(it.plinth); }
     else if (!need && it.plinth) { this.batch.remove(it.plinth.inst, it.plinth.geo); it.plinth = null; }
@@ -175,20 +187,39 @@ export class RivalTowns {
     return u < 0.5 ? 1 - u * 2 : (u - 0.5) * 2;
   }
 
-  /** L'âge des villes (celui du village du joueur, la Préhistoire montrant le bourg de l'Antiquité) */
-  setAge(age: number, instant = false) {
+  /**
+   * La campagne du nouveau monde, vue des villes (chantier D) : le rôle de chaque ville (le rival en guerre, vaincu ; l'allié),
+   * et l'état de la ville vaincue (en ruine, en reconstruction). Change, les villes se refont (`setAge`)
+   */
+  private roles = new Map<TownPlan, Set<TownWhen>>();
+  private camp: { d: Pick<DiploState, 'ally' | 'path' | 'conflict' | 'victors' | 'wonAt'>; clock: number; dayLen: number } | null = null;
+  private campKey = '';
+  setCampaign(d: Pick<DiploState, 'ally' | 'path' | 'conflict' | 'victors' | 'wonAt'>, clock: number, dayLen: number) {
+    this.camp = { d, clock, dayLen };
+    for (const p of this.plans) this.roles.set(p, townRoles(d, p.people));
+    // (la clé : les rôles, et l'état de la ville vaincue, qui change avec les jours)
+    const st = this.plans.map((p) => `${[...this.roles.get(p)!].join(',')}:${d.ally !== p.people && d.conflict === 'won' ? townLotState(p, { kind: 'gate', x: p.x, z: p.z }, d, clock, dayLen) ?? 'up' : ''}`).join('|');
+    if (st !== this.campKey) { this.campKey = st; if (this.age >= 0) this.setAge(this.age, false, true); }
+  }
+
+  /** L'âge des villes (celui du village du joueur, la Préhistoire montrant le bourg de l'Antiquité) ; `force` : refaire (la campagne a changé) */
+  setAge(age: number, instant = false, force = false) {
     const a = rivalAge(age), dense = rivalLotsAge(age);
-    if (a === this.age) return;
+    if (a === this.age && !force) return;
     const first = this.age < 0;
     this.age = a;
     const have = new Map(this.items.map((it) => [it.lot, it]));
-    for (const plan of this.plans)
-      for (const lot of plan.lots) {
-        const it = have.get(lot), want = lotLives(lot, dense, a);
-        const geo = townModel(plan.people, lot.kind, a, lot.v, lot.w, lot.d);
+    for (const plan of this.plans) {
+      // (les lots de la campagne, présents selon le rôle de la ville)
+      const roles = this.roles.get(plan) ?? new Set<TownWhen>(), extra = campLotsAt(campaignLots(this.world, plan), a, roles);
+      const camp = new Set<Lot | CampLot>(extra);
+      for (const lot of [...plan.lots, ...extra] as (Lot | CampLot)[]) {
+        const it = have.get(lot), want = camp.has(lot) || lotLives(lot as Lot, dense, a);
+        const state = (this.camp && !camp.has(lot) ? townLotState(plan, lot as Lot, this.camp.d, this.camp.clock, this.camp.dayLen) : null) ?? 'intact';
+        const geo = townModel(plan.people, lot.kind, a, lot.v, lot.w, lot.d, state);
         const delay = first || instant ? 0 : hash2(Math.round(lot.x * 7), Math.round(lot.z * 7), 41) * SPREAD;
         if (want && !it) {
-          const n: Item = { lot, plan, body: null, plinth: null, next: geo, delay, t: first || instant ? -1 : 0.5 * MORPH, leave: false };
+          const n: Item = { lot, plan, state, body: null, plinth: null, next: geo, delay, t: first || instant ? -1 : 0.5 * MORPH, leave: false };
           if (n.t < 0) { n.body = this.addPiece(geo, lot.x, 0, lot.z, lot.rot); n.next = null; }
           else n.body = this.addPiece(geo, lot.x, 0, lot.z, lot.rot);
           this.items.push(n);
@@ -196,12 +227,16 @@ export class RivalTowns {
           if (n.t >= 0) this.morph(n, 1e-3);
         } else if (want && it) {
           it.leave = false;
+          it.state = state;
           if (it.body && it.body.geo !== geo) {
             if (instant) { this.batch.swap(it.body.inst, it.body.geo, geo); it.body.geo = geo; this.setPiece(it.body); }
             else { it.next = geo; it.delay = delay; it.t = 0; }
           }
         } else if (!want && it) { it.leave = true; it.next = null; it.delay = delay; it.t = 0; }
       }
+      // (les lots de campagne qui ne sont plus de mise s'en vont)
+      for (const it of this.items) if (it.plan === plan && 'when' in it.lot && !camp.has(it.lot) && !it.leave) { it.leave = true; it.next = null; it.delay = 0; it.t = 0; }
+    }
     this.buildWalls();
     this.buildGrounds();
     this.buildProps();
@@ -231,6 +266,7 @@ export class RivalTowns {
     for (const it of this.items) {
       if (it.leave) continue;
       const l = it.lot, c = Math.cos(l.rot), s = Math.sin(l.rot), [y] = this.footing(l);
+      if ('when' in l) continue;
       for (const [lx, ly, lz] of townSmoke(l.kind, this.age)) sm.start(id++, l.x + lx * c + lz * s, y + ly, l.z - lx * s + lz * c, 0.55);
     }
   }
@@ -251,7 +287,9 @@ export class RivalTowns {
           for (let j = 0; j < n; j++) {
             const m = s0 + step * (j + 0.5), x = a[0] + ux * m, z = a[1] + uz * m;
             const y = Math.min(this.h(a[0] + ux * (m - step / 2), a[1] + uz * (m - step / 2)), this.h(x, z), this.h(a[0] + ux * (m + step / 2), a[1] + uz * (m + step / 2)));
-            const pc = this.addPiece(townWall(p.people, this.age, step + 0.02), x, y + 0.02, z, rot);
+            // (la ville vaincue : les pans du côté de l'assaut en ruine, puis en reconstruction)
+            const st = this.camp ? townLotState(p, { kind: 'house', x, z }, this.camp.d, this.camp.clock, this.camp.dayLen) ?? 'intact' : 'intact';
+            const pc = this.addPiece(townWall(p.people, this.age, step + 0.02, st, i * 7 + j), x, y + 0.02, z, rot);
             if (pc) this.walls.push(pc);
           }
         }

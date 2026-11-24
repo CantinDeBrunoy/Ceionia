@@ -1,10 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import { newDiplo, readDiplo, chooseAlly, choosePath, applyDiplo, claimVictory, settleLate, conflictState, type DiploState } from '../src/sim/diplomacy';
-import { sagaSteps, chapterDone, chapterItem, stepSaga, catchUp, signPeace, stepNow, readSaga, seaBefore, seaWon, seaLost, seaReady, CONFLICT_LABEL, CHAPTER_LABELS, isChapterLabel, type SagaCtx } from '../src/sim/saga';
+import { stepSkipped, sagaSteps, chapterDone, chapterItem, stepSaga, catchUp, signPeace, stepNow, readSaga, seaBefore, seaWon, seaLost, seaReady, CONFLICT_LABEL, CHAPTER_LABELS, isChapterLabel, type SagaCtx } from '../src/sim/saga';
 import { nextBattle, campaignResult, stepCamp, raidDue, corpsMax, corpsTroops, RAID_FIRST, BATTLE_AGE } from '../src/sim/campaign';
 import { ageGo } from '../src/sim/sim';
 import { roadView } from '../src/sim/diploRoad';
 import { roadHtml } from '../src/ui/diploChoice';
+import { deliver, startHost, stepHost, settleSurprise, playTrial, ceremonyDone, chooseEnd, SURPRISE_CHOICES } from '../src/sim/islandGames';
+
+/**
+ * Joue les Jeux des îles jusqu'à la dernière carte (chantier D) : la candidature acceptée, le site bâti (`site` dans `c`), trois
+ * livraisons, l'accueil et ses surprises, les trois épreuves, la cérémonie ; renvoie le contexte avec le site
+ */
+function playGames(w: any, c: Record<string, number>) {
+  w.exp.done.push('gamesBid'); applyDiplo(w.diplo, 'bid');
+  const g = w.diplo.games, built = true, st = { bricks: 999, ore: 999, gold: 999 };
+  for (let i = 0; i < 3; i++) expect(deliver(g, built, st)).toBe(true);
+  expect(startHost(g, w.exp.clock)).toBe(true);
+  for (let t = 0; t < 400 && !g.hosted; t += 1) { stepHost(g, w.exp.clock + t, DAY, { housing: 1, food: 1, joy: 1, transport: 1 }, 1, () => 0); if (g.pending) settleSurprise(g, SURPRISE_CHOICES[g.pending][0].id); }
+  for (let i = 0; i < 3; i++) playTrial(g, 'fair', { ships: 3, transport: 1, troops: 10 }, 0.5);
+  expect(ceremonyDone(g)).toBe(true);
+  expect(chooseEnd(g, 'treaty')).toBe(true);
+  return kinds({ ...c, gamesSite: 1 });
+}
 
 /**
  * Le fil des âges (chantier A du nouveau monde, décision de l'auteur du 24 nov. 2026) : le conflit des deux îles en trois
@@ -85,7 +102,8 @@ describe('le fil des âges : la voie de la guerre', () => {
     expect(stepNow(w, 4, kinds(FORT))).toMatchObject({ id: 'garrison', go: 'build', kind: 'garrison' });
     expect(stepNow(w, 4, kinds({ fort: 1, garrison: 1 }))).toMatchObject({ id: 'garrison', kind: 'milHospital' });
     expect(chapterItem(w, 5, kinds({ fort: 1, garrison: 1, garrisonHouse: 2 }))).toMatchObject({ have: 1, need: 2 });
-    expect(sagaSteps(w).find((s) => s.id === 'assault')!.stub).toBe('D');
+    // (la bataille des deux îles, chantier D : plus d'étape provisoire)
+    expect(sagaSteps(w).find((s) => s.id === 'assault')!.stub).toBeUndefined();
     expect(win(w, 4)).toBe('assault');
     expect(w.diplo.conflict).toBe('won');
     expect(item(5)).toMatchObject({ have: 1, need: 1 });
@@ -110,6 +128,19 @@ describe('le fil des âges : la voie de la guerre', () => {
     w.diplo.camp.held = ['plage', 'port', 'tour'];
     expect(nextBattle(w.diplo, 0, 3)).toBeNull();
     expect(nextBattle(w.diplo, 0, 4)).toBe('assault');
+  });
+});
+
+describe('le fil des âges : « Tenir le camp »', () => {
+  it('ne se dit « se fait en prenant le port » qu’une fois la plage prise, jamais avant le débarquement (capture de l’auteur)', () => {
+    const w = onPath('war');
+    w.exp.done.push('allywar'); applyDiplo(w.diplo, 'landing');
+    const camp = sagaSteps(w).find((s) => s.id === 'camp')!;
+    for (const age of [2, 3, 5]) expect(stepSkipped(w, camp, age)).toBe(false);
+    const r = roadView(w, { running: () => false, dayLen: DAY, age: 2 })!;
+    expect(r.steps.find((s) => s.id === 'camp')!.sub).not.toMatch(/port/);
+    seaWon(w.diplo, 'strait'); win(w, 3);
+    expect(stepSkipped(w, camp, 3)).toBe(true);
   });
 });
 
@@ -138,11 +169,14 @@ describe('le fil des âges : la voie de la paix', () => {
     expect(stepSaga(w, 3, c)).toBeNull();
     c = kinds(CONCESSION);
     expect(stepSaga(w, 3, c)).toBe(3);
-    // au Moderne (provisoire : les Jeux des îles, chantier D) : l'ambassade bâtie, puis la paix signée
+    // au Moderne (chantier D) : les Jeux des îles, la candidature d'abord, puis le site, les livraisons, l'accueil, les épreuves,
+    // la cérémonie et la dernière carte
     expect(signPeace(w, c)).toBe(false);
-    c = kinds({ ...CONCESSION, embassy: 1 });
-    expect(stepNow(w, 4, c)).toMatchObject({ id: 'sign', go: 'sign' });
-    expect(chapterItem(w, 5, c)).toMatchObject({ have: 1, need: 2 });
+    expect(stepNow(w, 4, c)).toMatchObject({ id: 'bid', go: 'mission', mission: 'gamesBid' });
+    expect(chapterItem(w, 5, c)).toMatchObject({ have: 0, need: 6 });
+    c = playGames(w, CONCESSION);
+    expect(stepNow(w, 4, c)).toMatchObject({ id: 'ceremony', go: 'games' });
+    expect(chapterItem(w, 5, c)).toMatchObject({ have: 5, need: 6 });
     expect(signPeace(w, c)).toBe(true);
     expect(w.diplo.conflict).toBe('peace');
     expect(chapterItem(w, 5, c)).toMatchObject({ have: 1, need: 1 });
@@ -298,13 +332,14 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
     expect(war.diplo.conflict).toBe('won');
     // la paix : la paix ne se signe qu'au bout des trois chapitres
     const peace = world(readDiplo({ ally: 'orient', path: 'peace', conflict: 'open' }));
-    const c = kinds({ embassy: 1 });
+    const c = kinds({});
     expect(signPeace(peace, c)).toBe(false);
     peace.exp.done.push('envoys', 'truce'); applyDiplo(peace.diplo, 'truce');
     expect(signPeace(peace, c)).toBe(false);
     expect(stepNow(peace, 4, c)!.id).toBe('harbor2');
-    const all = kinds({ embassy: 1, ...CONCESSION });
-    expect(stepNow(peace, 4, all)!.id).toBe('sign');
+    expect(stepNow(peace, 4, kinds(CONCESSION))!.id).toBe('bid');
+    const all = playGames(peace, CONCESSION);
+    expect(stepNow(peace, 4, all)!.id).toBe('ceremony');
     expect(signPeace(peace, all)).toBe(true);
   });
 
@@ -336,10 +371,11 @@ describe('le fil des âges : les anciennes sauvegardes', () => {
         expect(w.diplo.conflict).toBe('won');
       } else {
         w.exp.done.push('envoys', 'truce'); applyDiplo(w.diplo, 'truce');
-        const c = kinds({ embassy: 1, ...CONCESSION });
-        expect(stepSaga(w, 5, c)).toBe(3);
+        expect(stepSaga(w, 5, kinds(CONCESSION))).toBe(3);
         expect(w.diplo.saga.done).toEqual([2, 3]);
-        expect(stepNow(w, 5, c)!.id).toBe('sign');
+        expect(stepNow(w, 5, kinds(CONCESSION))!.id).toBe('bid');
+        const c = playGames(w, CONCESSION);
+        expect(stepNow(w, 5, c)!.id).toBe('ceremony');
         expect(signPeace(w, c)).toBe(true);
         expect(w.diplo.conflict).toBe('peace');
       }

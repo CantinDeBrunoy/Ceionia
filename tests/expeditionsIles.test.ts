@@ -48,8 +48,11 @@ describe('expéditions facultatives sur les îles de l’archipel', () => {
     expect(ids((id, k) => isleOffered(w, id, k))).not.toContain('isleSabotage');
     expect(isleWhy(w, 'isleSabotage', 'war')).toMatch(/guerre/);
     w.diplo.path = 'war';
-    expect(ids((id, k) => isleOffered(w, id, k))).toContain('isleSabotage');
-    expect(isleWhy(w, 'isleSabotage', 'war')).toBeNull();
+    // (le sabotage, la régate, le transfuge et rebâtir sont retirés le 24 nov. 2026 : la guerre était trop facile)
+    expect(ids((id, k) => isleOffered(w, id, k)).sort()).toEqual(['isleFair', 'isleSeeds', 'isleSmiths', 'isleSpy']);
+    w.exp.done.push('isleSabotage');
+    expect(isleOffered(w, 'isleSabotage', 'war')).toBe(false);
+    w.exp.done.pop();
     w.diplo.conflict = 'peace';
     const after = ids((id, k) => isleOffered(w, id, k));
     expect(after).not.toContain('isleSpy');

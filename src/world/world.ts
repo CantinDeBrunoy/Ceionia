@@ -16,7 +16,7 @@ import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn
 import { FleetState, newFleet, readFleet, saveFleet } from '../sim/fleet';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Blason, DEFAULT_BLASON, DEFAULT_ISLE, readBlason, readIsleName } from '../sim/blason';
-import { readIlls } from '../sim/mishaps';
+import { readIlls, readDeaths, readUnburied } from '../sim/mishaps';
 import { ShowState, newShowState, readShowState, showStateEmpty } from '../sim/shows';
 import { Crossing, crossingMap, nearestOnDeck, DECK_CLEAR, waterLevel } from './crossings';
 
@@ -34,6 +34,11 @@ const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill'
 const GREW3: KindId[] = ['gather', 'forum'];
 /** Marque des sauvegardes où places et forums sont déjà en 3 × 3 */
 const PLAZA3 = 1;
+/**
+ * Le fort de la tête de pont, passé de 3 × 3 à 6 × 6 (demande de l'auteur, 24 nov. 2026) : les sauvegardes d'avant (sans la
+ * marque `fort6`) le font grandir autour de son ancienne emprise, s'il a la place ; sinon il garde ses 3 × 3 (`small`)
+ */
+const FORT6 = 1;
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
@@ -441,7 +446,10 @@ export class World {
   /** malades restés sans soins : soins en moins jusqu'à l'horloge des expéditions (`until`), voir `sim/mishaps.ts` */
   ills: { n: number; until: number }[] = [];
   /** deuils d'un village sans cimetière : bien-être en moins jusqu'à l'horloge des expéditions (`until`), voir `sim/mishaps.ts` */
-  mourning: { n: number; until: number }[] = [];
+  /** défunts sans sépulture : bien-être et soins en moins jusqu'au premier cimetière, voir `sim/mishaps.ts` */
+  unburied = 0;
+  /** les décès des derniers jours (horloge des expéditions, reposé au cimetière ou non), pour la fiche Santé */
+  deaths: { at: number; rest: boolean }[] = [];
   /** la côte de l'île principale est sûre (agrandie après le 21 nov. 2026, ou réparée par `repairCoast`, voir `expand.ts`) */
   coast = 0;
   /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
@@ -1654,6 +1662,20 @@ export class World {
    * âge, et les lignes de chemin de fer qui s'y arrêtaient s'arrêtent au nouveau. null s'il n'y a pas la place
    */
   upgrade(id: number, to: KindId): Building | null {
+    const b = this.buildings.get(id), spot = this.upgradeRoom(id, to);
+    if (!b || !spot) return null;
+    const stops = this.lines.filter((l) => l.stops.includes(id));
+    this.removeBuilding(id);
+    const nb = this.place(to, spot[0], spot[1], b.rot, b.auto, Math.max(b.age, KINDS[to].minAge), true);
+    for (const l of stops) l.stops = l.stops.map((s) => (s === id ? nb.id : s));
+    return nb;
+  }
+
+  /**
+   * Où se poserait l'amélioration (null : pas la place). Sans rien changer : la pastille d'amélioration ne se montre pas sur un
+   * bâtiment qui ne peut pas grandir (retour de l'auteur, 24 nov. 2026), la fiche le dit
+   */
+  upgradeRoom(id: number, to: KindId): [number, number] | null {
     const b = this.buildings.get(id);
     if (!b) return null;
     const s0 = sizeOf(b), s1 = KINDS[to].size, grow = Math.max(0, s1 - s0), f = [[0, 1], [1, 0], [0, -1], [-1, 0]][b.rot];
@@ -1667,12 +1689,7 @@ export class World {
     for (let j = 0; j < s0; j++) for (let i = 0; i < s0; i++) { const k = this.ci(b.x + i, b.z + j); cells.push(k); this.occ[k] = 0; }
     const spot = spots.find(([x, z]) => this.canPlace(to, x, z) === null);
     for (const k of cells) this.occ[k] = b.id;
-    if (!spot) return null;
-    const stops = this.lines.filter((l) => l.stops.includes(id));
-    this.removeBuilding(id);
-    const nb = this.place(to, spot[0], spot[1], b.rot, b.auto, Math.max(b.age, KINDS[to].minAge), true);
-    for (const l of stops) l.stops = l.stops.map((s) => (s === id ? nb.id : s));
-    return nb;
+    return spot ?? null;
   }
 
   /**
@@ -1945,7 +1962,8 @@ export class World {
       ...(this.zoneGen && this.isles ? { zoneGen: 1 } : {}),
       ...(this.modernSteps !== null ? { modern: this.modernSteps ? 1 : 0 } : {}),
       ...(this.ills.length ? { ills: this.ills.filter((i) => i.until > this.exp.clock) } : {}),
-      ...(this.mourning.length ? { mourning: this.mourning.filter((i) => i.until > this.exp.clock) } : {}),
+      ...(this.unburied ? { unburied: this.unburied } : {}),
+      ...(this.deaths.length ? { deaths: this.deaths } : {}),
       ...(this.isles && this.mainGen !== GEN_VAR ? { mainGen: this.mainGen } : {}),
       ...(this.reveal ? { reveal: 1 } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
@@ -1969,6 +1987,7 @@ export class World {
       nextId: this.nextId,
       ...(this.wishesMet ? { wishes: this.wishesMet } : {}),
       plaza3: PLAZA3,
+      fort6: FORT6,
       torches: [...this.torches],
       basalt: lavaFields(this.basalt),
       ash: [...this.ash.keys()].filter((k) => this.ash[k]),
@@ -2016,10 +2035,10 @@ export class World {
    * des sauvegardes d'avant (`plaza3` absent) : leur nouvelle emprise entoure l'ancienne, centrée sur elle de préférence ;
    * sans place, ils gardent l'ancienne taille, sans chevaucher personne
    */
-  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array, veg: Uint8Array, plaza3: boolean) {
+  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array, veg: Uint8Array, plaza3: boolean, fort6 = true) {
     const owner = new Int32Array(N * N);
     const mark = (b: Building) => { const s = sizeOf(b); for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) if (this.inCells(b.x + i, b.z + j)) owner[this.ci(b.x + i, b.z + j)] = b.id; };
-    const grows = (b: Building) => GREW.includes(b.kind) || (GREW3.includes(b.kind) && (!plaza3 || !!b.small));
+    const grows = (b: Building) => GREW.includes(b.kind) || (GREW3.includes(b.kind) && (!plaza3 || !!b.small)) || (b.kind === 'fort' && (!fort6 || !!b.small));
     const grow = buildings.filter(grows);
     for (const b of buildings) if (!grows(b)) mark(b);
     // l'ancienne emprise de chacun lui appartient d'office : un voisin qui grandit ne la prend pas
@@ -2085,7 +2104,7 @@ export class World {
     const stops = new Set<number>();
     for (const l of Array.isArray(d.lines) ? d.lines : []) for (const i of Array.isArray(l?.s) ? l.s : []) if (ids[i] > 0) stops.add(ids[i]);
     for (const b of buildings) if (b.kind === 'landmark' && b.age >= 3 && stops.has(b.id)) b.kind = 'terminal';
-    this.growLarge(buildings, heights, road, veg, d.plaza3 === PLAZA3);
+    this.growLarge(buildings, heights, road, veg, d.plaza3 === PLAZA3, d.fort6 === FORT6);
     // les sauvegardes d'avant le plan du continent n'ont pas de version : leur climat reste celui de la version 1
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     // (la place des îles se tire de la graine : celle de la sauvegarde n'est là que pour qui la lit au dehors)
@@ -2101,7 +2120,8 @@ export class World {
     this.zoneGen = d.zoneGen === 1 && this.isles ? 1 : 0;
     this.modernSteps = d.modern === 1 ? true : d.modern === 0 ? false : null;
     this.ills = readIlls(d.ills);
-    this.mourning = readIlls(d.mourning);
+    this.unburied = readUnburied(d);
+    this.deaths = readDeaths(d.deaths);
     this.mainGen = this.isles && [GEN_FIXED, 2, 5].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);

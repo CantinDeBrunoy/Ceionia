@@ -19,7 +19,7 @@ import { powerplant } from './powerplant';
 import { rampartWall, rampartGate } from './ramparts';
 import { rod, shipHull } from './models/orientShips';
 import { frontInfirmary, frontForge, fortModel, coastBattery, garrisonBarracks, milHospital, soldierClub, garrisonHouse, milHeliport, radarStation, type FrontKit } from './models/frontline';
-import { allyBarracks, allyShipyard, allyHospital, merchantPort, exchangeHall, commonSchool, dispensary, researchCenter, type ConcessionKit } from './models/concession';
+import { allyBarracks, allyShipyard, allyHospital, merchantPort, exchangeHall, commonSchool, dispensary, researchCenter, gamesSite, type ConcessionKit } from './models/concession';
 import type { People } from '../world/archipelago';
 
 /**
@@ -14511,13 +14511,13 @@ export function setModelAlly(p: People | null) { modelAlly = p ?? 'orient'; }
  * Les bâtiments des zones des îles : chacun a ses modèles par âge, futuriste compris (ni `futureModel`, ni rehausse). Rend
  * faux pour les autres sortes
  */
-function zoneModel(p: Parts, kind: KindId, age: number, v: number): boolean {
+function zoneModel(p: Parts, kind: KindId, age: number, v: number, size = KINDS[kind].size): boolean {
   const a = modelAlly, K = CONCESSION_KIT, F = FRONT_KIT;
   switch (kind) {
     case 'frontTower': defTower(p, Math.max(2, age), DEF_KIT); return true;
     case 'frontInfirmary': sink(0.012); frontInfirmary(p, age, F); return true;
     case 'frontForge': sink(0.012); frontForge(p, age, F); return true;
-    case 'fort': sink(0.012); fortModel(p, age, F); return true;
+    case 'fort': sink(0.012); fortModel(p, age, F, size); return true;
     case 'battery': sink(0.012); coastBattery(p, age, F); return true;
     case 'garrison': sink(0.012); garrisonBarracks(p, age, F); return true;
     case 'milHospital': sink(0.012); milHospital(p, age, F); return true;
@@ -14533,10 +14533,11 @@ function zoneModel(p: Parts, kind: KindId, age: number, v: number): boolean {
     case 'commonSchool': sink(0.012); commonSchool(p, age, a, K); return true;
     case 'dispensary': sink(0.012); dispensary(p, age, a, K); return true;
     case 'researchCenter': sink(0.012); researchCenter(p, age, a, K); return true;
+    case 'gamesSite': sink(0.012); gamesSite(p, age, a, K); return true;
   }
   return false;
 }
-const ZONE_STYLED = new Set<KindId>(['allyBarracks', 'allyShipyard', 'allyHospital', 'merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter']);
+const ZONE_STYLED = new Set<KindId>(['allyBarracks', 'allyShipyard', 'allyHospital', 'merchantPort', 'exchangeHall', 'commonSchool', 'dispensary', 'researchCenter', 'gamesSite']);
 
 /** Les aides dont les décorations (decor.ts) ont besoin */
 const DECOR_KIT: DecorKit = { flame, waterPool, waterJet, sway };
@@ -14564,7 +14565,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const up = upOf(kind, size);
   lifeK = 1 / up;
   // à l'âge futuriste : le modèle dessiné pour lui, sinon celui de l'époque moderne, rehaussé (voir futureExtras)
-  const zoned = zoneModel(p, kind, age, o.v);
+  const zoned = zoneModel(p, kind, age, o.v, size);
   const future = !zoned && age >= 5 && futureModel(p, kind, o, size), extras = !zoned && age >= 5 && !future;
   if (extras) age = 4;
   if (!future && !zoned) switch (kind) {
