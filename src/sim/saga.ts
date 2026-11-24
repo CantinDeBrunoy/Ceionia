@@ -2,7 +2,7 @@ import type { World } from '../world/world';
 import type { KindId } from '../build/catalog';
 import { archipelagoOn } from '../world/expand';
 import { PEACE_CHAIN, WAR_MISSION, type DiploState } from './diplomacy';
-import { RAID_FIRST, battleOpen } from './campaign';
+import { RAID_FIRST, battleOpen, campaignNext } from './campaign';
 import { BID_MISSION, GAMES_SITE, DELIVERIES, TRIALS, hostDone } from './islandGames';
 import { COMMON_KINDS, COMMONS_NEED, GARRISON_KINDS, garrisonBuilt, commonsCount, nextToBuild } from './concession';
 
@@ -216,7 +216,8 @@ export function chapterItem(w: Saga, next: number, ctx: SagaCtx = {}): { label: 
  * Une étape qu'on n'attend pas : « Tenir le camp » quand une bataille de la campagne est déjà ouverte à cet âge (une arrivée
  * tardive). Le port pris, le camp compte pour tenu (`sagaSteps`) : le joueur n'attend pas une sortie pour avancer
  */
-export const stepSkipped = (w: Saga, s: SagaStep, age: number) => s.id === 'camp' && battleOpen(w.diplo, age);
+// (pas avant le débarquement : au Médiéval, la plage à prendre, le camp s'annonçait « se fait en prenant le port », capture de l'auteur)
+export const stepSkipped = (w: Saga, s: SagaStep, age: number) => s.id === 'camp' && campaignNext(w.diplo) !== 'landing' && battleOpen(w.diplo, age);
 
 /** L'étape du moment : la première pas faite des chapitres ouverts à cet âge (les chapitres en retard d'abord), ou null */
 export function stepNow(w: Saga, age: number, ctx: SagaCtx = {}): SagaStep | null {

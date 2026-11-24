@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { newDiplo, readDiplo, chooseAlly, choosePath, applyDiplo, claimVictory, settleLate, conflictState, type DiploState } from '../src/sim/diplomacy';
-import { sagaSteps, chapterDone, chapterItem, stepSaga, catchUp, signPeace, stepNow, readSaga, seaBefore, seaWon, seaLost, seaReady, CONFLICT_LABEL, CHAPTER_LABELS, isChapterLabel, type SagaCtx } from '../src/sim/saga';
+import { stepSkipped, sagaSteps, chapterDone, chapterItem, stepSaga, catchUp, signPeace, stepNow, readSaga, seaBefore, seaWon, seaLost, seaReady, CONFLICT_LABEL, CHAPTER_LABELS, isChapterLabel, type SagaCtx } from '../src/sim/saga';
 import { nextBattle, campaignResult, stepCamp, raidDue, corpsMax, corpsTroops, RAID_FIRST, BATTLE_AGE } from '../src/sim/campaign';
 import { ageGo } from '../src/sim/sim';
 import { roadView } from '../src/sim/diploRoad';
@@ -128,6 +128,19 @@ describe('le fil des âges : la voie de la guerre', () => {
     w.diplo.camp.held = ['plage', 'port', 'tour'];
     expect(nextBattle(w.diplo, 0, 3)).toBeNull();
     expect(nextBattle(w.diplo, 0, 4)).toBe('assault');
+  });
+});
+
+describe('le fil des âges : « Tenir le camp »', () => {
+  it('ne se dit « se fait en prenant le port » qu’une fois la plage prise, jamais avant le débarquement (capture de l’auteur)', () => {
+    const w = onPath('war');
+    w.exp.done.push('allywar'); applyDiplo(w.diplo, 'landing');
+    const camp = sagaSteps(w).find((s) => s.id === 'camp')!;
+    for (const age of [2, 3, 5]) expect(stepSkipped(w, camp, age)).toBe(false);
+    const r = roadView(w, { running: () => false, dayLen: DAY, age: 2 })!;
+    expect(r.steps.find((s) => s.id === 'camp')!.sub).not.toMatch(/port/);
+    seaWon(w.diplo, 'strait'); win(w, 3);
+    expect(stepSkipped(w, camp, 3)).toBe(true);
   });
 });
 

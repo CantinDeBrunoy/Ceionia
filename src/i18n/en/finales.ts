@@ -195,4 +195,8 @@ registerDict('finales', {
   '🎪 Une surprise aux Jeux des îles : votre choix est attendu. Cliquez ici.': '🎪 A surprise at the Island Games: your choice is awaited. Click here.',
   '{n}/{m} épreuves jouées · une médaille': '{n}/{m} events held · one medal',
   'Ce choix est définitif.': 'This choice is final.',
+  // ---- la feuille de route : les visites des îles sont des expéditions ----
+  'des expéditions facultatives sur les îles': 'optional expeditions to the islands',
+  'Expédition · {gain}': 'Expedition · {gain}',
+  'expédition en route': 'expedition under way',
 });

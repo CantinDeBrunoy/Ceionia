@@ -227,7 +227,7 @@ export function roadHtml(r: Road) {
     if (!open) return head;
     return head + `<div class="dcSteps">${r.steps.filter((s) => s.age === c.age).map(step).join('')}</div>`;
   };
-  const prep = r.prep.map((p) => `<button data-a="mission" data-id="${p.id}" class="dcPrepIt${p.done ? ' done' : ''}"${p.done ? ' disabled' : ''}><em aria-hidden="true">${p.done ? '✓' : p.icon}</em><span><b>${p.title}</b><small>${p.running ? tr('en route') : p.gain}</small></span></button>`).join('');
+  const prep = r.prep.map((p) => `<button data-a="mission" data-id="${p.id}" class="dcPrepIt${p.done ? ' done' : ''}"${p.done ? ' disabled' : ''}><em aria-hidden="true">${p.done ? '✓' : p.icon}</em><span><b>${p.title}</b><small>${p.running ? tr('expédition en route') : tr('Expédition · {gain}', { gain: p.gain })}</small></span></button>`).join('');
   return `<div class="dcCrests">${crest(r.ally, 56)}<span class="dcVs">${war ? '⚔' : '🕊'}</span>${crest(r.rival, 56)}</div>
     <h4>${war ? tr('La voie de la guerre') : tr('La voie de la paix')}</h4>
     <p class="pcSub">${war ? tr('Avec {ally}, contre {rival}.', { ally: peopleName(r.ally), rival: peopleName(r.rival) }) : tr('Réconcilier {ally} et {rival}.', { ally: peopleName(r.ally), rival: peopleName(r.rival) })}</p>
@@ -235,7 +235,7 @@ export function roadHtml(r: Road) {
     <h5 class="dcH">${tr('La suite')}</h5>
     ${r.chapters.map(chapter).join('')}
     ${r.notes.length ? `<p class="dcNotes">${r.notes.join('<br>')}</p>` : ''}
-    ${prep ? `<h5 class="dcH">${tr('Pour se préparer')} <small>${tr('facultatif')}</small></h5><div class="dcPrep">${prep}</div>` : ''}
+    ${prep ? `<h5 class="dcH">${tr('Pour se préparer')} <small>${tr('des expéditions facultatives sur les îles')}</small></h5><div class="dcPrep">${prep}</div>` : ''}
     <div class="dcFoot">${r.canChange ? `<button data-a="change" class="dcLink">${tr('Changer de voie')}</button>` : ''}<button data-a="later" class="dcLink">${tr('Fermer')}</button></div>
     <small class="pcNote">${tr('Pour revoir cette fenêtre : le bouton des Peuples, en haut.')}</small>`;
 }
