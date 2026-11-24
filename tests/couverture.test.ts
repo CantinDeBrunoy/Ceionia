@@ -17,7 +17,11 @@ describe('couverture de sécurité', () => {
     const c = computeCoverage([b('house', 10, 10), b('house', 12, 10)]);
     expect(c.homes).toBe(2);
     expect(c.share).toBe(0);
-    expect(coverageTips(c, [b('house', 10, 10)]).join(' ')).toContain('caserne');
+    expect(coverageTips(c, [b('house', 10, 10)]).join(' ')).toContain('Caserne de pompiers');
+    // (le nom suit l'âge : la caserne de pompiers est d'abord le poste des vigiles, puis le centre de secours)
+    expect(coverageTips(c, [b('house', 10, 10)], 1).join(' ')).toContain('Poste des vigiles');
+    expect(coverageTips(c, [b('house', 10, 10)], 4).join(' ')).toContain('Centre de secours');
+    expect(coverageTips(c, [b('house', 10, 10)], 4).join(' ')).not.toContain('Caserne');
   });
 
   it('une caserne couvre les maisons à portée seulement, la jauge est la moyenne des deux', () => {

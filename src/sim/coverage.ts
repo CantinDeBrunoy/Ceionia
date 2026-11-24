@@ -84,13 +84,18 @@ export function whereIs(group: Building[], all: Building[]): string {
   return tr('{dir} du village', { dir: tr(DIRS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]) });
 }
 
-/** Les conseils de la fiche, ton casual */
-export function coverageTips(c: Coverage, all: Building[]): string[] {
+/**
+ * Les conseils de la fiche, ton casual. Les bâtiments y sont nommés à l'âge du village (`age`) : la caserne de pompiers est
+ * d'abord le poste des vigiles, puis la tour de guet, le centre de secours… (retour de l'auteur, 24 nov. 2026)
+ */
+export function coverageTips(c: Coverage, all: Building[], age = 3): string[] {
   const t: string[] = [];
   if (!c.homes) return [tr('Pas encore d’habitations à protéger.')];
-  if (!c.stations.fire.length) t.push(tr('Bâtissez une caserne de pompiers : elle protège les maisons des flammes.'));
-  else if (c.uncoveredFire.length) t.push(tr(c.uncoveredFire.length > 1 ? 'Une caserne de pompiers de plus {where} : {n} maisons sont trop loin des secours.' : 'Une caserne de pompiers de plus {where} : {n} maison est trop loin des secours.', { where: whereIs(c.uncoveredFire, all), n: c.uncoveredFire.length }));
-  if (!c.stations.police.length) t.push(tr('Bâtissez un poste de police : les rondes rassurent tout le monde.'));
-  else if (c.uncoveredPolice.length) t.push(tr(c.uncoveredPolice.length > 1 ? 'Un poste de police de plus {where} : {n} maisons sont trop loin des gardes.' : 'Un poste de police de plus {where} : {n} maison est trop loin des gardes.', { where: whereIs(c.uncoveredPolice, all), n: c.uncoveredPolice.length }));
+  const name = (k: 'fire' | 'police') => KINDS[k].names[Math.max(KINDS[k].minAge, Math.min(5, age))];
+  const fire = name('fire'), police = name('police');
+  if (!c.stations.fire.length) t.push(tr('Bâtissez « {name} » : il protège les maisons des flammes.', { name: fire }));
+  else if (c.uncoveredFire.length) t.push(tr(c.uncoveredFire.length > 1 ? 'Encore « {name} » {where} : {n} maisons sont trop loin des secours.' : 'Encore « {name} » {where} : {n} maison est trop loin des secours.', { name: fire, where: whereIs(c.uncoveredFire, all), n: c.uncoveredFire.length }));
+  if (!c.stations.police.length) t.push(tr('Bâtissez « {name} » : les rondes rassurent tout le monde.', { name: police }));
+  else if (c.uncoveredPolice.length) t.push(tr(c.uncoveredPolice.length > 1 ? 'Encore « {name} » {where} : {n} maisons sont trop loin des gardes.' : 'Encore « {name} » {where} : {n} maison est trop loin des gardes.', { name: police, where: whereIs(c.uncoveredPolice, all), n: c.uncoveredPolice.length }));
   return t;
 }

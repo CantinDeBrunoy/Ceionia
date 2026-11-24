@@ -2705,7 +2705,7 @@ export class UI {
     const { sim, world } = this.host, c = sim.coverage, pc = (v: number) => pctText(Math.round(v * 100));
     const all = [...world.buildings.values()], on = this.host.tools.coverage.active;
     const state = c.share >= 0.8 ? 'ok' : c.share >= 0.4 ? 'full' : 'warn';
-    const tips = coverageTips(c, all);
+    const tips = coverageTips(c, all, sim.age);
     const row = (icon: string, label: string, v: string, note = '') => `<div class="crow"><b>${ic(icon, 16, 2)}</b><span>${tr(label)}${note ? `<small>${note}</small>` : ''}</span><em>${v}</em></div>`;
     const html = `
       <h4>${ic(SECURITY_NEED.icon, 18, 2)} ${tr(SECURITY_NEED.label)}<em class="${state}">${pc(c.share)}</em></h4>
