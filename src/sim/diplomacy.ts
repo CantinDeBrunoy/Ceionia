@@ -5,6 +5,7 @@ import { tr } from '../i18n';
 import { archipelagoOn } from '../world/expand';
 import { newCamp, readCamp, type CampState } from './campaign';
 import { newGames, readGames, BID_MISSION, type GamesState } from './islandGames';
+import { RETIRED_ISLE } from './isleMissions';
 import { newSaga, readSaga, conflictAge, FIRST_CHAPTER, type SagaState } from './saga';
 import { isZoneKind, zoneKindOffered } from './concession';
 
@@ -79,7 +80,8 @@ export type Victors = 'rebuild' | 'tribute';
 export interface Boons { allies: number; ours: number; foes: number; peace: number }
 export type BoonKind = keyof Boons;
 export const BOON_KINDS: BoonKind[] = ['allies', 'ours', 'foes', 'peace'];
-export const BOON_MAX: Boons = { allies: 12, ours: 6, foes: 15, peace: 45 };
+/** (abaissés le 24 nov. 2026 avec les visites retirées : la guerre était trop facile, `RETIRED_ISLE`) */
+export const BOON_MAX: Boons = { allies: 4, ours: 3, foes: 5, peace: 45 };
 /** La bonne volonté ne descend pas plus bas (le vol des semences, refait, ne ferme pas la paix pour de bon) */
 export const PEACE_MIN = -20;
 const noBoons = (): Boons => ({ allies: 0, ours: 0, foes: 0, peace: 0 });
@@ -116,7 +118,7 @@ export function isleWhy(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string, w
   return null;
 }
 export function isleOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string, when: IsleWhen): boolean {
-  if (!archipelagoOn(w) || !w.diplo.ally) return false;
+  if (!archipelagoOn(w) || !w.diplo.ally || RETIRED_ISLE.has(id)) return false;
   if (w.exp.done.includes(id)) return true;
   if (when === 'war') return w.diplo.path === 'war' && w.diplo.conflict === 'open';
   return when === 'ally' || w.diplo.conflict === 'open';

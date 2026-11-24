@@ -2,7 +2,7 @@ import type { World } from '../world/world';
 import type { People } from '../world/archipelago';
 import { tr } from '../i18n';
 import { archipelagoOn, canChangePath, isleOffered, isleName, Path, rivalOf, type BoonKind, type DiploState } from './diplomacy';
-import { ISLE_MISSIONS } from './isleMissions';
+import { ISLE_OFFERED } from './isleMissions';
 import { MISSIONS, type Mission } from './missions';
 import { battleOpen, campaignNext, corps, corpsMax, raidDue } from './campaign';
 import { AGES, type KindId } from '../build/catalog';
@@ -138,7 +138,7 @@ export function roadView(w: Pick<World, 'isles' | 'diplo' | 'exp'>, ctx: RoadCtx
   const path = d.path, ally = d.ally, rival = rivalOf(ally), age = ctx.age ?? 2, sctx = { count: ctx.count };
   const prep: RoadPrep[] = [];
   // (la trêve signée, plus de pourparlers : les visites qui les rendaient plus sûrs ne servent plus à la paix)
-  for (const m of path === 'peace' && d.saga.truce ? [] : ISLE_MISSIONS) {
+  for (const m of path === 'peace' && d.saga.truce ? [] : ISLE_OFFERED) {
     if (!isleOffered(w, m.id, m.isle!.when)) continue;
     const gain = prepGain(m, path);
     if (!gain) continue;

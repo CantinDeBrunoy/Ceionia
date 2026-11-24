@@ -2,7 +2,7 @@ import type { World } from '../world/world';
 import type { People } from '../world/archipelago';
 import { tr } from '../i18n';
 import { archipelagoOn, ENDGAME_AGE, PEACE_CHAIN, PEACE_MISSION, peopleName as name, rivalOf, WAR_MISSION, talkRisk, isleOffered, isleWhy, boonsMatter, rivalTownState, tributePerDay } from './diplomacy';
-import { ISLE_MISSIONS } from './isleMissions';
+import { ISLE_OFFERED } from './isleMissions';
 
 /**
  * Le panneau « Peuples » (voir `docs/diplomatie.md`, idée de Margot, testeuse v6 : « une diplomatie que je ne vois pas
@@ -196,7 +196,7 @@ function isles(w: Pick<World, 'isles' | 'diplo' | 'exp'>, c: PeoplesCtx, to: 'al
   if (c.age < ENDGAME_AGE) return { id: 'isles', label, on: false, why: tr('Au Médiéval') };
   // (chez le rival, le conflit réglé : rien à y gagner)
   if (to === 'rival' && w.diplo.conflict !== 'open') return { id: 'isles', label, on: false, why: tr('Le conflit est réglé') };
-  const all = ISLE_MISSIONS.filter((m) => m.isle!.to === to), offered = all.filter((m) => isleOffered(w, m.id, m.isle!.when));
+  const all = ISLE_OFFERED.filter((m) => m.isle!.to === to), offered = all.filter((m) => isleOffered(w, m.id, m.isle!.when));
   const todo = offered.filter((m) => !w.exp.done.includes(m.id));
   if (todo.length) return { id: 'isles', label, on: true, go: 'mission', mission: todo[0].id, why: to === 'ally' ? tr('{n} à faire : des renforts pour la bataille, de la bonne volonté pour la paix', { n: todo.length }) : tr('{n} à faire : affaiblir leur flotte, plaider la paix… ou les voler', { n: todo.length }) };
   if (offered.length) return { id: 'isles', label, on: false, done: true, why: tr('Toutes faites') };

@@ -34,10 +34,11 @@ describe('la feuille de route', () => {
     // (trois chapitres : le Médiéval déplié, les deux autres plus tard)
     expect(r.chapters.map((c) => [c.age, c.state])).toEqual([[2, 'now'], [3, 'later'], [4, 'later']]);
     // (pour la guerre, seulement les visites qui rapportent à la bataille ; le vol des semences n'y est pas)
-    expect(r.prep.length).toBeGreaterThan(3);
+    // (trois visites depuis le 24 nov. 2026 : une par avantage ; les autres sont retirées, la guerre était trop facile)
+    expect(r.prep.map((p) => p.id).sort()).toEqual(['isleFair', 'isleSmiths', 'isleSpy']);
     expect(r.prep.every((p) => /alliés|soldats|ennemis/.test(p.gain))).toBe(true);
     expect(r.prep.some((p) => p.id === 'isleSeeds')).toBe(false);
-    expect(r.prep.some((p) => p.id === 'isleSabotage')).toBe(true);
+    expect(r.prep.some((p) => p.id === 'isleSabotage')).toBe(false);
     // en route : le bouton ne relance rien
     expect(roadView(w, ctx([WAR_MISSION]))!.steps[0]).toMatchObject({ state: 'now', go: 'wait' });
     w.exp.done.push(WAR_MISSION);

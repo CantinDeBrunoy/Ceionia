@@ -20,6 +20,14 @@ const hurt = (n: number, days: number): Effect => ({ t: 'injured', n, days });
 export const SMITHS_PERK = 'isleSmiths', SMITHS_CRAFT = 1.3;
 export const SEEDS_PERK = 'isleSeeds', SEEDS_FIELDS = 1.15;
 
+/**
+ * Les visites retirées (retour de l'auteur, 24 nov. 2026 : toutes faites, la guerre devenait bien trop facile) : rebâtir après
+ * la tempête, la régate, le transfuge, le sabotage. Gardées dans la liste pour les anciennes parties (une équipe en route, un
+ * récit, l'id dans `exp.done`), mais plus proposées (`isleOffered`, `ISLE_OFFERED`). Il reste une visite par avantage : la
+ * foire (des alliés), les maîtres artisans (des soldats), l'espionnage du port (des ennemis en moins), plus les semences
+ */
+export const RETIRED_ISLE = new Set(['isleRebuild', 'isleRegatta', 'isleDefector', 'isleSabotage']);
+
 export const ISLE_MISSIONS: Mission[] = [
   // ---------------- Chez notre allié ----------------
   {
@@ -184,3 +192,6 @@ export const ISLE_MISSIONS: Mission[] = [
     ],
   },
 ];
+
+/** Les visites encore proposées (sans celles retirées) */
+export const ISLE_OFFERED = ISLE_MISSIONS.filter((m) => !RETIRED_ISLE.has(m.id));
