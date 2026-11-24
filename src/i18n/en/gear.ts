@@ -120,7 +120,6 @@ registerDict('gear', {
   'plus risqué': 'riskier',
   'plus long': 'longer',
   'plus rapide': 'faster',
-  'Voir l’équipe': 'See the team',
   'Le jeu reste en pause : l’équipe attend votre choix pour continuer.': 'The game stays paused: the team is waiting for your choice to go on.',
   'Risque d’échec : {p} · ⏸ jeu en pause': 'Chance of failure: {p} · ⏸ game paused',
 

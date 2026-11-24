@@ -171,7 +171,6 @@ registerDict('expeditions', {
   'avec {what}': 'with {what}',
   'demande {what}, non emportées': 'needs {what}, not taken along',
   'bien plus sûr': 'much safer', 'plus sûr': 'safer', 'bien plus risqué': 'much riskier', 'plus risqué': 'riskier', 'plus long': 'longer', 'plus rapide': 'faster',
-  'Voir l’équipe': 'See the team',
   'jeu en pause': 'game paused',
   'Réussite !': 'Success!',
   'Échec…': 'Failure…',
