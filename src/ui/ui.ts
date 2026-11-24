@@ -356,6 +356,12 @@ const ALLEGE = `(min-width: ${ONE_LINE_MIN}px) and (min-height: 521px)`;
 const allege = () => document.body.classList.contains('allege');
 /** marge de sécurité de la barre du haut sur une ligne (arrondis, bordures des pilules) */
 const FIT_SLACK = 8;
+/**
+ * Ce qui reste de cette marge pour garder le nombre de stocks et de besoins déjà montré : sans elle, quand la place était
+ * juste, un rien (l'heure, l'objectif, un chiffre) faisait passer la barre de quatre stocks à trois et ses flèches, puis
+ * revenir, image après image (vidéo de l'auteur, 24 nov. 2026)
+ */
+const FIT_KEEP = 6;
 /** durée de la pastille dorée d'un objectif atteint */
 const GOAL_WIN_MS = 5000;
 /**
@@ -1935,6 +1941,10 @@ export class UI {
    * (deux de chaque au moins) ; plus étroit, ils passent à la ligne comme avant (demande de l'auteur, 20 nov. 2026)
    */
   private fitKey = '';
+  /** le nombre de stocks et de besoins montrés au dernier calcul (gardé tant qu'il tient, à `FIT_KEEP` près) */
+  private fitPrev: [number, number] | null = null;
+  /** l'objectif était resserré au dernier calcul (`compact`, `mini`) */
+  private fitPrevBox: '' | 'compact' | 'mini' = '';
   private fitHud() {
     const one = innerWidth >= ONE_LINE_MIN, rv = $('#resView'), nv = $('#needView'), box = $('#goalBox');
     const nRes = rv.querySelectorAll('.res').length, nNeed = nv.querySelectorAll('.need').length;
@@ -1974,23 +1984,27 @@ export class UI {
       return w;
     };
     const chromeR = chrome(rp, rv), chromeN = lite ? nb.offsetWidth : chrome(nb, nv), nN = lite ? 0 : nNeed;
-    const fitIn = (goalW: number) => {
-      const free = hud.clientWidth - $('#hudL').offsetWidth - $('#hudR').offsetWidth - 3 * gap - (goalW ? goalW + gap : 0) - chromeR - chromeN - FIT_SLACK;
+    const fitIn = (goalW: number, extra = 0) => {
+      const free = hud.clientWidth - $('#hudL').offsetWidth - $('#hudR').offsetWidth - 3 * gap - (goalW ? goalW + gap : 0) - chromeR - chromeN - FIT_SLACK - extra;
       const cost = (r: number, n: number) => span(resWs, r) + span(needWs, n) + (r < nRes ? navW : 0) + (n < nN ? navW : 0);
+      // (ce qui était déjà montré se garde avec un peu de la marge : la barre ne bat plus entre deux tailles)
+      const prev = this.fitPrev, fits = (r: number, n: number) => cost(r, n) <= free + (prev && r <= prev[0] && n <= prev[1] ? FIT_KEEP : 0);
       let r = Math.min(2, nRes), n = Math.min(2, nN);
-      if (cost(r, n) > free) return null;
+      if (!fits(r, n)) return null;
       // une ressource, puis un besoin, tant qu'il reste de la place
       for (let grew = true; grew;) {
         grew = false;
-        if (r < nRes && cost(r + 1, n) <= free) { r++; grew = true; }
-        if (n < nN && cost(r, n + 1) <= free) { n++; grew = true; }
+        if (r < nRes && fits(r + 1, n)) { r++; grew = true; }
+        if (n < nN && fits(r, n + 1)) { n++; grew = true; }
       }
       return [r, n];
     };
-    let fit = fitIn(box.hidden ? 0 : box.offsetWidth);
+    // (l'objectif ne regrandit que s'il reste `FIT_KEEP` de marge de plus : sinon il battait entre deux tailles, lui aussi)
+    const was = this.fitPrevBox;
+    let fit = fitIn(box.hidden ? 0 : box.offsetWidth, was ? FIT_KEEP : 0);
     // pas la place : l'objectif se resserre (sans sa jauge, puis sans sa récompense), puis les fenêtres ne gardent qu'un besoin,
     // et enfin qu'une ressource
-    if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth); }
+    if (!fit && !box.hidden) { box.classList.add('compact'); fit = fitIn(box.offsetWidth, was === 'mini' ? FIT_KEEP : 0); }
     if (!fit && !box.hidden) { box.classList.add('mini'); fit = fitIn(box.offsetWidth); }
     let [r, n] = fit ?? [Math.min(2, nRes), Math.min(1, nN)];
     const apply = () => {
@@ -2014,6 +2028,8 @@ export class UI {
       else break;
       apply();
     }
+    this.fitPrev = [r, n];
+    this.fitPrevBox = box.classList.contains('mini') ? 'mini' : box.classList.contains('compact') ? 'compact' : '';
     rv.scrollLeft = keep[0]; nv.scrollLeft = keep[1];
     this.syncResNav(); this.syncNeedNav();
   }
