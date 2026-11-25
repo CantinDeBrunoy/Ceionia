@@ -721,7 +721,7 @@ export class UI {
           </nav>
         </div>
       </header>
-      <div id="expList"><button id="helpBtn" type="button" aria-pressed="false"></button><button id="expPill" type="button" aria-expanded="false" hidden></button><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
+      <div id="expList" class="open"><button id="helpBtn" type="button" aria-pressed="false"></button><button id="expPill" type="button" aria-expanded="true" hidden></button><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="bUp" title="${tr('Remonter à la surface (U)')}">${ic('up', 18)} ${tr('Remonter')}</button>
@@ -967,7 +967,8 @@ export class UI {
     // (un choix pris referme le menu)
     $('#hudMenu').addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('button')) this.hudMenu(false); });
     document.addEventListener('pointerdown', (e) => { if (!$('#hudMenu').hidden && !(e.target as HTMLElement).closest('#hudMenu, #bMenu')) this.hudMenu(false); });
-    // l'écran allégé : les équipes en route tiennent dans une pastille, un clic déplie leurs cartes (et les replie)
+    // l'écran allégé : les équipes en route tiennent dans une pastille ; leurs cartes sont dépliées au départ, un clic les replie
+    // (et les déplie de nouveau)
     $('#expPill').onclick = () => {
       const on = $('#expList').classList.toggle('open');
       $('#expPill').setAttribute('aria-expanded', String(on));
@@ -2900,9 +2901,10 @@ export class UI {
       pill.innerHTML = ph.slice(0, ph.lastIndexOf('|'));
       pill.hidden = !ex.active.length;
       pill.classList.toggle('ask', !!nDec);
-      const t = tr('Les équipes en route : cliquer pour voir leurs cartes');
+      const t = tr('Les équipes en route : un clic replie ou déplie leurs cartes');
       pill.title = t; pill.setAttribute('aria-label', t);
-      if (!ex.active.length) { list.classList.remove('open'); pill.setAttribute('aria-expanded', 'false'); }
+      // (sans équipe dehors, la liste se redéplie : les prochaines équipes partent cartes visibles)
+      if (!ex.active.length) { list.classList.add('open'); pill.setAttribute('aria-expanded', 'true'); }
     }
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
@@ -2996,8 +2998,7 @@ export class UI {
         <button data-tab="blason" class="${tab === 'blason' ? 'on' : ''}">${ic('flag', 19, 1.8)}${tr('Blason')}</button>
       </nav>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
-        <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}
-          <details class="cdet"><summary>${tr('En savoir plus')}</summary><p class="hint">${tr('Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant. En cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.')}</p></details></div>
+        <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
         <div class="missions">${cards}</div>
         <p class="emptyMsg" hidden></p>
       </section>

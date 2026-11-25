@@ -106,7 +106,6 @@ registerDict('expeditions', {
   'Chemin de fer': 'Railway',
   'Équipes en route : {n} / {max}': 'Teams out: {n} / {max}',
   'Envoyez de petites équipes chercher ce qui manque au village.': 'Send small teams to find what the village is missing.',
-  'Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant. En cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.': 'You will watch them leave, do their work on site and come back. On site, a surprise will ask you to choose. Every age has at least one mandatory expedition (★) to move on to the next. If it fails, you can try again. Equipment, a school and a place of care make expeditions safer.',
   'Toutes': 'All',
   'Militaires': 'Military',
   'Légendaires': 'Legendary',

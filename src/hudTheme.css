@@ -203,7 +203,7 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 .expModal > section::-webkit-scrollbar-thumb, .expModal .missions::-webkit-scrollbar-thumb { background: rgba(160, 120, 60, 0.35); }
 /* l'objet entier, posé sur son parchemin (l'image est carrée, la case en 16:10) */
 .gear .gart img { object-fit: contain; object-position: 50% 50%; }
-.expModal .cdet summary, .expModal a { color: #8A5A12; }
+.expModal a { color: #8A5A12; }
 /* les missions, d'après la maquette de l'auteur : deux cartes larges par ligne, plus claires que le parchemin de la fenêtre.
    Une mission en diorama (`.mart.dio`) n'a pas de cadre : son îlot est posé à cheval sur le bord gauche de la carte, aussi
    haut qu'elle, et déborde un peu ; le texte commence au milieu de l'îlot. Sans diorama, l'image reste dans son cadre, à gauche */

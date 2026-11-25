@@ -1461,13 +1461,6 @@ button.bgo:hover { background: #0f9270; }
 .gnrow .mk { flex: 0 0 auto; min-height: 30px; padding: 0 10px; gap: 5px; font-size: 12.5px; }
 .gnrow .mkq { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: #0d7a5f; display: inline-flex; align-items: center; gap: 4px; }
 .gear.flash { animation: missionFlash 1.6s ease-out; }
-.cdet { margin: 2px 0 4px; font-size: 12px; }
-.cdet summary { cursor: pointer; font-weight: 700; color: var(--accent, #2b6cd8); list-style: none; padding: 2px 4px; }
-.cdet summary::-webkit-details-marker { display: none; }
-.cdet p { margin: 4px 4px; }
-.cdet small { display: block; margin: 2px 4px; font-size: 11.5px; color: var(--ink2); }
-.cdet .gain { color: #0d7a5f; }
-.cdet .gain em { color: var(--bad); font-style: normal; }
 
 /* menu Expéditions, version courte : pastilles et icônes plutôt que des phrases */
 .mpills { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 6px 0 0; }
@@ -2138,8 +2131,6 @@ body.cinematic #bannerWrap { display: none !important; }
 .expModal .teams .row { flex: 1; gap: 10px; }
 .expModal .teams b { display: inline-flex; align-items: center; gap: 6px; }
 .expModal .teams .teamChip { margin: 0; }
-.expModal .teams .cdet { margin: 0; }
-.expModal .teams .cdet[open] { flex-basis: 100%; }
 .expModal .missions { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 18px; }
 .expModal .mission { flex-direction: row; align-items: stretch; gap: 16px; padding: 12px; border-radius: 22px; border: 1.5px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.8); box-shadow: 0 8px 22px rgba(20, 35, 70, 0.1); }
 .expModal .mission.done { opacity: 0.78; }
