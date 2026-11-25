@@ -147,6 +147,33 @@ describe('routes en courbe', () => {
     expect(w3.curves).toEqual([]);
     expect(w3.curveAt(plan.cells[0])).toBeUndefined();
   });
+
+  it('une route démolie ne revient pas avec la route reposée à sa place', () => {
+    const w = continent();
+    const [x, z] = flatStrip(w, 16);
+    const old = planRoad(w, x + 1.5, z + 1.5, x + 14.5, z + 5.5);
+    w.addCurve(old.pts);
+    // démolie en entier, puis une route droite qui croise son ancien tracé : aucune case n'appartient à l'ancienne courbe
+    for (const k of old.cells) w.setRoad(k % N, Math.floor(k / N), false);
+    for (let i = 1; i <= 14; i++) w.setRoad(x + i, z + 3, true);
+    for (let i = 1; i <= 14; i++) expect(w.curveAt(w.ci(x + i, z + 3))).toBeUndefined();
+    expect(w.curves.length).toBe(0);
+    // reposée au même endroit : une seule courbe, la nouvelle
+    const again = planRoad(w, x + 1.5, z + 1.5, x + 14.5, z + 5.5);
+    const id = w.addCurve(again.pts) && w.curves[w.curves.length - 1].id;
+    expect(w.curves.length).toBe(1);
+    for (const k of again.cells) if (w.road[k]) expect(w.curveAt(k)?.ids ?? [id]).toEqual([id]);
+    // démolie au milieu : les deux bouts restent courbes, la case du milieu reposée à la main est une rue ordinaire
+    const mid = again.cells[Math.floor(again.cells.length / 2)];
+    w.setRoad(mid % N, Math.floor(mid / N), false);
+    w.setRoad(mid % N, Math.floor(mid / N), true);
+    expect(w.curveAt(mid)).toBeUndefined();
+    expect(w.curves.length).toBe(2);
+    expect(w.curveAt(again.cells[0])).toBeDefined();
+    expect(w.curveAt(again.cells[again.cells.length - 1])).toBeDefined();
+    // la sauvegarde garde les deux morceaux, et rien de l'ancienne courbe
+    expect(w.toJSON().curves.length).toBe(2);
+  });
 });
 
 describe('voie ferrée tracée à la main', () => {

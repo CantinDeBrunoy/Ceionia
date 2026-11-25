@@ -71,3 +71,40 @@ export function chaikin(pts: [number, number][], iters: number): [number, number
 
 /** Points d'une ligne au centième (une courbe sauvegardée se relit exactement, ses cases restent les mêmes) */
 export const roundPts = (pts: number[]) => pts.map((v) => Math.round(v * 100) / 100);
+
+/**
+ * Ligne coupée là où elle traverse une case qui n'est plus une route (`alive` faux) : les morceaux qui restent, chacun d'au
+ * moins deux points. On suit les cases comme `rasterize` (la case de coin d'un pas en diagonale compte aussi). Un morceau
+ * garde un point tous les `CURVE_STEP` le long de son tracé, sauf ceux qui sont alignés avec leurs voisins
+ */
+export function cutCurve(pts: number[], n: number, alive: (k: number) => boolean): number[][] {
+  const s = sampleCurve(pts), out: number[][] = [];
+  const ok = (x: number, z: number) => x < 0 || z < 0 || x >= n || z >= n || alive(z * n + x);
+  let cur: number[] = [], px = 0, pz = 0;
+  const close = () => { if (cur.length >= 4) out.push(slim(cur)); cur = []; };
+  for (let i = 0; i + 1 < s.length; i += 2) {
+    const x = Math.floor(s[i]), z = Math.floor(s[i + 1]);
+    let live = ok(x, z);
+    if (live && i > 0 && x !== px && z !== pz) {
+      const mx = (s[i - 2] + s[i]) / 2, mz = (s[i - 1] + s[i + 1]) / 2;
+      live = Math.hypot(x + 0.5 - mx, pz + 0.5 - mz) <= Math.hypot(px + 0.5 - mx, z + 0.5 - mz) ? ok(x, pz) : ok(px, z);
+    }
+    if (live) cur.push(s[i], s[i + 1]); else close();
+    px = x; pz = z;
+  }
+  close();
+  return out;
+}
+
+/** Retire les points alignés avec leurs voisins (à moins d'un demi-centième de la corde) ; les deux bouts restent */
+function slim(p: number[]): number[] {
+  const out = [p[0], p[1]];
+  for (let i = 2; i + 3 < p.length; i += 2) {
+    const ax = out[out.length - 2], az = out[out.length - 1], bx = p[i + 2], bz = p[i + 3], dx = bx - ax, dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    if (len > 1e-9 && Math.abs((p[i] - ax) * dz - (p[i + 1] - az) * dx) / len < 0.005) continue;
+    out.push(p[i], p[i + 1]);
+  }
+  out.push(p[p.length - 2], p[p.length - 1]);
+  return out;
+}

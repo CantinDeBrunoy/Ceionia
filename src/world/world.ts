@@ -14,7 +14,7 @@ import { allyLand, awayWhy, tradepostWhy } from '../sim/allyLand';
 import { zoneWhy } from '../sim/concession';
 import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
 import { FleetState, newFleet, readFleet, saveFleet } from '../sim/fleet';
-import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
+import { RoadCurve, cutCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Blason, DEFAULT_BLASON, DEFAULT_ISLE, readBlason, readIsleName } from '../sim/blason';
 import { readIlls, readDeaths, readUnburied } from '../sim/mishaps';
 import { ShowState, newShowState, readShowState, showStateEmpty } from '../sim/shows';
@@ -392,6 +392,8 @@ export class World {
   curves: RoadCurve[] = [];
   /** cases des courbes (recalculées quand elles changent) */
   private curveMap: Map<number, CurveCell> | null = null;
+  /** une case de route a disparu depuis la dernière taille des courbes (`trimCurves`) */
+  private curvesStale = false;
   /**
    * Moteur du monde souterrain (gardé pour les Enfers, hors de portée du joueur ; ni sauvegardé ni relu) : filons exploités,
    * galeries tenues, cases de roche percées (tunnels) et celles encore à creuser, dans l'ordre
@@ -1743,12 +1745,15 @@ export class World {
     const k = this.ci(cx, cz);
     if (on) {
       if (this.road[k] || !this.canRoad(cx, cz, steep)) return false;
+      // (une courbe démolie ici ne doit pas revenir avec la nouvelle route : on la coupe avant)
+      this.trimCurves();
       this.road[k] = 1;
       this.veg[k] = 0;
       this.vegDirty = true;
     } else {
       if (!this.road[k]) return false;
       this.road[k] = 0;
+      this.curvesStale = true;
     }
     this.markVeg(cx, cz, cx, cz);
     this.roadsDirty = true;
@@ -1772,14 +1777,37 @@ export class World {
     return n;
   }
 
+  /**
+   * Coupe les courbes là où leurs cases ne sont plus des routes (démolies, emportées par la sculpture) et oublie ce qui n'est
+   * plus qu'une ligne morte. Sans cela, une route reposée plus tard sur une case de l'ancienne courbe la faisait revivre : la
+   * vue redessinait des bouts de l'ancien tracé dans la nouvelle route
+   */
+  trimCurves() {
+    if (!this.curvesStale) return;
+    this.curvesStale = false;
+    const alive = (k: number) => this.road[k] === 1;
+    let id = Math.max(0, ...this.curves.map((c) => c.id)), changed = false;
+    const out: RoadCurve[] = [];
+    for (const c of this.curves) {
+      if (rasterize(c.pts, N).every(alive)) { out.push(c); continue; }
+      changed = true;
+      for (const pts of cutCurve(c.pts, N, alive)) out.push({ id: ++id, pts: roundPts(pts) });
+    }
+    if (!changed) return;
+    this.curves = out;
+    this.curveMap = null;
+    this.roadsDirty = true;
+  }
+
   /** Courbes qui passent par cette case, si c'est encore une route (undefined sinon) */
   curveAt(k: number): CurveCell | undefined {
     if (!this.curves.length || !this.road[k]) return undefined;
     return this.curveCells().get(k);
   }
 
-  /** Cases de toutes les courbes (même celles qui ne sont plus des routes : démolies, emportées par la sculpture) */
+  /** Cases de toutes les courbes, coupées d'abord là où une route a disparu (`trimCurves`) */
   curveCells(): Map<number, CurveCell> {
+    this.trimCurves();
     if (this.curveMap) return this.curveMap;
     const out = new Map<number, CurveCell>();
     for (const c of this.curves) {
@@ -1870,7 +1898,7 @@ export class World {
         // un ravin noyé (creusé sous l'eau avec l'outil Eau) disparaît
         if (this.rift[k] && this.cellAvg(cx, cz) < 0.1) { this.rift[k] = 0; this.decor[k] = 0; this.vegDirty = true; }
         // (une route en lacets reste tant que la pente ne dépasse pas celle des lacets)
-        if (this.road[k] && !this.canRoad(cx, cz, true)) { this.road[k] = 0; this.roadsDirty = true; }
+        if (this.road[k] && !this.canRoad(cx, cz, true)) { this.road[k] = 0; this.roadsDirty = this.curvesStale = true; }
       }
     this.version++;
   }
@@ -1925,7 +1953,7 @@ export class World {
     if (s.brick !== undefined) this.brick = s.brick;
     // (une ligne dont une gare a disparu se replie d'elle-même au prochain passage de `Railway.refresh`)
     if (s.lines) this.lines = s.lines.map(copyLine);
-    if (s.curves) { this.curves = s.curves.map((c) => ({ id: c.id, pts: c.pts.slice() })); this.curveMap = null; }
+    if (s.curves) { this.curves = s.curves.map((c) => ({ id: c.id, pts: c.pts.slice() })); this.curveMap = null; this.curvesStale = true; }
     this.roadsDirty = this.vegDirty = true;
     this.markTerrainAll();
     this.markVeg(0, 0, N - 1, N - 1);
@@ -2023,7 +2051,7 @@ export class World {
       ...(this.portalWoken ? { portalWoken: true } : {}),
       ...(this.war ? { war: this.war } : {}),
       // routes en courbe (au centième) ; celles dont il ne reste aucune case de route s'oublient
-      curves: this.curves.filter((c) => rasterize(c.pts, N).some((k) => this.road[k])).map((c) => c.pts.map((v) => Math.round(v * 100))),
+      curves: (this.trimCurves(), this.curves).map((c) => c.pts.map((v) => Math.round(v * 100))),
     };
   }
 
@@ -2206,6 +2234,8 @@ export class World {
       this.curves.push({ id: this.curves.length + 1, pts: c.map((v: number) => +v / 100) });
     }
     this.curveMap = null;
+    // (une ancienne sauvegarde garde des courbes à moitié démolies : coupées au premier dessin)
+    this.curvesStale = true;
     this.roadsDirty = true;
   }
 }
