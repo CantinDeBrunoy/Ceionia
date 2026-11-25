@@ -2,7 +2,7 @@ import type { ShowDirector } from '../shows';
 import { armWhy, costText, fleetCap, shipCost } from '../sim/fleet';
 import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang, bothOf, bothLangs, isEnglish } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
-import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
+import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, KIND_ALSO, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
 import { rampartTower } from '../build/rampart';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
 import { Sim, NeedId, ageGo } from '../sim/sim';
@@ -23,7 +23,7 @@ import { readSlot, SaveData, savedAgo, Quality } from '../save/save';
 import { helpOn, setHelpOn } from './warTips';
 import { MAPS, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition } from '../sim/expeditions';
-import type { ExpEvent } from '../sim/events';
+import { ExpEvent, RoadNeed, eventsOfChoice, optionOpen, roadNeeds } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
 import { zoneLock, peacePerks } from '../sim/concession';
@@ -34,7 +34,7 @@ import { legacyOf } from '../sim/legacy';
 import { boonText, effectSummary, effectChips, giftChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
-import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
+import { GEAR, GEAR_BY, GearId, Gear, GearGap, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent, gearKnown, gearPower } from '../sim/gear';
 import { choiceStyles, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
 import { priceIn, canPay, costLabel, haveLabel, shortLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, RES_NAME } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
@@ -650,6 +650,11 @@ const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
   aerodrome: ' Montgolfières et dirigeable prendront l’air depuis son terrain.',
 };
 
+/** Le bâtiment se montre-t-il dans le rayon `cat` (le sien, ou un second rayon de `KIND_ALSO`) ? */
+const inCat = (k: KindId, cat: BuildCat) => KINDS[k].cat === cat || KIND_ALSO[k]?.cat === cat;
+/** Son groupe dans le rayon `cat` */
+const subIn = (k: KindId, cat: BuildCat) => (KINDS[k].cat === cat ? KIND_SUB[k] : KIND_ALSO[k]?.sub);
+
 export class UI {
   root: HTMLElement;
   tab = 'build';
@@ -1250,7 +1255,7 @@ export class UI {
   private tilesNow() {
     // une recherche en cours : les vignettes de tous les rayons qui répondent
     if (this.query.trim()) return `q${this.query}|${this.tab}|${+isStart(this.host.world)}|${KIND_ORDER.map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join()}`;
-    return this.tab === 'build' ? (this.cat === 'life' ? this.host.diploLine?.()?.text ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
+    return this.tab === 'build' ? (this.cat === 'life' ? this.host.diploLine?.()?.text ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => inCat(k, this.cat)).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
   }
 
   /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
@@ -1314,9 +1319,9 @@ export class UI {
       // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue) ; ceux des âges
       // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant. Les vignettes se rangent par groupe de
       // lecture (Nourriture, Matériaux, Santé…), chacun sous son titre
-      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && shown(k));
+      const kinds = KIND_ORDER.filter((k) => inCat(k, this.cat) && shown(k));
       html = BUILD_SUBS[this.cat].map((sub) => {
-        const tiles = kinds.filter((k) => KIND_SUB[k] === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
+        const tiles = kinds.filter((k) => subIn(k, this.cat) === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
         // les champs nourrissent (groupe Nourriture), masqués tant que le village est vide : on ne pose d'abord que le feu de camp
         if (this.cat === 'prod' && sub.id === 'nourriture' && !isStart(this.host.world)) tiles.push(toolTile('field', tr('Nourriture')));
         return tiles.length ? `<div class="grp" data-sub="${sub.id}"><div class="gh">${ic(SUB_ICON[sub.id] ?? 'leaf', 13, 2)}<span>${sub.label}</span></div><div class="gt">${tiles.join('')}</div></div>` : '';
@@ -3258,19 +3263,35 @@ export class UI {
     };
     const cards = `<div class="sCards n${cs.length}" role="radiogroup" aria-label="${tr('Façon de partir')}">${order.map(card).join('')}</div>`;
     // l'équipement : ce que l'équipe emporte de la réserve (prêt), et ce qui manque (à fabriquer d'un clic)
-    const gaps = gearGaps(c, st.gear, st.craft, age, (g) => !g.needs || ex.has(g.needs), st.perks);
+    const usable = (g: Gear) => !g.needs || ex.has(g.needs);
+    const gaps: (GearGap & { road?: RoadNeed })[] = gearGaps(c, st.gear, st.craft, age, usable, st.perks);
+    // les pièces « utiles en route » (la corde du lasso de l'étalon…) : une seule, si l'équipe n'en emporte pas déjà
+    // (testeur du 25 nov. 2026 : une option d'imprévu restait grisée sans qu'on ait jamais pu fabriquer la pièce)
+    for (const r of roadNeeds(m, c, age)) {
+      if (r.needs.some((g) => (pv.take[g] ?? 0) > 0)) continue;
+      const cands = r.needs.map((g) => GEAR_BY[g]).filter((g) => gearCurrent(g, age) && gearKnown(g, st.perks)), pool = cands.filter(usable);
+      const pick = [...(pool.length ? pool : cands)].sort((a, b) => gearPower(b) - gearPower(a))[0];
+      if (pick && !gaps.some((g) => g.gear.id === pick.id)) gaps.push({ dangers: [], gear: pick, need: 1, have: 0, queued: Math.min(1, st.craft.filter((q) => q === pick.id).length), road: r });
+    }
+    // ce que chaque pièce ouvre en route (« Monter la garde, armes en main »), dit dans son info-bulle
+    const evs = eventsOfChoice(m, c, age);
+    const opens = (id: GearId) => [...new Set(evs.flatMap((e) => e.options.filter((o) => o.needs?.includes(id) && optionOpen(c, e, o, age)).map((o) => tr('« {opt} »', { opt: o.label }))))];
+    const roadTip = (id: GearId) => { const o = opens(id); return o.length ? ` · ${tr('En route : {opts}', { opts: o.join(', ') })}` : ''; };
     const scaled = (g: Gear, n: number) => { const k = gearCost(g, h.world.difficulty); return { wood: k.wood * n, stone: k.stone * n, ore: k.ore * n, fuel: (k.fuel ?? 0) * n }; };
-    const ready = GEAR.filter((g) => (pv.take[g.id] ?? 0) > 0).map((g) => `<div class="gslot ok" title="${attr(`${tr(g.name)} ×${pv.take[g.id]} · ${tr('prêt, en réserve')}`)}">${gearPic(g, 46, 30)}<b>×${pv.take[g.id]}</b><i class="gmark">${ic('check', 12, 3)}</i></div>`).join('');
+    const ready = GEAR.filter((g) => (pv.take[g.id] ?? 0) > 0).map((g) => `<div class="gslot ok" title="${attr(`${tr(g.name)} ×${pv.take[g.id]} · ${tr('prêt, en réserve')}${roadTip(g.id)}`)}">${gearPic(g, 46, 30)}<b>×${pv.take[g.id]}</b><i class="gmark">${ic('check', 12, 3)}</i></div>`).join('');
     const missing = gaps.map((g) => {
       const left = g.need - g.have - g.queued, wc = ex.whyCraft(g.gear, age), name = tr(g.need > 1 ? g.gear.plural : g.gear.name);
       if (left <= 0) return `<div class="gslot wait" title="${attr(tr('{name} : en fabrication', { name }))}">${gearPic(g.gear, 46, 30)}<b>×${g.need - g.have}</b><i class="gmark">${ic('clock', 12, 2.6)}</i>${st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}</div>`;
       const price = gearCostLabel(scaled(g.gear, left));
-      const tip = wc ?? `${name} : ${tr('protège de : {d}', { d: g.dangers.map((d) => tr(DANGER_NAME[d])).join(', ') })} · ${price ? tr('Fabriquer · {price}', { price }) : tr('Fabriquer')}`;
+      const use = g.road ? tr('utile en route : « {opt} »', { opt: g.road.option.label }) : `${tr('protège de : {d}', { d: g.dangers.map((d) => tr(DANGER_NAME[d])).join(', ') })}${roadTip(g.gear.id)}`;
+      const tip = wc ?? `${name} : ${use} · ${price ? tr('Fabriquer · {price}', { price }) : tr('Fabriquer')}`;
       return `<button type="button" class="gslot miss" data-mk="${g.gear.id}" data-left="${left}" ${wc ? 'disabled' : ''} title="${attr(tip)}">${gearPic(g.gear, 46, 30)}<b>×${left}</b><i class="gmark">+</i></button>`;
     }).join('');
     const todo = gaps.filter((g) => g.need - g.have - g.queued > 0);
     const total = todo.reduce((t, g) => { const k = scaled(g.gear, g.need - g.have - g.queued); return { wood: t.wood + k.wood, stone: t.stone + k.stone, ore: t.ore + k.ore, fuel: t.fuel + k.fuel }; }, { wood: 0, stone: 0, ore: 0, fuel: 0 });
-    const gearNote = todo.length ? `<p class="gnote">${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
+    const roadLeft = todo.filter((g) => g.road);
+    const roadNote = roadLeft.length ? `<p class="gnote gRoad">${ic('compass', 13, 2)} ${roadLeft.map((g) => tr('{gear} : utile en route, pour « {opt} »', { gear: tr(g.gear.name), opt: g.road!.option.label })).join(' · ')}</p>` : '';
+    const gearNote = todo.length ? `${roadNote}<p class="gnote">${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
     // la boîte de « Tout fabriquer » doit contenir les boutons des pièces (voir le gestionnaire)
     // l'équipement en une ligne fine sous les cartes : titre, pièces, consigne, nombre d'habitants
     const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement nécessaire')}</b></span>
@@ -3454,7 +3475,9 @@ export class UI {
     // que la fenêtre puisse s'ouvrir (un récit, un panneau ouvert, un bâtiment en main) ne compte pas
     if (this.offered.get(a) !== ev) { this.offered.set(a, ev); a.waitT = 0; }
     this.root.querySelector('.decide')?.closest('.overlay')?.remove();
+    // (une option qu'aucune équipe de ce choix ne peut suivre n'est pas montrée : les armes au pugilat, testeur du 25 nov. 2026)
     const opts = ev.options.map((o, i) => {
+      if (!ex.offers(a, i)) return '';
       const ok = ex.canTake(a, i), hints: string[] = [];
       // « des armes » plutôt que la liste de toutes les armes possibles
       const names = (gs: GearId[]) => (gs.length > 2 ? tr('des armes') : gs.map((g) => GEAR_BY[g].plural.toLowerCase()).join(tr(' ou ')));

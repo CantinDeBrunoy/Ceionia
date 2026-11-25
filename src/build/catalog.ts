@@ -799,7 +799,7 @@ export const BUILD_SUBS: Record<BuildCat, BuildSub[]> = {
   home: [{ id: 'logis', label: 'Logements' }, { id: 'eau', label: 'Eau' }],
   prod: [{ id: 'nourriture', label: 'Nourriture' }, { id: 'materiaux', label: 'Matériaux' }, { id: 'industrie', label: 'Industrie' }, { id: 'concession', label: 'Concession' }],
   service: [{ id: 'sante', label: 'Santé' }, { id: 'savoir', label: 'Savoir' }, { id: 'securite', label: 'Sécurité' }, { id: 'transport', label: 'Transport' }, { id: 'concession', label: 'Concession' }],
-  war: [{ id: 'defense', label: 'Défense' }, { id: 'remparts', label: 'Remparts' }, { id: 'front', label: 'Tête de pont' }, { id: 'arriere', label: 'Base arrière' }],
+  war: [{ id: 'defense', label: 'Défense' }, { id: 'remparts', label: 'Remparts' }, { id: 'flotte', label: 'Flotte' }, { id: 'front', label: 'Tête de pont' }, { id: 'arriere', label: 'Base arrière' }],
   deco: [{ id: 'jardin', label: 'Jardins' }, { id: 'mobilier', label: 'Mobilier' }, { id: 'ornements', label: 'Ornements' }],
   life: [{ id: 'parcs', label: 'Places publiques' }, { id: 'detente', label: 'Détente' }, { id: 'culte', label: 'Culte' }, { id: 'monuments', label: 'Monuments' }],
 };
@@ -821,6 +821,15 @@ export const KIND_SUB: Record<KindId, string> = {
   frontTower: 'front', frontInfirmary: 'front', fort: 'front', battery: 'front', frontForge: 'front', garrison: 'front', milHospital: 'front', soldierClub: 'front', garrisonHouse: 'front', milHeliport: 'front', radar: 'front',
   allyBarracks: 'arriere', allyShipyard: 'arriere', allyHospital: 'arriere',
   merchantPort: 'concession', exchangeHall: 'concession', commonSchool: 'concession', dispensary: 'concession', researchCenter: 'concession', gamesSite: 'concession',
+};
+
+/**
+ * Les bâtiments montrés aussi dans un second rayon, sous un groupe de ce rayon (n'a aucun effet sur le jeu ni sur la
+ * sauvegarde) : le chantier naval arme la flotte, on le cherche aussi dans Militaire (demande de l'auteur, 25 nov. 2026).
+ * La recherche ne le range que sous son rayon d'origine
+ */
+export const KIND_ALSO: Partial<Record<KindId, { cat: BuildCat; sub: string }>> = {
+  shipyard: { cat: 'war', sub: 'flotte' },
 };
 
 export interface AgeDef {

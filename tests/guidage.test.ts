@@ -1,13 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { MISSIONS } from '../src/sim/missions';
 import { gearGaps, emptyStock } from '../src/sim/gear';
-import { KINDS, KIND_ORDER, KIND_SUB, BUILD_SUBS } from '../src/build/catalog';
+import { KINDS, KIND_ORDER, KIND_SUB, KIND_ALSO, BUILD_SUBS, type KindId } from '../src/build/catalog';
 
 describe('guidage : menu et équipement', () => {
   it('chaque bâtiment est rangé dans un groupe de son rayon', () => {
     for (const k of KIND_ORDER) {
       const subs = BUILD_SUBS[KINDS[k].cat].map((s) => s.id);
       expect(subs, k).toContain(KIND_SUB[k]);
+    }
+  });
+
+  it('un second rayon (KIND_ALSO) a son groupe : le chantier naval aussi dans Militaire, sous Flotte', () => {
+    expect(KIND_ALSO.shipyard).toEqual({ cat: 'war', sub: 'flotte' });
+    for (const [k, also] of Object.entries(KIND_ALSO)) {
+      expect(also!.cat, k).not.toBe(KINDS[k as KindId].cat);
+      expect(BUILD_SUBS[also!.cat].map((s) => s.id), k).toContain(also!.sub);
     }
   });
 
