@@ -5,6 +5,7 @@ import { TrophyRise } from './render/trophyRise';
 import { TrophyCineQueue, TrophyEntry, SHOT, cineView, riseAt, captionAt, CineView, pickAngle } from './trophyCine';
 import { tr } from './i18n';
 import { KINGDOM_TEXT } from './ui/kingdom';
+import { skipAsk } from './ui/skipAsk';
 
 /**
  * La petite cinématique (5 s) d'un trophée qui rejoint la grande place au retour d'une expédition légendaire (mammouth, kraken,
@@ -177,12 +178,14 @@ export class TrophyStage {
     requestAnimationFrame(() => root.classList.add('on'));
     this.el = { root, cap };
     // un clic n'importe où, Échap ou Espace : passer (avant tout le reste : ni pause, ni outil, ni fenêtre)
+    // (en deux temps : le premier appui demande « Vraiment passer ? », voir `skipAsk`)
+    const ask = skipAsk(root, () => this.skip());
     const key = (ev: KeyboardEvent) => {
       if (ev.code !== 'Escape' && ev.code !== 'Space') return;
       ev.preventDefault(); ev.stopImmediatePropagation();
-      this.skip();
+      if (!ev.repeat) ask();
     };
-    const click = (ev: PointerEvent) => { ev.preventDefault(); ev.stopImmediatePropagation(); this.skip(); };
+    const click = (ev: PointerEvent) => { ev.preventDefault(); ev.stopImmediatePropagation(); ask(); };
     window.addEventListener('keydown', key, true);
     window.addEventListener('pointerdown', click, true);
     this.off = () => { window.removeEventListener('keydown', key, true); window.removeEventListener('pointerdown', click, true); };

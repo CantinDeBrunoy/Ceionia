@@ -2,6 +2,7 @@ import { tr } from '../i18n';
 import { VOY_FILM, VOY_WAIT, voyFilmCaptionAt } from '../voyageCine';
 import { KINGDOM_TEXT } from './kingdom';
 import { FILM_WAIT, fetchFilm, filmOrder, firstFrames } from './filmLoad';
+import { skipAsk } from './skipAsk';
 
 /** Les fichiers du film (`public/voyage/`) : la WebM, puis le MP4 de secours */
 const VOY_FILES = { webm: './voyage/traversee.webm', mp4: './voyage/traversee.mp4' };
@@ -115,13 +116,15 @@ export class VoyageFilm {
     }
     v.addEventListener('timeupdate', () => this.paint());
     this.paint();
-    el.querySelector<HTMLButtonElement>('.vySkip')!.onclick = (e) => { e.stopPropagation(); this.skip(); };
+    // (en deux temps : le premier appui demande « Vraiment passer ? », voir `skipAsk`)
+    const ask = skipAsk(el, () => this.skip());
+    el.querySelector<HTMLButtonElement>('.vySkip')!.onclick = (e) => { e.stopPropagation(); ask(); };
     // (le son d'abord : avant, ce clic coupait le film, et le joueur ne l'entendait jamais en musique)
-    el.addEventListener('pointerdown', () => { if (!VoyageFilm.soundLocked()) this.skip(); });
+    el.addEventListener('pointerdown', () => { if (!VoyageFilm.soundLocked()) ask(); });
     this.keyHandler = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Space') return;
       e.preventDefault(); e.stopImmediatePropagation();
-      this.skip();
+      if (!e.repeat) ask();
     };
     window.addEventListener('keydown', this.keyHandler, true);
   }

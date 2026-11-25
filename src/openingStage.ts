@@ -2,6 +2,7 @@ import type { CameraRig } from './core/camera';
 import { OPEN_CLOUD, OPEN_LIVE, openCloudAt, openLiveCaptionAt, openViewAt } from './openingCine';
 import { KINGDOM_TEXT } from './ui/kingdom';
 import { tr } from './i18n';
+import { skipAsk } from './ui/skipAsk';
 
 /**
  * Le plan en direct de la cinématique d'ouverture (partition dans `openingCine.ts`), après le film (`ui/opening.ts`) : sur
@@ -125,13 +126,15 @@ export class OpeningStage {
     root.innerHTML = `<div class="kc-veil" style="background:${OPEN_CLOUD};opacity:1"></div><div class="kc-bar t"></div><div class="kc-bar b"></div>
       <div class="kc-cap"><b></b></div><button class="kc-skip" type="button">${KINGDOM_TEXT.skip}</button>`;
     this.host.root.appendChild(root);
-    root.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.skip(); });
+    // (en deux temps : le premier appui demande « Vraiment passer ? », voir `skipAsk`)
+    const ask = skipAsk(root, () => this.skip());
+    root.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); ask(); });
     this.keyHandler = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Space') return;
       // (sous l'écran de chargement, c'est le film qui prend la touche)
       if (this.phase !== 'live') return;
       e.preventDefault(); e.stopImmediatePropagation();
-      this.skip();
+      if (!e.repeat) ask();
     };
     window.addEventListener('keydown', this.keyHandler, true);
     this.el = { root, veil: root.querySelector('.kc-veil')!, cap: root.querySelector('.kc-cap')! };

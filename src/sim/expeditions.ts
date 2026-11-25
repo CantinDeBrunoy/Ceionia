@@ -282,6 +282,8 @@ const destName = (c: Choice) => tr(c.sea ? 'la mer' : DEST_NAME[c.dest]);
  * La galère du portail ne dépasse pas `PORTAL_SAIL` cases par seconde en moyenne ; son retour, le plus court des deux trajets,
  * tient en `PORTAL_RETURN` du travail (de 0,8 à 0,97, voir `stepBoat` dans expeditionScenes.ts)
  */
+/** L'âge du cheval : celui de l'écurie, des chevaux sauvages et de la cavalerie (l'Antiquité). Avant, les équipes vont à pied */
+export const HORSE_AGE = 1;
 export const PORTAL_SAIL = 2.2, PORTAL_RETURN = 0.17;
 const FALLBACK: Record<DestKind, DestKind | null> = { cave: 'mountain', mountain: 'far', river: 'plain', forest: 'plain', far: 'plain', plain: null, spaceport: null };
 /**
@@ -420,9 +422,13 @@ export class Expeditions {
    * Chevaux pris à l'écurie par l'équipe : ceux qu'exige la cavalerie ; une troupe armée à pied n'en prend aucun (ils restent
    * à l'écurie) ; les autres équipes, un par membre tant que l'écurie en a. Dès qu'il y en a un, toute l'équipe part en selle
    * (`rides`) : les chevaux qui manquent sont prêtés, sans en retirer de l'écurie (avant, les marcheurs traînaient derrière
-   * les cavaliers, qu'on croyait bloqués à les attendre)
+   * les cavaliers, qu'on croyait bloqués à les attendre). Une mission d'avant le cheval (la Préhistoire, `HORSE_AGE`), rejouée
+   * plus tard, part à pied : on ne chasse pas le mammouth à cheval (retour de l'auteur, 26 nov. 2026)
    */
-  mountsFor(c: Choice) { return c.troop ? 0 : Math.min(c.party, this.horsesHome()); }
+  mountsFor(c: Choice, m = MISSIONS.find((x) => x.choices.includes(c)), age = this.age()) {
+    if (c.troop || age < HORSE_AGE || (m && m.age < HORSE_AGE)) return 0;
+    return Math.min(c.party, this.horsesHome());
+  }
 
   /** âge du village, donné par le jeu (sinon celui de ses bâtiments, qui passent d'âge avec lui) */
   age: () => number = () => { let a = 0; for (const b of this.world.buildings.values()) a = Math.max(a, b.age); return a; };
@@ -615,7 +621,7 @@ export class Expeditions {
     const motor = age >= 3 && this.world.exp.done.includes('motorcar') && this.has('carworks') && !c.troop;
     // la montagne et le bout du monde se gagnent en l'air quand le village a de quoi s'envoler : pas de chevaux, pas de voiture
     const air = hop ?? (c.troop || sea || m.farewell || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest));
-    const mounts = motor || air ? 0 : this.mountsFor(c);
+    const mounts = motor || air ? 0 : this.mountsFor(c, m, age);
     const party = this.agents.recruit(this.need(c));
     if (!party) { this.lastFail = tr('Pas assez d’habitants prêts à partir à cet instant : réessayez dans un moment.'); return null; }
     this.world.exp.riding += mounts;

@@ -10,6 +10,7 @@ import { mats } from './render/materials';
 import { VOY_ACT2, actTotal, voyCaptionAt, voyShotAt, voyVeilAt, type VoyShot } from './voyageCine';
 import { tr } from './i18n';
 import { KINGDOM_TEXT } from './ui/kingdom';
+import { skipAsk } from './ui/skipAsk';
 
 /** Ce que la mise en scène demande au jeu */
 export interface VoyageHost {
@@ -310,13 +311,15 @@ export class VoyageStage {
     el.innerHTML = `<div class="kc-veil vc-mist"></div><div class="kc-veil vc-black"></div><div class="kc-bar t"></div><div class="kc-bar b"></div><div class="kc-cap"><b></b><small></small></div><button class="kc-skip" type="button">${KINGDOM_TEXT.skip}</button>`;
     this.host.root.appendChild(el);
     // un clic n'importe où, Échap ou Espace : passer (la partie ne réagit pas dessous)
-    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.skip(); });
+    // (en deux temps : le premier appui demande « Vraiment passer ? », voir `skipAsk`)
+    const ask = skipAsk(el, () => this.skip());
+    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); ask(); });
     this.keyHandler = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Space') return;
       // (pendant le film, l'écran de la traversée a ses propres touches)
       if (this.host.loading()) return;
       e.preventDefault(); e.stopImmediatePropagation();
-      this.skip();
+      if (!e.repeat) ask();
     };
     window.addEventListener('keydown', this.keyHandler, true);
     this.paint(true);

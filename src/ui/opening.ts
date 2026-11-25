@@ -2,6 +2,7 @@ import { tr } from '../i18n';
 import { OPEN_FALLBACK, OPEN_FILM, openFallbackPlan, openFilmCaptionAt } from '../openingCine';
 import { KINGDOM_TEXT } from './kingdom';
 import { FILM_WAIT, fetchFilm, filmOrder, firstFrames } from './filmLoad';
+import { skipAsk } from './skipAsk';
 
 /**
  * Le film de la cinématique d'ouverture (partition dans `openingCine.ts`) : deux plans faits par l'auteur avec Gemini
@@ -71,13 +72,15 @@ export class OpeningFilm {
         return url;
       });
     this.drawLoad();
-    el.querySelector<HTMLButtonElement>('.opSkip')!.onclick = (e) => { e.stopPropagation(); this.skip(); };
+    // (en deux temps : le premier appui demande « Vraiment passer ? », voir `skipAsk`)
+    const ask = skipAsk(el, () => this.skip());
+    el.querySelector<HTMLButtonElement>('.opSkip')!.onclick = (e) => { e.stopPropagation(); ask(); };
     // (pendant le vrai chargement, un clic ne passe rien : le joueur vient de cliquer pour lancer la partie)
-    el.addEventListener('pointerdown', () => { if (!el.classList.contains('wait')) this.skip(); });
+    el.addEventListener('pointerdown', () => { if (!el.classList.contains('wait')) ask(); });
     this.keyHandler = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Space') return;
       e.preventDefault(); e.stopImmediatePropagation();
-      this.skip();
+      if (!e.repeat) ask();
     };
     window.addEventListener('keydown', this.keyHandler, true);
   }

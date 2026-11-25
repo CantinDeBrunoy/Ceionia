@@ -42,6 +42,8 @@ registerDict('misc', {
   '🌠 Nuit des étoiles filantes ! Cliquez ici pour lever les yeux.': '🌠 A night of shooting stars! Click here to look up.',
   '🔭 Les astronomes annoncent une nuit d’étoiles filantes ! Cliquez ici pour lever les yeux.': '🔭 The astronomers announce a night of shooting stars! Click here to look up.',
   'Passer ›': 'Skip ›',
+  'Vraiment passer ?': 'Really skip?',
+  'Voulez-vous vraiment passer la cinématique ? Cliquez encore pour confirmer.': 'Do you really want to skip the cutscene? Click again to confirm.',
   'les grands cratères': 'the great craters',
   'la mer de la Tranquillité': 'the Sea of Tranquility',
   'Descente vers {where}… altitude {alt} m': 'Descending toward {where}… altitude {alt} m',

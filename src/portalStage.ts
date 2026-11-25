@@ -4,6 +4,7 @@ import { HELL_ZONES } from './world/hell';
 import { PORTAL_FILM, PORTAL_FALLBACK, fallbackAt, portalBlackAt, portalCaptionAt, portalFilmCaptionAt, portalShotAt } from './portalCine';
 import { KINGDOM_TEXT } from './ui/kingdom';
 import { tr } from './i18n';
+import { skipAsk } from './ui/skipAsk';
 
 /**
  * La mise en scène de la cinématique du portail (partition dans `portalCine.ts`) : une fois par partie, à l'ouverture du
@@ -230,11 +231,13 @@ export class PortalStage {
       <button class="kc-skip" type="button">${KINGDOM_TEXT.skip}</button>`;
     this.host.ui.root.appendChild(root);
     // (un clic n'importe où passe, comme la traversée ; le bouton aussi)
-    root.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.skip(); });
+    // (en deux temps : le premier appui demande « Vraiment passer ? », voir `skipAsk`)
+    const ask = skipAsk(root, () => this.skip());
+    root.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); ask(); });
     this.keyHandler = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Space') return;
       e.preventDefault(); e.stopImmediatePropagation();
-      this.skip();
+      if (!e.repeat) ask();
     };
     window.addEventListener('keydown', this.keyHandler, true);
     const video = root.querySelector('video')!;

@@ -9,6 +9,7 @@ import { KingdomEndFx } from './render/kingdomEndFx';
 import { END_PLAN, EndShot, endShotAt, endShotStart, endFlashAt, endBlackAt, endCaptionAt, shouldPlayKingdomEnd } from './kingdomEnd';
 import { BossBar, KINGDOM_TEXT, showKingdomVictory } from './ui/kingdom';
 import { tr } from './i18n';
+import { skipAsk } from './ui/skipAsk';
 
 /**
  * La mise en scène du royaume des Enfers : la bannière à l'arrivée, la barre de vie du roi (puis de sa citadelle), les
@@ -269,12 +270,14 @@ export class KingdomStage {
     el.id = 'kingCine';
     el.innerHTML = `<div class="kc-veil"></div><div class="kc-bar t"></div><div class="kc-bar b"></div><div class="kc-cap"></div><button class="kc-skip" type="button">${KINGDOM_TEXT.skip}</button>`;
     this.host.ui.root.appendChild(el);
-    (el.querySelector('.kc-skip') as HTMLButtonElement).onclick = () => this.skip();
+    // (en deux temps : le premier appui demande « Vraiment passer ? », voir `skipAsk`)
+    const ask = skipAsk(el, () => this.skip());
+    (el.querySelector('.kc-skip') as HTMLButtonElement).onclick = ask;
     // Échap ou espace : passer (avant tout le reste : la partie ne doit ni se mettre en pause ni réagir)
     this.keyHandler = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Space') return;
       e.preventDefault(); e.stopImmediatePropagation();
-      this.skip();
+      if (!e.repeat) ask();
     };
     window.addEventListener('keydown', this.keyHandler, true);
     this.cine = { el, veil: el.querySelector('.kc-veil') as HTMLElement, cap: el.querySelector('.kc-cap') as HTMLElement };

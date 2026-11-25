@@ -38,7 +38,7 @@ Au fond des Enfers, la zone 6 abrite le roi démon et sa citadelle. Le roi dort 
   - `village` 5,5 s : la vue glisse vers le cœur du village, jusqu'à 28 habitants fêtent bras levés (`kingCrowd`), feu d'artifice toutes les 1,6 s (`festAt`).
 
   Bandeaux (`END_CAPTIONS`) : « Le roi des Enfers est tombé », « Le portail s'éteint », « L'île est sauvée ». Fondu au noir sur les `END_FADE` = 1,6 dernières secondes. Lancée de la surface (partie quittée aux Enfers, portail déjà éteint), elle saute les deux premiers plans (`endShotStart('portal')`).
-- **Fin** : `endFinale` retire effets et habillage (`body.cinematic`), renvoie en surface si besoin, joue `sfxAgeUp`, puis `showKingdomVictory` (couronne dans la lumière, récit, liste des récompenses ; « Continuer » ou « Retour au village » = `goHome`). Passer : Échap, Espace ou le bouton (écoutés en phase de capture, la partie ne réagit pas).
+- **Fin** : `endFinale` retire effets et habillage (`body.cinematic`), renvoie en surface si besoin, joue `sfxAgeUp`, puis `showKingdomVictory` (couronne dans la lumière, récit, liste des récompenses ; « Continuer » ou « Retour au village » = `goHome`). Passer : Échap, Espace ou le bouton (écoutés en phase de capture, la partie ne réagit pas), en deux temps (voir [interface.md](interface.md), « Passer une cinématique »).
 - **Une seule fois** : `playEnd` pose `war.endSeen = true` dès le lancement (`shouldPlayKingdomEnd`) ; une partie rechargée en cours de route ne la rejoue pas. La rediffusion du mode développeur `__game.playKingdomEnd()` (`force`) ne touche ni aux récompenses ni à la contamination (`holdingBlight` faux).
 
 ## Liens avec les autres systèmes

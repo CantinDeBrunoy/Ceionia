@@ -10,7 +10,7 @@ import { KINDS, KindId, UPGRADES, Building } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { sculpt, brushOnBuilding } from '../src/world/terraform';
 import { GameTime } from '../src/core/time';
-import { Expeditions, Report, partyLimit, nextTeam } from '../src/sim/expeditions';
+import { Expeditions, Report, partyLimit, nextTeam, HORSE_AGE } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { Railway } from '../src/sim/railway';
 import { EVENTS } from '../src/sim/events';
@@ -1081,6 +1081,35 @@ describe('expéditions', () => {
     }
     expect(a.phase).toBe('home');
     expect(spread).toBeLessThan(5);
+  });
+
+  it('une mission d’avant le cheval (la Préhistoire), rejouée plus tard, part à pied même avec une écurie pleine', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 30, 0);
+    let spot: number[] | null = null;
+    for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
+    w.place('stable', spot![0], spot![1], 0, true, 2, false);
+    w.exp.herd.push('horse', 'horse', 'horse', 'horse');
+    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
+    expect(HORSE_AGE).toBe(KINDS.stable.minAge);
+    // toutes les missions de la Préhistoire : ni cheval annoncé, ni cheval pris à l'écurie
+    for (const m of MISSIONS.filter((q) => q.age < HORSE_AGE)) for (const c of m.choices) {
+      expect(ex.mountsFor(c, m, 2)).toBe(0);
+      expect(ex.preview(c).label).not.toMatch(/cheva/);
+    }
+    const berries = MISSIONS.find((m) => m.id === 'berries')!;
+    const a = ex.start(berries, 0, 2)!;
+    expect(a.mounts).toBe(0);
+    expect(w.exp.riding).toBe(0);
+    expect(a.party.every((id) => !agents.agents.find((g) => g.id === id)!.kit?.horse)).toBe(true);
+    // une mission de l'Antiquité, elle, part en selle
+    const seeds = MISSIONS.find((m) => m.id === 'seeds')!;
+    expect(ex.mountsFor(seeds.choices[0], seeds, 2)).toBeGreaterThan(0);
+    // et un village encore à la Préhistoire n'a pas de cavaliers
+    expect(ex.mountsFor(seeds.choices[0], seeds, 0)).toBe(0);
   });
 
   it('une décision prise en route ne fait pas reculer l’équipe, et les libellés suivent l’âge', () => {

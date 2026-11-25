@@ -5,6 +5,7 @@ import { END_FILM, END_FILM_SRC, endFilmCaptionAt } from '../endFilm';
 import { ic } from './icons';
 import { tr } from '../i18n';
 import { BLASON_COLORS, Blason, DEFAULT_BLASON, EMBLEM_HOLE, EMBLEM_PATH, SHAPE_PATH, hex } from '../sim/blason';
+import { skipAsk } from './skipAsk';
 
 /**
  * Les grands moments de la conquête de l'espace, en images. Pendant l'expédition « Un homme sur la Lune », une fois la fusée
@@ -307,5 +308,6 @@ export function showVoyage(root: HTMLElement, jump: boolean, onDone: () => void)
   // rien ne démarre en 5 s (réseau lent, format refusé) : le voyage dessiné
   safety = window.setTimeout(() => { if (!(video.currentTime > 0)) toDrawn(); else safety = window.setTimeout(end, (END_FILM.dur + 4) * 1000); }, 5000);
   video.play().then(filmLoop, toDrawn);
-  (ov.querySelector('.skip') as HTMLButtonElement).onclick = end;
+  // (en deux temps : le premier clic demande « Vraiment passer ? », voir `skipAsk`)
+  (ov.querySelector('.skip') as HTMLButtonElement).onclick = skipAsk(ov, end);
 }
