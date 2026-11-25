@@ -6,12 +6,15 @@ import '../src/i18n/en';
 afterEach(() => setLang('fr', false));
 
 describe('le film de fin', () => {
-  it('a deux bandeaux, un par plan, qui tiennent dans le film et ne se chevauchent pas', () => {
+  it("a deux bandeaux, sur le décollage et sur l'atterrissage, qui tiennent dans leur plan", () => {
     const [a, b] = END_FILM.captions;
+    const [envol, espace, sol] = END_FILM.cuts;
     expect(END_FILM.captions.length).toBe(2);
-    expect(a.at + a.dur).toBeLessThanOrEqual(END_FILM.cut);
-    expect(b.at).toBeGreaterThanOrEqual(END_FILM.cut);
-    expect(b.at + b.dur).toBeLessThanOrEqual(END_FILM.dur);
+    expect(END_FILM.cuts.length).toBe(3);
+    expect(a.at + a.dur).toBeLessThanOrEqual(envol);
+    expect(b.at).toBeGreaterThanOrEqual(espace);
+    expect(b.at + b.dur).toBeLessThanOrEqual(sol);
+    expect(sol).toBeLessThan(END_FILM.dur);
   });
 
   it('dit le bandeau du moment, en douceur, et rien entre deux', () => {
@@ -20,14 +23,16 @@ describe('le film de fin', () => {
     expect(endFilmCaptionAt(3)!.alpha).toBe(1);
     expect(endFilmCaptionAt(0.95)!.alpha).toBeLessThan(1);
     expect(endFilmCaptionAt(7.2)).toBeNull();
-    expect(endFilmCaptionAt(9.5)!.text).toBe('Une terre nouvelle');
+    expect(endFilmCaptionAt(11)).toBeNull();
+    expect(endFilmCaptionAt(24)).toBeNull();
+    expect(endFilmCaptionAt(18)!.text).toBe('Une terre nouvelle');
     for (const c of END_FILM.captions) expect(c.text() + c.sub()).not.toContain(';');
   });
 
   it('se traduit en anglais', () => {
     setLang('en', false);
     expect(endFilmCaptionAt(3)!.text).toBe('The great departure');
-    expect(endFilmCaptionAt(9.5)!.sub).toBe('beyond the stars');
+    expect(endFilmCaptionAt(18)!.sub).toBe('beyond the stars');
   });
 
   it('essaie la WebM, puis le MP4', () => {
