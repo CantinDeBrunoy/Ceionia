@@ -49,6 +49,11 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 .hsep { width: 1.5px; background: linear-gradient(transparent, rgba(180, 135, 70, 0.45) 20%, rgba(180, 135, 70, 0.45) 80%, transparent); }
 .res:hover, .res.open, button.pop:hover, .need:hover, .need.open { background: rgba(255, 236, 190, 0.55); }
 .rv b, .pn b { font-family: var(--hSerif); font-weight: 800; font-size: 20px; letter-spacing: -0.02em; font-variation-settings: 'SOFT' 30, 'opsz' 48; }
+/* la Fraunces n'a pas de chiffres à chasse fixe (`tabular-nums` n'y fait rien : « 111 » est bien plus étroit que « 888 »). Les
+   stocks et les habitants gardent la place de quatre chiffres (le « 0 », le plus large, fait 0,683 em) : un stock qui passe de
+   581 à 582, de 99 à 100 ou de 999 à 1000 ne change plus de largeur. Avant, la fenêtre des stocks, taillée au pixel près,
+   débordait d'un rien et l'or (la dernière case) disparaissait puis revenait (vidéo de l'auteur, 25 nov. 2026) */
+.rv b, .pn b { min-width: 2.74em; }
 .rv small, .res .rate, .pn small { color: var(--hInk2); font-weight: 600; }
 /* les besoins : picto, nom, pourcentage (plus de jauge), le besoin qui manque sur fond rosé */
 .need { width: 56px; padding: 4px 0 3px; border-radius: 10px; }

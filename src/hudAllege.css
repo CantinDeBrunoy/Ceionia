@@ -113,6 +113,10 @@ body.allege #clock img.pic { width: 24px; height: 24px; }
 body.allege #clock .time { flex-direction: row; align-items: baseline; gap: 7px; font-size: 18px; min-width: 0; }
 body.allege #clock small.dl { display: none; }
 body.allege #clock small.ds { display: flex; font-size: 12px; color: var(--hInk2); }
+/* l'heure et le jour gardent leur place (la Fraunces n'a pas de chiffres à chasse fixe : « 00:00 » fait 3 em, « 11:11 » bien
+   moins ; le jour, trois chiffres) : le bloc de l'heure ne change plus de largeur d'une minute ou d'un jour à l'autre */
+body.allege #clock .hm { min-width: 3.04em; }
+body.allege #clock .dn { min-width: 2.1em; margin-left: 0.25em; }
 body.allege #hud button.round { width: 34px; height: 34px; }
 body.allege #menuBtns button.round { width: 44px; height: 44px; }
 body.allege #menuBtns button.round svg.ic { width: 20px; height: 20px; }

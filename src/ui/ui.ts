@@ -1976,7 +1976,9 @@ export class UI {
     const rp = $('#resPanel'), nb = $('#needsBox');
     // (les cases n'ont pas toutes la même largeur : une fenêtre de n cases prend la largeur des n plus larges, pour en montrer n
     // entières d'où que parte le défilement ; un bout de la suivante qui dépasserait est masqué, voir `hidePeek`)
-    const top = (q: NodeListOf<HTMLElement>) => [...q].map((e) => e.offsetWidth + 2).sort((a, b) => b - a);
+    // (au sous-pixel près, arrondi au-dessus : `offsetWidth` arrondit au plus proche, quatre stocks pouvaient perdre 2 px et le
+    // dernier passait sous le bord, masqué par `hidePeek`)
+    const top = (q: NodeListOf<HTMLElement>) => [...q].map((e) => Math.ceil(e.getBoundingClientRect().width) + 2).sort((a, b) => b - a);
     const resWs = top(rv.querySelectorAll<HTMLElement>('.res')), needWs = lite ? [] : top(nv.querySelectorAll<HTMLElement>('.need'));
     const span = (ws: number[], n: number) => ws.slice(0, n).reduce((a, b) => a + b, 0);
     // ce que chaque pilule prend en dehors de sa fenêtre (marges, séparateur, habitants), les flèches à part : mesuré pièce par
@@ -2124,6 +2126,9 @@ export class UI {
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
       ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${resPic(r, 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
       : `<div class="res${short.has(r) ? ' short' : ''}" data-r="${r}" aria-label="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}${short.has(r) ? ' ' + attr(shortText(w, this.host.sim.age, short.get(r)!, true)) : ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b>${r === 'gold' ? `<em class="rate">${tr('échange')}</em>` : `<em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em>`}</span></div>`).join('');
+    // la barre se recale tout de suite si la largeur d'un stock a changé (un cinquième chiffre) : `update` passe `fitHud` avant
+    // les stocks, et jusqu'au tour suivant la fenêtre gardait l'ancienne largeur, sa dernière case masquée (l'or qui sautait)
+    this.fitHud();
     this.fitResView();
     this.syncResNav();
   }
@@ -2478,7 +2483,8 @@ export class UI {
     // le picto de la saison (la lune la nuit), l'heure, la saison et le jour de la partie
     const night = hh >= 21 || hh < 6, sp = hudPic(night ? 'nuit' : SEASON_PIC[time.season], 38);
     // (deux écritures du jour : l'écran allégé, sur une ligne, prend la courte, « Printemps · j. 23 »)
-    const clock = `${sp}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small class="dl">${tr('{season}, jour {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small><small class="ds">${tr('{season} · j. {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small></span>`;
+    // (l'heure et le numéro du jour dans leurs propres cases : sur l'écran allégé, elles gardent une largeur fixe, voir `hudAllege.css`)
+    const clock = `${sp}<span class="time"><span class="hm">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</span><small class="dl">${tr('{season}, jour {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small><small class="ds">${tr('{season} · j. {n}', { season: SEASONS[time.season], n: `<span class="dn">${time.days + 1}</span>` })} ${wk}</small></span>`;
     // le contenu ne change que si l'heure, la saison ou la météo changent (on évite de recréer les icônes à chaque mise à jour)
     if ($('#clock').dataset.v !== clock) { $('#clock').innerHTML = clock; $('#clock').dataset.v = clock; }
     this.syncPause();
