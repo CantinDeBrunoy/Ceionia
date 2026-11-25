@@ -4,7 +4,7 @@ import { World, N, MOUNTAIN_H, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { mulberry32 } from '../src/core/rng';
 import { MISSIONS, Mission } from '../src/sim/missions';
-import { EVENTS, ExpEvent, eventsFor } from '../src/sim/events';
+import { EVENTS, ExpEvent, eventsFor, optionOpen } from '../src/sim/events';
 import { GEAR, gearGaps, emptyStock } from '../src/sim/gear';
 
 /**
@@ -72,19 +72,28 @@ function fresh(age: number) {
   return w;
 }
 
-/** Une mission (et un choix, un âge) où l'imprévu peut survenir */
-function fixture(ev: ExpEvent): { m: Mission; ci: number; age: number } | null {
+/**
+ * Une mission (et un choix, un âge) où l'imprévu peut survenir : de préférence une où toutes ses options sont proposées (pas
+ * d'option armée au pugilat, ni de trousse à la Préhistoire, voir `optionOpen`), au plus tôt ; sinon la première venue.
+ * `open` : les options proposées là (une option armée d'une expédition qui n'emporte jamais d'armes ne l'est nulle part)
+ */
+function fixture(ev: ExpEvent): { m: Mission; ci: number; age: number; open: boolean[] } | null {
+  let first: { m: Mission; ci: number; age: number; open: boolean[] } | null = null;
   for (const m of MISSIONS) {
     if (m.farewell) continue;
     for (let ci = 0; ci < m.choices.length; ci++) {
       const c = m.choices[ci];
-      const age = Math.max(m.age, ev.ages?.[0] ?? 0);
-      if (ev.ages && age > ev.ages[1]) continue;
-      const ctx = { dest: c.dest, mission: m.id, scene: c.scene, age, arrive: !!ev.arrive, sea: !!c.sea, warm: true, at: 0.55, own: m.talks };
-      if (eventsFor(ctx).includes(ev)) return { m, ci, age };
+      for (let age = Math.max(m.age, ev.ages?.[0] ?? 0); age <= Math.min(5, ev.ages?.[1] ?? 5); age++) {
+        const ctx = { dest: c.dest, mission: m.id, scene: c.scene, age, arrive: !!ev.arrive, sea: !!c.sea, warm: true, at: 0.55, own: m.talks };
+        if (!eventsFor(ctx).includes(ev)) continue;
+        const open = ev.options.map((o) => optionOpen(c, ev, o, age));
+        if (open.every(Boolean)) return { m, ci, age, open };
+        // (sans chercher plus loin que l'âge de la mission pour la première venue)
+        if (!first) first = { m, ci, age, open };
+      }
     }
   }
-  return null;
+  return first;
 }
 
 /**
@@ -165,16 +174,19 @@ describe('chaque choix d’un imprévu a sa propre suite', () => {
       for (const ev of evs) {
         const fx = fixture(ev)!;
         // (une première partie pour rien : les formes mises en cache la première fois tirent au hasard, et décaleraient le relevé)
-        for (let i = 0; i < ev.options.length; i++) play(ev, fx, i);
-        const runs = ev.options.map((_, i) => play(ev, fx, i));
-        if (runs.some((r) => !r)) { bad.push(`${ev.id} : ne survient pas (${fx.m.id})`); continue; }
+        for (let i = 0; i < ev.options.length; i++) if (fx.open[i]) play(ev, fx, i);
+        // (seules les options proposées à cette expédition se jouent)
+        const runs = ev.options.map((_, i) => (fx.open[i] ? play(ev, fx, i) : null));
+        if (runs.some((r, i) => fx.open[i] && !r)) { bad.push(`${ev.id} : ne survient pas (${fx.m.id})`); continue; }
         // le relevé est fidèle : la même option rejouée donne la même scène
-        expect(play(ev, fx, 0)!.sig, `${ev.id} : relevé instable`).toBe(runs[0]!.sig);
+        const i0 = fx.open.indexOf(true);
+        expect(play(ev, fx, i0)!.sig, `${ev.id} : relevé instable`).toBe(runs[i0]!.sig);
         runs.forEach((r, i) => {
-          if (!r!.took) bad.push(`${ev.id} ${i} : option refusée`);
-          if (i === 0 && r!.seen && !BY_FX.has(ev.id)) bad.push(`${ev.id} : ${r!.seen}`);
-          if (!r!.staged) bad.push(`${ev.id} ${i} « ${ev.options[i].label} » : rien sur la scène`);
-          for (let j = 0; j < i; j++) if (runs[j]!.sig === r!.sig) bad.push(`${ev.id} ${i} « ${ev.options[i].label} » = ${j} « ${ev.options[j].label} »`);
+          if (!r) return;
+          if (!r.took) bad.push(`${ev.id} ${i} : option refusée`);
+          if (i === i0 && r.seen && !BY_FX.has(ev.id)) bad.push(`${ev.id} : ${r.seen}`);
+          if (!r.staged) bad.push(`${ev.id} ${i} « ${ev.options[i].label} » : rien sur la scène`);
+          for (let j = 0; j < i; j++) if (runs[j] && runs[j]!.sig === r.sig) bad.push(`${ev.id} ${i} « ${ev.options[i].label} » = ${j} « ${ev.options[j].label} »`);
         });
       }
       expect(bad.join('\n')).toBe('');

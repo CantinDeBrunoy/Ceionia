@@ -3290,8 +3290,9 @@ export class UI {
     const todo = gaps.filter((g) => g.need - g.have - g.queued > 0);
     const total = todo.reduce((t, g) => { const k = scaled(g.gear, g.need - g.have - g.queued); return { wood: t.wood + k.wood, stone: t.stone + k.stone, ore: t.ore + k.ore, fuel: t.fuel + k.fuel }; }, { wood: 0, stone: 0, ore: 0, fuel: 0 });
     const roadLeft = todo.filter((g) => g.road);
-    const roadNote = roadLeft.length ? `<p class="gnote gRoad">${ic('compass', 13, 2)} ${roadLeft.map((g) => tr('{gear} : utile en route, pour « {opt} »', { gear: tr(g.gear.name), opt: g.road!.option.label })).join(' · ')}</p>` : '';
-    const gearNote = todo.length ? `${roadNote}<p class="gnote">${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
+    // (sur sa propre ligne, au-dessus de la consigne)
+    const roadNote = roadLeft.length ? `<span class="gRoad">${roadLeft.map((g) => tr('{gear} : utile en route, pour « {opt} »', { gear: tr(g.gear.name), opt: g.road!.option.label })).join(' · ')}</span>` : '';
+    const gearNote = todo.length ? `<p class="gnote">${roadNote}${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
     // la boîte de « Tout fabriquer » doit contenir les boutons des pièces (voir le gestionnaire)
     // l'équipement en une ligne fine sous les cartes : titre, pièces, consigne, nombre d'habitants
     const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement nécessaire')}</b></span>

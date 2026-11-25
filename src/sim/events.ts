@@ -1,5 +1,5 @@
-import type { DestKind, Effect, Scene } from './missions';
-import type { GearId } from './gear';
+import type { Choice, DestKind, Effect, Mission, Scene } from './missions';
+import { GEAR_BY, GearId, Pack, Stock, dangersOf, gearPower } from './gear';
 import { localize } from '../i18n';
 
 /**
@@ -730,6 +730,65 @@ export function eventsFor(ctx: EventCtx): ExpEvent[] {
     && (!e.ages || (ctx.age >= e.ages[0] && ctx.age <= e.ages[1])) && (!e.arrive || ctx.arrive)
     && (e.from === undefined || (!ctx.arrive && (ctx.at ?? 1) >= e.from))
     && (!e.water || (e.water === 'sea') === !!ctx.sea) && (!e.warm || !!ctx.warm));
+}
+
+// ---------------- Les options qui demandent une pièce : seulement celles que l'équipe a une chance d'emporter ----------------
+// Une équipe n'emporte que ce qui pare les dangers de son choix (`loadout`). Avant (testeur, 25 nov. 2026), les loups de
+// « L'école du pugilat » proposaient « Monter la garde, armes en main », grisé : le pugilat ne craint que la météo, aucune arme
+// n'y part, et la fenêtre de départ n'en proposait pas. 54 options étaient ainsi fermées d'avance (requins en mer, crocodiles,
+// lasso de l'étalon…). Décision de l'auteur : les armes suivent les dangers (une expédition sans bêtes ne voit pas d'option
+// armée) ; les autres pièces demandées par un imprévu propre à la mission (corde du lasso, pièges, torches et boucliers de
+// l'arche) sont « utiles en route » : la fenêtre de départ les propose, et l'équipe en emporte une si la réserve en a
+
+/** Une option qui demande des armes */
+const armed = (o: EventOption) => !!o.needs?.some((g) => WEAPONS.includes(g));
+/** L'équipe de ce choix emporte-t-elle cette pièce quand la réserve en a ? (ce qui pare ses dangers, et la trousse) */
+const guardsFor = (c: Choice, g: GearId) => { const x = GEAR_BY[g], ds = dangersOf(c); return g === 'kit' || (!!x.guards && ds.includes(x.guards)) || (!!x.also && ds.includes(x.also)); };
+/** Une pièce utile en route : demandée par un imprévu propre à la mission (ou à sa scène), pas une arme, et hors de ses dangers */
+const roadOption = (c: Choice, e: ExpEvent, o: EventOption) => !!o.needs && !armed(o) && !!(e.missions || e.scenes) && !o.needs.some((g) => guardsFor(c, g));
+
+/**
+ * Cette option peut-elle s'offrir à l'équipe de ce choix, à cet âge ? (sinon elle n'est pas montrée) Il faut une pièce déjà
+ * inventée (pas de trousse à la Préhistoire), que l'équipe emporte contre ses dangers ou comme pièce utile en route
+ */
+export function optionOpen(c: Choice, e: ExpEvent, o: EventOption, age: number): boolean {
+  if (!o.needs) return true;
+  const known = o.needs.filter((g) => GEAR_BY[g].age <= age);
+  return known.some((g) => guardsFor(c, g)) || (known.length > 0 && roadOption(c, e, o));
+}
+
+/** Une pièce utile en route : l'une de `needs` ouvre cette option de cet imprévu */
+export interface RoadNeed { needs: GearId[]; event: ExpEvent; option: EventOption }
+
+/** Les imprévus que l'équipe de ce choix peut croiser à cet âge (à l'arrivée ou au travail, mer ou non, chaud ou froid) */
+export function eventsOfChoice(m: Mission, c: Choice, age: number): ExpEvent[] {
+  const out = new Set<ExpEvent>();
+  for (const arrive of [true, false]) for (const warm of [true, false]) for (const sea of c.sea ? [true, false] : [false])
+    for (const e of eventsFor({ dest: c.dest, mission: m.id, scene: c.scene, age, arrive, sea, warm, at: 1, own: m.talks })) out.add(e);
+  return [...out];
+}
+
+/**
+ * Les pièces utiles en route pour ce choix (une option chacune, la même liste de pièces comptée une fois). `all` : aussi
+ * celles des options qui demandent une pièce parant un danger du choix, hors armes (la corde, quand le bouclier de champ a
+ * été pris contre les chutes) : l'équipe en emporte une si elle n'en a pas, sans que la fenêtre de départ la propose
+ */
+export function roadNeeds(m: Mission, c: Choice, age: number, all = false): RoadNeed[] {
+  const out: RoadNeed[] = [];
+  for (const e of eventsOfChoice(m, c, age)) for (const o of e.options)
+    if ((all ? !!o.needs && !armed(o) && optionOpen(c, e, o, age) : roadOption(c, e, o) && optionOpen(c, e, o, age)) && !out.some((r) => r.needs.join() === o.needs!.join())) out.push({ needs: o.needs!, event: e, option: o });
+  return out;
+}
+
+/** Ce qu'emporte en plus l'équipe pour la route : une pièce par besoin, la plus forte en réserve, si rien ne le couvre déjà */
+export function roadTake(needs: RoadNeed[], stock: Stock, take: Pack): Pack {
+  const extra: Pack = {};
+  for (const r of needs) {
+    if (r.needs.some((g) => (take[g] ?? 0) + (extra[g] ?? 0) > 0)) continue;
+    const g = r.needs.filter((x) => (stock[x] ?? 0) - (take[x] ?? 0) > 0).sort((a, b) => gearPower(GEAR_BY[b]) - gearPower(GEAR_BY[a]))[0];
+    if (g) extra[g] = 1;
+  }
+  return extra;
 }
 
 /**

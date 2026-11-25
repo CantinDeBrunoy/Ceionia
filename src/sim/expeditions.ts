@@ -6,7 +6,7 @@ import { noteGoalEvent } from './goals';
 import { nearestVolcano, volcanoIsle, volcanoGate, crossTo, landCell } from './volcano';
 import { AGES, KINDS, KindId, isDecor, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon, gearKnown } from './gear';
-import { ExpEvent, pickEvent, waitTime } from './events';
+import { ExpEvent, optionOpen, pickEvent, roadNeeds, roadTake, waitTime } from './events';
 import { missionOffered, missionWhy, tributePerDay, isleOf, rivalOf, talkRisk, isleOffered, isleWhy } from './diplomacy';
 import { SMITHS_PERK, SMITHS_CRAFT } from './isleMissions';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, ecoPace } from './economy';
@@ -430,9 +430,19 @@ export class Expeditions {
   private nameOf(k: KindId) { const d = KINDS[k]; return (d.names[Math.max(this.age(), d.minAge)] || d.names.find((n) => n)!).toLowerCase(); }
   /** « à l'écurie », « au haras », « au centre équestre » */
 
+  /**
+   * L'équipement d'une équipe : ce qui pare les dangers de son choix (`loadout`, qui fait le risque), plus une pièce par
+   * besoin « utile en route » (`roadNeeds` : la corde du lasso…), qui ne change pas le risque mais ouvre une option d'imprévu
+   */
+  pack(c: Choice, m = MISSIONS.find((x) => x.choices.includes(c)), age = this.age()) {
+    const stock = this.world.exp.gear, l = loadout(c, stock);
+    if (!m) return l;
+    return { take: { ...l.take, ...roadTake(roadNeeds(m, c, age, true), stock, l.take) }, k: l.k };
+  }
+
   /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux, carburant), et son risque avec cet équipement */
   preview(c: Choice) {
-    const l = loadout(c, this.world.exp.gear), n = this.mountsFor(c) ? this.need(c) : 0;
+    const l = this.pack(c), n = this.mountsFor(c) ? this.need(c) : 0;
     // (les pourparlers de la paix : leur risque est celui de la bonne volonté gagnée, voir `talkRisk`)
     const talk = MISSIONS.find((m) => m.talks && m.choices.includes(c));
     return { take: l.take, label: [packLabel(l.take), n ? `${n} ${plural(n, 'cheval', 'chevaux')}` : ''].filter(Boolean).join(' · '), risk: talk ? talkRisk(this.world.diplo) : this.riskOf(c) * l.k };
@@ -610,7 +620,7 @@ export class Expeditions {
     if (!party) { this.lastFail = tr('Pas assez d’habitants prêts à partir à cet instant : réessayez dans un moment.'); return null; }
     this.world.exp.riding += mounts;
     // l'équipe emporte le meilleur équipement en réserve contre les dangers du voyage
-    const { take, k } = loadout(c, this.world.exp.gear);
+    const { take, k } = this.pack(c, m, age);
     for (const [g, n] of Object.entries(take) as [GearId, number][]) { this.world.exp.gear[g] -= n; this.world.exp.away[g] += n; }
     const a: ActiveExpedition = {
       id: this.nextId++, m, c, phase: m.farewell ? 'gather' : 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
@@ -934,7 +944,13 @@ export class Expeditions {
   /** L'équipe a-t-elle emporté de quoi suivre cette option ? */
   canTake(a: ActiveExpedition, i: number) {
     const o = a.wait?.options[i];
-    return !!o && (!o.needs || o.needs.some((g) => (a.gear[g] ?? 0) > 0));
+    return !!o && this.offers(a, i) && (!o.needs || o.needs.some((g) => (a.gear[g] ?? 0) > 0));
+  }
+
+  /** L'option est-elle proposée à cette équipe ? (pas une option armée à une expédition qui n'emporte jamais d'armes, voir `optionOpen`) */
+  offers(a: ActiveExpedition, i: number) {
+    const o = a.wait?.options[i];
+    return !!o && optionOpen(a.c, a.wait!, o, a.age);
   }
 
   /** Option que l'équipe choisit seule : la plus sûre de celles qu'elle peut suivre */

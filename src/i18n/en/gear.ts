@@ -89,6 +89,10 @@ registerDict('gear', {
   'Chaque équipe emporte le meilleur équipement en réserve.': 'Each team takes the best gear in stock.',
   'Elle le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier.': 'The team brings it back when it returns (a failure can cost a piece). On site, some decisions call for a rope, a boat or weapons. The village makes one piece after another, faster with a workshop.',
   'Tout fabriquer': 'Craft all',
+  // pièces utiles en route : elles ouvrent une option d'imprévu
+  'En route : {opts}': 'On the way: {opts}',
+  'utile en route : « {opt} »': 'useful on the way: “{opt}”',
+  '{gear} : utile en route, pour « {opt} »': '{gear}: useful on the way, for “{opt}”',
   'Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent': 'Starts crafting one piece of each available item, as long as resources last',
   'Dépassées à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore': 'Out of date for this era: expeditions no longer ask for them, but the troops still use them',
   'Fabrication': 'Crafting',
