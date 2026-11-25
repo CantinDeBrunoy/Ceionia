@@ -9,7 +9,7 @@ import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, g
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { missionOffered, missionWhy, tributePerDay, isleOf, rivalOf, talkRisk, isleOffered, isleWhy } from './diplomacy';
 import { SMITHS_PERK, SMITHS_CRAFT } from './isleMissions';
-import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
+import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, ecoPace } from './economy';
 import { recover } from './trade';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
 import { rulesOf } from './difficulty';
@@ -1099,7 +1099,8 @@ export class Expeditions {
     return rate;
   }
   private mineStep(dt: number) {
-    const rate = this.yields(), w = this.world, day = dt / this.dayLen();
+    // (aux grandes vitesses, l'économie compte moins qu'un jour par jour de jeu : voir `ecoPace`)
+    const rate = this.yields(), w = this.world, day = (dt / this.dayLen()) * ecoPace(this.speed);
     // les cours du comptoir remontent au fil des jours
     recover(w.trade, day);
     // le tribut d'or de l'île vaincue, chaque jour, une fois la guerre de l'archipel gagnée

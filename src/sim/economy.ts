@@ -115,6 +115,24 @@ export const missingOf = (w: World, c: Cost): Cost => {
  */
 export const shortLabel = (w: World, c: Cost) => tr('Il manque {cost}', { cost: costLabel(missingOf(w, c)) });
 
+/**
+ * Les ressources ne suivent pas tout à fait la vitesse du jeu (décision de l'auteur, 25 nov. 2026 : « en plus de ×4, on a trop
+ * de ressources ») : à ×4, elles viennent trois fois plus vite qu'à ×1, à ×8 quatre fois (×1 et ×2 inchangés). Couples (vitesse,
+ * rythme des ressources en temps réel), entre eux en ligne droite
+ */
+export const ECO_PACE: readonly (readonly [number, number])[] = [[1, 1], [2, 2], [4, 3], [8, 4]];
+
+/** Part d'un jour de jeu que comptent la production et la consommation à cette vitesse (1 jusqu'à ×2, 0,75 à ×4, 0,5 à ×8) */
+export function ecoPace(speed: number): number {
+  if (!(speed > ECO_PACE[0][0])) return 1;
+  for (let i = 1; i < ECO_PACE.length; i++) {
+    const [s0, r0] = ECO_PACE[i - 1], [s1, r1] = ECO_PACE[i];
+    if (speed <= s1) return (r0 + ((r1 - r0) * (speed - s0)) / (s1 - s0)) / speed;
+  }
+  const [s, r] = ECO_PACE[ECO_PACE.length - 1];
+  return r / s;
+}
+
 /** Production par jour d'un bâtiment, selon son âge */
 export const YIELD: Partial<Record<KindId, Partial<Record<Resource, number[]>>>> = {
   // le double d'avant : la production venait trop lentement pour bâtir les grands bâtiments. Puis 12 et 14 (au lieu de 8 et

@@ -78,7 +78,7 @@ Ordre (surface, simplifié) :
 - `dayLen` = secondes **réelles** par jour (défaut 130, curseur 30–400 ; une sauvegarde restée à l'ancien défaut de 100 passe à 130, `OLD_DAY_LEN`) ; `seasonLen` = secondes réelles par saison (défaut 240, curseur 30–600 ; une sauvegarde restée à l'ancien défaut de 160 passe à 240 au chargement, `OLD_SEASON_LEN`). Un an = 4 × `seasonLen`.
 - Les heures de nuit passent plus vite que celles du jour : `hour += g·24/dayLen / (1 + NIGHT_SKIP·sin((hour−6)/24·2π))`, `NIGHT_SKIP = 0,6` (environ 70 % du cycle au jour). Le jour garde sa durée totale `dayLen`.
 - `mix()` : transition du décor d'une saison à la suivante sur `BLEND = 0,3` de saison, centrée sur le changement (la saison affichée est toujours celle qui domine). `setSeason(i)` pose `seasonT = i + 0,3`.
-- Vitesses : bouton `#bSpeed` du HUD en boucle sur 1, 2, 4, 8 ; fenêtre Réglages : Pause, ×1, ×2, ×4, ×8. `Espace` bascule la pause (surface, souterrain, Enfers). Les réglages `dayLen`, `seasonLen`, `speed` sont sauvegardés ; `paused` et `days` ne le sont pas.
+- Vitesses : bouton `#bSpeed` du HUD en boucle sur 1, 2, 4, 8 ; fenêtre Réglages : Pause, ×1, ×2, ×4, ×8. Les ressources ne suivent pas tout à fait : ×3 à ×4, ×4 à ×8 (`ecoPace`, voir [economie-ressources.md](economie-ressources.md)). `Espace` bascule la pause (surface, souterrain, Enfers). Les réglages `dayLen`, `seasonLen`, `speed` sont sauvegardés ; `paused` et `days` ne le sont pas.
 - Aux vitesses élevées : `cam.pace = speed`, la caméra qui suit rattrape d'autant plus vite ; les balayages de teinte du sol s'espacent (`refreshSeason`, `2 × max(1, speed)` crans).
 
 ### Caméra (`CameraRig`)
