@@ -313,6 +313,9 @@ registerDict('war', {
   '🔥 Incursion sur l’île du portail : {n} !': '🔥 Raid on the portal island: {n}!',
 
   // ---- guidage dans les Enfers : objectif, frise, suivi de la vue, portail comme cible d'ordre ----
+  // (les flèches vers les ennemis hors de vue, bataille de l'archipel)
+  'ennemi': 'enemy', 'ennemis': 'enemies',
+  '{n} par là · clic : y aller': '{n} this way · click to go there',
   '(à {n})': '({n} away)',
   'à {n}': '{n} away',
   'Objectif : abattre l’avant-poste': 'Goal: destroy the outpost',

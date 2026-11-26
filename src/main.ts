@@ -1839,6 +1839,8 @@ class Game implements UIHost {
       kind: 'rival', sim: b.sim, layer,
       pick: (x, y) => { const p = this.terrain.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x - ox, p.z - oz] : null; },
       screen: (x, z) => this.toScreen(v.set(x + ox, w.hAt(x + ox, z + oz) + 0.3, z + oz)),
+      // (les flèches vers les ennemis hors de vue, `CommandUI.foeFrame`)
+      screenRaw: (x, z) => this.toScreenRaw(v.set(x + ox, w.hAt(x + ox, z + oz) + 0.3, z + oz)),
       focus: (x, z, dist) => this.cam.goTo(x + ox, z + oz, dist === undefined ? this.cam.dist : Math.max(this.cam.dist, dist)),
       status: () => this.rivalStatus(),
       leave: () => this.endRivalBattle('lost', true),
@@ -4052,6 +4054,8 @@ class Game implements UIHost {
       if (fp && Math.hypot(fp[0] - this.cam.target.x, fp[1] - this.cam.target.z) > 2.5) this.cam.glide(fp[0], fp[1]);
       this.command.frame();
     }
+    // la bataille de l'archipel : les flèches vers les ennemis hors de vue
+    else if (this.rivalBattle) this.command.foeFrame();
     if (hv) { hv.view.units.age = this.sim.age; hv.view.age = this.sim.age; hv.update(dt, this.war.hellFx, this.cam.camera, this.cam.target, this.cam.dist); }
     else if (uv) {
       uv.age = this.sim.age;

@@ -32,8 +32,10 @@ type PartName = typeof PARTS[number];
 interface Rig { parts: Partial<Record<PartName, { mesh: THREE.InstancedMesh; pivot: THREE.Vector3 }>> }
 
 const BAR_M = new THREE.Matrix4(), BAR_S = new THREE.Matrix4();
-const BAR_BG = new THREE.Color(0x1a0a0c), HELL_C = new THREE.Color(0xff4a3a), PLAYER_C = new THREE.Color(0x5adf6a), WEAK_C = new THREE.Color(0xffc040);
+const BAR_BG = new THREE.Color(0x1a0a0c), HELL_C = new THREE.Color(0xff4a3a), PLAYER_C = new THREE.Color(0x5adf6a), WEAK_C = new THREE.Color(0xffc040), ALLY_C = new THREE.Color(0x5ab8ff);
 const BARS = 600, RINGS = 120;
+/** Cercles rouges sous les ennemis, au plus (un seul maillage instancié : un appel de dessin) */
+const FOES = 400;
 /** Taille des soldats du joueur (au-dessus de celle des habitants : on les lit de loin) */
 const TROOP_K: Record<string, number> = { soldier: 1.6, archer: 1.5, knight: 1.85, cavalry: 1.5, warlord: 2.6 };
 /** Le modèle de chaque troupe : lancier (lance et bouclier), archer (arc, carquois, capuchon), chevalier (armure, écu, épée) */
@@ -82,6 +84,8 @@ export class BattleLayer {
   private rings: THREE.InstancedMesh;
   /** socles pâles sous les troupes du joueur non choisies (on repère toujours ses hommes) */
   private soft: THREE.InstancedMesh;
+  /** cercles rouges sous les ennemis (on les repère dans l'herbe et parmi nos troupes) */
+  private foes: THREE.InstancedMesh;
   private markMesh: THREE.Mesh;
   private pin: THREE.Mesh;
   private m4 = new THREE.Matrix4();
@@ -111,6 +115,10 @@ export class BattleLayer {
     this.soft = new THREE.InstancedMesh(new THREE.RingGeometry(0.6, 1, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.45, depthWrite: false, fog: false }), RINGS);
     this.soft.count = 0; this.soft.frustumCulled = false; this.soft.renderOrder = 8;
     this.group.add(this.soft);
+    // (rouge vif, plus épais que le socle pâle : l'ennemi se distingue de loin, sans se confondre avec le cercle vert du choix)
+    this.foes = new THREE.InstancedMesh(new THREE.RingGeometry(0.62, 1, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.8, depthWrite: false, fog: false }), FOES);
+    this.foes.count = 0; this.foes.frustumCulled = false; this.foes.renderOrder = 8;
+    this.group.add(this.foes);
     this.markMesh = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.4, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, depthWrite: false, depthTest: false, fog: false }));
     this.markMesh.visible = false; this.markMesh.renderOrder = 9;
     // la flèche de l'ordre, pointe en bas (toujours visible, par-dessus le relief)
@@ -298,10 +306,14 @@ export class BattleLayer {
       if (u.hp <= 0) continue;
       const boss = u.kind === 'guardian' || u.kind === 'king' || u.kind === 'chief' || u.kind === 'elite' || BIGS.includes(u.kind as DemonKind);
       // (une petite barre seulement sur les blessés, les chefs et les choisis : pas de barre pleine sur chaque combattant)
-      if (u.hp >= u.maxHp && !boss && !this.selected.has(u.id)) continue;
-      const sc = u.side === 'hell' ? SCALE[u.kind as DemonKind] ?? 0.4 : 0.45;
+      // (dans l'archipel, chaque soldat ennemi garde sa barre rouge : elle passe par-dessus le relief et les maisons, on sait où ils sont)
+      const foe = u.side === 'hell', marked = foe && !!this.people;
+      if (u.hp >= u.maxHp && !boss && !marked && !this.selected.has(u.id)) continue;
+      const sc = foe ? SCALE[u.kind as DemonKind] ?? 0.4 : 0.45;
       const frac = u.hp / u.maxHp;
-      put(u.x, this.groundY(u.x, u.z) + sc * 1.25 + 0.15, u.z, boss ? Math.min(2.2, 0.9 + sc * 0.4) : 0.36, frac, u.side === 'hell' ? HELL_C : frac > 0.35 ? PLAYER_C : WEAK_C);
+      // (rouge : l'ennemi ; bleu : nos alliés ; vert, puis ambre une fois affaiblies : nos troupes)
+      const c = foe ? HELL_C : u.kind.startsWith('ally:') ? ALLY_C : frac > 0.35 ? PLAYER_C : WEAK_C;
+      put(u.x, this.groundY(u.x, u.z) + sc * 1.25 + 0.15, u.z, boss ? Math.min(2.2, 0.9 + sc * 0.4) : 0.36, frac, c);
     }
     for (const b of this.hell.buildings.values()) {
       if (b.down || (b.hp >= b.maxHp && b.kind !== 'kingdom')) continue;
@@ -316,7 +328,7 @@ export class BattleLayer {
     }
   }
 
-  /** Cercles verts sous les unités choisies ; la marque de l'ordre, qui s'efface */
+  /** Cercles verts sous les unités choisies, socles pâles sous les autres, cercles rouges sous les ennemis ; la marque de l'ordre, qui s'efface */
   private drawRings() {
     let n = 0;
     const m = this.m4, v = this.v, s = this.s, q = this.q.identity();
@@ -340,6 +352,17 @@ export class BattleLayer {
     }
     this.soft.count = kn;
     this.soft.instanceMatrix.needsUpdate = true;
+    // un cercle rouge sous chaque ennemi (démons compris : sur l'île, ils se fondaient dans l'herbe)
+    let fn = 0;
+    for (const u of this.hell.units.values()) {
+      if (u.hp <= 0 || u.side !== 'hell') continue;
+      if (fn >= FOES) break;
+      v.set(u.x, this.groundY(u.x, u.z) + 0.028, u.z);
+      s.setScalar(u.stats.radius * 0.9 + 0.08);
+      this.foes.setMatrixAt(fn++, m.compose(v, q, s));
+    }
+    this.foes.count = fn;
+    this.foes.instanceMatrix.needsUpdate = true;
     // la marque de l'ordre : un anneau qui s'élargit et une flèche qui se plante en rebondissant (verte : aller, tenir ; rouge :
     // attaquer ; ambre : se replier), à la taille de la vue
     const k = this.mark, LIFE = 1.2;

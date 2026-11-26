@@ -1965,6 +1965,15 @@ body.cinematic #bannerWrap { display: none !important; }
 #hellGoal.edge .hgArrow { display: block; }
 #hellGoal.edge .hgPin { transform: translate(-50%, 8px); }
 @keyframes hgbob { 0%, 100% { margin-top: 0; } 50% { margin-top: -5px; } }
+/* les flèches vers les ennemis hors de vue (bataille de l'archipel, `CommandUI.foeFrame`) : une pointe rouge tournée vers eux,
+   leur nombre dans une pastille rouge ; un clic y mène la vue */
+#foeMarks { position: absolute; left: 0; top: 0; z-index: 8; pointer-events: none; }
+#foeMarks .foeMark { position: absolute; left: 0; top: 0; width: 0; height: 0; padding: 0; border: 0; background: none; pointer-events: none; }
+#foeMarks .fmArrow { position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; pointer-events: none; }
+#foeMarks .fmArrow::before { content: ''; position: absolute; left: 36px; top: 10px; border-left: 16px solid #ff3b2e; border-top: 10px solid transparent; border-bottom: 10px solid transparent; filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55)); }
+#foeMarks .foeMark b { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); min-width: 26px; padding: 3px 7px; box-sizing: border-box; border-radius: 999px; border: 2px solid #fff1e6; background: #c8281c; color: #fff; font-size: 12.5px; font-weight: 800; line-height: 1; text-align: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45); pointer-events: auto; cursor: pointer; }
+#foeMarks .foeMark:hover b { background: #e2382a; }
+body.cinematic #foeMarks { display: none !important; }
 @media (max-width: 640px) {
   #troopBar .tgoal { font-size: 11px; padding: 3px 7px; }
 }

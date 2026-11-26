@@ -173,6 +173,9 @@ export const CONTROLS_HELP: [string, string][] = [
   ['🔥', 'revenir ici depuis le village : le bouton « Les Enfers », ou un clic sur l’arche de l’île'],
 ];
 
+/** Les repères des ennemis hors de vue (bataille de l'archipel) : au plus, et la taille d'un groupe (cases) */
+const FOE_MARKS = 3, FOE_GROUP = 10;
+
 export class CommandUI implements ToolInput {
   cmd = new Command();
   theater: Theater | null = null;
@@ -199,6 +202,8 @@ export class CommandUI implements ToolInput {
   /** le prochain objectif dans les Enfers (recalculé à chaque rendu) et son marqueur à l'écran */
   goal: HellGoal | null = null;
   private goalEl: HTMLElement;
+  /** les repères au bord de l'écran vers les groupes ennemis hors de vue (bataille de l'archipel) */
+  private foeEl: HTMLElement;
   /** le curseur est sur le portail, des troupes choisies : un ordre y fait passer le portail */
   private overPortal = false;
   /** l'outil de la base des Enfers (les boutons carrés à gauche de « Ma base ») */
@@ -225,7 +230,9 @@ export class CommandUI implements ToolInput {
     this.card = document.createElement('div');
     this.card.id = 'tinfo';
     this.card.className = 'panel xcard';
-    root.append(this.bar, this.box, this.goalEl, this.card);
+    this.foeEl = document.createElement('div');
+    this.foeEl.id = 'foeMarks';
+    root.append(this.bar, this.box, this.goalEl, this.foeEl, this.card);
     // l'alerte se range en tête de la colonne de gauche, au-dessus des cartes des équipes et des messages
     const side = root.querySelector('#expList');
     if (side) side.prepend(this.alertEl); else root.append(this.alertEl);
@@ -287,6 +294,7 @@ export class CommandUI implements ToolInput {
     this.theater = t;
     // hors des Enfers, `frame` n'est plus appelé : la cible du prochain bastion restait affichée à la surface
     if (t?.kind !== 'hell') this.goalEl.classList.remove('show');
+    if (t?.kind !== 'rival') this.foeEl.innerHTML = '';
     this.cmd.clear();
     this.cmd.groups = {};
     if (t) t.layer.selected = this.cmd.selected;
@@ -1373,20 +1381,10 @@ export class CommandUI implements ToolInput {
   frame() {
     const t = this.theater, g = this.goal, el = this.goalEl;
     if (!t || t.kind !== 'hell' || !g || g.x === undefined || g.z === undefined || !t.screenRaw) { el.classList.remove('show'); return; }
-    const c = this.host.canvas, W = c.clientWidth, H = c.clientHeight;
     const from = this.center(), dist = Math.hypot(g.x - from[0], g.z - from[1]);
     const label = nplural(Math.max(1, Math.round(dist)), 'case', 'cases');
     const [sx, sy] = t.screenRaw(g.x, g.z);
-    // la zone libre de l'écran : sous le haut (ressources, frise) et au-dessus du bas (barre des troupes)
-    const cr = c.getBoundingClientRect(), under = this.bar.querySelector('.tfcol')?.getBoundingClientRect(), over = this.bar.querySelector('.tfoot')?.getBoundingClientRect();
-    const x0 = 28, x1 = W - 28, y0 = under ? under.bottom - cr.top + 34 : 130, y1 = Math.max(y0 + 40, over ? over.top - cr.top - 24 : H - 190);
-    const inside = sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1;
-    let px = sx, py = sy, ang = 0;
-    if (!inside) {
-      const cx = W / 2, cy = (y0 + y1) / 2, dx = sx - cx, dy = sy - cy;
-      const k = Math.min(dx ? ((dx > 0 ? x1 : x0) - cx) / dx : Infinity, dy ? ((dy > 0 ? y1 : y0) - cy) / dy : Infinity);
-      px = cx + dx * k; py = cy + dy * k; ang = Math.atan2(dy, dx);
-    }
+    const { inside, px, py, ang } = this.toEdge(sx, sy, this.freeArea(34, 24));
     el.classList.add('show');
     el.classList.toggle('edge', !inside);
     el.style.transform = `translate(${Math.round(px)}px, ${Math.round(py)}px)`;
@@ -1396,6 +1394,73 @@ export class CommandUI implements ToolInput {
     const d = this.bar.querySelector('.tgd');
     const txt = ` (${tr('à {n}', { n: label })})`;
     if (d && d.textContent !== txt) d.textContent = txt;
+  }
+
+  /**
+   * La zone libre de l'écran : sous le haut (ressources, frise ou bandeau) et au-dessus du bas (barre des troupes) ; `top` et
+   * `bottom` : la marge sous le haut et au-dessus du bas
+   */
+  private freeArea(top: number, bottom: number) {
+    const c = this.host.canvas, W = c.clientWidth, H = c.clientHeight;
+    const cr = c.getBoundingClientRect(), under = this.bar.querySelector('.tfcol')?.getBoundingClientRect(), over = this.bar.querySelector('.tfoot')?.getBoundingClientRect();
+    const x0 = 28, x1 = W - 28, y0 = under ? under.bottom - cr.top + top : 130, y1 = Math.max(y0 + 40, over ? over.top - cr.top - bottom : H - 190);
+    return { x0, x1, y0, y1 };
+  }
+
+  /** Un point de l'écran dans la zone libre (tel quel), ou ramené au bord vers lui (avec l'angle de la flèche) */
+  private toEdge(sx: number, sy: number, a: { x0: number; x1: number; y0: number; y1: number }) {
+    const { x0, x1, y0, y1 } = a, inside = sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1;
+    if (inside) return { inside, px: sx, py: sy, ang: 0 };
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, dx = sx - cx, dy = sy - cy;
+    const k = Math.min(dx ? ((dx > 0 ? x1 : x0) - cx) / dx : Infinity, dy ? ((dy > 0 ? y1 : y0) - cy) / dy : Infinity);
+    return { inside, px: cx + dx * k, py: cy + dy * k, ang: Math.atan2(dy, dx) };
+  }
+
+  /**
+   * Une image (bataille de l'archipel) : une flèche rouge au bord de l'écran vers chaque groupe ennemi hors de vue (`FOE_MARKS`
+   * au plus, les plus nombreux), avec leur nombre ; un clic y mène la vue. Les ennemis à l'écran ont leur cercle et leur barre
+   */
+  foeFrame() {
+    const t = this.theater, el = this.foeEl;
+    if (!t || t.kind !== 'rival' || !t.screenRaw || document.body.classList.contains('cinematic')) { if (el.childElementCount) el.innerHTML = ''; return; }
+    // les groupes : chaque ennemi rejoint le premier groupe à moins de `FOE_GROUP` cases de son centre, sinon en ouvre un
+    const groups: { x: number; z: number; n: number }[] = [];
+    for (const u of t.sim.units.values()) {
+      if (u.hp <= 0 || u.side !== 'hell') continue;
+      const g = groups.find((g) => Math.hypot(g.x - u.x, g.z - u.z) < FOE_GROUP);
+      if (g) { g.n++; g.x += (u.x - g.x) / g.n; g.z += (u.z - g.z) / g.n; }
+      else groups.push({ x: u.x, z: u.z, n: 1 });
+    }
+    groups.sort((a, b) => b.n - a.n);
+    const area = this.freeArea(40, 30), shown: { px: number; py: number; ang: number; g: typeof groups[number] }[] = [];
+    for (const g of groups) {
+      if (shown.length >= FOE_MARKS) break;
+      const [sx, sy] = t.screenRaw(g.x, g.z), e = this.toEdge(sx, sy, area);
+      // (à l'écran : rien ; deux flèches trop proches n'en font qu'une, celle du plus gros groupe)
+      if (e.inside || shown.some((o) => Math.hypot(o.px - e.px, o.py - e.py) < 56)) continue;
+      shown.push({ ...e, g });
+    }
+    while (el.childElementCount > shown.length) el.lastElementChild!.remove();
+    while (el.childElementCount < shown.length) {
+      const m = document.createElement('button');
+      m.className = 'foeMark';
+      m.innerHTML = '<i class="fmArrow"></i><b></b>';
+      m.onclick = () => {
+        if (!this.theater) return;
+        this.host.follow?.(false);
+        this.theater.focus(Number(m.dataset.x), Number(m.dataset.z));
+        this.host.click();
+      };
+      el.append(m);
+    }
+    shown.forEach((s, i) => {
+      const m = el.children[i] as HTMLElement, n = String(s.g.n);
+      m.style.transform = `translate(${Math.round(s.px)}px, ${Math.round(s.py)}px)`;
+      (m.firstElementChild as HTMLElement).style.transform = `rotate(${s.ang}rad)`;
+      m.dataset.x = String(s.g.x); m.dataset.z = String(s.g.z);
+      const b = m.lastElementChild!;
+      if (b.textContent !== n) { b.textContent = n; m.title = tr('{n} par là · clic : y aller', { n: nplural(s.g.n, 'ennemi', 'ennemis') }); }
+    });
   }
 
   /** L'alerte d'incursion (bannière et bouton « Voir l'île »), quand on ne regarde pas l'île */
