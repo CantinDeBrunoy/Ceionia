@@ -828,7 +828,7 @@ export class Tutorial {
     return { a: arrow, scroll: TUTO_TEXT.scroll(side === 'itNext' ? '›' : '‹', name) };
   }
 
-  /** l'élément montré : un bouton prend une teinte dorée (l'anneau doré, lui, l'entoure d'un halo qui respire lentement) */
+  /** l'élément montré (classe `tHi`, qui garde la barre ouverte ; l'anneau orange en pointillés l'entoure, une flèche au-dessus) */
   private lit: Element | null = null;
   private light(a: Element | null) {
     if (a === this.lit) return;
@@ -934,8 +934,14 @@ export class Tutorial {
       const a = this.lit, ring = this.ring;
       if (!a || ring.hidden || !this.on || !a.isConnected) return false;
       const r = a.getBoundingClientRect();
+      // l'élément caché sous une fenêtre ouverte par-dessus (le bouton Équipement sous la fenêtre de départ d'une expédition) :
+      // pas d'anneau vide qui flotte au milieu de la fenêtre (testeur, 26 nov. 2026)
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const under = !!top && !a.contains(top) && !top.contains(a) && !!top.closest('.overlay') && !a.closest('.overlay')?.contains(top.closest('.overlay'));
+      ring.style.visibility = under ? 'hidden' : '';
       ring.style.left = `${r.left - 6}px`; ring.style.top = `${r.top - 6}px`;
       ring.style.width = `${r.width + 12}px`; ring.style.height = `${r.height + 12}px`;
+      ring.classList.toggle('below', r.top < 40);
       return true;
     };
     if (!fit() || this.followId) return;

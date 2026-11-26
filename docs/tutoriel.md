@@ -5,7 +5,11 @@
 > Voir aussi : [interface.md](interface.md), [portail-ile.md](portail-ile.md), [enfers.md](enfers.md), [armee-combat.md](armee-combat.md), [sauvegarde.md](sauvegarde.md), [traduction.md](traduction.md)
 
 ## En bref
-Une bulle guide le joueur pas à pas. Elle se place à côté de l'élément dont elle parle, qu'entoure un anneau doré.
+Une bulle guide le joueur pas à pas. Elle se place à côté de l'élément dont elle parle, qu'entoure un anneau (`#tutoRing`) :
+orange, en pointillés, qui bat, avec une flèche qui sautille au-dessus (dessous près du haut de l'écran, classe `below`). Le
+bouton montré garde la classe `tHi` mais plus de liseré doré : doré, il ressemblait à l'objet choisi (fond et cadre dorés), et
+un testeur a cru avoir le point d'eau en main (26 nov. 2026). L'élément caché sous une autre fenêtre (le bouton Équipement
+sous la fenêtre de départ d'une expédition) n'a pas d'anneau : il flottait, vide, au milieu de la fenêtre (`follow`).
 Chaque étape a des tâches ; quand elles sont faites, la bulle dit « Bien joué ! » puis passe seule à la suivante.
 Rien n'est bloqué : « Suivant » passe toujours, « Passer le tutoriel » le met de côté.
 Un « Suivant » qui arrive moins de 0,9 s après un passage automatique (`LATE_MS`), ou enfoncé sur l'étape d'avant (`downOn`),

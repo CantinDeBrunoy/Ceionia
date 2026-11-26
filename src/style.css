@@ -1233,12 +1233,18 @@ body.photo #photoBar { display: flex; }
 #tuto[data-side="right"] .tArrow { left: -1px; border-bottom-width: 2px; border-left-width: 2px; }
 #tuto[data-side="left"] .tArrow { left: calc(100% + 1px); border-top-width: 2px; border-right-width: 2px; }
 #tuto:not([data-side]) .tArrow, #tuto[data-side=""] .tArrow { display: none; }
-/* l'élément montré : un bouton prend un liseré doré, sans bouger ni clignoter ni changer de couleur (texte blanc ou foncé, il reste lisible) */
-button.tHi { box-shadow: inset 0 0 0 2px #ffb31a, 0 0 14px rgba(255, 179, 26, 0.45) !important; }
-/* autour de lui, un anneau doré dont la lueur respire lentement (l'anneau est à part : un élément redessiné ne la relance pas) */
-#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; border: 3px solid #ffb31a; box-shadow: 0 0 12px 3px rgba(255, 179, 26, 0.5); animation: tutoRing 3.2s ease-in-out infinite; }
-@keyframes tutoRing { 50% { box-shadow: 0 0 20px 6px rgba(255, 179, 26, 0.28); } }
-@media (prefers-reduced-motion: reduce) { #tutoRing { animation: none; } }
+/* l'élément montré par le tutoriel ne ressemble pas à l'objet choisi (fond et cadre dorés) : plus de liseré doré sur le bouton,
+   autour de lui un anneau orange en pointillés qui bat, et une flèche qui sautille au-dessus (testeur, 26 nov. 2026 : la carte
+   « Point d'eau » entourée d'or semblait déjà en main, et une hutte de trop était posée). L'anneau est à part : un élément
+   redessiné ne relance pas son animation */
+#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; border: 3px dashed #ff8a1c; box-shadow: 0 0 0 2px rgba(255, 246, 222, 0.9), 0 0 14px 4px rgba(255, 138, 28, 0.5); animation: tutoRing 1.2s ease-in-out infinite; }
+@keyframes tutoRing { 50% { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(255, 246, 222, 0.6), 0 0 22px 7px rgba(255, 138, 28, 0.25); } }
+#tutoRing::after { content: ''; position: absolute; left: 50%; bottom: calc(100% + 5px); margin-left: -10px; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 14px solid #ff8a1c; filter: drop-shadow(0 2px 2px rgba(60, 30, 0, 0.45)); animation: tutoArrow 0.8s ease-in-out infinite alternate; }
+/* près du haut de l'écran (boutons du HUD), la flèche passe dessous, pointe vers le haut */
+#tutoRing.below::after { bottom: auto; top: calc(100% + 5px); border-top: none; border-bottom: 14px solid #ff8a1c; animation-name: tutoArrowUp; }
+@keyframes tutoArrow { to { transform: translateY(-6px); } }
+@keyframes tutoArrowUp { to { transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { #tutoRing, #tutoRing::after { animation: none; } }
 /* le marqueur du guidage de la première ligne : posé sur la gare à cliquer (la bulle l'entoure de son anneau), une flèche
    dorée au-dessus ; il laisse passer les clics vers la gare */
 #railPin { position: absolute; z-index: 30; pointer-events: none; border-radius: 50%; border: 2px dashed rgba(255, 210, 122, 0.95); background: radial-gradient(circle, rgba(255, 196, 64, 0.22), rgba(255, 196, 64, 0) 70%); }
