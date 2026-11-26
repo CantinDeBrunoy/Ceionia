@@ -969,9 +969,9 @@ export class UI {
     $('#bExp').onclick = () => this.openExpeditions();
     // l'écran allégé : Peuples, Enfers et notifications dans un seul menu (demande de l'auteur, 24 nov. 2026 : restent à part les
     // expéditions, le temps et les paramètres) ; avec un seul choix (les notifications, avant l'archipel et le portail), il y
-    // mène tout droit
+    // mène tout droit. Le style calculé compte : aux Enfers, la feuille de style cache Peuples et Enfers (seule la cloche reste)
     $('#bMenu').onclick = () => {
-      const menu = $('#hudMenu'), items = [...menu.querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.style.display !== 'none');
+      const menu = $('#hudMenu'), items = [...menu.querySelectorAll<HTMLButtonElement>('button')].filter((b) => getComputedStyle(b).display !== 'none');
       if (items.length === 1) { this.hudMenu(false); items[0].click(); return; }
       this.hudMenu(menu.hidden);
       this.host.audio.sfxClick();
