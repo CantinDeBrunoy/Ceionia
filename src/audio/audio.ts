@@ -340,6 +340,10 @@ export class AudioEngine {
     if (!this.ctx) return;
     const want = this.muteMusic || !RECORDED_MUSIC ? null : this.scene ?? this.ageKey;
     if (this.track?.key === want) return;
+    // (le morceau de l'ouverture continue dans la partie jusqu'à sa fin, puis la liste de l'âge prend le relais : demande
+    // de l'auteur, 26 nov. 2026)
+    const t = this.track;
+    if (t && t.key === 'opening' && want?.startsWith('age') && !t.next) { t.key = want; return; }
     // (un morceau n'appartient qu'à une liste : la cinématique finie, le sien s'efface pendant que celui de l'âge entre)
     this.fadeOut(this.track);
     this.track = null;

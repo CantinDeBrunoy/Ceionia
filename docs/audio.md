@@ -83,7 +83,7 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 | `hell` | `enfers-croisade` | « Crusade » (3:19) | Kevin MacLeod | CC BY 4.0 |
 | `hell` | `enfers-rituel` | « Ritual » (4:24) | Kevin MacLeod | CC BY 4.0 |
 | `end` | `fin` | « Beyond The Clouds » (2:22), le voyage des colons et les écrans de victoire | Matthew Pablo, OpenGameArt | CC BY 3.0 |
-| `opening` | `cine-ouverture` | « Ascending the Vale » (4:08), l'ouverture : une tribu qui erre (harpe, chœur, flûte, percussions) | Kevin MacLeod | CC BY 4.0 |
+| `opening` | `cine-ouverture` | « Adding the Sun » (2:56), l'ouverture : chill mais rythmé (chœur, percussions, basse), choisi par l'auteur le 26 nov. 2026 à la place d'« Ascending the Vale ». Il continue dans la partie après la cinématique, jusqu'à sa fin, puis la liste de l'âge prend le relais (`syncMusic`) | Kevin MacLeod | CC BY 4.0 |
 | `theft` | `cine-vol` | « The Descent » (3:12), le vol du bâton du fondateur : une irruption sombre et menaçante (cuivres, percussions). Fiche du morceau : « Action, Dark, Driving, Epic, Intense ». Licence vérifiée sur sa page incompetech (ISRC USUAN1200094) le 26 nov. 2026 | Kevin MacLeod | CC BY 4.0 |
 | `portal` | `cine-portail` | « Lightless Dawn » (6:20), le portail : sombre et mystérieux (cordes, cloches, nappes) | Kevin MacLeod | CC BY 4.0 |
 | `voyage` | `cine-traversee` | « Ocean Theme » (fichier « Brave New Ocean », 5:02), la traversée : un thème de mer et d'aventure | Wolfgang_, OpenGameArt | CC BY 4.0 |
