@@ -14,6 +14,8 @@ import { drapeTiles } from './zones';
 export class RangeView {
   private mine: THREE.Mesh;
   private others: THREE.Mesh;
+  /** les habitations qu'aucun poste de ce service ne couvre (celui qu'on montre compris) : ce qui reste à protéger */
+  private bare: THREE.Mesh;
   private mats: THREE.Material[] = [];
   private key = '';
   private t = 0;
@@ -36,6 +38,10 @@ export class RangeView {
     // (bleu franc, liseré blanc, et le quadrillage des cases à portée : on les compte)
     this.others = tile(0x6aa8ff, 0.14, 0xb8d4ff, 0, 6);
     this.mine = tile(0x1f6fff, 0.36, 0xffffff, 0.35, 7);
+    // (rouge orangé, liseré clair : se voit sur l'herbe comme sur la neige, et ne se confond pas avec le bleu)
+    this.bare = tile(0xff4a2a, 0.38, 0xffd2c4, 0, 8);
+    // (vue au travers de la maison qui la couvre : la maison paraît teintée de rouge)
+    for (const o of [this.bare, ...this.bare.children] as THREE.Mesh[]) (o.material as THREE.Material).depthTest = false;
   }
 
   /** La portée d'un genre (0 : il n'en a pas) */
@@ -47,9 +53,9 @@ export class RangeView {
    */
   show(w: World, kind: KindId | null, x = 0, z = 0, age = 0, self = -1) {
     const r = kind ? RangeView.range(w, kind, age) : 0;
-    if (!kind || !r) { this.mine.visible = this.others.visible = false; this.key = ''; return; }
+    if (!kind || !r) { this.mine.visible = this.others.visible = this.bare.visible = false; this.key = ''; return; }
     const key = `${kind}|${x},${z}|${r}|${self}|${w.version}|${w.buildings.size}`;
-    if (key === this.key) { this.mine.visible = this.others.visible = true; return; }
+    if (key === this.key) { this.mine.visible = this.others.visible = true; this.bare.visible = this.bareN > 0; return; }
     this.key = key;
     const s = KINDS[kind].size / 2, cx = x + s, cz = z + s, R = Math.ceil(r);
     const near = (ox: number, oz: number, rr: number) => (px: number, pz: number) => Math.hypot(px + 0.5 - ox, pz + 0.5 - oz) <= rr;
@@ -70,7 +76,26 @@ export class RangeView {
           }
     }
     this.set(this.others, drapeTiles(w, x0, z0, x1, z1, (px, pz) => covered[pz * N + px] === 1));
+    // les habitations hors de portée de tout poste du service, le montré compris (de centre à centre, comme `reaches`) :
+    // leur emprise en rouge. Retour de l'auteur (26 nov. 2026) : on voyait la zone protégée, pas ce qui restait à protéger
+    const posts: [number, number, number][] = [[cx, cz, r]];
+    for (const b of w.buildings.values()) if (b.id !== self && same(b.kind)) { const h = sizeOf(b) / 2; posts.push([b.x + h, b.z + h, rangeOf(b, guardReach(w))]); }
+    const bare = new Uint8Array(N * N);
+    let bx0 = N, bz0 = N, bx1 = -1, bz1 = -1, nb = 0;
+    for (const b of w.buildings.values()) {
+      if ((KINDS[b.kind]?.housing?.[b.age] ?? 0) <= 0) continue;
+      const sz = sizeOf(b), hx = b.x + sz / 2, hz = b.z + sz / 2;
+      if (posts.some(([px, pz, pr]) => Math.hypot(px - hx, pz - hz) <= pr)) continue;
+      nb++;
+      for (let pz = b.z; pz < b.z + sz; pz++) for (let px = b.x; px < b.x + sz; px++) if (w.inCells(px, pz)) bare[pz * N + px] = 1;
+      bx0 = Math.min(bx0, b.x); bz0 = Math.min(bz0, b.z); bx1 = Math.max(bx1, b.x + sz - 1); bz1 = Math.max(bz1, b.z + sz - 1);
+    }
+    this.bareN = nb;
+    this.set(this.bare, drapeTiles(w, bx0, bz0, bx1, bz1, (px, pz) => bare[pz * N + px] === 1));
   }
+
+  /** combien d'habitations restent hors de portée (0 : tout est couvert) */
+  bareN = 0;
 
   private set(mesh: THREE.Mesh, t: ReturnType<typeof drapeTiles>) {
     mesh.geometry.dispose();

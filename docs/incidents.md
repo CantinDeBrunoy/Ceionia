@@ -53,7 +53,7 @@ Messages : les nouvelles de `Fires.news` s'affichent en toast `danger` s'ils com
 
 ### Couverture et portées (rappel)
 - Jauge Sécurité : pompiers `FIRE_RANGE = 14`, police `policeRange(age) = 12 + min(5, âge)` ; voir [besoins-population.md](besoins-population.md). La santé (hôpital) n'a **pas** de portée côté besoins : seule sa capacité compte.
-- Surbrillance (`CoverageView`, bouton de la fiche Sécurité) : disque et anneau verts de la portée de chaque poste, pastille orange sous une habitation qui n'a pas les deux services, rouge si aucun. Reconstruite seulement quand `world.version` change. À la pose et à la sélection d'un poste, sa portée case par case : `RangeView`, voir [placement-construction.md](placement-construction.md).
+- Surbrillance (`CoverageView`, bouton de la fiche Sécurité) : disque et anneau verts de la portée de chaque poste, pastille orange sous une habitation qui n'a pas les deux services, rouge si aucun. Reconstruite seulement quand `world.version` change. À la pose et à la sélection d'un poste, sa portée case par case et, en rouge, les habitations qu'aucun poste de ce service ne couvre : `RangeView`, voir [placement-construction.md](placement-construction.md).
 - Effet sur les expéditions (`security.ts`) : un poste `fire` retire 5 % du risque (10 % face aux dangers chute, eau, intempéries) ; un poste `police` 5 % (10 % face aux bêtes et monstres) ; un seul poste de chaque sorte compte ; plafond `SECURITY_MAX = 0,15`. Ne dépend ni de la distance ni de l'âge.
 
 ### Autres événements aléatoires
