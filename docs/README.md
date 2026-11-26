@@ -15,6 +15,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [interface.md](interface.md) : HUD, menus, onglets et rayons de construction, fiches, notifications, réglages.
 - [traduction.md](traduction.md) : `tr`, `localize`, fichiers anglais (voir aussi `src/i18n/README.md`).
 - [chargement-performances.md](chargement-performances.md) : écran de chargement, préparation des shaders, coûts connus, régime normal (mesures, ce qui est fait, ce qui reste).
+- [mesure-audience.md](mesure-audience.md) : la mesure d'audience anonyme (signaux du jeu, refus dans les paramètres), le Worker Cloudflare et sa base D1, le back-office `/bo`, la mise en service.
 - [audio.md](audio.md) : musique (morceaux enregistrés par âge, menu, Enfers, fin ; musique générative en repli), ambiances, bruitages de proximité (forge, bêtes, foule, volcan…), effets, réglages de volume.
 
 ### Le monde

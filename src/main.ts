@@ -3,6 +3,7 @@ import './hudTheme.css';
 import './hudAllege.css';
 import './i18n/en';
 import { onLangChange, tr, nplural, getLang } from './i18n';
+import { startAudience, type Audience } from './audience';
 import * as THREE from 'three';
 import { World, N, VEG_VOLCANO, VEG_FOREST, setMapSize } from './world/world';
 import { buildingSpots, pickVoices } from './audio/spots';
@@ -316,6 +317,10 @@ class Game implements UIHost {
   hideGoals = false;
   /** la cinématique d'ouverture coupée (Paramètres › Divers) : une partie neuve commence sans elle */
   introOff = false;
+  /** la mesure d'audience de la partie (`audience.ts`) ; nulle si refusée, en développement et dans les tests */
+  audience: Audience | null = null;
+  /** la partie a été lancée neuve ou reprise d'une sauvegarde (mesure d'audience) */
+  launched: 'new' | 'continue' = 'new';
   /** comment le joueur déplace la vue : retenu pour ce navigateur ; avant le premier choix, le clavier (comme avant) */
   controls: Controls = loadControls() ?? { mode: 'keys', layout: guessLayout(getLang()) };
   fires: Fires;
@@ -584,6 +589,7 @@ class Game implements UIHost {
     const w = this.world;
     // une sauvegarde illisible est mise de côté (la partie neuve ne l'écrase pas) ; le joueur est prévenu au lancement
     const slot = openSlot(mapId), save = mode === 'continue' ? slot.save : null;
+    this.launched = save ? 'continue' : 'new';
     this.loadError = slot.error;
     // le son vient des réglages du navigateur s'ils sont à l'échelle actuelle : ils sont écrits à chaque changement,
     // y compris depuis l'accueil, donc toujours plus frais que ceux d'une sauvegarde
@@ -985,6 +991,7 @@ class Game implements UIHost {
       return false;
     };
     this.sim.onAgeUp = (age) => {
+      this.audience?.ageUp();
       // (la fenêtre du nouvel âge s'ouvre 3,6 s après la bannière : aucune fenêtre automatique ne passe avant elle)
       this.popups.hold(5);
       // les illustrations des expéditions du nouvel âge, d'avance
@@ -1199,6 +1206,15 @@ class Game implements UIHost {
     sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|fresh|${difficulty}|${age}`);
     this.running = false;
     location.reload();
+  }
+  /** La mesure d'audience de la partie : le signal de lancement part, puis un par minute de jeu (voir `audience.ts`) */
+  startAudience() {
+    this.audience = startAudience({
+      age: () => this.sim.age,
+      mode: () => (this.world.sandbox ? 'sandbox' : this.mode === 'hell' ? 'hell' : this.isleCmd ? 'isle' : 'normal'),
+      difficulty: () => this.world.difficulty,
+      lang: getLang,
+    }, this.launched);
   }
   toMenu() { this.saveNow(); this.running = false; location.reload(); }
   setPhoto(on: boolean) { document.body.classList.toggle('photo', on); }
@@ -4329,6 +4345,7 @@ async function boot() {
     if (film instanceof OpeningFilm) game.openingStage.prepare(() => film.wasSkipped);
     ld.done();
     game.warnLoadError();
+    game.startAudience();
     // la cinématique d'ouverture ou celle de la traversée d'abord (le tutoriel attend sous elle), puis, au premier lancement,
     // le choix des contrôles de la vue, et le blason
     await game.openingStage.finished();

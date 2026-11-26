@@ -64,6 +64,7 @@ import { MiniMap } from './minimap';
 import { placeCard } from './xcard';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
 import type { CalamityKind } from '../sim/calamity';
+import { audienceOff, setAudienceOff } from '../audience';
 
 export interface UIHost {
   tools: ToolController;
@@ -3678,6 +3679,9 @@ export class UI {
         <h4>${tr('Cinématique d’ouverture')}</h4>
         <div class="row"><label>${tr('Au début d’une partie')}</label><button id="gIntro" class="${h.introOff ? '' : 'active'}">${tr(h.introOff ? 'Désactivée' : 'Activée')}</button></div>
         <p class="hint">${tr('Un court film au début de chaque nouvelle partie : la vallée sauvage, un peuple nomade, le premier foyer.')}</p>
+        <h4>${tr('Statistiques anonymes')}</h4>
+        <div class="row"><label>${tr('Mesure d’audience')}</label><button id="gAudience" class="${audienceOff() ? '' : 'active'}">${tr(audienceOff() ? 'Désactivée' : 'Activée')}</button></div>
+        <p class="hint">${tr('Le jeu compte, sans nom ni adresse IP, combien de joueurs jouent, combien de temps et jusqu’à quel âge. Cela nous aide à l’améliorer. Désactivée, rien n’est envoyé.')}</p>
         <h4>${tr('Langue')}</h4>
         ${langPicker(lang)}
         <h4>${tr('Crédits')}</h4>
@@ -3813,6 +3817,11 @@ export class UI {
       q('#gUnlimited').textContent = tr(h.world.unlimited ? 'Illimitées' : 'Normales');
       q('#gUnlimited').classList.toggle('active', h.world.unlimited);
       this.update();
+    };
+    q('#gAudience').onclick = () => {
+      setAudienceOff(!audienceOff());
+      q('#gAudience').textContent = tr(audienceOff() ? 'Désactivée' : 'Activée');
+      q('#gAudience').classList.toggle('active', !audienceOff());
     };
     q('#gIntro').onclick = () => {
       h.setIntroOff(!h.introOff);
@@ -3951,6 +3960,10 @@ export function showCredits(root: HTMLElement) {
         <li>${tr('« Greek Temple » par {author} : temple et asclépiéion de l’Antiquité.', { author: a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)') })}</li>
         <li>${tr('« Amphora » par {a1} et « Eight Vases » par {a2} : atelier du potier.', { a1: a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira'), a2: a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner') })}</li>
       </ul>
+    </section>
+    <section class="credCard">
+      <h4>${ic('heart', 18, 2)}${tr('Statistiques anonymes')}</h4>
+      <p>${tr('Pour savoir combien de personnes jouent, combien de temps et jusqu’à quel âge elles vont, le jeu envoie pendant une partie un petit signal par minute : un numéro tiré au hasard, l’âge du village, le mode, la difficulté, la langue et la version du jeu. Ni nom, ni adresse IP, ni empreinte du navigateur. Ces chiffres servent seulement à améliorer le jeu. Vous pouvez refuser dans Paramètres › Divers.')}</p>
     </section>
     <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>
   </div>`, undefined, tr('Les artistes des modèles 3D, des sons et des musiques, et leurs licences.'));

@@ -302,4 +302,11 @@ registerDict('misc', {
   'Manche {n}': 'Round {n}',
   '{name} est couronné !': '{name} is crowned!',
   '{name} remporte le tournoi !': '{name} wins the tournament!',
+  // mesure d'audience (audience.ts, Paramètres › Divers, Crédits)
+  'Statistiques anonymes': 'Anonymous statistics',
+  'Mesure d’audience': 'Usage statistics',
+  'Le jeu compte, sans nom ni adresse IP, combien de joueurs jouent, combien de temps et jusqu’à quel âge. Cela nous aide à l’améliorer. Désactivée, rien n’est envoyé.':
+    'Without any name or IP address, the game counts how many people play, for how long and up to which age. It helps us improve it. When off, nothing is sent.',
+  'Pour savoir combien de personnes jouent, combien de temps et jusqu’à quel âge elles vont, le jeu envoie pendant une partie un petit signal par minute : un numéro tiré au hasard, l’âge du village, le mode, la difficulté, la langue et la version du jeu. Ni nom, ni adresse IP, ni empreinte du navigateur. Ces chiffres servent seulement à améliorer le jeu. Vous pouvez refuser dans Paramètres › Divers.':
+    'To know how many people play, for how long and how far they go, the game sends a small signal every minute during a game: a random number, the village age, the mode, the difficulty, the language and the game version. No name, no IP address, no browser fingerprint. These figures are only used to improve the game. You can turn this off in Settings › More.',
 });

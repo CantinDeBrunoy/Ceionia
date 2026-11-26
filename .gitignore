@@ -1,3 +1,6 @@
 node_modules
 dist
 assets-src/
+# wrangler dev : base D1 locale et secrets d’essai
+.wrangler/
+.dev.vars
