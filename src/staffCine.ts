@@ -21,18 +21,19 @@
  * recaler sur la vraie vidéo une fois branchée (voir `docs/lore-enfers.md`, « La vidéo »)
  */
 export const STAFF_FILM = {
-  // (deux plans Flow de 8 s collés par un fondu d'une demi-seconde : la faille s'ouvre, puis les démons)
-  dur: 15.5,
+  // (deux plans Flow collés par un fondu de 0,8 s : la place calme, coupée à 3,5 s avant que le sol tremble, puis un seul plan
+  // au crépuscule où le chef démon arrache le bâton et replonge, la faille se refermant sur le socle vide ; fondu au noir)
+  dur: 10.6,
   webm: './vol/vol.webm',
   mp4: './vol/vol.mp4',
   captions: [
-    { at: 0.8, dur: 3.6, text: 'Le bâton du fondateur', sub: 'Planté le premier jour du village' },
-    { at: 8.2, dur: 3, text: 'Les démons surgissent', sub: 'Ils arrachent le bâton' },
-    { at: 11.6, dur: 3.2, text: 'Le bâton est aux Enfers', sub: 'Sous la terre, chez le roi démon' },
+    { at: 0.4, dur: 2.4, text: 'Le bâton du fondateur', sub: 'Planté le premier jour du village' },
+    { at: 3.0, dur: 3.2, text: 'Les démons surgissent', sub: 'Ils arrachent le bâton' },
+    { at: 7.9, dur: 2.4, text: 'Le bâton est aux Enfers', sub: 'Sous la terre, chez le roi démon' },
   ] as { at: number; dur: number; text: string; sub?: string }[],
-  /** le grondement de la terre (la faille s'ouvre, puis se referme) et le cri des démons, au temps de la vidéo */
-  rumble: [3.5, 12.5] as number[],
-  roar: 8.4,
+  /** le grondement de la terre (la faille, puis le plongeon et la faille qui se referme) et le cri du démon, au temps de la vidéo */
+  rumble: [2.8, 6.3] as number[],
+  roar: 3.6,
 };
 
 /** Le film qui ne joue toujours pas au bout de ce temps (s, réseau lent, lecture bloquée) : le remplacement en direct */
