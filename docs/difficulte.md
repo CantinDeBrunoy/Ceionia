@@ -51,7 +51,7 @@ Le bac à sable et Facile ne diffèrent que par `unlimited`. Les petits objectif
 
 ## Liens avec les autres systèmes
 - Économie ([economie-ressources.md](economie-ressources.md)), besoins ([besoins-population.md](besoins-population.md)), âges ([ages.md](ages.md)), expéditions et équipement ([expeditions.md](expeditions.md), [equipement.md](equipement.md)), sauvegarde ([sauvegarde.md](sauvegarde.md)), mode libre ([bac-a-sable.md](bac-a-sable.md)).
-- Les règles de combat (armée, Enfers) ont leur propre équilibrage : `hellBalance.ts`, pas cette table (voir [armee-combat.md](armee-combat.md)). **À vérifier** : aucun usage de `rulesOf` hors `sim/`, `world/`, `main.ts` et `ui.ts` n'a été trouvé.
+- Les règles de combat (armée, Enfers) ont leur propre équilibrage : `hellBalance.ts`, pas cette table (voir [armee-combat.md](armee-combat.md)). Le joueur peut adoucir les Enfers en cours de partie, après deux camps de base perdus de suite (carte « Les Enfers sont durs ? », voir [enfers.md](enfers.md), « Adoucir les Enfers ») : la difficulté de la partie ne change pas. **À vérifier** : aucun usage de `rulesOf` hors `sim/`, `world/`, `main.ts` et `ui.ts` n'a été trouvé.
 
 ## Pièges et invariants
 - **Compatibilité** : ne jamais renommer une valeur de `Difficulty` sans monter `DIFF_VERSION` et étendre `readDifficulty`. Les tests `difficulty.test.ts` fixent la relecture des anciens noms.

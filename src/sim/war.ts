@@ -3,7 +3,7 @@ import { HellMap } from '../world/hell';
 import { isleDefenses, villageBarracks, repelWave, ISLE_SECURE } from '../world/portal';
 import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats, SECURE_WAVES, SITES, DEMON_POWER, INVASION_DELAY, INVASION_WAVES, INVASION_GAP } from './hell';
 import { IsleBattle, defenseK } from './isleBattle';
-import { balanceOf, powerOf } from './hellBalance';
+import { balanceOf, powerOf, type Balance } from './hellBalance';
 import { tr, plural, nplural } from '../i18n';
 import { gearName, Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, troopStatsOf, kitMissing, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName, andJoin } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
@@ -94,11 +94,18 @@ export interface WarSave {
   intro?: 'due' | 'seen';
   /** les dons de la première arrivée (camp, caserne avancée, troupe de départ) sont faits */
   welcomed?: boolean;
+  /** les Enfers adoucis à la demande du joueur (nombre de crans, voir `EASE_K`), les camps perdus de suite, la carte en attente */
+  ease?: number;
+  lostRow?: number;
+  easeAsk?: boolean;
   /** le choix du joueur sur le PvE (absent d'une ancienne sauvegarde : déduit, voir `readLegacyPve`) ; la carte du choix s'est ouverte */
   pve?: Pve;
   sealed?: boolean;
   choiceSeen?: boolean;
 }
+
+/** Adoucir les Enfers : la carte après tant de camps de base perdus de suite ; chaque cran multiplie les effectifs démoniaques */
+export const EASE_AFTER = 2, EASE_K = 0.75, EASE_MAX = 2;
 
 export class War {
   army: Army = newArmy();
@@ -128,6 +135,15 @@ export class War {
   intro: 'none' | 'due' | 'seen' = 'none';
   /** les dons de la première arrivée sont faits (`welcome`) ; une ancienne partie déjà allée aux Enfers : vrai */
   welcomed = false;
+  /**
+   * Adoucir les Enfers (retour de l'auteur, 26 nov. 2026) : après `EASE_AFTER` camps de base perdus de suite (sans contre-attaque
+   * repoussée ni zone conquise entre eux), la carte « baisser la difficulté » s'ouvre (`easeAsk`). Le joueur accepte (un cran
+   * de plus : les effectifs démoniaques ×`EASE_K`, `EASE_MAX` crans au plus) ou refuse (elle reviendra après deux autres camps
+   * perdus). Jamais d'office, jamais au bac à sable
+   */
+  ease = 0;
+  lostRow = 0;
+  easeAsk = false;
   /**
    * Le passage direct (décision de l'auteur, 22 nov. 2026) : plus de garnison sur l'île du portail. Les troupes vivent dans les
    * Enfers : celles d'une ancienne partie restées sur l'île y passent d'elles-mêmes, les recrues y arrivent, les blessés s'y
@@ -193,7 +209,7 @@ export class War {
       this.hellMap = new HellMap(this.world.seed);
       const p = this.pending;
       // (l'équilibre suit la difficulté de la partie : plein en Normal, ×0,6 en Facile, l'ancien en bac à sable)
-      const bal = balanceOf(this.world.difficulty);
+      const bal = this.balance();
       this.faction = p?.faction ? Hell.load(this.hellMap, p.faction, bal) : new Hell(this.hellMap, this.hellMap.seed, bal);
       // les unités du joueur viennent de l'armée, pas de la sauvegarde de la faction
       for (const u of this.faction.alive('player')) this.faction.units.delete(u.id);
@@ -580,6 +596,27 @@ export class War {
     this.news.push({ kind: 'victory', text: tr('👑 Le royaume des Enfers est tombé ! Le portail s’éteint : plus aucune incursion ne menacera l’île.') });
   }
 
+  /** Un camp de base perdu : au deuxième de suite, la carte qui propose d'adoucir les Enfers (s'il reste un cran) */
+  private baseLost() {
+    if (++this.lostRow < EASE_AFTER) return;
+    this.lostRow = 0;
+    if (this.ease < EASE_MAX && !this.faction?.balance.legacy) this.easeAsk = true;
+  }
+
+  /** La réponse du joueur à la carte : oui, les effectifs démoniaques baissent d'un cran tout de suite ; non, rien ne change */
+  answerEase(yes: boolean) {
+    this.easeAsk = false;
+    if (!yes || this.ease >= EASE_MAX) return;
+    this.ease++;
+    if (this.faction) this.faction.balance = this.balance();
+  }
+
+  /** L'équilibre des Enfers : celui de la difficulté de la partie, adouci des crans acceptés */
+  private balance(): Balance {
+    const b = balanceOf(this.world.difficulty);
+    return b.legacy || !this.ease ? b : { ...b, k: b.k * EASE_K ** this.ease };
+  }
+
   /** Les nouvelles de la base avancée : contre-attaques, zones */
   private baseNews() {
     const b = this.base;
@@ -588,12 +625,12 @@ export class War {
       if (e.type === 'counterWarn') this.news.push({ kind: 'counter', text: tr('⚠️ Les démons se rassemblent : ils vont marcher sur ta base {zone}. Prépare tes troupes !', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'counter') this.news.push({ kind: 'counter', text: tr('🔥 Les démons marchent sur ta base {zone} ! {n} démons approchent : tes troupes sur place comptent pour la défense.', { zone: zoneOf(e.zone), n: e.n }) });
       else if (e.type === 'frontCleared') this.news.push({ kind: 'zone', text: tr('🌋 Les démons ont repris tous tes postes avancés : le front est revenu au portail.') });
-      else if (e.type === 'counterEnd') this.news.push({ kind: 'repelled', text: tr('🛡️ Contre-attaque repoussée : la base {zone} tient bon.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'counterEnd') { this.lostRow = 0; this.news.push({ kind: 'repelled', text: tr('🛡️ Contre-attaque repoussée : la base {zone} tient bon.', { zone: zoneOf(e.zone) }) }); }
       else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: tr('💥 Les démons ont repris la zone {zone} : sa forteresse se relève, le front recule. Tu peux la reprendre quand tu voudras.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'reclaimWarn') this.news.push({ kind: 'zone', text: tr('⚠️ Les démons se rassemblent pour reprendre la zone {zone}, que personne ne garde ! Posez-y un camp de base ou envoyez des troupes.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'raised') this.news.push({ kind: 'zone', text: e.retaken ? tr('⛺ Les démons sont chassés des ruines : le camp se relève au Seuil.') : tr('⛺ Votre camp se dresse sur les ruines de la forteresse {zone} : votre nouveau point de ralliement.', { zone: zoneOf(e.zone) }) });
-      else if (e.type === 'occupied') this.news.push({ kind: 'zone', text: tr('💥 Le camp du Seuil est tombé : les démons occupent ses ruines. Chassez-les pour le relever.') });
-      else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: tr('💥 Le camp de base {zone} est tombé. Rebâtissez-le pour rouvrir la base.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'occupied') { this.baseLost(); this.news.push({ kind: 'zone', text: tr('💥 Le camp du Seuil est tombé : les démons occupent ses ruines. Chassez-les pour le relever.') }); }
+      else if (e.type === 'campLost') { this.baseLost(); this.news.push({ kind: 'zone', text: tr('💥 Le camp de base {zone} est tombé. Rebâtissez-le pour rouvrir la base.', { zone: zoneOf(e.zone) }) }); }
       // (une construction : l'interface le dit elle-même)
     }
   }
@@ -655,6 +692,7 @@ export class War {
       }
       // la progression dans les Enfers
       if (sim === this.faction) {
+        if (e.type === 'conquered') this.lostRow = 0;
         if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: tr('🏴 La zone {zone} est conquise ! La brume se lève sur {next}.', { zone: zoneOf(e.zone), next: zoneThe(e.zone + 1) }) });
         else if (e.type === 'sealed') this.news.push({ kind: 'info', text: e.byAge ? tr('🌫️ Les démons {zone} sont trop forts : montez à {age} pour y aller.', { zone: zoneOf(e.zone), age: zoneAgeText(e.zone) }) : tr('🌫️ La brume infernale barre {zone} : abattez d’abord la forteresse {prev}.', { zone: zoneThe(e.zone), prev: zoneOf(e.zone - 1) }) });
         // le combat du roi
@@ -835,6 +873,9 @@ export class War {
       visited: this.visited || undefined,
       intro: this.intro === 'none' ? undefined : this.intro,
       welcomed: this.welcomed || undefined,
+      ease: this.ease || undefined,
+      lostRow: this.lostRow || undefined,
+      easeAsk: this.easeAsk || undefined,
       pve: this.legacyPve ? undefined : this.pve,
       choiceSeen: this.choiceSeen || undefined,
       raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })), t: Math.round(isle.raidT) } : null,
@@ -860,6 +901,9 @@ export class War {
     this.intro = o.intro === 'due' || o.intro === 'seen' ? o.intro : this.visited ? 'seen' : 'none';
     // (une ancienne partie, même déjà allée aux Enfers, reçoit les dons à sa prochaine entrée : ce qui manque seulement)
     this.welcomed = o.welcomed === true;
+    // (une ancienne sauvegarde : les Enfers tels quels, aucun camp perdu compté)
+    const num = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(max, Math.floor(v))) : 0);
+    this.ease = num(o.ease, EASE_MAX); this.lostRow = num(o.lostRow, EASE_AFTER); this.easeAsk = o.easeAsk === true;
     this.choiceSeen = o.choiceSeen === true;
     const pv = (['ask', 'on', 'off'] as Pve[]).find((x) => x === o.pve);
     this.pve = pv ?? 'ask'; this.legacyPve = !pv; this.wasSealed = o.sealed === true;

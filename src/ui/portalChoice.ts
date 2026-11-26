@@ -15,7 +15,7 @@ import { hudPic } from './pics';
 export class PortalChoice {
   private el: HTMLElement;
 
-  constructor(root: HTMLElement, private host: { war: War; age(): number; click(): void; fought(): void; closed?(): void; thumb?(k: 'watchtower' | 'barracks', age: number): string | null }) {
+  constructor(root: HTMLElement, private host: { war: War; age(): number; click(): void; fought(): void; closed?(): void; eased?(yes: boolean): void; thumb?(k: 'watchtower' | 'barracks', age: number): string | null }) {
     this.el = document.createElement('div');
     this.el.id = 'portalChoice';
     this.el.className = 'panel';
@@ -26,6 +26,7 @@ export class PortalChoice {
       this.host.click();
       const w = this.host.war;
       this.hide();
+      if (a === 'easeYes' || a === 'easeNo') { w.answerEase(a === 'easeYes'); this.host.eased?.(a === 'easeYes'); return; }
       if (a === 'fight') { w.acceptPve(); this.host.fought(); } else if (a === 'close' && w.closePortal()) this.host.closed?.();
     });
     root.append(this.el);
@@ -87,6 +88,21 @@ export class PortalChoice {
       <div class="pcHow">${lines.map((l) => `<p>${l}</p>`).join('')}</div>
       <small class="pcNote">${tr('Vous pourrez le rouvrir quand vous voulez.')}</small>
       <div class="pcBtns">${choice('close', 'pcGo', 'cadenas', tr('Refermer le portail'), tr('continuer sans combats'))}${choice('keep', 'pcNo', 'militaire', tr('Le laisser ouvert'), tr('continuer le combat'))}</div>`;
+  }
+
+  /**
+   * La carte « baisser la difficulté des Enfers » (`War.easeAsk`, après deux camps de base perdus de suite) : le joueur
+   * accepte (les démons moins nombreux) ou garde la difficulté. Même habillage que la carte du portail
+   */
+  showEase() {
+    const choice = (a: string, cls: string, icon: string, title: string, sub: string) => `<button data-a="${a}" class="${cls}">${hudPic(icon, 34)}<span><b>${title}</b><small>${sub}</small></span></button>`;
+    this.el.innerHTML = `<img class="pcDio" src="./ui/portail.webp" alt="" draggable="false">
+      <h4>${tr('Les Enfers sont durs ?')}</h4>
+      <p class="pcSub">${tr('Vous avez perdu deux camps de base de suite.')}</p>
+      <div class="pcHow"><p>${tr('Vous pouvez baisser la difficulté des Enfers : les démons seront moins nombreux, dans les forteresses comme dans les contre-attaques.')}</p></div>
+      <small class="pcNote">${tr('Le reste du jeu ne change pas.')}</small>
+      <div class="pcBtns">${choice('easeYes', 'pcGo', 'militaire', tr('Baisser la difficulté'), tr('moins de démons'))}${choice('easeNo', 'pcNo', 'cadenas', tr('Garder la difficulté'), tr('rien ne change'))}</div>`;
+    this.el.style.display = '';
   }
 
   hide() { this.el.style.display = 'none'; }

@@ -852,7 +852,7 @@ class Game implements UIHost {
       epicPlan: (s) => this.epicPlan(s), victors: (v) => this.chooseVictors(v),
       games: () => this.gamesView(), gamesAct: (a, id) => this.gamesAct(a, id),
     });
-    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), closed: () => { if (this.mode === 'hell') this.exitHell(true); this.ui.update(); this.saveNow(); }, thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
+    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), closed: () => { if (this.mode === 'hell') this.exitHell(true); this.ui.update(); this.saveNow(); }, eased: (yes) => { if (yes) this.ui.toast(tr('🔥 Les Enfers sont adoucis : les démons seront moins nombreux.')); this.saveNow(); }, thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
     // la cinématique « Explorer le monde » (elle tient lieu d'écran de chargement de l'agrandissement)
     this.voyageStage = new VoyageStage({
       cam: this.cam, world: w, scene: this.scene, root: uiRoot,
@@ -1246,6 +1246,12 @@ class Game implements UIHost {
    * tout est calme (`portalCineReady`) : à la surface, ni fenêtre, ni récit d'expédition en attente, ni autre cinématique, ni
    * outil en main ou geste en cours. Déjà dans les Enfers (entré autrement), elle n'a plus lieu d'être
    */
+  /** La carte « baisser la difficulté des Enfers » (`War.easeAsk`) : dans les Enfers, au calme, ni fenêtre ni cinématique */
+  private stepHellEase() {
+    if (!this.war.easeAsk || this.mode !== 'hell' || this.portalChoice.visible || this.kingStage.playing || this.fading || document.getElementById('loadScreen') || uiRoot.querySelector('.overlay:not(#menu)')) return;
+    this.portalChoice.showEase();
+  }
+
   private stepPortalCine(dt: number) {
     const ps = this.portalStage;
     ps.tick();
@@ -3856,6 +3862,7 @@ class Game implements UIHost {
     if (this.mode === 'surface') this.tools.update(dt);
     // (après la caméra : la cinématique du portail pose la vue elle-même, temps réel)
     this.stepPortalCine(dt);
+    this.stepHellEase();
 
     // maillages dépendant du monde (limités en fréquence)
     this.terrainTimer -= dt;

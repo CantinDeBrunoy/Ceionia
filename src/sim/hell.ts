@@ -342,7 +342,7 @@ export class Hell {
   private reinforced: number[] = Array.from({ length: HELL_ZONE_N }, () => 0);
 
   /** `balance` : l'équilibre de la partie (Normal par défaut ; Facile ×0,6 ; bac à sable : l'ancien) */
-  constructor(readonly map: CombatMap, seed = map.seed, readonly balance: Balance = BALANCE_NORMAL) {
+  constructor(readonly map: CombatMap, seed = map.seed, public balance: Balance = BALANCE_NORMAL) {
     this.rnd = mulberry32(seed * 977 + 13);
     this.gate = map.zones.length === HELL_ZONE_N;
     this.populate();
