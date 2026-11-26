@@ -244,7 +244,8 @@ describe('expéditions et sauvegarde selon la difficulté', () => {
     // avec le marqueur : les noms d'aujourd'hui, Normal pour une valeur inconnue
     for (const d of DIFFICULTIES) expect(readDifficulty(d, DIFF_VERSION)).toBe(d);
     expect(readDifficulty('nimporte', DIFF_VERSION)).toBe(DEFAULT_DIFFICULTY);
-    expect(DEFAULT_DIFFICULTY).toBe('normal');
+    // Facile est conseillé depuis le 26 nov. 2026 (décision de l'auteur, testeur débutant)
+    expect(DEFAULT_DIFFICULTY).toBe('easy');
     // par la sauvegarde du monde
     const { difficulty, diffV, ...old } = flatWorld('normal').toJSON();
     void difficulty; void diffV;

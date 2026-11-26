@@ -176,6 +176,7 @@ registerDict('ui', {
   'prêt, en réserve': 'ready, in stock',
   '{name} : en fabrication': '{name}: being made',
   'Cliquez sur « + » pour fabriquer ce qui manque.': 'Click “+” to make what is missing.',
+  'Ce minerai compte pour l’âge {age} ({have}/{need}) : la fabrication le dépense.': 'This ore counts towards the {age} age ({have}/{need}): making the gear spends it.',
   'Aucun équipement nécessaire : l’équipe part les mains libres.': 'No equipment needed: the team travels light.',
   'Durée estimée': 'Estimated duration',
   'Récompenses possibles': 'Possible rewards',

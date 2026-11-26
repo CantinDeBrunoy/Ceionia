@@ -243,6 +243,8 @@ export class ToolController implements ToolInput {
 
   /** Un bâtiment en main : à poser, ou ramassé pour le déplacer */
   holding() { return this.tool === 'build' || (this.tool === 'move' && !!this.moveOrigin); }
+  /** L'emplacement possible le plus proche de (x, z) pour le bâtiment en main à contrainte de terrain (voir `ZoneHighlight`) */
+  zoneSpot(x: number, z: number) { return this.zones.nearest(x, z); }
 
   /** Quart de tour du bâtiment en main, à partir de l'orientation affichée ; sinon, du bâtiment sélectionné */
   rotate() {

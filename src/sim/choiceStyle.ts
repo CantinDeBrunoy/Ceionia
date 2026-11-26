@@ -42,8 +42,11 @@ const NONE: ChoiceStyle = { style: null, effect: null };
  * les blessés du prudent sont réellement moins nombreux que ceux de tous les audacieux (sinon « plus sûr »), « plus de
  * récompenses » seulement si l'audacieux rapporte réellement plus que tous les prudents (sinon « plus risqué »).
  */
-export function choiceStyles(choices: Pick<Choice, 'risk' | 'win' | 'lose'>[]): ChoiceStyle[] {
+export function choiceStyles(choices: Pick<Choice, 'risk' | 'win' | 'lose'>[], shown?: (c: Choice) => number): ChoiceStyle[] {
   if (choices.length < 2) return choices.map(() => NONE);
+  // `shown` : le risque affiché sur la carte, équipement en réserve compris, au pour cent près. Le style suit ce que le joueur
+  // lit : le dragon disait « Prudent » à 50 % et « Audacieux » à 46 % avant la fabrication (testeur débutant, 26 nov. 2026)
+  if (shown) return choiceStyles(choices.map((c) => ({ ...c, risk: Math.round(shown(c as Choice) * 100) / 100 })));
   const risks = choices.map((c) => c.risk), lo = Math.min(...risks), hi = Math.max(...risks);
   if (lo === hi) return choices.map(() => NONE);
   // trois choix sur deux niveaux de risque seulement (« Le blé des collines » : pirogue et col à 0,3) : deux cartes portaient le

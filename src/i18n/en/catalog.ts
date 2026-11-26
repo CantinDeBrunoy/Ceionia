@@ -544,7 +544,7 @@ registerDict('catalog', {
   'Maisons au bord de l’eau': 'Houses by the water',
   'Champs': 'Fields',
   'Sécurité (pompiers et police)': 'Security (firefighters and police)',
-  'Forêts où l’on se promène': 'Forests to stroll in',
+  'Forêts près des maisons (au plus {n})': 'Forests near homes (at most {n})',
   'à quai à {name}, attend que le quai de {next} se libère': 'at the platform at {name}, waiting for the platform at {next} to clear',
   'à quai à {name}': 'at the platform at {name}',
   'de {name} vers {next}': 'from {name} to {next}',
@@ -638,7 +638,10 @@ registerDict('catalog', {
   'Train de voyageurs': 'Passenger train',
   'L’entrée est marquée en or': 'The entrance is marked in gold',
   'Un clic : l’endroit, un second : le côté de l’entrée (en or)': 'One click: the spot, a second: the entrance side (in gold)',
-  'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)': 'Click on the entrance side (on the building: toward the road)',
+  'Cliquez du côté de la porte, ou sur le bâtiment pour la laisser où elle est': 'Click on the side of the door, or on the building to leave it where it is',
+  // la légende des couleurs du fantôme de pose
+  'Vert : on peut bâtir ici': 'Green: you can build here', 'Rouge : pas ici': 'Red: not here', 'Or : la porte': 'Gold: the door',
+  'Montrer un endroit possible': 'Show a possible spot', 'Les endroits possibles se cherchent encore, réessayez dans un instant.': 'Still looking for possible spots, try again in a moment.',
   'Cliquez du côté de l’entrée': 'Click on the entrance side',
   'Cliquez du côté de l’ouverture': 'Click on the opening side',
   // la recherche du menu Bâtir

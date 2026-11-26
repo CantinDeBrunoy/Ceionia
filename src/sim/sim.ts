@@ -32,6 +32,30 @@ export interface NeedDetail extends Need { rows: { label: string; n: number; v: 
 /** Parts entières d'un besoin : ce qui est fourni s'arrondit en dessous, ce qui est demandé au-dessus (aux erreurs d'arrondi près) */
 const down = (v: number) => Math.max(0, Math.floor(v + 1e-9)), up = (v: number) => Math.ceil(v - 1e-9);
 
+/**
+ * Les forêts où l'on se promène : seules comptent les cases boisées à `FOREST_REACH` cases au plus d'un logis, et leur
+ * bien-être est plafonné. Toute la carte comptait : 7 000 cases boisées donnaient 585 de bien-être dès la première minute,
+ * la fiche disait « Comblé : 703,4 pour 4,7 » et le besoin ne manquait jamais (testeur débutant, 26 nov. 2026)
+ */
+export const FOREST_REACH = 4, FOREST_JOY = 0.08, FOREST_JOY_MAX = 2;
+export const forestJoy = (cells: number) => Math.min(FOREST_JOY_MAX, cells * FOREST_JOY);
+export function forestsNearHomes(w: World): number {
+  const n = w.n, seen = new Uint8Array(n * n);
+  let count = 0;
+  for (const b of w.buildings.values()) {
+    if (!(KINDS[b.kind].housing?.[b.age] ?? 0)) continue;
+    const s = KINDS[b.kind].size;
+    for (let z = Math.max(0, b.z - FOREST_REACH); z <= Math.min(n - 1, b.z + s - 1 + FOREST_REACH); z++)
+      for (let x = Math.max(0, b.x - FOREST_REACH); x <= Math.min(n - 1, b.x + s - 1 + FOREST_REACH); x++) {
+        const i = z * n + x;
+        if (seen[i]) continue;
+        seen[i] = 1;
+        if (w.veg[i] === 1) count++;
+      }
+  }
+  return count;
+}
+
 export interface AgeProgress {
   next: number;
   ratio: number;
@@ -186,12 +210,13 @@ export class Sim {
       He += v('health');
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += v('housing');
     }
-    let fields = 0, fertile = 0, forests = 0;
+    let fields = 0, fertile = 0;
     for (let i = 0; i < w.veg.length; i++) {
       const v = w.veg[i];
       // (un champ sous l'eau d'une crue ne donne rien)
-      if (v === 2) { if (w.flooded[i]) continue; fields++; if (w.ash[i]) fertile++; } else if (v === 1) forests++;
+      if (v === 2) { if (w.flooded[i]) continue; fields++; if (w.ash[i]) fertile++; }
     }
+    const forests = forestsNearHomes(w);
     // les cases pavées : un habillage du sol, compté comme une décoration (le nombre affiché sur la carte du rayon, le bien-être)
     let paved = 0;
     for (let i = 0; i < w.paving.length; i++) if (w.paving[i]) paved++;
@@ -206,7 +231,7 @@ export class Sim {
     this.fieldFood = (fields + fertile) * 3;
     // un emploi pour deux champs (des emplois entiers, comme les autres)
     J += Math.floor(fields / 2);
-    Jy += forests * 0.08;
+    Jy += forestJoy(forests);
     Jy += Math.min(DECOR_JOY_MAX, deco);
     { const s = this.src.joy.get('decor'); if (s) s.v = Math.min(DECOR_JOY_MAX, deco); }
     this.coverage = computeCoverage(w.buildings.values(), guardReach(w));
@@ -264,7 +289,7 @@ export class Sim {
     if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: tr('Sécurité (pompiers et police)'), n: this.coverage.both, v: this.coverage.joy });
     if (k === 'joy') { const n = showJoy(this.world.shows, this.world.exp.clock); if (n) rows.push({ label: tr('Fêtes et spectacles (en cours)'), n: 0, v: n }); }
     if (k === 'joy' && this.world.wishesMet) rows.push({ label: tr('Envies d’habitants comblées'), n: this.world.wishesMet, v: Math.min(WISH_JOY_MAX, this.world.wishesMet * WISH_JOY) });
-    if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts où l’on se promène'), n: L.forests, v: L.forests * 0.08 });
+    if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts près des maisons (au plus {n})', { n: FOREST_JOY_MAX }), n: L.forests, v: forestJoy(L.forests) });
     if (k === 'health') { const a = ailing(this.world); if (a) rows.push({ label: tr('Malades restés sans soins'), n: 0, v: -a }); }
     if (k === 'health') { const u = unburied(this.world); if (u) rows.push({ label: tr('Défunts sans sépulture (aucun cimetière)'), n: this.world.unburied, v: -u }); }
     if (k === 'health') { const n = showJoy(this.world.shows, this.world.exp.clock, 'health'); if (n) rows.push({ label: tr('Fête au temple (en cours)'), n: 0, v: n }); }

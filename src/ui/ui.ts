@@ -4,6 +4,7 @@ import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, ty
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, KIND_ALSO, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
 import { rampartTower } from '../build/rampart';
+import { isZoned } from '../build/zones';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
 import { Sim, NeedId, ageGo } from '../sim/sim';
 import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
@@ -212,6 +213,14 @@ function trainWhere(r: Railway, t: Train) {
 const dot = (c: number) => `<i class="lineDot" style="background:${hex(c)}"></i>`;
 /** clé du `localStorage` : la barre du bas repliée ('1') ou dépliée ('0') */
 const DOCK_MIN_KEY = 'ceionia.basReplie';
+/**
+ * La vue suit-elle d'office l'équipe qui part en expédition ? Non par défaut : un débutant ne voyait pas le lien et croyait
+ * que la souris avait glissé, la vue partait vers la forêt au milieu d'une pose (testeur débutant, 26 nov. 2026). L'œil de
+ * la carte de l'équipe la suit toujours ; Paramètres › Partie rend le suivi d'office
+ */
+const FOLLOW_KEY = 'ceionia.suiviEquipe';
+export function followOnLaunch() { try { return localStorage.getItem(FOLLOW_KEY) === '1'; } catch { return false; } }
+function setFollowOnLaunch(on: boolean) { try { localStorage.setItem(FOLLOW_KEY, on ? '1' : '0'); } catch { /* sans stockage */ } }
 /** Texte sûr dans un attribut (info-bulle) */
 const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 /** Un texte long en fiche : son début, et la suite repliée derrière « En savoir plus » (data-k garde l'état ouvert d'un rendu à l'autre) */
@@ -441,7 +450,8 @@ const sensText = (v: number) => `×${v.toFixed(1).replace('.', isEnglish() ? '.'
 const FOLD_SIDE = '(max-width: 860px)';
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
 /** une décimale quand il y en a une (« 2,4 » de bien-être ne s'affiche plus « 2 » en rouge) */
-const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
+/** (avec la virgule en français : « 4,7 », pas « 4.7 ») */
+const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : isEnglish() ? v.toFixed(1) : v.toFixed(1).replace('.', ','));
 /** Ce qu'un bâtiment produit ou consomme par jour, en pastilles (« +8 bois / jour », « −2 carburant / jour ») */
 const flowChips = (f: Flow) => (Object.keys(f) as Resource[]).filter((r) => f[r]).sort((a, b) => f[b]! - f[a]!)
   .map((r) => `<span class="eff flow${f[r]! < 0 ? ' neg' : ''}">${resPic(r, 15)} ${tr('{n} {res} / jour', { n: signed(f[r]!), res: tr(RES_NAME[r]) })}</span>`).join('');
@@ -785,6 +795,9 @@ export class UI {
       if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
     });
     // (outil Démolir : la bulle suit le bâtiment visé, après que l'outil a regardé sous la souris)
+    // (l'appui aussi : un clic sans mouvement juste avant, ou la souris d'un outil d'essai, laissait la bulle d'un refus à
+    // l'ancienne place du curseur, loin du clic : testeur débutant, 26 nov. 2026)
+    window.addEventListener('pointerdown', (e) => { this.cursorXY = [e.clientX, e.clientY]; }, { passive: true, capture: true });
     window.addEventListener('pointermove', (e) => { this.cursorXY = [e.clientX, e.clientY]; this.onMap = (e.target as HTMLElement).tagName === 'CANVAS'; if (this.hintTxt || this.host.tools.tool === 'bulldoze') requestAnimationFrame(() => this.renderCursorHint()); }, { passive: true });
     // la carte d'explication suit la mise en page de la barre du bas (après le reflux)
     window.addEventListener('resize', () => requestAnimationFrame(() => this.placeCards()));
@@ -1212,7 +1225,7 @@ export class UI {
       this.clearSearch();
       this.tab = b.dataset.t!;
       // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
-      if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
+      if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) { this.foldTool = 'none'; this.host.tools.setTool('none'); }
       this.renderDock(); this.host.audio.sfxClick();
     }));
     const quick = $('#quickL');
@@ -1277,7 +1290,8 @@ export class UI {
       this.land = b.dataset.l as LandSub;
       this.clearSearch();
       const lt = landOfTool(this.host.tools.tool);
-      if (lt && lt !== this.land) this.host.tools.setTool('none');
+      // (lâché par le changement de rayon, pas par le joueur : la barre reste ouverte sur le nouveau rayon)
+      if (lt && lt !== this.land) { this.foldTool = 'none'; this.host.tools.setTool('none'); }
       this.renderItems(); this.host.audio.sfxClick();
     }));
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = (ev) => {
@@ -1288,7 +1302,9 @@ export class UI {
       this.clearSearch();
       // le bâtiment en main est d'un autre rayon : on le lâche, sinon refreshTools ramènerait son rayon
       const tl = this.host.tools;
-      if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) tl.setTool('none');
+      // (lâché par le changement de rayon, pas par le joueur : la barre ne se replie pas. Juste après une pose, le bâtiment encore
+      // en main faisait replier la barre au clic sur un autre rayon, et le clic suivant tombait sur la carte : testeur débutant, 26 nov. 2026)
+      if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) { this.foldTool = 'none'; tl.setTool('none'); }
       this.renderItems(); this.host.audio.sfxClick();
     }));
     let html: string;
@@ -1565,7 +1581,7 @@ export class UI {
       const bar = document.getElementById('troopBar');
       if (foot && tool && bar) { const l = `${Math.round(tool.getBoundingClientRect().left - foot.getBoundingClientRect().left)}px`; if (bar.style.getPropertyValue('--tbL') !== l) bar.style.setProperty('--tbL', l); }
       const t = document.getElementById('tinfo');
-      if (t) placeCard(t, document.querySelector('#troopBar .tmenu'), document.querySelector('#troopBar .tcorner'), top);
+      if (t) placeCard(t, document.querySelector('#troopBar .tmenu'), document.querySelector('#troopBar .tcorner'), top, [document.querySelector('#troopBar .tbot')]);
       return;
     }
     // (au téléphone, la barre ne forme plus qu'un panneau, `#dockRow` : le menu et le coin se mesurent sur lui)
@@ -1625,7 +1641,18 @@ export class UI {
     box.innerHTML = `<div class="ihead">${this.cardThumb(k, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub">${d.size} × ${d.size} · ${AGES[a].name}</small><small class="xcount">${count}</small></div></div>
       <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${this.needUse(k, a)}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${tl.tracingWall && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${rich ? tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) }) : shortLabel(w, cost)}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && placeWhy && !(cost && !rich && placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : tl.tracingWall ? tr(tl.freeStage === 2 ? 'Cliquez le point B : la ligne se pose d’un trait, en angles droits' : 'Cliquez le point A, puis le point B : la ligne se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}`;
+      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && placeWhy && !(cost && !rich && placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : tl.tracingWall ? tr(tl.freeStage === 2 ? 'Cliquez le point B : la ligne se pose d’un trait, en angles droits' : 'Cliquez le point A, puis le point B : la ligne se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de la porte, ou sur le bâtiment pour la laisser où elle est' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}
+      ${tl.tool === 'build' && brief && !lock && k !== 'wall' && !tl.tracingWall ? `<p class="keys glegend"><span><i class="gok"></i>${tr('Vert : on peut bâtir ici')}</span><span><i class="gno"></i>${tr('Rouge : pas ici')}</span>${hasDoor(k) ? `<span><i class="gdoor"></i>${tr('Or : la porte')}</span>` : ''}</p>` : ''}
+      ${tl.tool === 'build' && brief && !lock && isZoned(k) ? `<button type="button" class="zoneGo">${ic('target', 14, 2.2)} ${tr('Montrer un endroit possible')}</button>` : ''}`;
+    // le port demande une côte, la mine une montagne : le voile doré des endroits possibles pouvait être hors de la vue
+    // (testeur débutant, 26 nov. 2026). Le bouton y mène, au plus près de ce qu'on regarde
+    const go = box.querySelector<HTMLButtonElement>('.zoneGo');
+    if (go) go.onclick = () => {
+      const c = this.host.cam, at = tl.zoneSpot(c.target.x, c.target.z);
+      if (!at) { this.toast(tr('Les endroits possibles se cherchent encore, réessayez dans un instant.')); return; }
+      c.goTo(at[0] + 0.5, at[1] + 0.5, Math.max(c.dist, 14));
+      this.host.audio.sfxClick();
+    };
   }
 
   /**
@@ -3221,16 +3248,17 @@ export class UI {
       close();
       closeMain();
       h.audio.sfxClick();
-      // la caméra suit l'équipe d'office, à la même distance (elle se collait au sol, testeurs v6) ; l'œil de sa carte (à gauche)
-      // la lâche ou la reprend de près
-      h.follow(a.id, true);
+      // la caméra suit l'équipe seulement si le joueur l'a voulu (Paramètres › Partie), à la même distance (elle se collait au
+      // sol, testeurs v6) ; sinon un mot dit que l'œil de sa carte (à gauche) la suit
+      if (followOnLaunch()) h.follow(a.id, true);
+      else this.toast(tr('🧭 L’équipe est partie. Cliquez ici pour la suivre, ou sur l’œil de sa carte à gauche.'), () => { if (h.expeditions.active.includes(a)) h.follow(a.id, true); }, 'notice');
       this.update();
     });
   }
 
   /** Le choix montré d'avance à l'ouverture de la fenêtre de départ : l'équilibré, sinon le premier qu'on peut faire */
   private defaultChoice(m: Mission) {
-    const ex = this.host.expeditions, cs = m.choices, st = choiceStyles(cs);
+    const ex = this.host.expeditions, cs = m.choices, st = choiceStyles(cs, (c) => ex.preview(c).risk);
     const ok = (i: number) => !ex.why(m, cs[i]);
     // la façon de partir choisie la dernière fois pour cette mission (fenêtre refermée, mission ratée qu'on relance)
     const last = this.lastChoice.get(m.id);
@@ -3256,7 +3284,7 @@ export class UI {
    */
   private sendHtml(m: Mission, sel: number) {
     const h = this.host, ex = h.expeditions, age = h.sim.age, st = ex.state;
-    const cs = m.choices, styles = choiceStyles(cs);
+    const cs = m.choices, styles = choiceStyles(cs, (c) => ex.preview(c).risk);
     const i = Math.min(sel, cs.length - 1), c = cs[i], done = ex.done(m), run = ex.running(m), redo = done;
     const why = run ? tr('Une équipe est déjà en route.') : ex.why(m, c);
     const pv = ex.preview(c);
@@ -3311,7 +3339,12 @@ export class UI {
     const roadLeft = todo.filter((g) => g.road);
     // (sur sa propre ligne, au-dessus de la consigne)
     const roadNote = roadLeft.length ? `<span class="gRoad">${roadLeft.map((g) => tr('{gear} : utile en route, pour « {opt} »', { gear: tr(g.gear.name), opt: g.road!.option.label })).join(' · ')}</span>` : '';
-    const gearNote = todo.length ? `<p class="gnote">${roadNote}${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
+    // le minerai d'une condition d'âge : « Tout fabriquer » prenait les 8 minerais qui comptaient pour l'âge industriel, et la
+    // condition retombait à 0 sans un mot (testeur débutant, 26 nov. 2026). On le dit avant de fabriquer
+    const oreAge = h.world.unlimited ? null : h.sim.ageProgress()?.items.find((x) => x.label === 'minerai' && x.have > 0);
+    const oreWarn = oreAge && total.ore > 0 && Math.floor(h.world.ore - total.ore) < oreAge.need
+      ? `<span class="gOre">${ic('alert', 13, 2.4)} ${tr('Ce minerai compte pour l’âge {age} ({have}/{need}) : la fabrication le dépense.', { age: tr(AGES[h.sim.age + 1].name), have: oreAge.have, need: oreAge.need })}</span>` : '';
+    const gearNote = todo.length ? `<p class="gnote">${roadNote}${oreWarn}${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
     // la boîte de « Tout fabriquer » doit contenir les boutons des pièces (voir le gestionnaire)
     // l'équipement en une ligne fine sous les cartes : titre, pièces, consigne, nombre d'habitants
     const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement conseillé')}</b></span>
@@ -3441,6 +3474,9 @@ export class UI {
    */
   private forceDecision(a: ActiveExpedition) {
     if (this.root.querySelector('.decide') || this.host.midGesture()) return;
+    // le récit du retour d'une autre équipe se lit d'abord : la décision le fermait avant qu'on l'ait vu (« Apprivoiser des
+    // bêtes » réussie sans récit, testeur débutant, 26 nov. 2026). Elle attend sa fermeture (`offerPending`)
+    if (this.root.querySelector('.modal.report')) return;
     this.root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay').forEach((o) => { if (o.id !== 'menu' && !o.classList.contains('victory')) o.close?.(); });
     this.showDecision(a);
   }
@@ -3655,6 +3691,8 @@ export class UI {
         <p class="hint">${tr('Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.')}</p>
         <div class="row"><label>${tr('Catastrophes naturelles')}</label>${CALAM_FX.map(([k, i, l]) => `<button data-calam="${k}" aria-pressed="${h.calamities[k]}" class="${h.calamities[k] ? 'active' : ''}">${ic(i, 16)} ${l()}</button>`).join('')}</div>
         <p class="hint">${tr('Une au plus par âge, annoncée juste avant : une crue après une forte averse, un séisme, une pluie de météorites la nuit. Chacune se coupe à part.')}</p>
+        <div class="row"><label>${tr('Suivre les équipes')}</label><button id="gFollow" class="${followOnLaunch() ? 'active' : ''}">${tr(followOnLaunch() ? 'Au départ' : 'À l’œil seulement')}</button></div>
+        <p class="hint">${tr('Au départ : la vue suit chaque équipe qui part en expédition. À l’œil seulement : la vue ne bouge pas, l’œil de la carte de l’équipe la suit.')}</p>
         <div class="row"><label>${tr('Routes auto')}</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${tr(h.autoRoads ? 'Activées' : 'Désactivées')}</button></div>
         <p class="hint">${tr('Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.')}</p>
         <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
@@ -3830,6 +3868,11 @@ export class UI {
       q('#gHelp').textContent = tr(this.help ? 'Affichés' : 'Masqués');
       q('#gHelp').classList.toggle('active', this.help);
     };
+    q('#gFollow').onclick = () => {
+      setFollowOnLaunch(!followOnLaunch());
+      q('#gFollow').textContent = tr(followOnLaunch() ? 'Au départ' : 'À l’œil seulement');
+      q('#gFollow').classList.toggle('active', followOnLaunch());
+    };
     q('#gGoals').onclick = () => {
       h.setHideGoals(!h.hideGoals);
       q('#gGoals').textContent = tr(h.hideGoals ? 'Masqués' : 'Affichés');
@@ -4000,7 +4043,7 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
       <div class="mModes" role="radiogroup" aria-label="${tr('Mode')}">${DIFFICULTIES.map((d) => `<button type="button" role="radio" class="mMode ${d}${d === DEFAULT_DIFFICULTY ? ' rec' : ''}" data-d="${d}" title="${attr(DIFF_TEXT.points[d].join(' · '))}">
         <span class="mGem" aria-hidden="true"></span>
         <span class="mArt"><img src="./menu/mode-${d}.webp" alt="" decoding="async"></span>
-        <span class="mRec">${d === DEFAULT_DIFFICULTY ? DIFF_TEXT.recommended : ''}</span>
+        <span class="mRec${d === 'normal' && d !== DEFAULT_DIFFICULTY ? ' alt' : ''}">${d === DEFAULT_DIFFICULTY ? DIFF_TEXT.recommended : d === 'normal' ? DIFF_TEXT.challenge : ''}</span>
         <h2>${DIFF_TEXT.mode(d)}</h2><em>${DIFF_TEXT.blurb[d]}</em>${CHEVRON}</button>`).join('')}</div>
       <div class="mPlay"><button class="mResume" hidden>${playIcon()}<span>${tr('Continuer')}</span></button><button class="mGo">${playIcon()}<span>${tr('Nouvelle partie')}</span></button></div>
       <p class="mSave" hidden></p>

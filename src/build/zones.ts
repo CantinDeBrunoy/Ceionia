@@ -69,6 +69,17 @@ export class ZoneScan {
   }
 }
 
+/** La case marquée (1) la plus proche de (x, z), ou null */
+export function nearestCell(cells: Uint8Array, x: number, z: number): [number, number] | null {
+  let best = -1, d = Infinity;
+  for (let i = 0; i < cells.length; i++) {
+    if (!cells[i]) continue;
+    const dx = (i % N) - x, dz = Math.floor(i / N) - z, e = dx * dx + dz * dz;
+    if (e < d) { d = e; best = i; }
+  }
+  return best < 0 ? null : [best % N, Math.floor(best / N)];
+}
+
 /** Toutes les emprises valides (cases d'origine) d'un bâtiment, d'un seul tenant (tests, outils) */
 export function zoneOrigins(w: World, kind: KindId): number[] {
   const out: number[] = [], s = KINDS[kind].size;
@@ -144,6 +155,19 @@ export class ZoneHighlight {
     this.mat.opacity = 0.2 + 0.14 * p;
     this.edgeMat.opacity = 0.55 + 0.4 * p;
   }
+
+  /**
+   * La case possible la plus proche de (x, z), une fois la carte parcourue (null avant, ou sans emplacement). Le voile doré
+   * pouvait être loin de la vue : un débutant cherchait la côte à la mini-carte et ne trouvait jamais de montagne pour la mine
+   * (testeur débutant, 26 nov. 2026)
+   */
+  nearest(x: number, z: number): [number, number] | null {
+    const sc = this.scan;
+    if (!sc?.done || !sc.origins) return null;
+    return nearestCell(sc.cells, x, z);
+  }
+  /** La recherche est finie et a trouvé au moins un emplacement */
+  get found() { return !!this.scan?.done && this.scan.origins > 0; }
 
   /** Une tuile par case de la zone, posée sur le relief affiché ; le liseré suit le bord des zones */
   private build(cells: Uint8Array) {

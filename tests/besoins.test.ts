@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { World, setMapSize, VEG_FIELD } from '../src/world/world';
-import { Sim, NeedId } from '../src/sim/sim';
+import { World, setMapSize, VEG_FIELD, VEG_FOREST } from '../src/world/world';
+import { Sim, NeedId, FOREST_JOY_MAX, FOREST_REACH, forestsNearHomes } from '../src/sim/sim';
 import { KINDS, KindId } from '../src/build/catalog';
 import { DIFFICULTY, DIFFICULTIES, Difficulty } from '../src/sim/difficulty';
 import { mulberry32 } from '../src/core/rng';
@@ -95,5 +95,25 @@ describe('croissance jusqu’à la dernière place', () => {
     for (let i = 0; i < 10; i++) sim.update(0.5, 0.5);
     expect(sim.messageKind).toBe('house');
     expect(sim.messageNeed).toBe(false);
+  });
+
+  it('le bien-être des forêts : seulement près des maisons, et plafonné (plus de « Comblé : 703,4 pour 4,7 »)', () => {
+    const w = village('normal', [['house', 0, 3]]);
+    // toute la carte boisée, sauf sous les maisons
+    for (let i = 0; i < w.veg.length; i++) w.veg[i] = VEG_FOREST;
+    const sim = new Sim(w);
+    sim.pop = 16;
+    sim.update(0, 1);
+    const d = sim.needDetail('joy');
+    expect(d.cap).toBeLessThanOrEqual(FOREST_JOY_MAX);
+    expect(d.ok).toBe(false);
+    // les cases comptées sont autour des maisons, pas sur toute la carte
+    expect(forestsNearHomes(w)).toBeLessThan(400);
+    // loin des maisons, une forêt ne compte pas
+    w.veg.fill(0);
+    w.veg[w.ci(80, 80)] = VEG_FOREST;
+    expect(forestsNearHomes(w)).toBe(0);
+    w.veg[w.ci(2, 2 + KINDS.house.size + FOREST_REACH - 1)] = VEG_FOREST;
+    expect(forestsNearHomes(w)).toBe(1);
   });
 });
