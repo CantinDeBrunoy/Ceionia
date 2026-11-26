@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Parts, type Glow } from '../parts';
-import { TEAM_A, TEAM_B, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG, team } from '../teamPaint';
+import { TEAM_A, TEAM_BANNER, TEAM_EMBLEM, TEAM_FLAG, team } from '../teamPaint';
 import { hash2 } from '../../core/rng';
 
 /**
@@ -33,7 +33,7 @@ const lt = (c: number, k: number) => new THREE.Color(c).lerp(new THREE.Color(0xf
 const IRON = 0x3c4046, STEEL = 0x474d55, GUN = 0x2f3338, OLIVE = 0x5a6444, OLIVE_D = 0x3c4630, KHAKI = 0xb8a878, CANVAS = 0xe6dcc4;
 const WHITE = 0xf2f0ea, REDX = 0xc8302c, GLASS = 0xa8d4ec, WARM = 0xffe2a0, FLAME = 0xff9a3a, GOLD = 0xe8c66a, SKIN = 0xe8b894;
 const WOOD = 0xb08968, DWOOD = 0x7a6355, LEAF = 0x6fa85a, LEAF_D = 0x4f8a4e, CONC = 0xb8b8b2, CONC_D = 0x8e9196, CONC_L = 0xd0d0ca;
-const BRICK = 0xa8502e, BRICK_D = 0x8a3e24, STONE = 0xb8b2a6, TIN = 0x7c858c, ASPH = 0x5d6168;
+const BRICK = 0xa8502e, BRICK_D = 0x8a3e24, TIN = 0x7c858c, ASPH = 0x5d6168;
 const FWALL = 0xe4ebf1, FDARK = 0x4a5664, NEON = 0x5ae0ff, NEON_G = 0x5aff9a, FGLASS = 0x8fd4f4;
 const GREY_LEGS = 0x4a4a40;
 

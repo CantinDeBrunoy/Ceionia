@@ -7,7 +7,7 @@ import { Hell, HellUnit, HellEvent, DemonKind, DEMONS, BaseKind } from '../sim/h
 import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight';
 import { BattleLayer, paint, merge } from './battleUnits';
 import { hash2, smoothstep } from '../core/rng';
-import { baseGeo, BASE_FLAG, baseGeoAged, palisadeGeo, gateGeo, gateAlongX, GATE_HINGE, GATE_OPEN, WALL_N, WALL_E, WALL_S, WALL_W } from './hellBase';
+import { baseGeo, BASE_FLAG, baseGeoAged, gateAlongX, GATE_HINGE, GATE_OPEN, WALL_N, WALL_E, WALL_S, WALL_W } from './hellBase';
 import { baseAgeOf, BaseParts } from './hellBaseAges';
 import { wallPartsAged, gatePartsAged } from './hellWallAges';
 import { BASE_DEFS, BASE_R } from '../sim/hellBase';
@@ -69,7 +69,6 @@ export class HellView {
   private wallV = -1;
   private wallAge = 0;
   private wallGeos = new Map<string, THREE.BufferGeometry>();
-  private gateParts: ReturnType<typeof gateGeo> | null = null;
   private ghostLines = new THREE.Group();
   /** les bouts de mur qui entrent dans la paroi (ou la lave) : la roche dessinée est en retrait de sa case, le mur va la toucher */
   private anchors = new THREE.Group();

@@ -31,7 +31,6 @@ const WHITE = new THREE.Color(0xf4f7fb);
 const SNOW_BASE = new THREE.Color(SNOW_COLORS.base), SNOW_SHADE = new THREE.Color(SNOW_COLORS.shade), SNOW_LIT = new THREE.Color(SNOW_COLORS.lit);
 const HIGH = new THREE.Color(0xc9d79a);
 const TILLED = new THREE.Color(0xa47b52);
-const BEDS = new THREE.Color(0x8a6548);
 /** Sol des anciens jardins (il n'en reste plus : voir `World.fromJSON`) */
 const LAWN = new THREE.Color(0x74c060);
 const UNDERGROWTH = new THREE.Color(0x6f9c5c);
@@ -131,8 +130,6 @@ export class TerrainView {
   water: THREE.Mesh;
   waterMat: THREE.MeshStandardMaterial;
   private sideMat: THREE.MeshStandardMaterial;
-  private waterBase: Float32Array;
-  private waterGeo: THREE.BufferGeometry;
   private waterU = {
     uTime: { value: 0 },
     /** amplitude de la houle (plus calme par gros temps) */
@@ -424,8 +421,6 @@ ${BLIGHT_GLSL}
     this.waterU.uFlow.value = this.flowTex;
     const W = N + 2 * this.M;
     const pg = new THREE.PlaneGeometry(W, W, W, W).rotateX(-Math.PI / 2).translate(N / 2, 0, N / 2);
-    this.waterGeo = pg;
-    this.waterBase = (pg.attributes.position.array as Float32Array).slice();
     const normalMap = waterNormalTexture();
     normalMap.repeat.set(9 * W / 48, 9 * W / 48);
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, roughness: 0.1, metalness: 0, depthWrite: false, normalMap, normalScale: new THREE.Vector2(0.4, 0.4) });

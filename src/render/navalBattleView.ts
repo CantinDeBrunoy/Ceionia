@@ -85,7 +85,7 @@ export class NavalBattleView {
   /** un bruit de combat proche (pour le son) */
   onShot: ((big: boolean) => void) | null = null;
 
-  constructor(private world: World, readonly battle: NavalBattle, readonly frame: NavalFrame, ally: People, rival: People, age: number) {
+  constructor(world: World, readonly battle: NavalBattle, readonly frame: NavalFrame, ally: People, rival: People, age: number) {
     this.group.add(this.fx.group, this.smoke.mesh);
     const a = Math.max(2, age), mine = shipClass(a);
     let ai = 0, fi = 0, mi = 0;

@@ -163,7 +163,6 @@ export class FloatIsles {
   private glows: { obj: THREE.Mesh; at: [number, number]; cut: number }[] = [];
   private routes: Station[][] = [];
   private crates: THREE.Mesh[] = [];
-  private props: THREE.Mesh[] = [];
   private tablets = new Map<number, THREE.Mesh>();
   private carried = new Map<number, THREE.Mesh>();
   private rotors: THREE.Object3D[] = [];
@@ -171,7 +170,6 @@ export class FloatIsles {
   private mist: THREE.Mesh[] = [];
   private drone = new THREE.Group();
   private propellers: THREE.Mesh[] = [];
-  private padWorld: [number, number] = [0, 0];
   private away: [number, number] = [0, 0];
   private t = 0;
   private spark = 0;
@@ -180,7 +178,7 @@ export class FloatIsles {
    * `out` : où l'hydroglisseur accoste (sur l'eau), `home` d'où il vient, `level` : niveau de l'eau, `surface` : hauteur du
    * terrain (les îles ne s'enfoncent pas dans un cap voisin), `n` : l'équipe
    */
-  constructor(private group: THREE.Group, private objs: THREE.Object3D[], home: [number, number], private out: [number, number], private level: number, private surface: (x: number, z: number) => number, n: number) {
+  constructor(private group: THREE.Group, private objs: THREE.Object3D[], home: [number, number], out: [number, number], private level: number, private surface: (x: number, z: number) => number, n: number) {
     let ux = out[0] - home[0], uz = out[1] - home[1];
     const l = Math.hypot(ux, uz);
     if (l < 0.01) { ux = 1; uz = 0; } else { ux /= l; uz /= l; }

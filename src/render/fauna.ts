@@ -3,10 +3,10 @@ import { claimArrival } from './pens';
 import * as THREE from 'three';
 import { still, refresh } from './still';
 import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO, VEG_CAVE, VEG_FOREST } from '../world/world';
-import { KINDS, sizeOf } from '../build/catalog';
+import { sizeOf } from '../build/catalog';
 import { hash2, mulberry32, wrapAngle } from '../core/rng';
 import { Parts } from './parts';
-import { makeActor, play, hasModel, Actor, ModelName } from './assets';
+import { makeActor, releaseActor, play, hasModel, Actor, ModelName } from './assets';
 import { CH, NC } from './vegetation';
 import { makeBeast, BEAST_KINDS, GESTURES, beastYaw, BeastKind, FOWL_FLOAT } from './beasts';
 import { Impostors } from './impostors';
@@ -1311,7 +1311,7 @@ export class Fauna {
     yield;
     // réconciliation : on garde les bêtes existantes, on ajoute ou retire l'écart
     const want = new Map(src.map((s) => [s.key, s]));
-    for (const c of this.critters) if ((!want.has(c.key) || want.get(c.key)!.kind !== baseKind(c.kind)) && c.actor) { c.actor.mixer.stopAllAction(); this.group.remove(c.actor.root); }
+    for (const c of this.critters) if ((!want.has(c.key) || want.get(c.key)!.kind !== baseKind(c.kind)) && c.actor) { releaseActor(c.actor); this.group.remove(c.actor.root); }
     this.critters = this.critters.filter((c) => want.has(c.key) && want.get(c.key)!.kind === baseKind(c.kind));
     const have = new Map<string, Critter[]>();
     for (const c of this.critters) { const l = have.get(c.key) ?? []; l.push(c); have.set(c.key, l); }

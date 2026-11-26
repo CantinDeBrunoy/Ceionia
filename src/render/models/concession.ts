@@ -1241,7 +1241,7 @@ export function commonSchool(p: Parts, age: number, people: People, kit: Concess
   const a = Math.min(5, Math.max(3, age)), c = pal(people, a), o = ours(a), or = people === 'orient';
   // les deux ailes
   ourWing(p, kit, a, -0.54, -0.62, 0.72, 0.6, { floors: 2, fh: 0.26, door: 0.15 });
-  const top = allyWing(p, people, a, 0.54, -0.62, 0.72, 0.6, { floors: 2, fh: 0.26, door: -0.15, mash: true });
+  allyWing(p, people, a, 0.54, -0.62, 0.72, 0.6, { floors: 2, fh: 0.26, door: -0.15, mash: true });
   // le porche de liaison : la cloche ou l'horloge, nos deux drapeaux au-dessus
   const px = 0, pz = -0.6;
   p.box(0.34, 0.5, 0.4, px, 0, pz, a <= 3 ? 0xe8dcc8 : a === 4 ? 0xe6e2da : 0xf4f4f0);

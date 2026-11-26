@@ -283,7 +283,7 @@ function queue(f: Fr, x: number, z: number, st: Style) {
 /* ------------------------------------------------------------------------------------------------------------------ */
 interface WagonO { body: number; trim: number; roof: number; seed: number }
 function wagon(f: Fr, st: Style, kit: CircusKit, x: number, z: number, ry: number, o: WagonO) {
-  const g = f.sub(x, z, ry), age = st.age, lamp: Glow = st.neon ? 'neon' : true;
+  const g = f.sub(x, z, ry), age = st.age;
   if (age === 5) {
     // capsule en lévitation : coque nacrée, bandeau lumineux, hublots, deux nacelles antigravité
     g.ball(1, 0, 0.17, 0, 0xe8ecf8, false, 0.3, 0.12, 0.13, 2);

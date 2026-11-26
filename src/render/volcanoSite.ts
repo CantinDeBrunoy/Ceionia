@@ -3,7 +3,7 @@ import { TEAM_FLAG } from './teamPaint';
 import type { World } from '../world/world';
 import type { ActiveExpedition } from '../sim/expeditions';
 import type { Act } from '../sim/agents';
-import { makeFolk, folkStep, Folk, FolkPose } from './folk';
+import { makeFolk, disposeFolk, folkStep, Folk, FolkPose } from './folk';
 import { Parts } from './parts';
 import { mats } from './materials';
 
@@ -171,6 +171,16 @@ export class VolcanoSite {
       s.scale.setScalar(0.001);
       this.sacks.push(s);
     }
+  }
+
+  /**
+   * On range (les objets quittent la scène avec ceux de l'expédition, `props`) : on libère ce qui a été fait pour elle seule,
+   * les coulées, la tranchée et la lave détournée, la corde, les villageois. Le reste (cases, éclats, sacs) vient du cache
+   */
+  dispose() {
+    for (const f of this.flows) for (const m of f.meshes) m.geometry.dispose();
+    for (const m of [this.trench, ...this.turn, this.rope]) m?.geometry.dispose();
+    for (const v of this.folks) disposeFolk(v.folk);
   }
 
   /** Un objet du décor, posé au sol */

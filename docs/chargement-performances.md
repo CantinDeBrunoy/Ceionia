@@ -209,6 +209,26 @@ Un pilote relancé, un partage d'écran ou une mise en veille peuvent faire perd
 - `Game.watchGpu` : à la perte, la partie est sauvegardée ; au retour, ombres et décor sont redemandés et un message le dit. Sans retour dans `GPU_WAIT` (4 s), la page recharge la partie (`AUTOSTART` `<carte>|continue`).
 - Pour l'essayer : `WEBGL_lose_context` sur la toile `#view` (`loseContext()`, puis `restoreContext()` ou rien). Cela ne vide pas les toiles 2D comme une vraie panne. En développement, `?n=` force une partie neuve au rechargement : essayer depuis `/`.
 
+## La mémoire graphique dans une longue partie
+
+Le retour au menu recharge la page : une fuite ne vit que le temps d'une partie, mais une longue partie (des dizaines d'expéditions, six passages d'âge, les Enfers) l'accumule. Ce qui compte : `renderer.info.memory.geometries` et `.textures`, qui ne redescendent qu'au `dispose`.
+
+Mesuré le 26 nov. 2026 (bac à sable à l'âge industriel, 80 bâtiments, environ 190 habitants ; la version d'avant et celle d'après côte à côte) :
+
+| Situation répétée | Avant | Après |
+|---|---|---|
+| Un tour des 86 scènes d'expédition de l'âge (création, 4 images, rangement) | +179 géométries, +43 textures à chaque tour | +0 géométrie, +0 texture |
+| Un aller-retour d'âge (2 → 3 → 2), le jeu en pause | +5 géométries par habitant dessiné (+20 pour 2 habitants) | +0 (22 habitants dessinés) |
+| Un aller-retour aux Enfers (le décor est bâti une fois) | +0 | +0 |
+
+Les fuites trouvées, toutes répétées dans une partie :
+- **Les bêtes animées** (`makeActor`, `makeBeast`) : chaque copie a une texture des os par squelette, jamais libérée (expéditions, faune qui va et vient avec la vue, enclos, zoo, montures, attelages). `releaseActor` aux endroits où on les retire.
+- **Les habitants dessinés** (`makeFolk`) : cinq géométries à chacun, refaites quand sa tenue change (passage d'âge, aux champs ou non) sans libérer les anciennes. `disposeFolk` dans `Agents.dropActor`, les scènes d'expédition, l'équipe qui rentre, le pêcheur des barques, le voleur.
+- **Les secours, gendarmes et gardes à torche** (`makeSoldier`) : seules les troupes partageaient leurs géométries ; les autres en avaient des neuves à chaque sortie.
+- **Les scènes d'expédition** : le site du volcan (coulées, tranchée, corde, villageois : `VolcanoSite.dispose`), les flammes et les torches (cônes neufs à chaque scène, en cache désormais), la locomotive du tracé, le halo du cerf blanc, le dragon et le cerf (le cerf restait même dans la scène).
+
+Pour mesurer (scripts du 26 nov. 2026, à recopier dans la page) : une scène d'expédition se crée à la main, `new ExpeditionScene(world, agents, expView.group, a, expView.fx)` avec `a` copié d'une expédition en cours (`m`, `c` de la mission voulue, `phase: 'work'`), quatre `update` et `renderer_render`, puis `dispose(a)` ; l'écart de `renderer.info.memory` sur un deuxième tour (le premier remplit les caches) est la fuite. Pour la trouver : envelopper `BufferGeometry.prototype.dispose` pour noter les géométries libérées, et relever celles de la scène qui n'y sont pas et ne sont plus dans `__game.scene`. Le renderer : `__game.glow?.renderer ?? __game.thumbs.renderer`. Le tas JavaScript (`performance.memory`) bouge trop au gré du ramasse-miettes pour servir.
+
 ## Pièges et invariants
 - Un calcul fait à chaque pas de saison (toutes les 2 s) tombe d'un bloc sur une image : au-delà de 2 ms, l'étaler ou le garder en cache. Ce qui ne dépend que du monde (biomes, relief) ne se refait pas avec la saison.
 - Un objet ajouté sous `VegView.group` ou `Fauna.samples` ailleurs qu'à l'origine ne s'affichera pas à sa place sans `refresh` (`still.ts`).

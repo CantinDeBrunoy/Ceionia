@@ -16,7 +16,6 @@ import { rulesOf } from './difficulty';
 import { securityK } from './security';
 import { FORGE_PERK, FORGE_RISK, FORGE_CRAFT } from './kingdom';
 import { hasPerk, perkYield, COAL_CRAFT, HOUND_BEAST, METEO_WEATHER, SAT_SEA } from './legacy';
-import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
 import { tr, plural } from '../i18n';
 import { peacePerks, SCHOOL_ISLE_RISK, RESEARCH_RISK } from './concession';

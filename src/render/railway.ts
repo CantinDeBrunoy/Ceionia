@@ -683,7 +683,7 @@ export class RailView {
         const ax = Math.cos(h0), az = -Math.sin(h0), bx = Math.cos(h1), bz = -Math.sin(h1);
         // point à `o` du milieu de la voie (vers la droite du sens de marche), `dy` au-dessus des rails, au début ou à la fin du pas
         const A = (o: number, dy: number) => [x0 + ax * o, y0 + dy, z0 + az * o], B = (o: number, dy: number) => [x1 + bx * o, y1 + dy, z1 + bz * o];
-        const xm = (x0 + x1) / 2, zm = (z0 + z1) / 2, ym = (y0 + y1) / 2, hm = Math.atan2(x1 - x0, z1 - z0), len = Math.hypot(x1 - x0, z1 - z0) + 0.006;
+        const xm = (x0 + x1) / 2, zm = (z0 + z1) / 2, ym = (y0 + y1) / 2, hm = Math.atan2(x1 - x0, z1 - z0);
         const bridge = this.deckAt(xm, zm) !== null;
         if (bridge) {
           // pont : tablier, poutres latérales (treillis d'acier à l'âge industriel, parapets de béton ensuite), piles plantées

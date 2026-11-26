@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { World, N, VEG_FIELD } from '../world/world';
 import { Building, KINDS, KindId, hasDoor, sizeOf, walkableDecor } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
-import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
-import { makeFolk, folkStep, holdFolk, folkTraits, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
+import { makeActor, releaseActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
+import { makeFolk, disposeFolk, folkStep, holdFolk, folkTraits, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
 import { Wish, Sites, sitesOf, wishFor, wishMet } from './wishes';
 import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { Parts } from '../render/parts';
@@ -245,9 +245,6 @@ export function sideStep(px: number, pz: number, dx: number, dz: number, lat: nu
 const SHOWN = 0.85 / 4, MAX_SHOWN = Math.floor(MAX_AGENTS / 4);
 /** Part de la population en âge et en état de partir en expédition */
 const ABLE = 0.6;
-const HUMAN_HEIGHT = HUMAN;
-/** les bancs sont faits pour des habitants de 0,3 : assis, un habitant plus petit se pose un peu plus haut */
-const SIT_LIFT = 0.4 * (0.3 - HUMAN);
 
 const BODY_COLS = [
   [0xb98a5e, 0xa07850, 0xc9a070],
@@ -451,7 +448,6 @@ export class Agents {
   burning: (id: number) => boolean = () => false;
   private spotKey = '';
   private lastVersion = -1;
-  private lastAge = -1;
   private d = new THREE.Object3D();
   private col = new THREE.Color();
   /** population du village (donnée à chaque image) */
@@ -574,6 +570,7 @@ export class Agents {
     if (a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
     if (!a.actor) return;
     this.group.remove(a.actor.root);
+    disposeFolk(a.actor);
     a.actor = null;
     a.actorKey = '';
   }
@@ -1273,7 +1270,7 @@ export class Agents {
     a.kit = kit;
     a.mounted = !!kit?.horse || !!kit?.car;
     if ((!kit?.car || (a.car && a.carHover !== !!kit.hover)) && a.car) { this.group.remove(a.car); a.car.geometry.dispose(); a.car = null; }
-    if (!kit?.horse && a.mount) { a.mount.mixer.stopAllAction(); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
+    if (!kit?.horse && a.mount) { releaseActor(a.mount); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
     if (!kit?.armor && a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
   }
 
@@ -1729,7 +1726,7 @@ export class Agents {
   }
 
   private render(age: number, dt: number) {
-    const w = this.world, d = this.d;
+    const d = this.d;
     const palette = BODY_COLS[Math.min(age, 5)];
     const cam = this.camera?.position, farSq = (FOLK_FAR * this.detail) ** 2;
     let n = 0;

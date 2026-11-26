@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { N } from '../world/world';
 import { Underground, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
-import { makeActor, play, hasModel, Actor, ModelName } from './assets';
+import { makeActor, releaseActor, play, hasModel, Actor, ModelName } from './assets';
 import { batGeo, flapMaterial } from './fauna';
 import { caveLit } from './caveLight';
 import { mulberry32, wrapAngle } from '../core/rng';
@@ -347,7 +347,7 @@ export class UnderMobs {
 
   private remove(m: Mob) {
     m.alive = false;
-    m.actor.mixer.stopAllAction();
+    releaseActor(m.actor);
     this.group.remove(m.actor.root);
   }
 

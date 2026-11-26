@@ -19,7 +19,7 @@ const PI = Math.PI;
 const H = (i: number, k: number, s = 0) => hash2(i, k, 53 + s);
 const dk = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
-const EARTH = 0x7a5a3a, MUD = 0x5e4630, GRASS = 0x6f9a48, GRASS2 = 0x5a8a3c, STONE = 0xa8a298, TRAV = 0xd8ccb4;
+const MUD = 0x5e4630, GRASS = 0x6f9a48, GRASS2 = 0x5a8a3c, STONE = 0xa8a298, TRAV = 0xd8ccb4;
 const SHALLOW = 0x7cc4cc, WATER = 0x4a9ab4, DEEP = 0x2f7494, PAD = 0x4f8f3a, PAD2 = 0x6aa848;
 const REED = 0x7a9a4a, REED2 = 0x9aa858, CATTAIL = 0x6a4428, WOOD = 0x8a6440, WOOD2 = 0x6e4e30;
 const WHITE = 0xf2f4f6, NEON = 0x5af0ff, SEA = 0x58c8d8, SEA2 = 0x3aa8c4;

@@ -9,7 +9,7 @@ import { mats } from './materials';
 import { Puffs } from './particles';
 import type { Fires } from './fires';
 import { makeSoldier, soldierStep, Soldier, SoldierMode } from './soldiers';
-import { makeFolk, folkStep, Folk, FolkPose } from './folk';
+import { makeFolk, disposeFolk, folkStep, Folk, FolkPose } from './folk';
 import { makeDraftHorse, rideStep, Rider } from './riders';
 import { fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 import { guardReach } from '../sim/legacy';
@@ -706,7 +706,7 @@ export class Emergencies {
    * le couchent sur la civière et la portent jusqu'à l'ambulance, où ils le chargent
    */
   private stepHealth(u: Unit, tb: Building, dt: number) {
-    const w = this.world, s = sizeOf(tb), tx = tb.x + s / 2, tz = tb.z + s / 2;
+    const w = this.world;
     if (!u.crew) {
       const c = (u.crew = this.crewFor(u, tb));
       for (let i = 0; i < 2; i++) c.men.push(this.man('medic', u.home + i, c.exit[0], c.exit[1]));
@@ -783,7 +783,8 @@ export class Emergencies {
       chase.mode = 'guard';
       c.stage = 0.5;
     }
-    const knockAt = this.stepMan(knock, c.root, dt), chaseAt = this.stepMan(chase, c.root, dt);
+    const knockAt = this.stepMan(knock, c.root, dt);
+    this.stepMan(chase, c.root, dt);
     // il frappe à la porte
     if (c.stage === 0.5 && knockAt) knock.mode = Math.floor(c.t * 2) % 3 === 0 ? 'fight' : 'idle';
     if (c.stage === 0.5 && knockAt && c.t > 4) {
@@ -824,6 +825,8 @@ export class Emergencies {
     if (!u.crew) return;
     this.group.remove(u.crew.root);
     u.crew.hose?.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+    // (le voleur est dessiné pour lui seul ; secours et gendarmes partagent leurs géométries, voir `makeSoldier`)
+    for (const m of u.crew.men) if (m.f) disposeFolk(m.f);
     u.crew = null;
   }
 

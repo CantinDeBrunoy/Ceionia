@@ -123,7 +123,6 @@ export class Festivities {
   private flashPts: THREE.Points;
   private flashes: { x: number; y: number; z: number; t: number; c: THREE.Color }[] = [];
   private tex: THREE.Texture;
-  private petalTex!: THREE.Texture;
   /** la langue de flamme (une goutte effilée, de hauteur et de rayon 1), partagée par toutes les fêtes */
   private tongueGeo: THREE.BufferGeometry;
   private flameMat = new THREE.MeshBasicMaterial({ color: 0xff7426, fog: false });
@@ -150,7 +149,7 @@ export class Festivities {
     this.flashPts = new THREE.Points(mk(64), new THREE.PointsMaterial({ size: 4, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     this.flashPts.frustumCulled = false;
     this.group.add(this.flashPts);
-    this.flakePts = new THREE.Points(mk(CAP / 2), new THREE.PointsMaterial({ size: 0.13, map: (this.petalTex = petalTexture()), alphaTest: 0.35, vertexColors: true, transparent: true, depthWrite: false }));
+    this.flakePts = new THREE.Points(mk(CAP / 2), new THREE.PointsMaterial({ size: 0.13, map: petalTexture(), alphaTest: 0.35, vertexColors: true, transparent: true, depthWrite: false }));
     this.emberPts = new THREE.Points(mk(EMBERS), new THREE.PointsMaterial({ size: 0.06, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     for (const p of [this.glowPts, this.flakePts, this.emberPts]) { p.frustumCulled = false; this.group.add(p); }
     // la langue de flamme : renflée au pied, effilée en haut

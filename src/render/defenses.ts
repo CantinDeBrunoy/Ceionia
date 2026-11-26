@@ -90,14 +90,6 @@ function shield(p: Parts, a: number, r: number, u: number, y: number, rad: numbe
   p.sphere(rad * 0.3, x + Math.sin(a) * 0.012, y, z + Math.cos(a) * 0.012, GOLD);
 }
 
-/** Créneaux en couronne : `n` merlons de largeur `w` sur le cercle de rayon `r` (une face sur deux), assise `y` */
-function merlons(p: Parts, r: number, y: number, n: number, w: number, h: number, d: number, color: number, skipFront = false) {
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * PI * 2;
-    if (skipFront && Math.abs(Math.sin(a / 2)) < 0.001) continue;
-    p.box(w, h, d, Math.sin(a) * r, y, Math.cos(a) * r, dk(color, 0.94 + 0.12 * H(i, 9)), a);
-  }
-}
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* ANTIQUITÉ : tour carrée de pierre claire à chaînages, poutres, galerie de bois sous un toit de chaume                */
@@ -760,7 +752,7 @@ function barracksModern(p: Parts, kit: DefKit) {
   for (let k = 0; k < 2; k++) p.box(0.34 + k * 0.04, 0.04 - k * 0.02, 0.07, 0, 0, zf + 0.04 + k * 0.06, concD);
   p.box(0.12, 0.05, 0.01, 0.22, 0.34, zf + 0.012, TEAM_A); p.box(0.12, 0.012, 0.012, 0.22, 0.34, zf + 0.014, TEAM_B); p.box(0.12, 0.012, 0.012, 0.22, 0.388, zf + 0.014, TEAM_B);
   // toit-terrasse : acrotère, antennes, parabole, groupes de climatisation, escalier de service
-  for (const [x0, z0, x1, z1] of [[-W / 2, zf, W / 2, zf], [-W / 2, bz - D / 2, W / 2, bz - D / 2]] as number[][]) p.box(W + 0.1, 0.05, 0.026, 0, 0.57, z0, concL);
+  for (const [, z0] of [[-W / 2, zf, W / 2, zf], [-W / 2, bz - D / 2, W / 2, bz - D / 2]] as number[][]) p.box(W + 0.1, 0.05, 0.026, 0, 0.57, z0, concL);
   for (const s of [-1, 1]) p.box(0.026, 0.05, D + 0.1, s * (W / 2 + 0.04), 0.57, bz, concL);
   for (const [x, z, h] of [[-0.6, bz, 0.5], [-0.46, bz + 0.08, 0.34], [0.2, bz - 0.1, 0.26]] as V3[]) { p.cyl(0.006, 0.009, h, 4, x, 0.58, z, steel); p.sphere(0.011, x, 0.58 + h, z, 0xff4a4a); }
   p.cyl(0.012, 0.016, 0.1, 6, 0.5, 0.58, bz, steel); p.add(new THREE.SphereGeometry(0.1, 10, 5, 0, PI * 2, 0, PI / 2.6).rotateX(PI / 2.6), 0.5, 0.74, bz + 0.02, 0xe8e8e0, 0.5);

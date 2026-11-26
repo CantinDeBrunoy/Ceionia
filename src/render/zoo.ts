@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { wrapAngle } from '../core/rng';
 import { World } from '../world/world';
 import { makeBeast, beastYaw, GESTURES, BeastKind } from './beasts';
-import { play, Actor } from './assets';
+import { play, releaseActor, Actor } from './assets';
 import { ZOO_RESIDENTS, ZooResident } from './models';
 import type { BuildingView } from './buildings';
 
@@ -61,7 +61,7 @@ export class ZooView {
   }
 
   private drop(z: Zoo) {
-    for (const s of z.beasts) s.actor.mixer.stopAllAction();
+    for (const s of z.beasts) releaseActor(s.actor);
     z.root.removeFromParent();
   }
 

@@ -66,7 +66,7 @@ export class Environment {
   /** demi-largeur courante de la zone d'ombres portées */
   private shadowExt = 0;
 
-  constructor(private scene: THREE.Scene, renderer: THREE.WebGLRenderer, private lowQuality: boolean) {
+  constructor(scene: THREE.Scene, renderer: THREE.WebGLRenderer, lowQuality: boolean) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
 

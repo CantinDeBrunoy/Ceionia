@@ -124,10 +124,10 @@ En commandement (Enfers, île) `CommandUI.key` passe d'abord : `H` tenir, `R` re
 - `src/ui/` : interface (voir [interface.md](interface.md)).
 - `src/save/save.ts` : voir [sauvegarde.md](sauvegarde.md). `src/i18n/` : voir [traduction.md](traduction.md). `src/audio/` : audio.
 - `tests/` (vitest, un fichier par sujet ; une boucle de test qui dure plus de quelques secondes appelle `await souffle()` de `tests/souffle.ts` à chaque tour : sans pause, au-delà de 60 s vitest compte une erreur « Timeout calling onTaskUpdate » et sort en échec même si tout passe), `public/models/` (modèles `.glb`), `assets-src/`, `tools/bench/`, `docs/` (ce manuel).
-- Build : `vite.config.ts` (`base: './'`, `three` en morceau à part, tests hors `.claude/`), `wrangler.jsonc` (le dossier `dist/` servi tel quel par Cloudflare Workers, repli « application d'une page », aucun code serveur).
+- Build : `vite.config.ts` (`base: './'`, `three` en morceau à part, tests hors `.claude/`), `wrangler.jsonc` (le dossier `dist/` servi tel quel par Cloudflare Workers, repli « application d'une page » ; un petit Worker, `worker/`, ne répond qu'à la mesure d'audience `/api/ping` et au back-office `/bo`, voir [mesure-audience.md](mesure-audience.md)), `.github/workflows/deploy.yml` (tests, build et déploiement à chaque push sur `master` ou `refonte-graphique`).
 
 ### `window.__game`
-L'objet `Game` entier, pour préparer une situation à la main : `__game.world`, `.sim`, `.time`, `.cam`, `.war`, `.expeditions`, `.ui`, `.tools`. Méthodes de développeur : `enterHell()`, `enterUnder(case)`, `playKingdomEnd()`, `erupt(case)`, `saveNow()`. Ne pas s'en servir pour juger l'équilibre. Dans la console aussi : `i18nMissing()`, `setLang('en')` (voir [traduction.md](traduction.md)).
+Exposé aussi dans la version en ligne (les essais sur un build de production s'en servent) : dans un jeu solo, ce n'est que de la triche sans victime. L'objet `Game` entier, pour préparer une situation à la main : `__game.world`, `.sim`, `.time`, `.cam`, `.war`, `.expeditions`, `.ui`, `.tools`. Méthodes de développeur : `enterHell()`, `enterUnder(case)`, `playKingdomEnd()`, `erupt(case)`, `saveNow()`. Ne pas s'en servir pour juger l'équilibre. Dans la console aussi : `i18nMissing()`, `setLang('en')` (voir [traduction.md](traduction.md)).
 
 ## Liens avec les autres systèmes
 - Chaque système a son `update(gdt|dt)` appelé dans `frame` : voir son fichier pour ses règles.

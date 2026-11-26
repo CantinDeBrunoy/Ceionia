@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { World, N, VR, VS } from '../world/world';
-import { Underground, Entrance, UWALL, ROCK_ISO, FLOOR_ISO, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA, POOL_WATER, POOL_LAVA, POOL_Y, ORE_KINDS, oreVeins } from '../world/underground';
+import { Underground, Entrance, UWALL, ROCK_ISO, FLOOR_ISO, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, POOL_WATER, POOL_LAVA, POOL_Y, ORE_KINDS, oreVeins } from '../world/underground';
 import { bakeStatic, StaticModel } from './assets';
 import { makeSoldier, soldierStep, Soldier } from './soldiers';
 import { rockShapes } from './treeShapes';

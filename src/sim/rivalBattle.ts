@@ -5,7 +5,6 @@ import { townPlans, TownPlan, casemateSpots } from '../world/rivalTown';
 import { CombatMap, Hell, HellUnit, HellBuilding, DemonKind, UnitStats } from './hell';
 import { BALANCE_EASY, BALANCE_NORMAL, powerOf } from './hellBalance';
 import { troopStats, TroopKind } from './army';
-import { defenseK } from './isleBattle';
 import type { Intel, Boons } from './diplomacy';
 import { CORPS } from './campaign';
 import { zoneOf } from '../world/concession';
@@ -549,7 +548,6 @@ export class RivalBattle {
     // de la zone, égrenait nos troupes ; la défense, elle, se tient au camp ; la bataille des deux îles part du camp et passe
     // le passage en combattant)
     const start = zone && !has('camp') && !has('plage') && !epic ? snapOut(this.map.freeNear(...this.map.local([zone.gate[0], zone.gate[1]]), 4)) : plageAt;
-    this.start = start;
     // nos troupes : en trois barques (la première tout de suite) pour un débarquement ; sinon toutes au camp de la plage
     this.beach = beach;
     this.boats = troops.slice();
@@ -635,8 +633,7 @@ export class RivalBattle {
   tactic3: Tactic3 | null = null;
   /** les casemates des remparts (bâtiments au combat, qui tirent) */
   casemates: HellBuilding[] = [];
-  /** d'où partent nos troupes ; la seconde plage (celle de la ville : l'allié y débarque en force) */
-  private start: [number, number] = [0, 0];
+  /** la seconde plage (celle de la ville : l'allié y débarque en force) */
   secondBeach: [number, number] = [0, 0];
   /** le bombardement du siège, l'appui aérien, la batterie qui pilonne (s restantes) ; le prochain obus des batteries côtières */
   siegeT = 0;

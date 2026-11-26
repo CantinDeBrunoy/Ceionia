@@ -5,11 +5,10 @@ import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demon
 import { IsleBattle, defenseK } from './isleBattle';
 import { balanceOf, powerOf, type Balance } from './hellBalance';
 import { tr, plural, nplural } from '../i18n';
-import { gearName, Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, troopStatsOf, kitMissing, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName, andJoin } from './army';
+import { gearName, Army, Troop, TroopKind, newArmy, readArmy, stepArmy, troopStats, troopStatsOf, kitMissing, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName, andJoin } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES, zoneOf, zoneOfZ, zoneThe, zoneAgeText } from '../world/hell';
 import type { BaseKind } from './hell';
-import { GEAR_BY } from './gear';
 import { penHerds } from './missions';
 import { Blight, isleBlight } from '../world/blight';
 import { KingFight, KingSave, KingdomReward, claimKingdom } from './kingdom';

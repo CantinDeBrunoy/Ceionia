@@ -22,7 +22,6 @@ export class KingdomEndFx {
   private ashN = 0;
   private green: THREE.Points;
   private greenVel = new Float32Array(GREEN);
-  private greenOn = -1;
   private rings: THREE.Mesh[] = [];
   private ringAt = -1;
   private soldiers: { f: Folk; a: number; r: number; ph: number }[] = [];
@@ -92,7 +91,6 @@ export class KingdomEndFx {
       this.greenVel[i] = 0.5 + Math.random() * 1.5;
     }
     a.needsUpdate = true;
-    this.greenOn = 0;
   }
 
   update(dt: number) {

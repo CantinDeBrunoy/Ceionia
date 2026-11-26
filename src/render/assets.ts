@@ -354,6 +354,22 @@ export interface Actor {
   current: THREE.AnimationAction | null;
 }
 
+/**
+ * Une bête retirée pour de bon : ses animations arrêtées et oubliées du mélangeur, la texture des os de chacun de ses
+ * squelettes libérée (chaque copie a la sienne, sur la carte graphique), et les matériaux qu'elle a seule (sa nuance,
+ * `userData.own`). Géométries et autres matériaux restent : ils sont partagés avec les autres bêtes du même modèle
+ */
+export function releaseActor(a: Actor) {
+  a.mixer.stopAllAction();
+  a.mixer.uncacheRoot(a.mixer.getRoot());
+  a.root.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (m.isSkinnedMesh) m.skeleton.dispose();
+    if (!(m as THREE.Mesh).isMesh) return;
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if (mat.userData.own) mat.dispose();
+  });
+}
+
 /** Bêtes de la ferme et des bois, rendues en facettes */
 const FACETED = new Set<string>(['cow', 'horse', 'horse_white', 'deer', 'stag', 'fox', 'wolf', 'llama', 'dog', 'husky']);
 

@@ -28,7 +28,7 @@ export interface ShipModel {
 
 const DARK = 0x4a3426, WOOD = 0x7a5236, DECK = 0xb89262, ROPE = 0x5a4630, IRON = 0x2a2c30, GOLD = 0xe0b850, TAR = 0x231c16;
 const SAIL = 0xf2e8d2, SAIL2 = 0xe4d6b8, PANE = 0xffd890, WHITE = 0xeeeae2, STEEL = 0x8a929c, GREY = 0x9aa2aa, GREY_D = 0x6e767e;
-const A_D = team(TEAM_A, 0.75), B_D = team(TEAM_B, 0.8);
+const A_D = team(TEAM_A, 0.75);
 
 /** Pavillon du village au bout d'une drisse : (y, z) du haut de la hampe, largeur */
 function teamFlag(p: Parts, y: number, z: number, w = 0.1) {

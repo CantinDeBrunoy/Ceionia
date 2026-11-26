@@ -34,6 +34,15 @@ export interface Folk {
   hands: THREE.Object3D[];
 }
 
+/**
+ * Un habitant retiré pour de bon : on libère les géométries que `makeFolk` lui a faites (corps, jambes, bras : propres à
+ * chacun, marquées `userData.folk`). Ce qu'il tient en main ou porte en plus (outils, coiffes, montures) n'est pas à lui seul
+ * et reste
+ */
+export function disposeFolk(f: Folk) {
+  f.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && m.geometry.userData.folk) m.geometry.dispose(); });
+}
+
 /** `farmer` : un habitant qui travaille aux champs (chapeau de paille ou casquette, salopette à l'âge industriel et après) */
 export interface FolkLook { age: number; v: number; child?: boolean; woman?: boolean; role?: FolkRole; size?: number; farmer?: boolean }
 
@@ -697,13 +706,16 @@ export function makeFolk(look: FolkLook): Folk {
   // corps et lumières (liserés lumineux du futur) dans un seul maillage : un appel de dessin de moins
   const built = p.build(false), lit = built.glow ? mergeLit(built.body, built.glow) : null;
   const hull = new THREE.Mesh(lit ?? built.body, lit ? mats.lit : mats.body);
+  // (à lui seul : `disposeFolk` les libère)
+  hull.geometry.userData.folk = true;
   hull.castShadow = true;
   body.add(hull);
-  if (built.glow && !lit) body.add(new THREE.Mesh(built.glow, mats.glow));
+  if (built.glow && !lit) { built.glow.userData.folk = true; body.add(new THREE.Mesh(built.glow, mats.glow)); }
   // jambes (pivot à la hanche) et bras (pivot à l'épaule), la main au bout du bras
   const legs: THREE.Object3D[] = [], arms: THREE.Object3D[] = [], hands: THREE.Object3D[] = [];
   [-1, 1].forEach((s, i) => {
     const leg = new THREE.Mesh(legGeo(w, i, s), mats.body);
+    leg.geometry.userData.folk = true;
     leg.position.set(s * 0.019, 0.1, 0);
     leg.castShadow = true;
     root.add(leg);
@@ -712,6 +724,7 @@ export function makeFolk(look: FolkLook): Folk {
   [-1, 1].forEach((s, i) => {
     const arm = new THREE.Group();
     const am = new THREE.Mesh(armGeo(w, i, s), mats.body);
+    am.geometry.userData.folk = true;
     am.castShadow = true;
     arm.add(am);
     arm.position.set(s * 0.052, 0.2, 0);

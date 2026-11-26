@@ -18,7 +18,7 @@ import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
 import { RangeView } from './rangeView';
 import { isStart, startRefusal, START_KIND } from './startLock';
-import { traceRampart, layRampart, rampartCost, RampartTrace, rampartMask, toggledTower } from './rampart';
+import { traceRampart, layRampart, rampartCost, rampartMask, toggledTower } from './rampart';
 import { linearMask } from './decor';
 import { costLabel } from '../sim/economy';
 import { tr } from '../i18n';
@@ -87,7 +87,6 @@ export class ToolController implements ToolInput {
   redoStack: Snapshot[] = [];
   hit: THREE.Vector3 | null = null;
   private pressed = false;
-  private touchMode = false;
   private pre: Snapshot | null = null;
   private strokeChanged = false;
   private ctx: SculptCtx = { target: 0 };
@@ -126,7 +125,6 @@ export class ToolController implements ToolInput {
   private pulseT = 0;
   /** le tracé d'un rempart (point A dans `freeFrom`) : une tuile par case, verte si le pan s'y pose, rouge sinon */
   private wallCells: THREE.InstancedMesh;
-  private wallTrace: RampartTrace | null = null;
   private wallKey = '';
 
   private ring: THREE.LineLoop;
@@ -473,7 +471,6 @@ export class ToolController implements ToolInput {
   down(e: PointerInfo) {
     this.pickAt(e);
     this.pressed = true;
-    this.touchMode = e.touch;
     this.refreshVisuals();
     if (!this.hit) return;
     if (this.overlay?.down(this.hit)) { this.overlayHeld = true; this.pressed = false; return; }
@@ -864,7 +861,7 @@ export class ToolController implements ToolInput {
     const key = `${this.kind}:${A[0]},${A[1]}>${c.x},${c.z}|${w.version}`;
     if (key !== this.wallKey) {
       this.wallKey = key;
-      const t = this.wallTrace = traceRampart(w, A, [c.x + 0.5, c.z + 0.5], this.kind);
+      const t = traceRampart(w, A, [c.x + 0.5, c.z + 0.5], this.kind);
       const m = new THREE.Matrix4(), col = new THREE.Color();
       let n = 0;
       for (let i = 0; i < t.cells.length && n < 64; i++) {
