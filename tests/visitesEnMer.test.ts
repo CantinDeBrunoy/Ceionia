@@ -1,3 +1,4 @@
+import { souffle } from './souffle';
 import { it, expect, afterAll } from 'vitest';
 
 /**
@@ -57,8 +58,9 @@ function archipel(seed: number) {
 
 const SEEDS = [11, 7313, 20974, 68380];
 
-it('le mouillage au large d’un port : mer ouverte, eau libre autour, à bonne distance du quai', { timeout: 300000 }, () => {
+it('le mouillage au large d’un port : mer ouverte, eau libre autour, à bonne distance du quai', { timeout: 300000 }, async () => {
   for (const seed of SEEDS) {
+    await souffle();
     const w = archipel(seed), sea = openWater(w), room = seaRoomMap(sea);
     for (const plan of townPlans(w)) {
       const p = offing(w, sea, plan.points.port);
@@ -73,10 +75,11 @@ it('le mouillage au large d’un port : mer ouverte, eau libre autour, à bonne 
   }
 });
 
-it('chaque visite sur les îles navigue sur la mer ouverte, jamais dans une mare ou un marais', { timeout: 600000 }, () => {
+it('chaque visite sur les îles navigue sur la mer ouverte, jamais dans une mare ou un marais', { timeout: 600000 }, async () => {
   stubCanvas();
   const bad: string[] = [];
   for (const seed of SEEDS) {
+    await souffle();
     const w = archipel(seed), sea = openWater(w), wet = (x: number, z: number) => sea[Math.floor(z) * N + Math.floor(x)] === 1;
     for (const m of ISLE_MISSIONS) for (let ci = 0; ci < m.choices.length; ci++) {
       const agents = new Agents(w);
@@ -111,10 +114,11 @@ it('chaque visite sur les îles navigue sur la mer ouverte, jamais dans une mare
  * tour de la petite île), puis l'expédition se termine et rend son récit. Sur l'archipel de Bernard (graine 20974, allié les
  * Jadéens, dont le port donne sur une lagune), la route par la seule mer ouverte n'arrivait plus au port
  */
-it('chaque visite chez l’allié arrive sur son île et se termine', { timeout: 900000 }, () => {
+it('chaque visite chez l’allié arrive sur son île et se termine', { timeout: 900000 }, async () => {
   stubCanvas();
   const bad: string[] = [];
   for (const [seed, ally, lagoon] of [[11, 'orient', false], [11, 'orient', true], [20974, 'asie', false]] as const) {
+    await souffle();
     const w = archipel(seed);
     w.diplo.ally = ally; w.diplo.path = 'peace';
     w.diplo.saga.sea.push('convoy');
@@ -161,9 +165,10 @@ it('chaque visite chez l’allié arrive sur son île et se termine', { timeout:
  * la mer à quatre cases derrière une bande de terre (`openSea` acceptait la terre avant l'eau) ; le bateau partait de la mare
  * et y faisait des allers-retours. Le mouillage de chaque expédition en mer est maintenant au bord de la mer ouverte
  */
-it('chaque expédition qui traverse jusqu’aux îles part d’une côte au bord de la mer ouverte', { timeout: 600000 }, () => {
+it('chaque expédition qui traverse jusqu’aux îles part d’une côte au bord de la mer ouverte', { timeout: 600000 }, async () => {
   const bad: string[] = [];
   for (const seed of SEEDS) {
+    await souffle();
     const w = archipel(seed), sea = openWater(w);
     const near = (x: number, z: number, r: number) => { for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { const cx = Math.floor(x) + dx, cz = Math.floor(z) + dz; if (w.inCells(cx, cz) && sea[cz * N + cx]) return true; } return false; };
     for (const m of [...ISLE_MISSIONS, ...MISSIONS.filter((x) => ['envoys', 'allywar'].includes(x.id))]) {
@@ -183,7 +188,7 @@ it('chaque expédition qui traverse jusqu’aux îles part d’une côte au bord
  * Sans route par la mer vers l'île (ici, toute la mer changée en eau fermée) : l'équipe ne tourne pas en rond, elle rentre
  * aussitôt, sans rien gagner ni perdre, et le récit le dit
  */
-it('une visite sans route par la mer rentre aussitôt et le dit', { timeout: 300000 }, () => {
+it('une visite sans route par la mer rentre aussitôt et le dit', { timeout: 300000 }, async () => {
   stubCanvas();
   const w = archipel(11);
   w.diplo.ally = 'orient';
@@ -208,7 +213,7 @@ it('une visite sans route par la mer rentre aussitôt et le dit', { timeout: 300
   expect(w.exp.done).not.toContain('isleFair');
 });
 
-it('une côte ouverte : la mer commence dans les deux cases, pas derrière une bande de terre', { timeout: 300000 }, () => {
+it('une côte ouverte : la mer commence dans les deux cases, pas derrière une bande de terre', { timeout: 300000 }, async () => {
   const w = archipel(11), agents = new Agents(w), ex = new Expeditions(w, agents, () => 100, mulberry32(7));
   const openSea = (x: number, z: number) => (ex as unknown as { openSea(x: number, z: number, len?: number, shore?: boolean): boolean }).openSea(x, z, 8, true);
   const land = (x: number, z: number) => w.inCells(x, z) && w.cellAvg(x, z) >= -0.1;
