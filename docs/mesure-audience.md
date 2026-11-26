@@ -12,7 +12,9 @@
 Pour savoir combien de joueurs différents jouent, combien de temps et jusqu'à quel âge ils vont, le jeu envoie un petit signal
 anonyme pendant une partie. Un Worker Cloudflare le range dans une base D1. L'auteur lit les chiffres sur `/bo`, protégée par
 une clé. Le joueur peut refuser la mesure (Paramètres › Divers), et les Crédits disent ce qui est mesuré, pourquoi, et combien
-de temps c'est gardé.
+de temps c'est gardé. La même carte s'ouvre depuis l'accueil, par le lien « Confidentialité » en bas à droite (`showPrivacy`,
+`privacyCard` dans `ui/ui.ts`) : le premier signal part au premier lancement, l'information est à portée avant (audit du
+26 nov. 2026).
 
 ## Ce qui est mesuré
 Un signal (`POST /api/ping`, texte JSON de moins de 600 octets) contient :

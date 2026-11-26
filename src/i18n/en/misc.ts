@@ -308,6 +308,8 @@ registerDict('misc', {
   '{name} remporte le tournoi !': '{name} wins the tournament!',
   // mesure d'audience (audience.ts, Paramètres › Divers, Crédits)
   'Statistiques anonymes': 'Anonymous statistics',
+  'Confidentialité': 'Privacy',
+  'Ce que le jeu mesure, et pourquoi.': 'What the game measures, and why.',
   'Mesure d’audience': 'Usage statistics',
   'Le jeu compte, sans nom ni adresse IP enregistrée, combien de joueurs jouent, combien de temps et jusqu’à quel âge. Cela nous aide à l’améliorer. Désactivée, rien n’est envoyé et votre numéro est effacé.':
     'Without any name or stored IP address, the game counts how many people play, for how long and up to which age. It helps us improve it. When off, nothing is sent and your number is erased.',

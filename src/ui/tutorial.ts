@@ -891,12 +891,14 @@ export class Tutorial {
     // les conditions de l'âge, la fiche du bâtiment, l'équipement à fabriquer, les onglets du bas)
     const rects = (q: string) => [...this.ui.root.querySelectorAll<HTMLElement>(q)].filter((e) => e !== box && !e.hidden && e.offsetParent).map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
     const blocks: Block[] = [
-      ...rects('#needInfo, #census, #selCard, #info, .expCard, #agePanel.open #ageReq, .overlay > .modal, #agePanel, #resPanel, #needsBox, #goalBox, #hudR, #msg, #railEdit.show, ' + DOCK).map((b) => ({ r: b, k: 1 })),
+      // (la frise du front des Enfers aussi : la bulle de « Où attaquer » couvrait le portail et la première zone, testeur du
+      // 26 nov. 2026)
+      ...rects('#needInfo, #census, #selCard, #info, .expCard, #agePanel.open #ageReq, .overlay > .modal, #agePanel, #resPanel, #needsBox, #goalBox, #hudR, #msg, #railEdit.show, .tfrise, ' + DOCK).map((b) => ({ r: b, k: 1 })),
     ];
     if (!this.ui.root.querySelector('.overlay')) blocks.push({ r: { left: W * 0.3, right: W * 0.7, top: H * 0.3, bottom: H * 0.68 }, k: 0.7 });
     // les places fixes, quand rien n'est montré ou que les côtés de l'élément sont pris : sous le HUD à droite et à gauche,
     // au-dessus de la barre du bas à gauche et à droite
-    const hudB = Math.max(80, ...rects('#hud > *, #needsBox, #goalBox, #hudNotes').map((b) => b.bottom)) + 12;
+    const hudB = Math.max(80, ...rects('#hud > *, #needsBox, #goalBox, #hudNotes, .tfrise').map((b) => b.bottom)) + 12;
     const dockT = Math.min(H - 8, ...rects(DOCK).map((b) => b.top)) - 12;
     const fixed: Spot[] = [
       { x: W - w - 12, y: hudB, side: '' }, { x: 12, y: hudB, side: '' },

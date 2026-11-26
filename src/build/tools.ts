@@ -878,6 +878,7 @@ export class ToolController implements ToolInput {
       if (this.wallCells.instanceColor) this.wallCells.instanceColor.needsUpdate = true;
       const cost = rampartCost(w, t, this.h.getAge());
       this.placeWhy = t.why ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+      this.placeWhyCost = !t.why && !!this.placeWhy;
       const fresh = t.ok.filter((o, i) => o && !t.had[i]).length;
       this.wallCost = cost ? tr(t.kind === 'wall' ? '{n} pans : {cost}' : '{n} cases : {cost}', { n: fresh, cost: costLabel(cost) }) : '';
     }
@@ -1100,6 +1101,8 @@ export class ToolController implements ToolInput {
   // ---------- Visuels ----------
   /** Pourquoi le bâtiment en main ne se poserait pas sous le curseur (null : il se pose), montré dès le survol */
   placeWhy: string | null = null;
+  /** `placeWhy` dit seulement un manque de ressources : la fiche le relit au présent (il restait périmé, voir `UI.renderInfo`) */
+  placeWhyCost = false;
   /** la case (origine) du dernier bâtiment posé : tant que le curseur y reste, pas de refus « occupé » */
   private placedAt: string | null = null;
 
@@ -1133,6 +1136,7 @@ export class ToolController implements ToolInput {
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
     this.placeWhy = null;
+    this.placeWhyCost = false;
     this.door.visible = false;
     this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = this.freePulse.visible = this.freeArrow.visible = this.wallCells.visible = false;
     this.wallCost = '';
@@ -1229,6 +1233,7 @@ export class ToolController implements ToolInput {
       // (un rempart en cours de tracé : l'aperçu du tracé a déjà dit ce qui manque ; une case occupée par un pan est son point de départ)
       const tracing = this.tracingWall && this.freeFrom;
       if (!tracing) this.placeWhy = this.placedAt === cellKey && reason ? null : this.tracingWall && this.hitBuilding && (this.kind === 'wall' ? this.hitBuilding.kind === 'wall' || this.hitBuilding.kind === 'gate' : this.hitBuilding.kind === this.kind) ? null : why0;
+      if (!tracing) this.placeWhyCost = !reason && !!this.placeWhy;
       setGhostValid(tracing ? !this.placeWhy : !why0);
       const rot = mask !== undefined ? 0 : an ? this.anchorRot() : this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);

@@ -136,7 +136,7 @@ de l'allié, la première ligne de train. Ils ne se montrent qu'une fois.
   places possibles : les quatre côtés de l'élément montré (ou de toute sa carte, `.gear`, `.mission`, `.sCard` : son image et
   son nom restent visibles), et quatre places fixes (sous le HUD à droite et à gauche, au-dessus de la barre du bas à gauche et
   à droite). Chacune est notée : couvrir l'élément coûte très cher ; puis les panneaux ouverts (fiches, conditions de l'âge,
-  fenêtres `.overlay > .modal`), les blocs du HUD, ceux de la barre du bas pris un par un (`DOCK` : ses colonnes se défont en
+  fenêtres `.overlay > .modal`), les blocs du HUD, la frise du front des Enfers (`.tfrise`, aussi comptée dans le bas du HUD pour les places fixes : la bulle de « Où attaquer » la couvrait, testeur du 26 nov. 2026), ceux de la barre du bas pris un par un (`DOCK` : ses colonnes se défont en
   `display: contents` selon la largeur), et, sans fenêtre ouverte, le milieu de l'écran où la caméra pose le village (poids 0,7) ;
   à égalité, la plus proche de l'élément. Sans élément montré, une des places fixes. La pointe ne paraît que sur un côté de
   l'élément.

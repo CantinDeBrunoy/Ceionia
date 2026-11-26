@@ -622,11 +622,11 @@ export class War {
     const b = this.base;
     if (!b) return;
     for (const e of b.events.splice(0)) {
-      if (e.type === 'counterWarn') this.news.push({ kind: 'counter', text: tr('⚠️ Les démons se rassemblent : ils vont marcher sur ta base {zone}. Prépare tes troupes !', { zone: zoneOf(e.zone) }) });
-      else if (e.type === 'counter') this.news.push({ kind: 'counter', text: tr('🔥 Les démons marchent sur ta base {zone} ! {n} démons approchent : tes troupes sur place comptent pour la défense.', { zone: zoneOf(e.zone), n: e.n }) });
-      else if (e.type === 'frontCleared') this.news.push({ kind: 'zone', text: tr('🌋 Les démons ont repris tous tes postes avancés : le front est revenu au portail.') });
+      if (e.type === 'counterWarn') this.news.push({ kind: 'counter', text: tr('⚠️ Les démons se rassemblent : ils vont marcher sur votre base {zone}. Préparez vos troupes !', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'counter') this.news.push({ kind: 'counter', text: tr('🔥 Les démons marchent sur votre base {zone} ! {n} démons approchent : vos troupes sur place comptent pour la défense.', { zone: zoneOf(e.zone), n: e.n }) });
+      else if (e.type === 'frontCleared') this.news.push({ kind: 'zone', text: tr('🌋 Les démons ont repris tous vos postes avancés : le front est revenu au portail.') });
       else if (e.type === 'counterEnd') { this.lostRow = 0; this.news.push({ kind: 'repelled', text: tr('🛡️ Contre-attaque repoussée : la base {zone} tient bon.', { zone: zoneOf(e.zone) }) }); }
-      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: tr('💥 Les démons ont repris la zone {zone} : sa forteresse se relève, le front recule. Tu peux la reprendre quand tu voudras.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: tr('💥 Les démons ont repris la zone {zone} : sa forteresse se relève, le front recule. Vous pourrez la reprendre quand vous voudrez.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'reclaimWarn') this.news.push({ kind: 'zone', text: tr('⚠️ Les démons se rassemblent pour reprendre la zone {zone}, que personne ne garde ! Posez-y un camp de base ou envoyez des troupes.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'raised') this.news.push({ kind: 'zone', text: e.retaken ? tr('⛺ Les démons sont chassés des ruines : le camp se relève au Seuil.') : tr('⛺ Votre camp se dresse sur les ruines de la forteresse {zone} : votre nouveau point de ralliement.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'occupied') { this.baseLost(); this.news.push({ kind: 'zone', text: tr('💥 Le camp du Seuil est tombé : les démons occupent ses ruines. Chassez-les pour le relever.') }); }
@@ -659,7 +659,10 @@ export class War {
       if (d < bd) { bd = d; site = b.site.kind === 'fortress' ? tr('devant la forteresse') : b.site.kind === 'outpost' ? tr('devant l’avant-poste') : b.site.kind === 'forge' ? tr('devant la forge') : tr('devant la citadelle'); }
     }
     const zone = zoneOf(zoneOfZ(Math.floor(s.z)));
-    const care = this.base?.countOf('infirmary') ? tr('Ils se soignent à l’infirmerie de la base.') : tr('Blessés, ils sont ramenés à la caserne de l’île et s’y soignent ({s} s).', { s: HEAL_TIME });
+    // (au passage direct, plus de caserne sur l'île : ils se soignent au camp de base, comme le dit la nouvelle de chaque blessé)
+    const care = this.base?.countOf('infirmary') ? tr('Ils se soignent à l’infirmerie de la base.')
+      : this.direct ? tr('Blessés, ils sont portés au camp de base et s’y soignent ({s} s).', { s: HEAL_TIME })
+        : tr('Blessés, ils sont ramenés à la caserne de l’île et s’y soignent ({s} s).', { s: HEAL_TIME });
     this.news.push({ kind: 'routed', text: tr('⚔️ Repli forcé {zone} : {who} tombés {site}, {k} abattus. {care} Revenez plus nombreux, ou avec une forge et une infirmerie dans la base.', { zone, who, site: site || tr('au combat'), k: nplural(s.slain, 'démon', 'démons'), care }) });
     this.sortie = { fallen: new Map(), slain: 0, x: 0, z: 0 };
   }

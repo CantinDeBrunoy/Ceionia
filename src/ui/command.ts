@@ -1323,10 +1323,10 @@ export class CommandUI implements ToolInput {
     // les alertes : assaut en cours, assaut annoncé (préavis), reprise annoncée ; la plus pressante d'abord
     const alerts: { zone: number; text: string; rank: number }[] = [];
     if (f && base) {
-      for (const [z, n] of att) alerts.push({ zone: z, rank: -1, text: tr('Les démons attaquent ta base {zone} : {n}', { zone: zoneOf(z), n: nplural(n, 'démon', 'démons') }) });
+      for (const [z, n] of att) alerts.push({ zone: z, rank: -1, text: tr('Les démons attaquent votre base {zone} : {n}', { zone: zoneOf(z), n: nplural(n, 'démon', 'démons') }) });
       for (let z = 0; z < HELL_ZONES.length; z++) {
         const at = base.next[z];
-        if (at >= 0 && !att.has(z) && f.time >= at - COUNTER_WARN) { const s = Math.max(0, Math.ceil(at - f.time)); alerts.push({ zone: z, rank: s, text: tr('Les démons marchent sur ta base {zone} dans {s} s', { zone: zoneOf(z), s }) }); }
+        if (at >= 0 && !att.has(z) && f.time >= at - COUNTER_WARN) { const s = Math.max(0, Math.ceil(at - f.time)); alerts.push({ zone: z, rank: s, text: tr('Les démons marchent sur votre base {zone} dans {s} s', { zone: zoneOf(z), s }) }); }
       }
       const r = base.reclaim;
       if (r && r.warned) { const s = Math.max(0, Math.ceil(r.at - f.time)); alerts.push({ zone: r.zone, rank: s, text: tr('Les démons vont reprendre {zone} dans {s} s', { zone: zoneThe(r.zone), s }) }); }

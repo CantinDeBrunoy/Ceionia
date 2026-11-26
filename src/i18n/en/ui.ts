@@ -171,7 +171,7 @@ registerDict('ui', {
   // ---- fenêtre de départ d'une expédition (sendHtml)
   'Envoyez votre équipe explorer de nouveaux territoires.': 'Send your team to explore new lands.',
   'Façon de partir': 'Way to go',
-  'Équipement nécessaire': 'Required equipment',
+  'Équipement conseillé': 'Recommended equipment',
   '{n} habitants': '{n} villagers',
   'prêt, en réserve': 'ready, in stock',
   '{name} : en fabrication': '{name}: being made',
