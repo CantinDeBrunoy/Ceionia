@@ -540,7 +540,8 @@ export class Expeditions {
    * emporte le même équipement (revenu en réserve au chargement). Rend le nombre d'équipes relancées et les missions (`id`) qui
    * n'ont pas pu repartir (le joueur en est prévenu)
    */
-  resume(notes: TeamNote[]): { back: number; lost: string[] } {
+  resume(notes: TeamNote[], why: 'voyage' | 'reload' = 'voyage'): { back: number; lost: string[] } {
+    const reload = why === 'reload';
     let back = 0;
     const lost: string[] = [];
     for (const n of notes) {
@@ -549,7 +550,9 @@ export class Expeditions {
       const a = this.start(m, n.c, n.age, true);
       if (!a) {
         lost.push(m.id);
-        this.onNews?.(tr('{icon} « {title} » n’a pas pu repartir après la traversée : l’équipe est rentrée au village, son équipement aussi.', { icon: m.icon, title: m.title }));
+        this.onNews?.(reload
+          ? tr('{icon} « {title} » n’a pas pu repartir après le rechargement : l’équipe est rentrée au village, son équipement aussi.', { icon: m.icon, title: m.title })
+          : tr('{icon} « {title} » n’a pas pu repartir après la traversée : l’équipe est rentrée au village, son équipement aussi.', { icon: m.icon, title: m.title }));
         continue;
       }
       back++;
@@ -559,11 +562,15 @@ export class Expeditions {
       if (n.phase === 'back' || n.phase === 'home') {
         // (l'issue était tirée : l'équipe est rentrée pendant la traversée)
         a.ok = n.ok; a.phase = 'home'; a.t = 4;
-        this.onNews?.(tr('{icon} « {title} » : l’équipe est rentrée pendant la traversée.', { icon: m.icon, title: m.title }));
+        this.onNews?.(reload
+          ? tr('{icon} « {title} » : l’équipe est rentrée pendant le rechargement.', { icon: m.icon, title: m.title })
+          : tr('{icon} « {title} » : l’équipe est rentrée pendant la traversée.', { icon: m.icon, title: m.title }));
         continue;
       }
       if (n.phase === 'work') a.resumeT = n.done * Math.max(1, a.c.work + a.extra);
-      this.onNews?.(tr('{icon} L’expédition « {title} » reprend la route après la traversée.', { icon: m.icon, title: m.title }));
+      this.onNews?.(reload
+        ? tr('{icon} L’expédition « {title} » reprend la route après le rechargement.', { icon: m.icon, title: m.title })
+        : tr('{icon} L’expédition « {title} » reprend la route après la traversée.', { icon: m.icon, title: m.title }));
     }
     return { back, lost };
   }
@@ -663,6 +670,7 @@ export class Expeditions {
     });
     party.forEach((id, i) => this.agents.equip(id, kits[i]));
     this.active.push(a);
+    this.world.exp.out.push(m.id);
     if (m.farewell) {
       // le grand départ : les colons se retrouvent d'abord au cœur du village, où tout le monde vient leur dire adieu
       this.agents.partyGo(party, base[0], base[1], 0.15);
@@ -1017,6 +1025,8 @@ export class Expeditions {
     if (a.c.oneWay) this.agents.partyPlace(a.party, a.base[0], a.base[1]);
     this.agents.dismiss(a.party, injured, days * this.dayLen() * (this.has('health') ? 0.5 : 1) * (a.gear.kit ? 0.5 : 1));
     this.active.splice(this.active.indexOf(a), 1);
+    const o = this.world.exp.out.indexOf(a.m.id);
+    if (o >= 0) this.world.exp.out.splice(o, 1);
     this.world.version++;
     const summary = [effectSummary(eff), lost].filter((x) => x && x !== tr('rien')).join(' · ') || tr('rien');
     this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text, summary, notes: a.notes, redo: a.redo, injured });

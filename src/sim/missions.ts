@@ -1217,12 +1217,17 @@ export interface ExpState {
   sea: number;
   /** temps écoulé vers le prochain poulain des écuries (secondes de jeu, voir `breedHorses` ; 0 pour les anciennes sauvegardes) */
   foal: number;
+  /**
+   * missions des équipes en route (une entrée par équipe). Elles ne sont pas sauvegardées : au chargement, cette liste dit
+   * au joueur quelles équipes sont rentrées sans rien rapporter (`Game.warnLostTeams` la vide ; anciennes sauvegardes : vide)
+   */
+  out: string[];
 }
 
 /** Imprévus récents dont on se souvient (les deux ou trois dernières expéditions) */
 export const RECENT_EVENTS = 6;
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), away: emptyStock(), craft: [], craftT: 0, riding: 0, recent: [], sea: 1, foal: 0 });
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), away: emptyStock(), craft: [], craftT: 0, riding: 0, recent: [], sea: 1, foal: 0, out: [] });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
@@ -1258,6 +1263,7 @@ export function readExpState(d: any): ExpState {
     if (!s.done.includes('caravel') && (['mine', 'dragon'].every((x) => s.done.includes(x)) || s.done.some((x) => ageOf(x) >= 3))) s.done.push('caravel');
   }
   s.recent = Array.isArray(d.recent) ? d.recent.filter((x: any) => typeof x === 'string').slice(-RECENT_EVENTS) : [];
+  s.out = Array.isArray(d.out) ? d.out.filter((x: any) => ids.has(x)) : [];
   return s;
 }
 
