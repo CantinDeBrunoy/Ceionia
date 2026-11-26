@@ -3481,6 +3481,9 @@ export class UI {
    */
   private forceDecision(a: ActiveExpedition) {
     if (this.root.querySelector('.decide') || this.host.midGesture()) return;
+    // le récit du retour d'une autre équipe se lit d'abord : la décision le fermait avant qu'on l'ait vu (« Apprivoiser des
+    // bêtes » réussie sans récit, testeur débutant, 26 nov. 2026). Elle attend sa fermeture (`offerPending`)
+    if (this.root.querySelector('.modal.report')) return;
     this.root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay').forEach((o) => { if (o.id !== 'menu' && !o.classList.contains('victory')) o.close?.(); });
     this.showDecision(a);
   }
