@@ -3,8 +3,8 @@ import { wrapAngle } from '../core/rng';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { World, N, SEA } from '../world/world';
 import { Building } from '../build/catalog';
-import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from './assets';
-import { makeFolk, folkStep, Folk, FOLK_SEAT } from './folk';
+import { makeActor, releaseActor, play, hasModel, Actor, HUMAN_K } from './assets';
+import { makeFolk, disposeFolk, folkStep, Folk, FOLK_SEAT } from './folk';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { makeDraftHorse, rideStep, Rider } from './riders';
@@ -551,7 +551,7 @@ export class Traffic {
     this.group.remove(v.rig.root);
     // le cheval animé partage la géométrie de son modèle : on ne libère que ce qui lui est propre (son harnais) et la charrette
     v.rig.actor?.root.traverse((o) => { if (o instanceof THREE.Mesh && !(o instanceof THREE.SkinnedMesh)) o.geometry.dispose(); });
-    v.rig.actor?.mixer.stopAllAction();
+    if (v.rig.actor) releaseActor(v.rig.actor);
     if (v.rig.actor) v.rig.root.remove(v.rig.actor.root);
     v.rig.root.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
     v.rig = null;
@@ -692,7 +692,7 @@ export class Traffic {
   }
 
   private dropFisher(b: Boat) {
-    if (b.actor) this.group.remove(b.actor.root);
+    if (b.actor) { this.group.remove(b.actor.root); disposeFolk(b.actor); }
     b.actor = null; b.actorKey = '';
   }
 

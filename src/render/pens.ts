@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World } from '../world/world';
 import { HerdKind, penHerds } from '../sim/missions';
-import { makeActor, play, hasModel, Actor } from './assets';
+import { makeActor, releaseActor, play, hasModel, Actor } from './assets';
 import { ANIMAL } from './expeditionScenes';
 import { mats } from './materials';
 
@@ -91,7 +91,7 @@ export class PenView {
       this.pens.set(id, pen);
     }
     // celles qui n'ont plus leur place (enclos démoli, cheval parti en expédition) quittent le pré
-    for (const list of old.values()) for (const b of list) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
+    for (const list of old.values()) for (const b of list) { if (b.actor) releaseActor(b.actor); this.group.remove(b.obj); }
   }
 
   /**

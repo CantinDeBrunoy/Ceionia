@@ -3,8 +3,8 @@ import { World } from '../world/world';
 import { Agents } from '../sim/agents';
 import { Expeditions, ActiveExpedition } from '../sim/expeditions';
 import { HerdKind, penHerds } from '../sim/missions';
-import { makeActor, play, hasModel, Actor } from './assets';
-import { makeFolk, folkStep, Folk, FolkRole } from './folk';
+import { makeActor, releaseActor, play, hasModel, Actor } from './assets';
+import { makeFolk, disposeFolk, folkStep, Folk, FolkRole } from './folk';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { ExpeditionScene, ANIMAL, IdleRockets, sledGeo } from './expeditionScenes';
@@ -169,7 +169,7 @@ export class ExpeditionView {
       // reprise (la même bête, au même endroit, par l'enclos ou le pré) : on retire la nôtre
       const i = ARRIVALS.indexOf(b.arr);
       if (i >= 0) ARRIVALS.splice(i, 1);
-      b.f.actor?.mixer.stopAllAction();
+      if (b.f.actor) releaseActor(b.f.actor);
       this.group.remove(b.f.obj);
       return false;
     });
@@ -258,7 +258,7 @@ export class ExpeditionView {
   }
 
   private clear(sh: Show) {
-    for (const f of sh.followers) { f.actor?.mixer.stopAllAction(); this.group.remove(f.obj); }
+    for (const f of sh.followers) { if (f.actor) releaseActor(f.actor); if (f.folk) disposeFolk(f.folk); this.group.remove(f.obj); }
     for (const s of sh.sacks) this.group.remove(s);
     sh.followers = []; sh.sacks = [];
   }

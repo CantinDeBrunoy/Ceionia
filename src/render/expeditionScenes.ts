@@ -6,8 +6,8 @@ import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntS
 import { HerdKind, Scene, BoatKind, boatKindFor, VOLCANIC } from '../sim/missions';
 import { nearestVolcano, volcanoGate, volcanoIsle } from '../sim/volcano';
 import { VolcanoSite } from './volcanoSite';
-import { makeActor, play, hasModel, Actor, ModelName } from './assets';
-import { makeFolk, folkStep, Folk, FolkPose, FolkRole } from './folk';
+import { makeActor, releaseActor, play, hasModel, Actor, ModelName } from './assets';
+import { makeFolk, disposeFolk, folkStep, Folk, FolkPose, FolkRole } from './folk';
 import { balloonBasketGeo, balloonEnvelopeGeo } from './balloon';
 import { locoGeo } from './railway';
 import { Parts } from './parts';
@@ -91,6 +91,12 @@ function wolfActor(len: number, seed: number): Actor {
 
 // ---------------- Accessoires (géométries partagées, faites à la première demande) ----------------
 const cache = new Map<string, THREE.BufferGeometry>();
+/** les deux cônes d'une flamme (`flameAt`), par taille */
+const FLAME_GEOS = new Map<number, [THREE.BufferGeometry, THREE.BufferGeometry]>();
+/** Le cône d'une flamme de torche, posé sur sa base, fait une fois par taille (les torches sont refaites à chaque scène) */
+function flameCone(r: number, h: number) { return geoOnce(`cone${r}|${h}`, () => new THREE.ConeGeometry(r, h, 5).translate(0, h / 2, 0)); }
+const once = new Map<string, THREE.BufferGeometry>();
+function geoOnce(key: string, make: () => THREE.BufferGeometry) { let g = once.get(key); if (!g) once.set(key, g = make()); return g; }
 function geo(key: string, make: (p: Parts) => void) {
   let g = cache.get(key);
   if (!g) { const p = new Parts(); make(p); g = p.build(false).body; cache.set(key, g); }
@@ -1288,7 +1294,7 @@ export class ExpeditionScene {
       this.put(telescopeGeo(), ex, ez, best + Math.PI);
       this.npc('scholar', a.m.age, ex + px * 0.12, ez + pz * 0.12, best + Math.PI, 'talk');
       this.put(railStockGeo(), cx - sx * 0.3 - px * 0.3, cz - sz * 0.3 - pz * 0.3, best);
-      const train = new THREE.Group(), loco = new THREE.Mesh(locoGeo(a.m.age, 0x3a6ab8).body, mats.body), car = new THREE.Mesh(flatcarGeo(), mats.body);
+      const train = new THREE.Group(), loco = new THREE.Mesh(geoOnce(`loco${a.m.age}`, () => locoGeo(a.m.age, 0x3a6ab8).body), mats.body), car = new THREE.Mesh(flatcarGeo(), mats.body);
       loco.castShadow = car.castShadow = true;
       car.position.z = 0.36;
       train.add(loco, car);
@@ -1818,8 +1824,11 @@ export class ExpeditionScene {
 
   /** Une flamme qui danse en (x, y, z) */
   private flameAt(x: number, y: number, z: number, s = 1) {
-    const f = new THREE.Mesh(new THREE.ConeGeometry(0.045 * s, 0.13 * s, 5).translate(0, 0.065 * s, 0), FLAME);
-    f.add(new THREE.Mesh(new THREE.ConeGeometry(0.025 * s, 0.08 * s, 5).translate(0, 0.04 * s, 0), FLAME_IN));
+    // (les deux cônes, faits une fois par taille : une flamme neuve à chaque scène ne s'ajoute plus à la carte graphique)
+    let cones = FLAME_GEOS.get(s);
+    if (!cones) FLAME_GEOS.set(s, cones = [new THREE.ConeGeometry(0.045 * s, 0.13 * s, 5).translate(0, 0.065 * s, 0), new THREE.ConeGeometry(0.025 * s, 0.08 * s, 5).translate(0, 0.04 * s, 0)]);
+    const f = new THREE.Mesh(cones[0], FLAME);
+    f.add(new THREE.Mesh(cones[1], FLAME_IN));
     f.position.set(x, y, z);
     this.group.add(f); this.props.push(f);
     this.spins.push({ obj: f, speed: 0 });
@@ -1928,7 +1937,7 @@ export class ExpeditionScene {
     const gone = new Set(s.objs);
     for (const o of s.objs) this.group.remove(o);
     for (const d of s.own) d.dispose();
-    this.npcs = this.npcs.filter((n) => !gone.has(n.folk.root));
+    this.npcs = this.npcs.filter((n) => { if (!gone.has(n.folk.root)) return true; disposeFolk(n.folk); return false; });
     this.spins = this.spins.filter((x) => !gone.has(x.obj));
     this.props = this.props.filter((o) => !gone.has(o));
   }
@@ -1974,7 +1983,7 @@ export class ExpeditionScene {
     const [name, len]: [ModelName, number] = k === 'deer' ? ['deer', 0.3] : ANIMAL[k];
     const actor = k === 'wolf' ? wolfActor(len * size, x + z) : hasModel(name) ? makeActor(name, len * size) : null;
     const obj: THREE.Object3D = actor ? actor.root : new THREE.Mesh(new THREE.IcosahedronGeometry(len * size * 0.5, 0), mats.body);
-    if (actor) { actor.mixer.setTime(x * 3); s.own.push({ dispose: () => actor.mixer.stopAllAction() }); } else s.own.push((obj as THREE.Mesh).geometry);
+    if (actor) { actor.mixer.setTime(x * 3); s.own.push({ dispose: () => releaseActor(actor) }); } else s.own.push((obj as THREE.Mesh).geometry);
     obj.position.set(x, this.world.surfaceAt(x, z), z);
     this.sAdd(s, obj);
     return { obj, actor, x, z, tx: x, tz: z, heading: 0, wait: 0, speed: 0 };
@@ -4247,8 +4256,8 @@ export class ExpeditionScene {
       if (!t) {
         t = new THREE.Group();
         t.add(new THREE.Mesh(handTorchGeo(), mats.body));
-        const f = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.05, 5).translate(0, 0.025, 0), FLAME);
-        f.add(new THREE.Mesh(new THREE.ConeGeometry(0.01, 0.03, 5).translate(0, 0.015, 0), FLAME_IN));
+        const f = new THREE.Mesh(flameCone(0.018, 0.05), FLAME);
+        f.add(new THREE.Mesh(flameCone(0.01, 0.03), FLAME_IN));
         f.position.y = 0.075;
         t.add(f);
         this.group.add(t); this.props.push(t); this.torches.set(id, t);
@@ -4941,7 +4950,7 @@ export class ExpeditionScene {
     return what.map((k) => {
       const b = this.beasts.find((x) => x.kind === k && x.obj.visible && x.flee === undefined && !x.held);
       if (!b) return null;
-      b.actor?.mixer.stopAllAction();
+      if (b.actor) releaseActor(b.actor);
       this.group.remove(b.obj);
       this.beasts.splice(this.beasts.indexOf(b), 1);
       return [b.x, b.z, b.heading];
@@ -6231,8 +6240,8 @@ export class ExpeditionScene {
     // le flambeau du relais : la poignée, la coupe, la flamme
     const torch = new THREE.Group();
     torch.add(new THREE.Mesh(handTorchGeo(), mats.body));
-    const tf = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.06, 5).translate(0, 0.03, 0), FLAME);
-    tf.add(new THREE.Mesh(new THREE.ConeGeometry(0.011, 0.035, 5).translate(0, 0.017, 0), FLAME_IN));
+    const tf = new THREE.Mesh(flameCone(0.02, 0.06), FLAME);
+    tf.add(new THREE.Mesh(flameCone(0.011, 0.035), FLAME_IN));
     tf.position.y = 0.075;
     torch.add(tf);
     torch.visible = false;
@@ -6792,15 +6801,20 @@ export class ExpeditionScene {
     this.stagings = [];
     for (const l of this.balloon?.ropes ?? []) l.geometry.dispose();
     if (this.rocket) { this.rocket.glare.geometry.dispose(); (this.rocket.glare.material as THREE.Material).dispose(); }
-    for (const n of this.npcs) this.group.remove(n.folk.root);
-    for (const b of [...this.beasts, ...this.dogs]) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
-    for (const m of this.mammoths) m.actor.mixer.stopAllAction();
-    for (const s of this.swimmers) s.actor?.mixer.stopAllAction();
+    for (const n of this.npcs) { this.group.remove(n.folk.root); disposeFolk(n.folk); }
+    for (const b of [...this.beasts, ...this.dogs]) { if (b.actor) releaseActor(b.actor); this.group.remove(b.obj); }
+    // (le cerf blanc n'est pas dans `props` : on le retire aussi)
+    for (const m of this.mammoths) { releaseActor(m.actor); this.group.remove(m.b.obj); }
+    if (this.dragon) releaseActor(this.dragon.actor);
+    this.stagH?.halo.geometry.dispose();
+    this.volc?.dispose();
+    for (const s of this.swimmers) if (s.actor) releaseActor(s.actor);
     for (const d of this.darts) this.group.remove(d.obj);
     for (const o of this.props) this.group.remove(o);
     for (const f of this.fx) this.group.remove(f.obj);
     for (const r of this.rods.values()) r.line.geometry.dispose();
-    this.flame?.geometry.dispose();
+    // (la flamme du camp et son cœur)
+    this.flame?.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
     this.salv?.dispose();
     void a;
   }

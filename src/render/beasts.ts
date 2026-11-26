@@ -3539,6 +3539,8 @@ export function makeBeast(kind: BeastKind, coat: number, size: number, shade = 1
     // chaque bête a sa nuance
     const mat = (m.material as THREE.MeshStandardMaterial).clone();
     mat.color.setScalar(shade);
+    // (à elle seule : libéré avec elle, `releaseActor`)
+    mat.userData.own = true;
     m.material = mat;
     m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
   });

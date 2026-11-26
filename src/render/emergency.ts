@@ -9,7 +9,7 @@ import { mats } from './materials';
 import { Puffs } from './particles';
 import type { Fires } from './fires';
 import { makeSoldier, soldierStep, Soldier, SoldierMode } from './soldiers';
-import { makeFolk, folkStep, Folk, FolkPose } from './folk';
+import { makeFolk, disposeFolk, folkStep, Folk, FolkPose } from './folk';
 import { makeDraftHorse, rideStep, Rider } from './riders';
 import { fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 import { guardReach } from '../sim/legacy';
@@ -824,6 +824,8 @@ export class Emergencies {
     if (!u.crew) return;
     this.group.remove(u.crew.root);
     u.crew.hose?.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+    // (le voleur est dessiné pour lui seul ; secours et gendarmes partagent leurs géométries, voir `makeSoldier`)
+    for (const m of u.crew.men) if (m.f) disposeFolk(m.f);
     u.crew = null;
   }
 

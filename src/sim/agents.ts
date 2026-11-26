@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { World, N, VEG_FIELD } from '../world/world';
 import { Building, KINDS, KindId, hasDoor, sizeOf, walkableDecor } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
-import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
-import { makeFolk, folkStep, holdFolk, folkTraits, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
+import { makeActor, releaseActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
+import { makeFolk, disposeFolk, folkStep, holdFolk, folkTraits, Folk, FolkHold, FolkPose, FOLK_SEAT } from '../render/folk';
 import { Wish, Sites, sitesOf, wishFor, wishMet } from './wishes';
 import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { Parts } from '../render/parts';
@@ -574,6 +574,7 @@ export class Agents {
     if (a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
     if (!a.actor) return;
     this.group.remove(a.actor.root);
+    disposeFolk(a.actor);
     a.actor = null;
     a.actorKey = '';
   }
@@ -1273,7 +1274,7 @@ export class Agents {
     a.kit = kit;
     a.mounted = !!kit?.horse || !!kit?.car;
     if ((!kit?.car || (a.car && a.carHover !== !!kit.hover)) && a.car) { this.group.remove(a.car); a.car.geometry.dispose(); a.car = null; }
-    if (!kit?.horse && a.mount) { a.mount.mixer.stopAllAction(); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
+    if (!kit?.horse && a.mount) { releaseActor(a.mount); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
     if (!kit?.armor && a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
   }
 

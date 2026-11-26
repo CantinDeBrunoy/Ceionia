@@ -1014,8 +1014,9 @@ function torch(): Parts {
 export function makeSoldier(age: number, v = 0, withTorch = false, role: SoldierRole = 'soldier'): Soldier {
   const era = Math.min(5, Math.max(0, age)), kit = (TROOP_ROLES[role] ?? (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : role === 'fireman' ? FIREMEN : role === 'medic' ? MEDICS : role === 'police' ? POLICE : KITS))[era], si = ((v % SKINS.length) + SKINS.length) % SKINS.length, skin = SKINS[si];
   const tint = (c: number) => (c === SKIN ? skin : c);
-  // les troupes partagent leurs géométries (une par rôle, époque, teint et pièce) : une recrue de plus ne coûte presque rien
-  const ck = TROOP_ROLES[role] && !withTorch ? `${role}|${era}|${si}|` : null;
+  // tous partagent leurs géométries (une par rôle, époque, teint et pièce) : une recrue de plus ne coûte presque rien, et
+  // un pompier, un gendarme ou un garde à torche rentré ne laisse rien derrière lui (chacun avait les siennes, jamais libérées)
+  const ck = `${role}|${era}|${si}|`;
   let glowG: THREE.BufferGeometry | null = null;
   const hullG = shared(ck && ck + 'body', () => {
     const p = new Parts();
@@ -1078,7 +1079,8 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
       kit.sleeve?.(ap);
     });
     // ce que tient la main (et ses parties lumineuses : lame d'énergie, corde lumineuse)
-    const side = s < 0 ? 'R' : 'L', hk = ck && ck + 'held' + side;
+    // (la torche remplace l'écu : une pièce à part)
+    const side = s < 0 ? 'R' : 'L', hk = ck + 'held' + side + (s > 0 && withTorch ? 'T' : '');
     let heldG: THREE.BufferGeometry | null = hk ? troopGeo.get(hk) ?? null : null, heldGlow: THREE.BufferGeometry | null = hk ? troopGeo.get(hk + 'glow') ?? null : null;
     if (!heldG && !(hk && troopGeo.has(hk + 'none'))) {
       const held = new Parts();
@@ -1102,7 +1104,7 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
       arm.add(hm);
       arm.userData.held = hm;
       if (s > 0 && withTorch) {
-        flame = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.04, 5).translate(0, 0.02, 0), FLAME);
+        flame = new THREE.Mesh(shared('flame', () => new THREE.ConeGeometry(0.014, 0.04, 5).translate(0, 0.02, 0)), FLAME);
         flame.position.set(0, 0.056, 0);
         hm.add(flame);
       }
