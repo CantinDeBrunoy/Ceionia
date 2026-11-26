@@ -11,8 +11,8 @@ describe('guidage : menu et équipement', () => {
     }
   });
 
-  it('un second rayon (KIND_ALSO) a son groupe : le chantier naval aussi dans Militaire, sous Flotte', () => {
-    expect(KIND_ALSO.shipyard).toEqual({ cat: 'war', sub: 'flotte' });
+  it('un second rayon (KIND_ALSO) a son groupe : le chantier naval aussi dans Militaire, sous Naval', () => {
+    expect(KIND_ALSO.shipyard).toEqual({ cat: 'war', sub: 'naval' });
     for (const [k, also] of Object.entries(KIND_ALSO)) {
       expect(also!.cat, k).not.toBe(KINDS[k as KindId].cat);
       expect(BUILD_SUBS[also!.cat].map((s) => s.id), k).toContain(also!.sub);

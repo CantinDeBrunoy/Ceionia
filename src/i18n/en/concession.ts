@@ -5,7 +5,7 @@ registerDict('concession', {
   // ---- les groupes de la barre de construction ----
   'Tête de pont': 'Bridgehead',
   'Base arrière': 'Rear base',
-  'Flotte': 'Fleet',
+  'Naval': 'Naval',
   'Concession': 'Concession',
 
   // ---- la tête de pont ----

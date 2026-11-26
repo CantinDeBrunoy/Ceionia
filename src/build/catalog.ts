@@ -799,7 +799,7 @@ export const BUILD_SUBS: Record<BuildCat, BuildSub[]> = {
   home: [{ id: 'logis', label: 'Logements' }, { id: 'eau', label: 'Eau' }],
   prod: [{ id: 'nourriture', label: 'Nourriture' }, { id: 'materiaux', label: 'Matériaux' }, { id: 'industrie', label: 'Industrie' }, { id: 'concession', label: 'Concession' }],
   service: [{ id: 'sante', label: 'Santé' }, { id: 'savoir', label: 'Savoir' }, { id: 'securite', label: 'Sécurité' }, { id: 'transport', label: 'Transport' }, { id: 'concession', label: 'Concession' }],
-  war: [{ id: 'defense', label: 'Défense' }, { id: 'remparts', label: 'Remparts' }, { id: 'flotte', label: 'Flotte' }, { id: 'front', label: 'Tête de pont' }, { id: 'arriere', label: 'Base arrière' }],
+  war: [{ id: 'defense', label: 'Défense' }, { id: 'remparts', label: 'Remparts' }, { id: 'naval', label: 'Naval' }, { id: 'front', label: 'Tête de pont' }, { id: 'arriere', label: 'Base arrière' }],
   deco: [{ id: 'jardin', label: 'Jardins' }, { id: 'mobilier', label: 'Mobilier' }, { id: 'ornements', label: 'Ornements' }],
   life: [{ id: 'parcs', label: 'Places publiques' }, { id: 'detente', label: 'Détente' }, { id: 'culte', label: 'Culte' }, { id: 'monuments', label: 'Monuments' }],
 };
@@ -829,7 +829,7 @@ export const KIND_SUB: Record<KindId, string> = {
  * La recherche ne le range que sous son rayon d'origine
  */
 export const KIND_ALSO: Partial<Record<KindId, { cat: BuildCat; sub: string }>> = {
-  shipyard: { cat: 'war', sub: 'flotte' },
+  shipyard: { cat: 'war', sub: 'naval' },
 };
 
 export interface AgeDef {
