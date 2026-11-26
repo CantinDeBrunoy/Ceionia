@@ -7,8 +7,8 @@ Lire son fichier dans `docs/` (index : `docs/README.md`) : règles, fichiers con
 
 ## Commandes
 - `npm run dev` : serveur de développement (port 5173, config `dev` de `.claude/launch.json`).
-- `npx tsc --noEmit` : types. `npx vitest run` : tests (dossier `tests/`). Les deux doivent être verts avant un commit.
-- `npm run build` : build de production. `npm run deploy` : seulement à la demande de l'auteur. Il déploie aussi le Worker (`worker/`, mesure d'audience et back-office `/bo`) : voir `docs/mesure-audience.md`.
+- `npx tsc --noEmit` : types (avec `noUnusedLocals` : une déclaration jamais lue est une erreur). `npx vitest run` : tests (dossier `tests/`). Les deux doivent être verts avant un commit.
+- `npm run build` : build de production. `npm run deploy` : seulement à la demande de l'auteur. Il déploie aussi le Worker (`worker/`, mesure d'audience et back-office `/bo`) : voir `docs/mesure-audience.md`. Chaque push sur `master` ou `refonte-graphique` déploie de lui-même (`.github/workflows/deploy.yml`).
 - En jeu, `window.__game` donne accès à l'objet `Game` pour préparer une situation (à ne pas utiliser pour juger l'équilibre).
 
 ## Conventions
