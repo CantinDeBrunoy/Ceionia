@@ -7046,7 +7046,8 @@ function lamp(p: Parts, age: number) {
 /**
  * Ponton de pêche, petit et mignon : la façade (+z) donne sur l'eau. Préhistoire : radeau de rondins, séchoir à poissons,
  * pirogue tirée sur la berge et panier ; ensuite une cabane de pêcheur à fenêtre ronde au bout d'un petit ponton de planches,
- * avec lanterne, tonneau, filet et canne à pêche ; la conserverie a sa cheminée, le port moderne sa bouée
+ * avec lanterne, tonneau, filet et canne à pêche ; le port de pêche (industriel et après) a sa cheminée puis sa bouée, et son
+ * bateau de pêche à quai ; le port aquacole (futuriste), ses cages à poissons qui flottent
  */
 function pier(p: Parts, age: number, o: ModelOpts) {
   // poisson pendu tête en haut : corps fuselé, queue en éventail en bas
@@ -7156,6 +7157,34 @@ function pier(p: Parts, age: number, o: ModelOpts) {
     for (const [x, z] of [[-0.09, 0.46], [-0.06, 0.52]]) { p.cyl(0.025, 0.03, 0.045, 7, x, 0.025, z, 0xb8945a); p.cyl(0.01, 0.025, 0.012, 7, x, 0.07, z, 0x8a6a3e); }
     p.add(new THREE.TorusGeometry(0.022, 0.008, 3, 8).rotateX(Math.PI / 2), 0.06, 0.033, 0.48, 0xc8b080);
     p.cyl(0.03, 0.025, 0.035, 7, 0.08, 0.025, 0.66, 0x9a7a4a); for (let k = 0; k < 3; k++) p.add(new THREE.ConeGeometry(0.006, 0.026, 4).rotateZ(Math.PI / 2), 0.07 + k * 0.01, 0.064, 0.66, [0xc8d4dc, 0xe8925a, 0x9ab0c0][k]);
+  }
+  if (age >= 3) {
+    // le port de pêche (âge industriel et après) : un bateau de pêche amarré le long du ponton, côté poteaux d'amarrage ; coque,
+    // pont, timonerie vitrée, mât et sa bôme au filet qui pend, bouées. Retour de l'auteur (26 nov. 2026) : la pêcherie doit
+    // devenir un port de pêche, pas un port de commerce
+    const bx = -w / 2 - 0.13, bz = 0.7, hull = age === 3 ? 0x2f4f6f : age === 4 ? 0xc8443a : 0xe8eef2, trim = age === 5 ? 0x2bb5b0 : C.white;
+    p.add(new THREE.IcosahedronGeometry(1, 1).scale(0.085, 0.05, 0.25), bx, 0.0, bz, hull);
+    p.box(0.13, 0.012, 0.36, bx, 0.035, bz, age === 3 ? C.wood : 0xd9d2c4);
+    p.box(0.135, 0.014, 0.37, bx, 0.03, bz, trim);
+    p.box(0.09, 0.09, 0.08, bx, 0.045, bz - 0.08, age === 5 ? C.white : 0xf2efe6);
+    p.box(0.092, 0.03, 0.082, bx, 0.1, bz - 0.08, C.win, 0, true);
+    p.box(0.1, 0.012, 0.09, bx, 0.135, bz - 0.08, hull);
+    if (age === 3) { p.cyl(0.012, 0.014, 0.07, 6, bx, 0.145, bz - 0.1, C.darkbrick); smoke(bx, 0.24, bz - 0.1, 1); }
+    else p.cyl(0.004, 0.004, 0.06, 4, bx + 0.03, 0.145, bz - 0.1, C.metal);
+    p.cyl(0.006, 0.007, 0.32, 5, bx, 0.04, bz + 0.06, C.darkwood);
+    p.add(new THREE.CylinderGeometry(0.004, 0.004, 0.2, 4).rotateX(Math.PI / 2 - 0.5), bx, 0.27, bz + 0.13, C.darkwood);
+    for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.003, 0.12, 0.002), bx - 0.024 + k * 0.012, 0.17, bz + 0.2, 0x8a7a5a, 0, false, (k - 2) * 0.1);
+    for (let k = 0; k < 3; k++) p.sphere(0.012, bx - 0.02 + k * 0.02, 0.1, bz + 0.2, k === 1 ? 0xf2c94c : 0xe8553c);
+    // caisses de poisson sur le pont, sous la bôme
+    for (const dz of [0.02, 0.09]) p.box(0.05, 0.03, 0.04, bx, 0.042, bz + dz, age === 3 ? C.wood : 0x3c7fd8, 0.2);
+  }
+  if (age === 5) {
+    // le port aquacole : deux cages à poissons rondes qui flottent au large du ponton, leurs filets et leurs bouées
+    for (const [x, z] of [[0.38, 0.78], [0.38, 1.08]] as [number, number][]) {
+      p.add(new THREE.TorusGeometry(0.13, 0.012, 4, 18).rotateX(Math.PI / 2), x, 0.01, z, 0xe8eef2);
+      p.add(new THREE.CylinderGeometry(0.125, 0.11, 0.05, 14, 1, true), x, -0.02, z, 0x2bb5b0);
+      for (let k = 0; k < 4; k++) p.sphere(0.016, x + Math.cos(k * 1.57) * 0.13, 0.025, z + Math.sin(k * 1.57) * 0.13, 0xf2c94c);
+    }
   }
   if (age >= 4) {
     // la boutique d'appâts : enseigne en drapeau au poisson orange, panneau solaire ; râtelier de kayaks, vélo contre le mur

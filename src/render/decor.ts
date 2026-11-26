@@ -786,7 +786,7 @@ function fountain(p: Parts, age: number, v: number, kit: DecorKit) {
 
 /**
  * Pavés, d'un bord à l'autre de la case (deux cases voisines se suivent sans couture) : pierres plates dans la terre
- * (Préhistoire), dallage de marbre à joints (Antiquité), pavés de grès en rangs (Moyen Âge), briques en arêtes de poisson
+ * (Préhistoire), dallage de marbre à joints (Antiquité), pavés de grès en rangs (Moyen Âge), pavés de granit gris
  * (Industriel), dalles de béton à joints (Moderne), dalles blanches aux joints lumineux (Futuriste)
  */
 function paving(p: Parts, age: number, v: number) {
@@ -816,12 +816,15 @@ function paving(p: Parts, age: number, v: number) {
     return;
   }
   if (age === 3) {
-    // briques en arêtes de poisson, bordure de briques de chant
-    p.box(1, Y, 1, 0, 0, 0, 0x8a5a4a);
-    for (let r = 0; r < 7; r++) for (let i = 0; i < 7; i++) {
-      const x = -0.43 + i * 0.143, z = -0.43 + r * 0.143;
-      p.box(0.12, 0.012, 0.055, x + 0.02, Y, z - 0.03, vary(0xc8705a, i, r, 0.25), (i + r) % 2 ? PI / 4 : -PI / 4);
+    // pavés de granit gris en rangs serrés, joints sombres, une plaque d'égout de fonte une case sur trois. (Des briques
+    // rouges jusqu'au 26 nov. 2026 : retour de l'auteur, la place tranchait en rouge sur le reste, gris de pierre)
+    p.box(1, Y, 1, 0, 0, 0, 0x5e5c58);
+    for (let r = 0; r < 9; r++) for (let i = 0; i < 9; i++) {
+      const x = -0.5 + (i + (r % 2 ? 0.5 : 0) + 0.5) / 9, z = -0.5 + (r + 0.5) / 9;
+      if (x > 0.49) continue;
+      p.box(0.098, 0.012, 0.096, x, Y, z, vary(0x9c9890, i + r * 11, v, 0.22));
     }
+    if (v % 3 === 0) p.cyl(0.06, 0.06, 0.004, 10, 0.2, Y + 0.012, -0.2, 0x4a4c52);
     return;
   }
   if (age === 4) {

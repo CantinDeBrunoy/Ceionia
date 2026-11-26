@@ -220,7 +220,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   pier: {
     id: 'pier', size: 1, minAge: 0, icon: '🎣', cat: 'prod',
-    names: ['Coin de pêche', 'Ponton de pêche', 'Pêcherie', 'Conserverie', 'Port de pêche', 'Aquaferme'],
+    names: ['Coin de pêche', 'Ponton de pêche', 'Pêcherie', 'Port de pêche', 'Port de pêche', 'Port aquacole'],
     desc: 'Nourrit grâce aux poissons. À poser au bord de l’eau : mer, rivière ou lac.',
     food: [4, 6, 9, 13, 18, 24], jobs: [1, 1, 2, 3, 3, 3],
   },
@@ -737,7 +737,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   paving: {
     id: 'paving', size: 1, minAge: 0, icon: '🧱', cat: 'deco',
-    names: ['Pierres plates', 'Dallage de marbre', 'Pavés', 'Pavage de briques', 'Dalles', 'Dalles lumineuses'],
+    names: ['Pierres plates', 'Dallage de marbre', 'Pavés', 'Pavés de granit', 'Dalles', 'Dalles lumineuses'],
     desc: 'Pave une case du sol, bord à bord, pour une place ou une allée. On peut ensuite bâtir, poser une décoration ou tracer une route par-dessus. Glissez pour en paver plusieurs.',
     joy: [0.05],
   },
@@ -899,9 +899,10 @@ export const KIND_LABEL: Record<KindId, string> = {
 export const UPGRADES: { from: KindId; to: KindId }[] = [
   { from: 'house', to: 'manor' },
   { from: 'well', to: 'watertower' },
+  // (plus de ponton → port : la pêcherie devenait un port de commerce. Retour de l'auteur du 26 nov. 2026 : elle reste un
+  // port de pêche, qui grandit seul avec l'âge, voir `pier` dans models.ts)
   // à l'âge futuriste, la gare intermodale devient la gare maglev (ses lignes s'y arrêtent toujours)
   { from: 'terminal', to: 'maglev' },
-  { from: 'pier', to: 'harbor' },
   { from: 'workshop', to: 'carworks' },
   { from: 'farm', to: 'vfarm' },
 ];
