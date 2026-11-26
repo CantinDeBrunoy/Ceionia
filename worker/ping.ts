@@ -64,18 +64,52 @@ export function parsePing(text: string): Ping | string {
 
 /**
  * Les secondes créditées pour un signal : celles annoncées, bornées par `MAX_SECONDS` et par le temps réel écoulé depuis le
- * dernier signal de la partie (plus 10 s de marge). Un signal de lancement ne compte rien. Une partie inconnue (`last` nul)
- * : seulement la borne fixe
+ * dernier signal de la partie (plus 10 s de marge). Un signal de lancement ne compte rien
  */
-export function creditedSeconds(ping: Pick<Ping, 'k' | 't'>, now: number, last: number | null): number {
+export function creditedSeconds(ping: Pick<Ping, 'k' | 't'>, now: number, last: number): number {
   if (ping.k === 'start') return 0;
-  let s = Math.min(ping.t, MAX_SECONDS);
-  if (last !== null) s = Math.min(s, Math.max(0, now - last) + 10);
+  const s = Math.min(ping.t, MAX_SECONDS, Math.max(0, now - last) + 10);
   return Math.max(0, Math.floor(s));
 }
 
+/** Plafonds par jour (heure de Paris) : au-delà, les nouveaux joueurs ou les nouvelles parties sont refusés jusqu'au lendemain */
+export const MAX_NEW_PLAYERS_DAY = 3000;
+export const MAX_NEW_SESSIONS_DAY = 15000;
+/** Durée de conservation : l'identifiant du joueur est retiré, et les données effacées, après 13 mois (396 jours) */
+export const KEEP_DAYS = 396;
+
+// (un seul formateur pour tout le module : en créer un par appel coûte des dizaines de microsecondes)
+const PARIS = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+function parisParts(sec: number) {
+  const o: Record<string, string> = {};
+  for (const p of PARIS.formatToParts(new Date(sec * 1000))) o[p.type] = p.value;
+  return o;
+}
 /** Le jour (AAAA-MM-JJ) d'un instant en secondes, à l'heure de Paris */
 export function parisDay(sec: number): string {
-  // (la locale suédoise écrit les dates en AAAA-MM-JJ)
-  return new Date(sec * 1000).toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+  const o = parisParts(sec);
+  return `${o.year}-${o.month}-${o.day}`;
+}
+/** L'instant (secondes) du dernier minuit à Paris */
+export function parisMidnight(sec: number): number {
+  const o = parisParts(sec);
+  return sec - (Number(o.hour) * 3600 + Number(o.minute) * 60 + Number(o.second));
+}
+
+/** Le corps d'une requête lu au plus `max` octets (nul au-delà, sans tout lire), avec ou sans `content-length` */
+export async function readBody(body: ReadableStream<Uint8Array> | null, max: number): Promise<string | null> {
+  if (!body) return '';
+  const reader = body.getReader(), parts: Uint8Array[] = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.byteLength;
+    if (n > max) { await reader.cancel().catch(() => {}); return null; }
+    parts.push(value);
+  }
+  const all = new Uint8Array(n);
+  let at = 0;
+  for (const p of parts) { all.set(p, at); at += p.byteLength; }
+  return new TextDecoder().decode(all);
 }

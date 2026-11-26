@@ -12,16 +12,29 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/bo", "/bo/*"]
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "ceionia-audience",
-      "database_id": "A-REMPLIR",
-      "migrations_dir": "migrations"
-    }
-  ],
-  // au plus 10 signaux par minute et par joueur (la clé est l'identifiant tiré au hasard, jamais l'adresse IP)
+  // La base D1 n'est pas encore déclarée : le Worker ignore alors les signaux, et le déploiement ne casse rien.
+  // Une fois la base créée, ajouter ici, au premier niveau (voir « Mise en service » dans docs/mesure-audience.md) :
+  //   "d1_databases": [{ "binding": "DB", "database_name": "ceionia-audience", "database_id": "<id>", "migrations_dir": "migrations" }],
+  // Les limiteurs comptent en mémoire chez Cloudflare, rien n'est écrit : par joueur (identifiant tiré au hasard),
+  // par adresse IP (jamais enregistrée), et les essais de connexion au back-office
   "ratelimits": [
-    { "name": "PING_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }
-  ]
+    { "name": "PING_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
+    { "name": "PING_IP", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } },
+    { "name": "BO_LOGIN", "namespace_id": "1003", "simple": { "limit": 5, "period": 60 } }
+  ],
+  // chaque nuit, l'effacement des données de plus de 13 mois
+  "triggers": { "crons": ["17 3 * * *"] },
+  "env": {
+    // Essai en local seulement (`wrangler dev --env essai`), jamais déployé : la même chose, avec une base locale
+    "essai": {
+      "d1_databases": [
+        { "binding": "DB", "database_name": "ceionia-audience", "database_id": "essai-local", "migrations_dir": "migrations" }
+      ],
+      "ratelimits": [
+        { "name": "PING_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
+        { "name": "PING_IP", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } },
+        { "name": "BO_LOGIN", "namespace_id": "1003", "simple": { "limit": 5, "period": 60 } }
+      ]
+    }
+  }
 }

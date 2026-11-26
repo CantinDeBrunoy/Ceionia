@@ -3681,7 +3681,7 @@ export class UI {
         <p class="hint">${tr('Un court film au début de chaque nouvelle partie : la vallée sauvage, un peuple nomade, le premier foyer.')}</p>
         <h4>${tr('Statistiques anonymes')}</h4>
         <div class="row"><label>${tr('Mesure d’audience')}</label><button id="gAudience" class="${audienceOff() ? '' : 'active'}">${tr(audienceOff() ? 'Désactivée' : 'Activée')}</button></div>
-        <p class="hint">${tr('Le jeu compte, sans nom ni adresse IP, combien de joueurs jouent, combien de temps et jusqu’à quel âge. Cela nous aide à l’améliorer. Désactivée, rien n’est envoyé.')}</p>
+        <p class="hint">${tr('Le jeu compte, sans nom ni adresse IP enregistrée, combien de joueurs jouent, combien de temps et jusqu’à quel âge. Cela nous aide à l’améliorer. Désactivée, rien n’est envoyé et votre numéro est effacé.')}</p>
         <h4>${tr('Langue')}</h4>
         ${langPicker(lang)}
         <h4>${tr('Crédits')}</h4>
@@ -3963,7 +3963,7 @@ export function showCredits(root: HTMLElement) {
     </section>
     <section class="credCard">
       <h4>${ic('heart', 18, 2)}${tr('Statistiques anonymes')}</h4>
-      <p>${tr('Pour savoir combien de personnes jouent, combien de temps et jusqu’à quel âge elles vont, le jeu envoie pendant une partie un petit signal par minute : un numéro tiré au hasard, l’âge du village, le mode, la difficulté, la langue et la version du jeu. Ni nom, ni adresse IP, ni empreinte du navigateur. Ces chiffres servent seulement à améliorer le jeu. Vous pouvez refuser dans Paramètres › Divers.')}</p>
+      <p>${tr('Pour savoir combien de personnes jouent, combien de temps et jusqu’à quel âge elles vont, le jeu envoie à son serveur, pendant une partie, un petit signal par minute de jeu : un numéro tiré au hasard, l’âge du village, le mode, la difficulté, la langue et la version du jeu. Ni nom, ni empreinte du navigateur. Votre adresse IP sert un instant à bloquer les abus, elle n’est jamais enregistrée. Le numéro change au bout de 13 mois, et les chiffres de plus de 13 mois sont effacés. Ils servent seulement à améliorer le jeu. Les polices viennent aussi du serveur du jeu. Vous pouvez refuser dans Paramètres › Divers.')}</p>
     </section>
     <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>
   </div>`, undefined, tr('Les artistes des modèles 3D, des sons et des musiques, et leurs licences.'));

@@ -53,8 +53,21 @@ jobs:
       - if: steps.secrets.outputs.ok == 'true'
         run: npm run build
 
+      # Le schéma de la base de la mesure d'audience, avant le Worker qui s'en sert. Seulement quand la base est déclarée au
+      # premier niveau de wrangler.jsonc (voir docs/mesure-audience.md) ; le jeton doit avoir le droit « D1 : modifier »
       - if: steps.secrets.outputs.ok == 'true'
-        run: npx --yes wrangler@4.147.0 deploy
+        run: |
+          if grep -qE '^  "d1_databases"' wrangler.jsonc; then
+            npx --yes wrangler@4.147.0 d1 migrations apply ceionia-audience --remote --env=""
+          else
+            echo "::notice::Base D1 pas encore déclarée : migrations ignorées, la mesure d'audience reste éteinte."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - if: steps.secrets.outputs.ok == 'true'
+        run: npx --yes wrangler@4.147.0 deploy --env=""
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
