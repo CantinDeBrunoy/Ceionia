@@ -2,7 +2,7 @@
 
 > Fichiers : `src/audience.ts` (côté jeu : identifiant, signaux, refus), `worker/index.ts` (le Worker : `/api/ping`, `/bo`,
 > purge planifiée), `worker/ping.ts` (forme et validation d'un signal, jours de Paris, plafonds), `worker/stats.ts` (rapport
-> calculé par D1, purge), `worker/auth.ts` (connexion et session signée), `worker/bo.ts` (pages HTML), `worker/d1.ts` (types),
+> calculé par D1, purge), `worker/auth.ts` (connexion GitHub et session signée), `worker/bo.ts` (pages HTML), `worker/d1.ts` (types),
 > `migrations/` (schéma D1), `wrangler.jsonc`, `.github/workflows/deploy.yml` (migrations avant le déploiement),
 > `vite.config.ts` (`__BUILD__`, proxy `/api`), `public/polices/` (polices servies par le jeu)
 > Tests : `tests/mesureAudience.test.ts` (sur une vraie base SQLite en mémoire, `node:sqlite`)
@@ -10,8 +10,8 @@
 
 ## En bref
 Pour savoir combien de joueurs différents jouent, combien de temps et jusqu'à quel âge ils vont, le jeu envoie un petit signal
-anonyme pendant une partie. Un Worker Cloudflare le range dans une base D1. L'auteur lit les chiffres sur `/bo`, protégée par
-une clé. Le joueur peut refuser la mesure (Paramètres › Divers), et les Crédits disent ce qui est mesuré, pourquoi, et combien
+anonyme pendant une partie. Un Worker Cloudflare le range dans une base D1. L'auteur lit les chiffres sur `/bo`, réservée à son
+compte GitHub. Le joueur peut refuser la mesure (Paramètres › Divers), et les Crédits disent ce qui est mesuré, pourquoi, et combien
 de temps c'est gardé. La même carte s'ouvre depuis l'accueil, par le lien « Confidentialité » en bas à droite (`showPrivacy`,
 `privacyCard` dans `ui/ui.ts`) : le premier signal part au premier lancement, l'information est à portée avant (audit du
 26 nov. 2026).
@@ -93,10 +93,31 @@ depuis 13 mois (`KEEP_DAYS`, `worker/ping.ts`, `purge`). Au refus, l'identifiant
   purge.
 
 ### Le back-office `/bo`
-- **Connexion** : formulaire POST seulement (la clé n'est jamais dans l'adresse, `/bo?key=` est ignoré). 5 essais par minute
-  et par adresse IP (`BO_LOGIN`, 429). La bonne clé pose un cookie de session signé `échéance.HMAC` (`worker/auth.ts`), valable
-  7 jours, `HttpOnly`, `Secure`, `SameSite=Strict`, limité à `/bo`. Il ne contient pas la clé et ne permet pas de la retrouver.
-  **Révoquer toutes les sessions** : changer le secret `BO_SALT` (ou la clé). Déconnexion : bouton (POST `/bo/sortie`).
+- **Connexion par GitHub (OAuth)**, réservée à un seul compte, celui de l'auteur. Plus de clé à garder.
+  1. `/bo` sans session : un bouton « Se connecter avec GitHub » (un lien vers `/bo/login`).
+  2. `/bo/login` tire un `state` de 32 octets au hasard, le garde dans le cookie `ceionia_bo_etat` (`Path=/bo/callback`,
+     `HttpOnly`, `Secure`, `SameSite=Lax` pour revenir de github.com, 10 minutes) et renvoie vers
+     `https://github.com/login/oauth/authorize` avec `client_id`, `redirect_uri` (`<origine>/bo/callback`), le `state`,
+     `allow_signup=false` et **aucun scope** : l'identifiant public du compte suffit.
+  3. `/bo/callback` vérifie le `state` contre le cookie, à temps constant (absent ou faux : 400, GitHub n'est pas appelé),
+     échange le `code` contre un jeton (`POST https://github.com/login/oauth/access_token` avec `GITHUB_CLIENT_SECRET`), lit
+     `GET https://api.github.com/user` (`User-Agent: ceionia-back-office`), puis **révoque le jeton**
+     (`DELETE /applications/{client_id}/token`) : il sert une fois et n'est gardé nulle part.
+  4. Seul l'**identifiant numérique** du compte compte, comparé à `BO_GITHUB_ID` (le login peut changer de nom, pas
+     l'identifiant). Tout autre compte : 403, « Ce compte GitHub n'a pas accès au back-office. », sans rien dire du compte admis.
+     Connexion annulée sur GitHub : 403. GitHub en panne ou code refusé : 502. Le cookie `state` est effacé à chaque retour.
+  5. Compte admis : le cookie de session est posé, et une petite page renvoie vers `/bo` (balise `meta refresh`). Une
+     redirection 303 directe ne marcherait pas : venue de github.com, elle est vue comme une navigation d'un autre site, et le
+     navigateur n'enverrait pas le cookie `SameSite=Strict` tout juste posé.
+- `/bo/login` et `/bo/callback` passent par le limiteur `BO_LOGIN` : 10 par minute et par adresse IP (429). Une connexion en
+  coûte deux.
+- **Session** : cookie signé `échéance.HMAC` (`worker/auth.ts`), valable 7 jours, `HttpOnly`, `Secure`, `SameSite=Strict`,
+  limité à `/bo`. La signature mêle `GITHUB_CLIENT_SECRET`, `BO_GITHUB_ID` et `BO_SALT`. **Révoquer toutes les sessions** :
+  changer le secret `BO_SALT` (ou régénérer le secret de l'application GitHub). Déconnexion : bouton (POST `/bo/sortie`).
+- **Plus de clé `BO_KEY`**, ni en secours : une clé de plus serait un mot de passe de plus à deviner et à perdre. Si GitHub
+  ne répond pas, `/bo` attend, les signaux des joueurs, eux, continuent d'être enregistrés.
+- Variables : `BO_GITHUB_ID` dans `wrangler.jsonc` (`vars`, public : `https://api.github.com/users/CantinDeBrunoy`, champ
+  `id`, aujourd'hui 90508998). Secrets Wrangler : `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `BO_SALT`.
 - **Calcul** (`loadReport`) : tout est calculé par D1, en un seul aller-retour (`batch`) : comptes et sommes, médianes
   (`ORDER BY seconds LIMIT 1 ou 2 OFFSET n/2`), répartition des âges (`GROUP BY`), 30 derniers jours (`GROUP BY day`), et une
   page de 100 joueurs (`?page=`). Le Worker ne reçoit que ces totaux : son temps de calcul ne grandit pas avec la base. Un seul
@@ -106,7 +127,7 @@ depuis 13 mois (`KEEP_DAYS`, `worker/ping.ts`, `purge`). Au refus, l'identifiant
   sans une minute de jeu (une hausse soudaine trahit une rafale de faux joueurs) ; temps total, moyen et médian par joueur et
   par partie ; joueurs par âge le plus haut atteint (et « bac à sable seul ») ; joueurs par jour sur 30 jours ; la liste des
   joueurs (identifiant court, première et dernière visite, temps, parties, âge max, langue), par pages.
-- Page sans script, `noindex`, `no-store`, CSP stricte. Sans `BO_KEY` posé : 503.
+- Page sans script, `noindex`, `no-store`, CSP stricte. Sans `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` ou `BO_GITHUB_ID` : 503.
 
 ## Mise en service
 **Dans cet ordre**, la base d'abord : chaque push sur `master` ou `refonte-graphique` déploie
@@ -118,21 +139,42 @@ depuis 13 mois (`KEEP_DAYS`, `worker/ping.ts`, `purge`). Au refus, l'identifiant
    `"d1_databases": [{ "binding": "DB", "database_name": "ceionia-audience", "database_id": "<id>", "migrations_dir": "migrations" }],`
    (deux espaces d'indentation : le workflow cherche cette ligne pour appliquer les migrations).
 3. Appliquer le schéma : `npx wrangler@4.147.0 d1 migrations apply ceionia-audience --remote --env=""`
-4. Choisir une clé longue et aléatoire (par exemple `openssl rand -base64 32`, ou un gestionnaire de mots de passe), puis la
-   poser, avec le sel (wrangler les demande, ils n'apparaissent nulle part) :
-   `npx wrangler@4.147.0 secret put BO_KEY`
+4. Le sel des sessions (une valeur longue et aléatoire, par exemple `openssl rand -base64 32`), puis la connexion GitHub
+   (voir plus bas) :
    `npx wrangler@4.147.0 secret put BO_SALT`
 5. Donner au jeton `CLOUDFLARE_API_TOKEN` de GitHub le droit « D1 : modifier » (le workflow applique les migrations avant
    chaque déploiement).
 6. Commiter `wrangler.jsonc`, fusionner, pousser : le workflow applique les migrations puis déploie (ou `npm run deploy` à la
    main).
-7. Ouvrir https://ceionia.cantin-roquier.workers.dev/bo et entrer la clé.
+7. Ouvrir https://ceionia.cantin-roquier.workers.dev/bo et se connecter avec GitHub.
 8. Conseillé : une alerte d'usage D1 et Workers dans le tableau de bord Cloudflare.
 
 Une nouvelle migration : un fichier `migrations/000N_….sql`. Le workflow l'applique au prochain push.
 
+## Connexion GitHub : mise en service
+Sur la machine de l'auteur, PowerShell bloque `npx.ps1` : écrire `npx.cmd`.
+
+1. **Créer l'OAuth App** : GitHub › Settings › Developer settings › OAuth Apps › New OAuth App.
+   - Application name : `Ceionia back-office` ; Homepage URL : `https://ceionia.cantin-roquier.workers.dev`
+   - Authorization callback URL : `https://ceionia.cantin-roquier.workers.dev/bo/callback`
+   - « Enable Device Flow » : non coché.
+   Puis « Generate a new client secret » et le copier tout de suite (GitHub ne le remontre pas).
+2. **Poser les secrets** (wrangler les demande, ils n'apparaissent nulle part) :
+   `npx.cmd wrangler@4.147.0 secret put GITHUB_CLIENT_ID` (le « Client ID » de l'application)
+   `npx.cmd wrangler@4.147.0 secret put GITHUB_CLIENT_SECRET`
+   `BO_SALT` est déjà posé. Pour le changer : `npx.cmd wrangler@4.147.0 secret put BO_SALT`.
+   Facultatif, l'ancienne clé ne sert plus : `npx.cmd wrangler@4.147.0 secret delete BO_KEY`
+3. **Pousser** sur `refonte-graphique` : le workflow déploie. `BO_GITHUB_ID` part avec `wrangler.jsonc`.
+4. Ouvrir https://ceionia.cantin-roquier.workers.dev/bo, « Se connecter avec GitHub », accepter.
+
+Avant les secrets, `/bo` répond 503 (« la connexion GitHub n'est pas configurée ») : rien ne casse si l'on pousse d'abord.
+Changer de compte admis : son identifiant dans `BO_GITHUB_ID` de `wrangler.jsonc` (les deux environnements).
+
 ## Essai en local
-1. `npx vite build` (le Worker sert `dist`), `.dev.vars` avec `BO_KEY=…` et `BO_SALT=…` (fichier ignoré par git).
+1. `npx vite build` (le Worker sert `dist`), `.dev.vars` avec `GITHUB_CLIENT_ID=…`, `GITHUB_CLIENT_SECRET=…` et
+   `BO_SALT=…` (fichier ignoré par git). GitHub n'accepte que l'adresse de retour déclarée dans l'application : pour aller
+   jusqu'au bout en local, une seconde OAuth App avec `http://127.0.0.1:8787/bo/callback`. Sans elle, `/bo/login` et le refus
+   d'un `state` faux s'essaient quand même. Le cookie `Secure` passe en `http://127.0.0.1` (Chrome et Firefox l'admettent).
 2. `npx wrangler@4.147.0 d1 migrations apply ceionia-audience --local --env essai`
 3. `npx wrangler@4.147.0 dev --env essai --port 8787` : le jeu de production sur http://127.0.0.1:8787 (il envoie ses signaux),
    et http://127.0.0.1:8787/bo. L'environnement `essai` de `wrangler.jsonc` déclare une base locale. Il n'est jamais déployé.
@@ -149,4 +191,7 @@ La base locale vit dans `.wrangler/` (ignoré par git).
   migration, et garder les anciens builds valides (champ facultatif).
 - Le signal de lancement perdu (réseau coupé à ce moment), la partie n'est pas comptée : ses `tick` sont refusés. C'est le prix
   du refus des parties inconnues.
-- Les tests du Worker passent par `node:sqlite` (Node 22.13 ou plus).
+- Les tests du Worker passent par `node:sqlite` (Node 22.13 ou plus). GitHub y est simulé en remplaçant `fetch`
+  (`vi.stubGlobal`).
+- Le bouton de connexion est un lien, pas un formulaire : la CSP (`form-action 'self'`) bloquerait la redirection d'un
+  formulaire vers github.com.

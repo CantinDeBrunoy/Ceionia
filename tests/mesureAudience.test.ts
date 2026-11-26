@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGE_NAMES, creditedSeconds, MAX_NEW_PLAYERS_DAY, MAX_SECONDS, parisDay, parisMidnight, parsePing, readBody, type Ping } from '../worker/ping';
 import { dayBefore, duration, loadReport, PAGE, purge } from '../worker/stats';
 import { loginPage, reportPage } from '../worker/bo';
-import { newSession, sessionValid, SESSION_DAYS } from '../worker/auth';
+import { newSession, sessionValid, SESSION_DAYS, STATE_SECONDS } from '../worker/auth';
 import { backOffice, ping, recordPing, type Env } from '../worker/index';
 import type { D1Database, D1Statement, RateLimit } from '../worker/d1';
 import { AGES } from '../src/build/catalog';
@@ -152,8 +152,8 @@ describe('mesure d’audience : la requête /api/ping', () => {
 });
 
 describe('mesure d’audience : connexion au back-office', () => {
-  const sec = { key: 'cle-de-test-assez-longue', salt: 'sel' };
-  it('session signée : échéance, falsification, révocation par la clé ou le sel', async () => {
+  const sec = { key: 'secret-de-l-application\u000090508998', salt: 'sel' };
+  it('session signée : échéance, falsification, révocation par le secret ou le sel', async () => {
     const c = await newSession(sec, NOW);
     expect(await sessionValid(c, sec, NOW + 60)).toBe(true);
     expect(await sessionValid(c, sec, NOW + SESSION_DAYS * 86400 + 1)).toBe(false);
@@ -161,29 +161,157 @@ describe('mesure d’audience : connexion au back-office', () => {
     expect(await sessionValid(c, { ...sec, salt: 'autre' }, NOW)).toBe(false);
     expect(await sessionValid(c, { ...sec, key: 'autre' }, NOW)).toBe(false);
     expect(await sessionValid('', sec, NOW)).toBe(false);
-    expect(c).not.toContain(sec.key);
+    expect(c).not.toContain('secret');
   });
-  it('formulaire POST seulement, cookie sûr, essais limités, déconnexion en POST', async () => {
-    const env: Env = { DB: fakeD1(), BO_KEY: sec.key, BO_SALT: sec.salt, BO_LOGIN: limiter(3) };
-    const r = (path: string, init: RequestInit = {}) => backOffice(new Request(`https://ceionia.test${path}`, init), env, NOW);
-    const form = (key: string) => ({ method: 'POST', body: new URLSearchParams({ key }) });
-    expect((await r('/bo')).status).toBe(401);
-    expect((await r(`/bo?key=${sec.key}`)).status).toBe(401);
-    expect((await r('/bo', form('faux'))).status).toBe(401);
-    expect((await r('/bo', { method: 'POST', body: '{', headers: { 'content-type': 'application/json' } })).status).toBe(400);
-    const okRes = await r('/bo', form(sec.key));
-    expect(okRes.status).toBe(303);
-    const cookie = okRes.headers.get('set-cookie')!;
-    expect(cookie).toMatch(/HttpOnly; Secure; SameSite=Strict; Max-Age=604800/);
-    expect((await r('/bo', form(sec.key))).status).toBe(429);
-    const value = cookie.split(';')[0];
-    const page = await r('/bo', { headers: { cookie: value } });
+});
+
+describe('mesure d’audience : connexion GitHub', () => {
+  const ADMIS = 90508998, AUTRE = 4242;
+  const base = (): Env => ({ DB: fakeD1(), GITHUB_CLIENT_ID: 'id-app', GITHUB_CLIENT_SECRET: 'secret-app', BO_GITHUB_ID: String(ADMIS), BO_SALT: 'sel', BO_LOGIN: limiter(50) });
+  const r = (env: Env, path: string, init: RequestInit = {}) => backOffice(new Request(`https://ceionia.test${path}`, init), env, NOW);
+  /** GitHub simulé : le jeton contre le bon code, puis le compte `account` ; chaque appel est noté */
+  let calls: { url: string; init: RequestInit }[] = [];
+  const github = (account: number | 'panne' | 'code refusé') => {
+    calls = [];
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (account === 'panne') throw new TypeError('réseau');
+      if (url === 'https://github.com/login/oauth/access_token') {
+        const code = new URLSearchParams(String(init.body)).get('code');
+        return Response.json(code === 'bon-code' && account !== 'code refusé' ? { access_token: 'gho_jeton', token_type: 'bearer', scope: '' } : { error: 'bad_verification_code' });
+      }
+      if (url === 'https://api.github.com/user') return Response.json({ id: account, login: 'quelqu-un' });
+      if (url === 'https://api.github.com/applications/id-app/token') return new Response(null, { status: 204 });
+      return new Response('inconnu', { status: 404 });
+    });
+  };
+  afterEach(() => vi.unstubAllGlobals());
+  /** /bo/login, puis le retour de GitHub avec ce `state` et ce code */
+  const login = async (env: Env) => {
+    const res = await r(env, '/bo/login');
+    const state = /ceionia_bo_etat=([0-9a-f]+)/.exec(res.headers.get('set-cookie') ?? '')![1];
+    return { res, state, back: (q: string, cookie = `ceionia_bo_etat=${state}`) => r(env, `/bo/callback?${q}`, { headers: { cookie } }) };
+  };
+
+  it('sans session : la page propose GitHub, plus de clé', async () => {
+    const env = base();
+    const res = await r(env, '/bo');
+    expect(res.status).toBe(401);
+    const page = await res.text();
+    expect(page).toContain('Se connecter avec GitHub');
+    expect(page).not.toContain('type="password"');
+    expect((await r(env, '/bo', { method: 'POST', body: new URLSearchParams({ key: 'x' }) })).status).toBe(405);
+    expect((await r({ ...env, GITHUB_CLIENT_SECRET: undefined }, '/bo')).status).toBe(503);
+    expect((await r({ ...env, BO_GITHUB_ID: 'CantinDeBrunoy' }, '/bo')).status).toBe(503);
+  });
+
+  it('/bo/login renvoie vers GitHub sans scope, avec un state gardé dans un cookie court', async () => {
+    const { res, state } = await login(base());
+    expect(res.status).toBe(302);
+    const to = new URL(res.headers.get('location')!);
+    expect(to.origin + to.pathname).toBe('https://github.com/login/oauth/authorize');
+    expect(to.searchParams.get('client_id')).toBe('id-app');
+    expect(to.searchParams.get('redirect_uri')).toBe('https://ceionia.test/bo/callback');
+    expect(to.searchParams.get('state')).toBe(state);
+    expect(to.searchParams.has('scope')).toBe(false);
+    expect(state).toMatch(/^[0-9a-f]{64}$/);
+    expect(res.headers.get('set-cookie')).toBe(`ceionia_bo_etat=${state}; Path=/bo/callback; HttpOnly; Secure; SameSite=Lax; Max-Age=${STATE_SECONDS}`);
+    expect((await login(base())).state).not.toBe(state);
+  });
+
+  it('state absent ou faux : refusé sans appeler GitHub', async () => {
+    github(ADMIS);
+    const { state, back } = await login(base());
+    for (const res of [
+      await back('code=bon-code'),
+      await back(`code=bon-code&state=${state}`, ''),
+      await back(`code=bon-code&state=${'0'.repeat(64)}`),
+      await back(`code=bon-code&state=${state}`, `ceionia_bo_etat=${'0'.repeat(64)}`),
+      await back('code=bon-code&state=', 'ceionia_bo_etat='),
+    ]) {
+      expect(res.status).toBe(400);
+      expect(res.headers.get('set-cookie')).toContain('ceionia_bo_etat=; Path=/bo/callback');
+      expect(res.headers.get('set-cookie')).not.toMatch(/ceionia_bo=\d/);
+      expect(await res.text()).toContain('expiré');
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('compte refusé : 403, sans rien dire du compte admis, jeton révoqué', async () => {
+    github(AUTRE);
+    const { state, back } = await login(base());
+    const res = await back(`code=bon-code&state=${state}`);
+    expect(res.status).toBe(403);
+    const page = await res.text();
+    expect(page).toContain('Ce compte GitHub n’a pas accès');
+    expect(page).not.toContain(String(ADMIS));
+    expect(page).not.toContain('quelqu-un');
+    expect(res.headers.get('set-cookie')).not.toMatch(/ceionia_bo=\d/);
+    expect(calls.at(-1)!.url).toBe('https://api.github.com/applications/id-app/token');
+    expect(calls.at(-1)!.init.method).toBe('DELETE');
+  });
+
+  it('compte accepté : le cookie de session est posé, le jeton ne sert qu’une fois', async () => {
+    github(ADMIS);
+    const env = base();
+    const { state, back } = await login(env);
+    const res = await back(`code=bon-code&state=${state}`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('url=/bo');
+    const cookies = res.headers.getSetCookie();
+    expect(cookies).toContain('ceionia_bo_etat=; Path=/bo/callback; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
+    const session = cookies.find((c) => c.startsWith('ceionia_bo='))!;
+    expect(session).toMatch(/^ceionia_bo=\d+\.[0-9a-f]{64}; Path=\/bo; HttpOnly; Secure; SameSite=Strict; Max-Age=604800$/);
+    expect(session).not.toContain('gho_jeton');
+    // GitHub : le jeton contre le code (avec le secret), le compte (User-Agent générique), puis la révocation du jeton
+    expect(calls.map((c) => c.url)).toEqual(['https://github.com/login/oauth/access_token', 'https://api.github.com/user', 'https://api.github.com/applications/id-app/token']);
+    const token = new URLSearchParams(String(calls[0].init.body));
+    expect(token.get('client_secret')).toBe('secret-app');
+    expect(token.get('redirect_uri')).toBe('https://ceionia.test/bo/callback');
+    const h = new Headers(calls[1].init.headers);
+    expect(h.get('authorization')).toBe('Bearer gho_jeton');
+    expect(h.get('user-agent')).toBe('ceionia-back-office');
+    expect(JSON.parse(String(calls[2].init.body))).toEqual({ access_token: 'gho_jeton' });
+    // la session ouvre le rapport, plus rien avec un autre sel ou un autre compte admis
+    const value = session.split(';')[0];
+    const page = await r(env, '/bo', { headers: { cookie: value } });
     expect(page.status).toBe(200);
     expect(await page.text()).toContain('Joueurs différents');
-    expect((await r('/bo/sortie')).status).toBe(405);
-    const out = await r('/bo/sortie', { method: 'POST' });
-    expect(out.headers.get('set-cookie')).toContain('Max-Age=0');
-    expect((await backOffice(new Request('https://ceionia.test/bo', { headers: { cookie: value } }), { ...env, DB: undefined }, NOW)).status).toBe(200);
+    expect((await r({ ...env, BO_SALT: 'autre' }, '/bo', { headers: { cookie: value } })).status).toBe(401);
+    expect((await r({ ...env, BO_GITHUB_ID: String(AUTRE) }, '/bo', { headers: { cookie: value } })).status).toBe(401);
+    expect((await r(env, '/bo/sortie')).status).toBe(405);
+    expect((await r(env, '/bo/sortie', { method: 'POST' })).headers.get('set-cookie')).toBe('ceionia_bo=; Path=/bo; HttpOnly; Secure; SameSite=Strict; Max-Age=0');
+    expect((await r({ ...env, DB: undefined }, '/bo', { headers: { cookie: value } })).status).toBe(200);
+  });
+
+  it('code refusé, connexion annulée, GitHub en panne', async () => {
+    github('code refusé');
+    let l = await login(base());
+    let res = await l.back(`code=bon-code&state=${l.state}`);
+    expect(res.status).toBe(502);
+    expect(calls.map((c) => c.url)).toEqual(['https://github.com/login/oauth/access_token']);
+    l = await login(base());
+    res = await l.back(`error=access_denied&state=${l.state}`);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain('annulée');
+    github('panne');
+    l = await login(base());
+    res = await l.back(`code=bon-code&state=${l.state}`);
+    expect(res.status).toBe(502);
+    expect(res.headers.get('set-cookie')).not.toMatch(/ceionia_bo=\d/);
+  });
+
+  it('le limiteur garde /bo/login et /bo/callback', async () => {
+    github(ADMIS);
+    const env = { ...base(), BO_LOGIN: limiter(2) };
+    const { state, back } = await login(env);
+    expect((await back(`code=faux&state=${state}`)).status).toBe(502);
+    expect((await r(env, '/bo/login')).status).toBe(429);
+    const late = await back(`code=bon-code&state=${state}`);
+    expect(late.status).toBe(429);
+    expect(late.headers.get('set-cookie')).toBeNull();
+    expect((await r(env, '/bo/login', { method: 'POST' })).status).toBe(405);
   });
 });
 
@@ -215,7 +343,8 @@ describe('mesure d’audience : rapport calculé par la base', () => {
     expect(html).toContain('&#60;b&#62;');
     expect(html).not.toContain('<td><b>');
     expect(html).toContain('10 min');
-    expect(loginPage(true)).toContain('Clé incorrecte');
+    expect(loginPage('refuse')).toContain('Ce compte GitHub n’a pas accès');
+    expect(loginPage()).toContain('href="/bo/login"');
   });
   it('médiane impaire et base vide, pagination', async () => {
     const db = fakeD1();
