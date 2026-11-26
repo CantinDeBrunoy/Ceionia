@@ -241,13 +241,21 @@ function readVoyageMusic(): { key: string; name: string; t: number } | null {
  * et le rechargement l'annulait (notes de joueurs du 22 nov. 2026). Relancées au calme après la cinématique (`Expeditions.resume`)
  */
 const LATE_TEAMS = 'village-lowpoly:late-teams';
-function keepLateTeams(ts: TeamNote[]) {
-  try { if (ts.length) sessionStorage.setItem(LATE_TEAMS, JSON.stringify(ts)); else sessionStorage.removeItem(LATE_TEAMS); } catch { /* sans stockage, les équipes sont perdues, comme avant (leur équipement revient) */ }
+/** pourquoi elles ont été notées : la traversée, ou une simple sauvegarde avant un rechargement (le message n'est pas le même) */
+const LATE_WHY = 'village-lowpoly:late-why';
+function keepLateTeams(ts: TeamNote[], why: 'voyage' | 'reload') {
+  try {
+    if (ts.length) { sessionStorage.setItem(LATE_TEAMS, JSON.stringify(ts)); sessionStorage.setItem(LATE_WHY, why); }
+    else { sessionStorage.removeItem(LATE_TEAMS); sessionStorage.removeItem(LATE_WHY); }
+  } catch { /* sans stockage, les équipes sont perdues, comme avant (leur équipement revient) */ }
 }
+let lateWhy: 'voyage' | 'reload' = 'voyage';
 function readLateTeams(): TeamNote[] {
   try {
     const raw = sessionStorage.getItem(LATE_TEAMS);
+    lateWhy = sessionStorage.getItem(LATE_WHY) === 'reload' ? 'reload' : 'voyage';
     sessionStorage.removeItem(LATE_TEAMS);
+    sessionStorage.removeItem(LATE_WHY);
     const list = JSON.parse(raw ?? '[]');
     return Array.isArray(list) ? list.map(readTeamNote).filter((n): n is TeamNote => !!n) : [];
   } catch { return []; }
@@ -626,6 +634,12 @@ class Game implements UIHost {
       if (w.sandbox) this.sim.age = Math.max(0, Math.min(AGES.length - 1, Math.round(startAge) || 0));
     }
     this.war.load(w.war);
+    // les équipes en route ne sont pas sauvegardées. Celles notées avant un rechargement dans le même onglet repartent (seulement
+    // celles que la sauvegarde savait en route : une partie neuve n'hérite de rien) ; les autres sont dites rentrées au
+    // chargement (`warnLostTeams`)
+    const out = w.exp.out.splice(0);
+    this.lateTeams = this.lateTeams.filter((n) => { const i = out.indexOf(n.m); if (i < 0) return false; out.splice(i, 1); return true; });
+    this.lostTeams = out;
     // le bâton du fondateur d'une partie d'avant lui : repris si le roi est tombé, volé si les Enfers ont été vus, sinon sur la place
     // (le vol viendra en son temps, jamais à l'improviste : voir `sim/staff.ts`)
     if (w.staff === null) w.staff = staffOfOld({ kingFallen: hellFallen(w), hellSeen: this.war.visited || this.war.intro === 'seen' });
@@ -1030,7 +1044,7 @@ class Game implements UIHost {
     this.applyControls();
     audio.unlockOn(window);
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveNow(); audio.pause(document.hidden); });
-    window.addEventListener('pagehide', () => this.saveNow());
+    window.addEventListener('pagehide', () => { this.saveNow(); this.keepVoyage(); });
     this.watchGpu();
     // changer de langue en jeu : on sauvegarde, la page recharge et reprend la partie dans la nouvelle langue
     onLangChange(() => { this.saveNow(); sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`); this.running = false; location.reload(); });
@@ -1180,6 +1194,8 @@ class Game implements UIHost {
   }
   saveNow() {
     if (!this.running) return;
+    // les équipes en route, avec la sauvegarde : un rechargement dans le même onglet (F5, langue, menu) les relance
+    keepLateTeams(this.expeditions.teamNotes(), 'reload');
     const ok = saveSlot(this.buildSave());
     if (!ok && !this.saveFailed) this.ui.toast(tr('⚠️ Sauvegarde impossible : le navigateur refuse d’écrire (stockage plein ou bloqué). Exportez votre partie (Paramètres › Partie) pour ne rien perdre.'), undefined, 'danger');
     this.saveFailed = !ok;
@@ -1190,6 +1206,21 @@ class Game implements UIHost {
     if (!why) return;
     this.loadError = null;
     this.ui.toast(tr('⚠️ Votre sauvegarde n’a pas pu être lue ({why}) : une nouvelle partie commence. L’ancienne est gardée de côté. Cliquez ici pour la télécharger.', { why }), () => exportAside(this.world.mapId), 'danger');
+  }
+  /**
+   * Les équipes en route ne sont pas sauvegardées : rechargée, la partie les a vues disparaître sans un mot, et l'expédition
+   * obligatoire semblait perdue (testeur, 26 nov. 2026). Au chargement, un message dit qu'elles sont rentrées, sans rien
+   * rapporter, et que leur équipement est en réserve ; un clic rouvre les expéditions
+   */
+  warnLostTeams() {
+    const out = this.lostTeams.splice(0);
+    if (!out.length) return;
+    const names = [...new Set(out)].map((id) => MISSIONS.find((m) => m.id === id)?.title).filter(Boolean).map((t) => tr('« {name} »', { name: t! }));
+    if (!names.length) return;
+    const text = names.length > 1
+      ? tr('🧭 Les équipes parties pour {names} sont rentrées au village quand la partie s’est fermée. Elles n’ont rien rapporté, leur équipement est en réserve. Cliquez ici pour les relancer.', { names: names.join(', ') })
+      : tr('🧭 L’équipe partie pour {names} est rentrée au village quand la partie s’est fermée. Elle n’a rien rapporté, son équipement est en réserve. Cliquez ici pour la relancer.', { names: names[0] });
+    this.ui.toast(text, () => this.ui.openExpeditions(), 'action');
   }
   exportSave() { exportSave(this.buildSave()); }
   async importFile(f: File) {
@@ -2621,13 +2652,16 @@ class Game implements UIHost {
    */
   private stepCrossroads() {
     const w = this.world;
-    if (w.reveal && this.revealReady()) { w.reveal = false; this.popups.taken(); this.revealIsles(); return; }
+    // (`reveal` reste vrai jusqu'à la fin du survol, voir `revealIsles` : une partie rechargée pendant le film ou le survol le
+    // rejoue, au lieu d'ouvrir tout droit le choix de l'allié, testeur du 26 nov. 2026)
+    if (w.reveal && this.revealReady()) { this.popups.taken(); this.revealIsles(); return; }
     if (this.voyageStage.playing) return;
     // les récits gardés pendant la traversée : au calme, après la cinématique des îles
     if (this.lateReports.length && !w.reveal && !this.revealing && this.portalCalm > 3 && this.popups.open && !this.popupBusy() && !this.diploChoice.visible) { for (const r of this.lateReports.splice(0)) this.expeditions.onReport?.(r); return; }
-    // les équipes en route pendant la traversée repartent, une fois la cinématique finie
-    if (this.lateTeams.length && !w.reveal && !this.revealing && !this.voyage) {
-      this.expeditions.resume(this.lateTeams.splice(0));
+    // les équipes en route pendant la traversée (ou un rechargement) repartent, une fois la cinématique finie et l'écran de
+    // chargement parti
+    if (this.lateTeams.length && !w.reveal && !this.revealing && !this.voyage && this.portalCalm > 0.5) {
+      this.expeditions.resume(this.lateTeams.splice(0), lateWhy);
       this.ui.update();
     }
     if (w.crossroads) return;
@@ -2667,8 +2701,10 @@ class Game implements UIHost {
   private reportsDue = new Set<Report>();
   /** les récits gardés pendant la traversée (rechargement de « Explorer le monde »), à montrer au calme */
   private lateReports: Report[] = readLateReports();
-  /** les équipes en route gardées pendant la traversée, à relancer après la cinématique */
+  /** les équipes en route gardées pendant la traversée ou un rechargement, à relancer au calme (après la cinématique) */
   private lateTeams: TeamNote[] = readLateTeams();
+  /** les missions des équipes en route à la sauvegarde qui ne repartent pas (onglet fermé) : dites au joueur au chargement */
+  private lostTeams: string[] = [];
 
   /**
    * La cinématique des îles peut partir : au sortir de la traversée, tout de suite (elle tient la brume tant que l'écran de
@@ -2749,7 +2785,7 @@ class Game implements UIHost {
       // un récit d'expédition pas encore montré survit au rechargement (il s'ouvre après la cinématique des îles)
       keepLateReports([...this.reportsDue]);
       // les équipes en route repartiront après la cinématique (le rechargement les aurait annulées)
-      keepLateTeams(this.expeditions.teamNotes());
+      keepLateTeams(this.expeditions.teamNotes(), 'voyage');
       film.mark();
       keepVoyageMusic(audio.musicMark());
       location.reload();
@@ -2758,15 +2794,29 @@ class Game implements UIHost {
 
   /** La partie vient d'une traversée (le monde agrandi) : le survol part sous le film, sans attendre (posé par `boot`) */
   voyage = false;
+  /** le film de la traversée de ce lancement (posé par `boot`), pour le reprendre si la page recharge avant la fin */
+  voyageFilm: VoyageFilm | null = null;
+  /**
+   * La page recharge (F5) pendant la traversée, film ou survol : on la reprend comme le rechargement prévu par le jeu, le film
+   * où il en était (fini : la brume), puis le survol. Avant, l'accueil revenait, et « Continuer » ouvrait le choix de l'allié
+   * sans les îles (testeur, 26 nov. 2026)
+   */
+  private keepVoyage() {
+    const f = this.voyageFilm;
+    if (!this.running || !f || !this.world.reveal) return;
+    try { sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue|voyage`); } catch { return; }
+    f.mark();
+    keepVoyageMusic(audio.musicMark());
+  }
 
   /** Le survol en direct de la cinématique « Explorer le monde » : les îles découvertes, puis le premier contact */
   private revealIsles() {
     const ends = () => { for (const f of this.voyageEnds.splice(0)) f(); };
-    if (!this.world.isles) { this.voyage = false; ends(); return; }
+    if (!this.world.isles) { this.voyage = false; this.world.reveal = false; ends(); return; }
     this.revealing = true;
     const fromMist = this.voyage;
     this.voyage = false;
-    this.voyageStage.play(fromMist, () => { clearFilmMark(); this.revealing = false; ends(); this.onIslesRevealed?.(); this.saveNow(); });
+    this.voyageStage.play(fromMist, () => { clearFilmMark(); this.world.reveal = false; this.revealing = false; ends(); this.onIslesRevealed?.(); this.saveNow(); });
   }
   private voyageEnds: (() => void)[] = [];
   /** Une cinématique joue (trophée, traversée, portail, ouverture, royaume) : les fenêtres qui s'ouvrent seules l'attendent */
@@ -3986,8 +4036,9 @@ class Game implements UIHost {
     stepWind(this.elapsed, this.env.rainK);
     const w = this.world;
 
-    // une fenêtre ouverte arrête le jeu, comme la pause (voir UI.menuOpen)
-    const gdt = this.ui?.menuOpen() ? 0 : this.time.update(dt);
+    // une fenêtre ouverte arrête le jeu, comme la pause (voir UI.menuOpen) ; l'écran de chargement aussi : les premières
+    // images et le fondu ne font pas avancer l'horloge (elle filait à ×8 sous l'écran, testeur du 26 nov. 2026)
+    const gdt = this.ui?.menuOpen() || this.warming || document.getElementById('loadScreen') ? 0 : this.time.update(dt);
     const uv = this.mode === 'under' ? this.underView : null;
     const hv = this.mode === 'hell' ? this.hellMode : null;
     this.cam.update(dt, uv ? (x, z) => uv.groundY(x, z) : hv ? (x, z) => hv.view.groundY(x, z) : (x, z) => w.hAt(x, z));
@@ -4339,12 +4390,14 @@ async function boot() {
     game.loadStats.build = performance.now() - t0;
     (window as any).__game = game;
     game.voyage = voyage && game.world.reveal;
+    if (game.voyage && ld.film instanceof VoyageFilm) game.voyageFilm = ld.film;
     await game.prepare(ld);
     // (l'ouverture : le plan en direct se prépare sous l'écran, et part quand le film est fini et l'écran parti)
     const film = ld.film;
     if (film instanceof OpeningFilm) game.openingStage.prepare(() => film.wasSkipped);
     ld.done();
     game.warnLoadError();
+    game.warnLostTeams();
     game.startAudience();
     // la cinématique d'ouverture ou celle de la traversée d'abord (le tutoriel attend sous elle), puis, au premier lancement,
     // le choix des contrôles de la vue, et le blason

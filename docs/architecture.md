@@ -78,7 +78,7 @@ Ordre (surface, simplifié) :
 - `dayLen` = secondes **réelles** par jour (défaut 130, curseur 30–400 ; une sauvegarde restée à l'ancien défaut de 100 passe à 130, `OLD_DAY_LEN`) ; `seasonLen` = secondes réelles par saison (défaut 240, curseur 30–600 ; une sauvegarde restée à l'ancien défaut de 160 passe à 240 au chargement, `OLD_SEASON_LEN`). Un an = 4 × `seasonLen`.
 - Les heures de nuit passent plus vite que celles du jour : `hour += g·24/dayLen / (1 + NIGHT_SKIP·sin((hour−6)/24·2π))`, `NIGHT_SKIP = 0,6` (environ 70 % du cycle au jour). Le jour garde sa durée totale `dayLen`.
 - `mix()` : transition du décor d'une saison à la suivante sur `BLEND = 0,3` de saison, centrée sur le changement (la saison affichée est toujours celle qui domine). `setSeason(i)` pose `seasonT = i + 0,3`.
-- Vitesses : bouton `#bSpeed` du HUD en boucle sur 1, 2, 4, 8 ; fenêtre Réglages : Pause, ×1, ×2, ×4, ×8. Les ressources ne suivent pas tout à fait : ×3 à ×4, ×4 à ×8 (`ecoPace`, voir [economie-ressources.md](economie-ressources.md)). `Espace` bascule la pause (surface, souterrain, Enfers). Les réglages `dayLen`, `seasonLen`, `speed` sont sauvegardés ; `paused` et `days` ne le sont pas.
+- Vitesses : bouton `#bSpeed` du HUD en boucle sur 1, 2, 4, 8 ; fenêtre Réglages : Pause, ×1, ×2, ×4, ×8. Les ressources ne suivent pas tout à fait : ×3 à ×4, ×4 à ×8 (`ecoPace`, voir [economie-ressources.md](economie-ressources.md)). `Espace` bascule la pause (surface, souterrain, Enfers). Les réglages `dayLen`, `seasonLen`, `speed` sont sauvegardés, l'horloge aussi (`clockOf`, `readClock`). Une partie reprise (rechargement, changement de langue, « Continuer ») commence **toujours en pause**, à l'heure exacte où on l'a quittée. Tant que l'écran de chargement est là (`#loadScreen`, premières images `warming` comprises), `gdt` vaut 0 : l'horloge ne bouge pas sous l'écran, ni à l'entrée aux Enfers.
 - Aux vitesses élevées : `cam.pace = speed`, la caméra qui suit rattrape d'autant plus vite ; les balayages de teinte du sol s'espacent (`refreshSeason`, `2 × max(1, speed)` crans).
 
 ### Caméra (`CameraRig`)
@@ -141,7 +141,7 @@ L'objet `Game` entier, pour préparer une situation à la main : `__game.world`,
 - Les actions du village faites depuis les Enfers doivent passer par `ensureSurface`, sinon elles s'exécutent avec la mauvaise scène.
 - `fadeThrough` ignore un appel pendant un fondu : ne pas enchaîner deux bascules sans passer par `ensureSurface`.
 - Le temps réel plafonné à 0,1 s : sous 10 images par seconde le jeu ralentit au lieu de sauter. Les pauses ne figent pas la caméra ni l'eau (`dt`).
-- `days` (jours écoulés, affiché à l'écran de victoire) n'est pas sauvegardé : il repart de 0 à chaque chargement. À corriger si on s'en sert ailleurs.
+- L'horloge filait sous l'écran de chargement (à ×8, une saison et des morts le temps des premières images : testeur du 26 nov. 2026). `Game.advance` donne `gdt = 0` tant que `#loadScreen` existe ou que `warming` tourne : ne pas retirer ce garde.
 
 ## Pour modifier
 - **Ajouter un sous-système animé** : classe dans `src/render/` ou `src/sim/` ; champ de `Game` ; construction dans le constructeur (après `world`) ; `scene.add(x.group)` dans la longue ligne d'ajout ; `x.update(…)` dans `frame` (branche surface si c'est un décor ; avant pour une simulation) ; s'il dépend de la qualité, le régler dans `applyQuality`.

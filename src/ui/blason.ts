@@ -43,7 +43,7 @@ export function blasonPickerHtml() {
   return `<div class="blWrap">
         <div class="blShow"><div class="blFlag"></div><div class="blMan"></div></div>
         <div class="blPick">
-          <h4><label for="blIsleIn">${tr('Nom de l’île')}</label></h4><div class="blRow blIsle"><input id="blIsleIn" type="text" data-isle maxlength="${ISLE_MAX}" spellcheck="false" autocomplete="off"></div>
+          <h4><label for="blIsleIn">${tr('Nom de l’île')}</label></h4><div class="blRow blIsle"><input id="blIsleIn" type="text" data-isle maxlength="${ISLE_MAX}" spellcheck="false" autocomplete="off"><small class="blCount" aria-hidden="true"></small></div>
           <h4>${tr('Couleur du champ')}</h4><div class="blRow">${COLOR_KEYS.map((k) => swatch('a', k)).join('')}</div>
           <h4>${tr('Couleur de l’emblème')}</h4><div class="blRow">${COLOR_KEYS.map((k) => swatch('b', k)).join('')}</div>
           <h4>${tr('Emblème')}</h4><div class="blRow blEmb">${EMBLEMS.map((e) => `<button type="button" data-e="${e}" title="${tr(EMBLEM_NAME[e])}" aria-label="${tr(EMBLEM_NAME[e])}">${emblemSvg(e, 'currentColor', 30, 'transparent')}</button>`).join('')}</div>
@@ -62,9 +62,19 @@ export function bindBlasonPicker(el: HTMLElement, cur: Blason, change: (b: Blaso
   const field = el.querySelector<HTMLInputElement>('[data-isle]');
   let name = readIsleName(isle?.name);
   if (field) {
+    // (les chevrons, refusés dans le nom, s'effacent dans la case même, et le compteur dit la limite : un nom collé
+    // « <b>Chelou</b> … » devenait « bChelou/b … », coupé sans prévenir, testeur du 26 nov. 2026)
+    const count = el.querySelector<HTMLElement>('.blCount');
+    const tally = () => { if (count) count.textContent = `${field.value.length}/${ISLE_MAX}`; };
     field.value = name;
-    field.oninput = () => { const n = readIsleName(field.value); if (n !== name) { name = n; isle?.change(n); } };
-    field.onblur = () => { field.value = name; };
+    tally();
+    field.oninput = () => {
+      const clean = field.value.replace(/[\u0000-\u001f\u007f<>]/g, '');
+      if (clean !== field.value) { const at = Math.max(0, (field.selectionStart ?? clean.length) - (field.value.length - clean.length)); field.value = clean; field.setSelectionRange(at, at); }
+      tally();
+      const n = readIsleName(field.value); if (n !== name) { name = n; isle?.change(n); }
+    };
+    field.onblur = () => { field.value = name; tally(); };
     // (les touches du jeu ne doivent pas partir pendant qu'on tape le nom)
     field.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') field.blur(); };
   }
@@ -89,7 +99,7 @@ export function bindBlasonPicker(el: HTMLElement, cur: Blason, change: (b: Blaso
   const rand = el.querySelector<HTMLButtonElement>('[data-rand]');
   if (rand) rand.onclick = () => {
     Object.assign(bl, randomBlason());
-    if (field) { name = randomIsleName(Math.random, name); field.value = name; isle?.change(name); }
+    if (field) { name = randomIsleName(Math.random, name); field.value = name; isle?.change(name); field.dispatchEvent(new Event('blur')); }
     draw();
   };
   draw(false);

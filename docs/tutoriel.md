@@ -5,11 +5,18 @@
 > Voir aussi : [interface.md](interface.md), [portail-ile.md](portail-ile.md), [enfers.md](enfers.md), [armee-combat.md](armee-combat.md), [sauvegarde.md](sauvegarde.md), [traduction.md](traduction.md)
 
 ## En bref
-Une bulle guide le joueur pas à pas. Elle se place à côté de l'élément dont elle parle, qu'entoure un anneau doré.
+Une bulle guide le joueur pas à pas. Elle se place à côté de l'élément dont elle parle, qu'entoure un anneau (`#tutoRing`) :
+orange, en pointillés, qui bat, avec une flèche qui sautille au-dessus (dessous près du haut de l'écran, classe `below`). Le
+bouton montré garde la classe `tHi` mais plus de liseré doré : doré, il ressemblait à l'objet choisi (fond et cadre dorés), et
+un testeur a cru avoir le point d'eau en main (26 nov. 2026). L'élément caché sous une autre fenêtre (le bouton Équipement
+sous la fenêtre de départ d'une expédition) n'a pas d'anneau : il flottait, vide, au milieu de la fenêtre (`follow`).
 Chaque étape a des tâches ; quand elles sont faites, la bulle dit « Bien joué ! » puis passe seule à la suivante.
 Rien n'est bloqué : « Suivant » passe toujours, « Passer le tutoriel » le met de côté.
 Un « Suivant » qui arrive moins de 0,9 s après un passage automatique (`LATE_MS`), ou enfoncé sur l'étape d'avant (`downOn`),
 est ignoré : il visait l'étape qui vient de se cocher et sautait la suivante (étapes 4 et 6 jamais vues, testeur v6).
+Quand la bulle change de place à ce passage, un appui à son ancienne place, dans les 2,5 s (`GONE_MS`, rectangle gardé dans
+`wasAt`), est avalé avant d'atteindre la carte (écouteurs en capture sur `window`) : le « Suivant » visé tombait sur le sol, et
+aux Enfers il désélectionnait les troupes (testeur, 26 nov. 2026).
 Plus tard dans la partie, des chapitres courts se lancent sur un événement : la première entrée dans les Enfers, le choix
 de l'allié, la première ligne de train. Ils ne se montrent qu'une fois.
 
@@ -85,7 +92,7 @@ de l'allié, la première ligne de train. Ils ne se montrent qu'une fois.
 - **Chapitre « Les Enfers »** (`hell`, 8 étapes), à la première entrée dans les Enfers (à la fin de la cinématique du portail). Se passe (« Passer ce chapitre »), ne se montre qu'une fois, la bulle à côté de ce qu'elle montre. Les gestes attendent d'être faits (24 nov. 2026, demande de l'auteur : il manquait comment déplacer les troupes et où attaquer) :
   1. `hellGoal` « Où attaquer » : l'anneau entoure le 🎯 à l'écran (`#hellGoal.show .hgPin`, ou sa flèche au bord quand la cible est hors de vue ; sinon l'objectif de la frise) ; cliquer l'objectif au bout de la frise centre la vue.
   2. `hellPick` « Vos troupes » : clic sur une troupe, cadre glissé, ou « Tous » (`selected` > 0).
-  3. `hellMove` « Se déplacer » : un clic droit au sol, une marche en formation (`lastOrder` neuf de genre `move`). La bulle se tient à l'écart ; sans troupe choisie, elle redit comment choisir.
+  3. `hellMove` « Se déplacer » : un clic droit, une marche en formation (`lastOrder` neuf, de tout genre : un clic au sol près d'un démon devient une attaque, et la case ne se cochait jamais, testeur du 26 nov. 2026). La bulle se tient à l'écart ; sans troupe choisie, elle redit comment choisir.
   4. `hellAttack` « À l'attaque » : un clic droit sur la cible (`lastOrder` neuf de genre `attack`).
   5. `hellRetreat` « Revenir au camp » : la touche R replie les troupes choisies au camp (`Command.retreats`, compté seulement avec des troupes choisies).
   6. `hellCamp` « Le camp de base » (à lire, 22 nov. 2026) : le camp offert au Seuil, où les troupes se soignent ; « Bâtir » pose les autres bâtiments autour. L'anneau entoure l'onglet Bâtir.
@@ -129,7 +136,7 @@ de l'allié, la première ligne de train. Ils ne se montrent qu'une fois.
   places possibles : les quatre côtés de l'élément montré (ou de toute sa carte, `.gear`, `.mission`, `.sCard` : son image et
   son nom restent visibles), et quatre places fixes (sous le HUD à droite et à gauche, au-dessus de la barre du bas à gauche et
   à droite). Chacune est notée : couvrir l'élément coûte très cher ; puis les panneaux ouverts (fiches, conditions de l'âge,
-  fenêtres `.overlay > .modal`), les blocs du HUD, ceux de la barre du bas pris un par un (`DOCK` : ses colonnes se défont en
+  fenêtres `.overlay > .modal`), les blocs du HUD, la frise du front des Enfers (`.tfrise`, aussi comptée dans le bas du HUD pour les places fixes : la bulle de « Où attaquer » la couvrait, testeur du 26 nov. 2026), ceux de la barre du bas pris un par un (`DOCK` : ses colonnes se défont en
   `display: contents` selon la largeur), et, sans fenêtre ouverte, le milieu de l'écran où la caméra pose le village (poids 0,7) ;
   à égalité, la plus proche de l'élément. Sans élément montré, une des places fixes. La pointe ne paraît que sur un côté de
   l'élément.

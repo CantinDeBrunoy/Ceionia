@@ -66,6 +66,8 @@ describe('équipement d’une expédition en route', () => {
     for (const g of GEAR) expect(back.exp.gear[g.id], g.id).toBe(3);
     // rien n'est plus « en route » dans la partie rechargée
     expect(total(back.exp.away)).toBe(0);
+    // la partie rechargée sait quelle équipe était en route, pour le dire au joueur
+    expect(back.exp.out).toEqual(['herd']);
   });
 
   it('au retour de l’équipe, plus rien n’est compté en route', () => {
@@ -79,12 +81,15 @@ describe('équipement d’une expédition en route', () => {
     }
     expect(ex.active.includes(a)).toBe(false);
     expect(total(w.exp.away)).toBe(0);
+    expect(w.exp.out).toEqual([]);
   });
 
   it('une ancienne sauvegarde, sans le champ, se lit encore', () => {
     const s = readExpState({ gear: { spear: 2 } });
     expect(s.gear.spear).toBe(2);
     expect(total(s.away)).toBe(0);
+    expect(s.out).toEqual([]);
+    expect(readExpState({ out: ['herd', 'inconnue', 3] }).out).toEqual(['herd']);
   });
 });
 
@@ -147,12 +152,19 @@ describe('jours et pause', () => {
     expect(back.seasonT).toBe(2.5);
   });
 
-  it('une ancienne sauvegarde (sans les champs) : jour 0, en marche', () => {
+  it('une partie reprise commence toujours en pause, même sauvegardée en marche', () => {
+    const t = new GameTime();
+    t.paused = false; t.speed = 8;
     const back = new GameTime();
-    back.paused = true;
+    readClock(back, JSON.parse(JSON.stringify(clockOf(t))));
+    expect(back.paused).toBe(true);
+  });
+
+  it('une ancienne sauvegarde (sans les champs) : jour 0, en pause', () => {
+    const back = new GameTime();
     readClock(back, { seasonT: 1, hour: 10 });
     expect(back.days).toBe(0);
-    expect(back.paused).toBe(false);
+    expect(back.paused).toBe(true);
     expect(back.hour).toBe(10);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestSpot, type Spot } from '../src/ui/tutorial';
+import { bestSpot, inRect, GONE_MS, type Spot } from '../src/ui/tutorial';
 
 // testeurs v6 : la bulle cachait ce qu'elle montrait (conditions de l'âge, fiche, équipement, barre du bas)
 describe('place de la bulle du tutoriel', () => {
@@ -25,5 +25,15 @@ describe('place de la bulle du tutoriel', () => {
     expect(p.y).toBeGreaterThanOrEqual(8);
     expect(p.x + w).toBeLessThanOrEqual(W - 8);
     expect(p.y + h).toBeLessThanOrEqual(H - 8);
+  });
+});
+
+describe('la bulle partie ailleurs', () => {
+  it('un appui à son ancienne place, « Suivant » compris, est reconnu quelques secondes', () => {
+    const r = { left: 980, right: 1340, top: 150, bottom: 300 };
+    expect(inRect(r, 1290, 270)).toBe(true);
+    expect(inRect(r, 1344, 304)).toBe(true);
+    expect(inRect(r, 700, 270)).toBe(false);
+    expect(GONE_MS).toBeGreaterThanOrEqual(2000);
   });
 });

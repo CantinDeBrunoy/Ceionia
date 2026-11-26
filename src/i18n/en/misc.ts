@@ -21,6 +21,10 @@ registerDict('misc', {
   'Retourner au village': 'Back to the village',
   'Ramener la vue sur la grande place (touche V)': 'Bring the view back to the main square (V key)',
   'Bon retour dans votre village !': 'Welcome back to your village!',
+  '🧭 Les équipes parties pour {names} sont rentrées au village quand la partie s’est fermée. Elles n’ont rien rapporté, leur équipement est en réserve. Cliquez ici pour les relancer.':
+    '🧭 The teams sent for {names} came back to the village when the game was closed. They brought nothing back, and their equipment is in storage. Click here to send them again.',
+  '🧭 L’équipe partie pour {names} est rentrée au village quand la partie s’est fermée. Elle n’a rien rapporté, son équipement est en réserve. Cliquez ici pour la relancer.':
+    '🧭 The team sent for {names} came back to the village when the game was closed. It brought nothing back, and its equipment is in storage. Click here to send it again.',
   'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.': 'Pick a building in “Build” or sculpt the terrain.',
   'Commencez par « {name} », la place au centre du village (Bâtir › Vie & culture).': 'Start with “{name}”, the square at the heart of the village (Build › Life & culture).',
   'Passage du portail…': 'Going through the portal…',
@@ -304,6 +308,8 @@ registerDict('misc', {
   '{name} remporte le tournoi !': '{name} wins the tournament!',
   // mesure d'audience (audience.ts, Paramètres › Divers, Crédits)
   'Statistiques anonymes': 'Anonymous statistics',
+  'Confidentialité': 'Privacy',
+  'Ce que le jeu mesure, et pourquoi.': 'What the game measures, and why.',
   'Mesure d’audience': 'Usage statistics',
   'Le jeu compte, sans nom ni adresse IP enregistrée, combien de joueurs jouent, combien de temps et jusqu’à quel âge. Cela nous aide à l’améliorer. Désactivée, rien n’est envoyé et votre numéro est effacé.':
     'Without any name or stored IP address, the game counts how many people play, for how long and up to which age. It helps us improve it. When off, nothing is sent and your number is erased.',

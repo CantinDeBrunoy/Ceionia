@@ -969,9 +969,9 @@ export class UI {
     $('#bExp').onclick = () => this.openExpeditions();
     // l'écran allégé : Peuples, Enfers et notifications dans un seul menu (demande de l'auteur, 24 nov. 2026 : restent à part les
     // expéditions, le temps et les paramètres) ; avec un seul choix (les notifications, avant l'archipel et le portail), il y
-    // mène tout droit
+    // mène tout droit. Le style calculé compte : aux Enfers, la feuille de style cache Peuples et Enfers (seule la cloche reste)
     $('#bMenu').onclick = () => {
-      const menu = $('#hudMenu'), items = [...menu.querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.style.display !== 'none');
+      const menu = $('#hudMenu'), items = [...menu.querySelectorAll<HTMLButtonElement>('button')].filter((b) => getComputedStyle(b).display !== 'none');
       if (items.length === 1) { this.hudMenu(false); items[0].click(); return; }
       this.hudMenu(menu.hidden);
       this.host.audio.sfxClick();
@@ -1623,12 +1623,15 @@ export class UI {
     // (les défenses se comptent au village et sur l'île du portail)
     const isle = k === 'watchtower' || k === 'barracks' ? [...w.buildings.values()].filter((b) => b.kind === k && w.onPortalIsland(b.x, b.z)).length : 0;
     const count = !n ? tr('pas encore construit') : isle === n ? tr('{n} sur l’île du portail', { n }) : isle ? tr('{n} dans le village, {m} sur l’île du portail', { n: n - isle, m: isle }) : tr('{n} dans le village', { n });
+    // le manque de ressources se relit au présent : calculé au survol, il restait affiché une fois les ressources revenues, et
+    // son chiffre pouvait différer de la ligne du coût (testeur, 26 nov. 2026). Les autres refus suivent le survol
+    const placeWhy = tl.placeWhyCost ? (cost && !rich ? shortLabel(w, cost) : null) : tl.placeWhy;
     // la carte d'explication (à droite du menu) : la vignette 3D, le nom, « 2 × 2 · Médiéval », à quoi il sert ; le détail
     // (effets, conseil) quand on le survole dans la barre, pas quand on l'a en main
     box.innerHTML = `<div class="ihead">${this.cardThumb(k, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub">${d.size} × ${d.size} · ${AGES[a].name}</small><small class="xcount">${count}</small></div></div>
       <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${this.needUse(k, a)}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${tl.tracingWall && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${rich ? tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) }) : shortLabel(w, cost)}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && tl.placeWhy && !(cost && !rich && tl.placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : tl.tracingWall ? tr(tl.freeStage === 2 ? 'Cliquez le point B : la ligne se pose d’un trait, en angles droits' : 'Cliquez le point A, puis le point B : la ligne se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}`;
+      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && placeWhy && !(cost && !rich && placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : tl.tracingWall ? tr(tl.freeStage === 2 ? 'Cliquez le point B : la ligne se pose d’un trait, en angles droits' : 'Cliquez le point A, puis le point B : la ligne se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}`;
   }
 
   /**
@@ -3318,7 +3321,7 @@ export class UI {
     const gearNote = todo.length ? `<p class="gnote">${roadNote}${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
     // la boîte de « Tout fabriquer » doit contenir les boutons des pièces (voir le gestionnaire)
     // l'équipement en une ligne fine sous les cartes : titre, pièces, consigne, nombre d'habitants
-    const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement nécessaire')}</b></span>
+    const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement conseillé')}</b></span>
       ${ready || missing ? `<div class="gslots">${ready}${missing}</div>${gearNote}` : `<p class="gnote">${tr('Aucun équipement nécessaire : l’équipe part les mains libres.')}</p>`}<small class="sgP">${ic('team', 16, 2)} ${tr('{n} habitants', { n: c.party })}</small></div>`;
     // en bas : pourquoi on ne peut pas partir, sinon ce qui arrive en cas d'échec
     // (un échec coûte une pièce emportée une fois sur deux, voir `Expeditions.finish` : l'aperçu disait « rien », testeur v6)
@@ -3920,6 +3923,20 @@ export function drawPreview(canvas: HTMLCanvasElement, heights: ArrayLike<number
   g.putImageData(img, 0, 0);
 }
 
+/** La carte de la mesure d'audience : ce qui est mesuré et pourquoi (Crédits, et lien « Confidentialité » de l'accueil) */
+const privacyCard = () => `<section class="credCard">
+      <h4>${ic('heart', 18, 2)}${tr('Statistiques anonymes')}</h4>
+      <p>${tr('Pour savoir combien de personnes jouent, combien de temps et jusqu’à quel âge elles vont, le jeu envoie à son serveur, pendant une partie, un petit signal par minute de jeu : un numéro tiré au hasard, l’âge du village, le mode, la difficulté, la langue et la version du jeu. Ni nom, ni empreinte du navigateur. Votre adresse IP sert un instant à bloquer les abus, elle n’est jamais enregistrée. Le numéro change au bout de 13 mois, et les chiffres de plus de 13 mois sont effacés. Ils servent seulement à améliorer le jeu. Les polices viennent aussi du serveur du jeu. Vous pouvez refuser dans Paramètres › Divers.')}</p>
+    </section>`;
+
+/**
+ * La confidentialité, depuis l'accueil (audit du 26 nov. 2026 : le premier signal part au premier lancement, l'information
+ * doit être à portée avant) : la même carte que dans les Crédits, dans la même fenêtre peinte
+ */
+export function showPrivacy(root: HTMLElement) {
+  return menuPop(root, 'credits privacy', 'credits', tr('Confidentialité'), `<div class="credPane">${privacyCard()}</div>`, undefined, tr('Ce que le jeu mesure, et pourquoi.'));
+}
+
 /**
  * Les crédits : les modèles 3D et les licences (les auteurs sous licence CC-BY doivent être cités). Même fenêtre peinte que
  * les paramètres (`menuPop`) : losange des crédits, titre et sous-titre, une carte par licence, paysage en bas
@@ -3961,10 +3978,7 @@ export function showCredits(root: HTMLElement) {
         <li>${tr('« Amphora » par {a1} et « Eight Vases » par {a2} : atelier du potier.', { a1: a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira'), a2: a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner') })}</li>
       </ul>
     </section>
-    <section class="credCard">
-      <h4>${ic('heart', 18, 2)}${tr('Statistiques anonymes')}</h4>
-      <p>${tr('Pour savoir combien de personnes jouent, combien de temps et jusqu’à quel âge elles vont, le jeu envoie à son serveur, pendant une partie, un petit signal par minute de jeu : un numéro tiré au hasard, l’âge du village, le mode, la difficulté, la langue et la version du jeu. Ni nom, ni empreinte du navigateur. Votre adresse IP sert un instant à bloquer les abus, elle n’est jamais enregistrée. Le numéro change au bout de 13 mois, et les chiffres de plus de 13 mois sont effacés. Ils servent seulement à améliorer le jeu. Les polices viennent aussi du serveur du jeu. Vous pouvez refuser dans Paramètres › Divers.')}</p>
-    </section>
+    ${privacyCard()}
     <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>
   </div>`, undefined, tr('Les artistes des modèles 3D, des sons et des musiques, et leurs licences.'));
 }
@@ -3998,6 +4012,7 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
       <div class="mPlay"><button class="mResume" hidden>${playIcon()}<span>${tr('Continuer')}</span></button><button class="mGo">${playIcon()}<span>${tr('Nouvelle partie')}</span></button></div>
       <p class="mSave" hidden></p>
     </div>
+    <button class="mPrivacy" type="button">${tr('Confidentialité')}</button>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">`;
   // la carte choisie (le continent par défaut) : sa sauvegarde, et la graine de sa prochaine partie (chacune a son continent)
   let save: SaveData | null = null, seed = newSeed(), pick: Difficulty = DEFAULT_DIFFICULTY;
@@ -4035,6 +4050,7 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
     host.start(map, 'new', seed, d, age);
   };
   $('.mGo', ov).onclick = play;
+  $('.mPrivacy', ov).onclick = () => showPrivacy(root);
   ov.querySelectorAll<HTMLButtonElement>('.mMode').forEach((b) => {
     b.onclick = () => select(b.dataset.d as Difficulty);
     b.ondblclick = () => { select(b.dataset.d as Difficulty); void play(); };

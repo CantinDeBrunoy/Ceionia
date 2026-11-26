@@ -628,6 +628,9 @@ body.under #selCard, body.photo #selCard { display: none; }
 .mSave[hidden] { display: none; }
 .mGear { position: fixed; top: 22px; right: 24px; z-index: 2; width: 62px; height: 62px; padding: 0; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.45); background: rgba(44, 60, 110, 0.38); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; box-shadow: 0 6px 18px rgba(20, 30, 70, 0.3); }
 .mGear:hover { background: rgba(44, 60, 110, 0.55); }
+/* le lien « Confidentialité » de l'accueil, discret, en bas à droite : il ouvre la carte de la mesure d'audience */
+.mPrivacy { position: fixed; right: 20px; bottom: 14px; z-index: 2; min-height: 0; padding: 4px 8px; border: none; background: none; box-shadow: none; color: #fdf6e8; font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-shadow: 0 1px 6px rgba(20, 25, 50, 0.7); cursor: pointer; }
+.mPrivacy:hover { color: #fff; background: rgba(44, 60, 110, 0.35); border-radius: 8px; }
 .mGear svg { transition: transform 0.4s; }
 .mGear:hover svg { transform: rotate(60deg); }
 
@@ -1233,12 +1236,18 @@ body.photo #photoBar { display: flex; }
 #tuto[data-side="right"] .tArrow { left: -1px; border-bottom-width: 2px; border-left-width: 2px; }
 #tuto[data-side="left"] .tArrow { left: calc(100% + 1px); border-top-width: 2px; border-right-width: 2px; }
 #tuto:not([data-side]) .tArrow, #tuto[data-side=""] .tArrow { display: none; }
-/* l'élément montré : un bouton prend un liseré doré, sans bouger ni clignoter ni changer de couleur (texte blanc ou foncé, il reste lisible) */
-button.tHi { box-shadow: inset 0 0 0 2px #ffb31a, 0 0 14px rgba(255, 179, 26, 0.45) !important; }
-/* autour de lui, un anneau doré dont la lueur respire lentement (l'anneau est à part : un élément redessiné ne la relance pas) */
-#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; border: 3px solid #ffb31a; box-shadow: 0 0 12px 3px rgba(255, 179, 26, 0.5); animation: tutoRing 3.2s ease-in-out infinite; }
-@keyframes tutoRing { 50% { box-shadow: 0 0 20px 6px rgba(255, 179, 26, 0.28); } }
-@media (prefers-reduced-motion: reduce) { #tutoRing { animation: none; } }
+/* l'élément montré par le tutoriel ne ressemble pas à l'objet choisi (fond et cadre dorés) : plus de liseré doré sur le bouton,
+   autour de lui un anneau orange en pointillés qui bat, et une flèche qui sautille au-dessus (testeur, 26 nov. 2026 : la carte
+   « Point d'eau » entourée d'or semblait déjà en main, et une hutte de trop était posée). L'anneau est à part : un élément
+   redessiné ne relance pas son animation */
+#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; border: 3px dashed #ff8a1c; box-shadow: 0 0 0 2px rgba(255, 246, 222, 0.9), 0 0 14px 4px rgba(255, 138, 28, 0.5); animation: tutoRing 1.2s ease-in-out infinite; }
+@keyframes tutoRing { 50% { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(255, 246, 222, 0.6), 0 0 22px 7px rgba(255, 138, 28, 0.25); } }
+#tutoRing::after { content: ''; position: absolute; left: 50%; bottom: calc(100% + 5px); margin-left: -10px; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 14px solid #ff8a1c; filter: drop-shadow(0 2px 2px rgba(60, 30, 0, 0.45)); animation: tutoArrow 0.8s ease-in-out infinite alternate; }
+/* près du haut de l'écran (boutons du HUD), la flèche passe dessous, pointe vers le haut */
+#tutoRing.below::after { bottom: auto; top: calc(100% + 5px); border-top: none; border-bottom: 14px solid #ff8a1c; animation-name: tutoArrowUp; }
+@keyframes tutoArrow { to { transform: translateY(-6px); } }
+@keyframes tutoArrowUp { to { transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { #tutoRing, #tutoRing::after { animation: none; } }
 /* le marqueur du guidage de la première ligne : posé sur la gare à cliquer (la bulle l'entoure de son anneau), une flèche
    dorée au-dessus ; il laisse passer les clics vers la gare */
 #railPin { position: absolute; z-index: 30; pointer-events: none; border-radius: 50%; border: 2px dashed rgba(255, 210, 122, 0.95); background: radial-gradient(circle, rgba(255, 196, 64, 0.22), rgba(255, 196, 64, 0) 70%); }
@@ -2342,9 +2351,11 @@ img.pic { display: inline-block; flex: none; vertical-align: -0.22em; object-fit
   .sWarn { height: auto; }
 }
 
-/* Enfers, écran allégé : le haut du village caché (carte, besoins, horloge, expéditions, nouvelles, habitants : on les retrouve
-   en rentrant) ; en bas, les troupes au milieu, et à droite l'aide, « Ma base » (un tiroir fermé à l'arrivée) et « Village » */
-body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsBox, body.hell #clock, body.hell #bExp, body.hell #bPeoples, body.hell #bHell, body.hell #bBell, body.hell #resPanel .hsep, body.hell #resPanel .pop { display: none !important; }
+/* Enfers, écran allégé : le haut du village caché (carte, besoins, horloge, expéditions, habitants : on les retrouve en
+   rentrant) ; en bas, les troupes au milieu, et à droite l'aide, « Ma base » (un tiroir fermé à l'arrivée) et « Village ». Les
+   notifications restent : celles du combat (« Repli forcé »…) s'y lisent, et le menu ☰ de l'écran allégé n'est plus vide
+   (testeur, 26 nov. 2026) */
+body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsBox, body.hell #clock, body.hell #bExp, body.hell #bPeoples, body.hell #bHell, body.hell #resPanel .hsep, body.hell #resPanel .pop { display: none !important; }
 #troopBar .tfg { display: inline-flex; align-items: center; gap: 7px; margin-left: 2px; padding: 4px 12px 4px 6px; border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 999px; background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font: inherit; font-size: 12.5px; font-weight: 800; white-space: nowrap; }
 #troopBar button.tfg { cursor: pointer; }
 #troopBar button.tfg:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }
@@ -2390,6 +2401,8 @@ body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsB
 @media (max-width: 640px) { .blasonPick .blWrap { grid-template-columns: 1fr; } .blasonPick .blShow { flex-direction: row; } }
 /* le nom de l'île, en tête des choix (fenêtre du blason et onglet Blason des expéditions) */
 .blPick .blIsle input { width: min(320px, 100%); box-sizing: border-box; min-height: 36px; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(160, 120, 70, 0.35); background: #fffdf8; color: #3a2a14; font: 700 16px var(--hSerif, 'Fraunces', Georgia, serif); box-shadow: inset 0 1px 3px rgba(120, 85, 50, 0.12); }
+.blPick .blIsle { align-items: center; gap: 8px; }
+.blPick .blIsle .blCount { color: rgba(90, 64, 34, 0.7); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .blPick .blIsle input:focus { outline: none; border-color: rgba(227, 154, 47, 0.85); box-shadow: 0 0 0 3px rgba(240, 180, 69, 0.28); }
 /* le petit drapeau du blason dans Paramètres › Partie */
 .setPane .setFlag { display: inline-flex; margin-right: 6px; }
