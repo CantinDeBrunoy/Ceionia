@@ -108,7 +108,7 @@ Quatre bulles facultatives, une à la fois, une fois chacune (`ceionia.aidesMili
 - `recruitWhy` dit « à partir de l'Antiquité » (troupe de l'âge 1) ou « à partir du Moyen Âge » (âge 2, le chevalier) ; le premier est inatteignable aujourd'hui (la caserne demande l'âge 1). `shortWhy` reconnaît les deux (`à partir d`).
 - Les raccourcis du commandement sont lus **avant** ceux du village (`bindKeys`) ; une touche prise doit retirer sa touche de caméra (`take`).
 - En pause (`Espace`), `War.update` tourne avec `dt` = 0 : les ordres se donnent (`Hell.order` ne dépend pas du temps), rien ne bouge.
-- Textes : `recruitWhy` et les phrases de `recruitPlan.ts` sont reconnues par `shortWhy` à coups d'expressions régulières (français et anglais) ; changer un message oblige à relire `shortWhy`.
+- Textes : `recruitWhy` et les phrases de `recruitPlan.ts` sont reconnues par `shortWhy` à coups d'expressions régulières (français et anglais) ; changer un message oblige à relire `shortWhy`. L'ordre compte : « Pas de cheval disponible à l'écurie » contient « écurie », il est donc testé avant « Il faut une écurie » (un haras sans cheval libre affichait « Il faut une écurie », retour de l'auteur du 26 nov. 2026).
 
 ## Pour modifier
 - **Ajouter ou changer une troupe** : `TroopKind`, `TROOPS` (base, `forms`), `TROOP_KINDS`, `troopLook` et `TROOP_K` / `TROOP_ROLE` (`battleUnits.ts`), `ROLE` d'`isleFerry.ts`, une tenue dans `soldiers.ts`, traduction (`src/i18n/en/army.ts`), tests `evolutionTroupes.test.ts`. Vérifier `readArmy` (sauvegardes) et l'équilibre.

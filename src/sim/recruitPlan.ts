@@ -42,9 +42,10 @@ export function shortWhy(why: string): string {
   if (/caserne avancée|forward barracks/i.test(why)) return tr('Il faut une caserne avancée');
   if (/Garnison au complet|Garrison full/.test(why)) return tr('Garnison au complet');
   if (/^Il faut une caserne|^You need a barracks/.test(why)) return tr('Il faut une caserne');
+  // (avant l'écurie : « Pas de cheval disponible à l'écurie » contient aussi le mot)
+  if (/Pas de cheval|No horse/.test(why)) return tr('Pas de cheval libre');
   if (/écurie|stable/.test(why)) return tr('Il faut une écurie');
   if (/trop petit|too small/.test(why)) return tr('Village trop petit');
-  if (/Pas de cheval|No horse/.test(why)) return tr('Pas de cheval libre');
   if (/à partir d|available from/.test(why)) return tr('Pas encore connue');
   if (/portail est éteint|portal has gone out/.test(why)) return tr('Guerre finie');
   if (/atelier|workshop/i.test(why)) return tr('Il faut un atelier');
