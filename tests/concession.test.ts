@@ -11,6 +11,7 @@ import { zoneLock, frontOpen, frontPerks, campPerks, garrisonBuilt } from '../sr
 import { kindOffered, newDiplo } from '../src/sim/diplomacy';
 import { corpsMax, campaignResult, stepCamp } from '../src/sim/campaign';
 import { RivalBattle } from '../src/sim/rivalBattle';
+import { souffle } from './souffle';
 
 /**
  * Les concessions et la tête de pont (chantier C du nouveau monde) : la zone de chaque île rivale, sur 20 graines et les deux
@@ -54,8 +55,9 @@ function openings(w: World, q: RivalIsle) {
 describe('les concessions et la tête de pont : la zone de chaque île', () => {
   afterAll(() => { setMapSize(192); forgetTowns(); forgetZones(); });
 
-  it('sur 20 graines, les deux peuples : plus de 300 cases, côté de notre île, hors de la ville, une eau profonde proche, la limite et un seul passage, le plan des villes inchangé', () => {
+  it('sur 20 graines, les deux peuples : plus de 300 cases, côté de notre île, hors de la ville, une eau profonde proche, la limite et un seul passage, le plan des villes inchangé', async () => {
     for (const seed of SEEDS) {
+      await souffle();
       forgetTowns(); forgetZones();
       const w = archipel(seed);
       expect(w.zoneGen).toBe(1);

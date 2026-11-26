@@ -6,6 +6,7 @@ import { mulberry32 } from '../src/core/rng';
 import { MISSIONS, Mission } from '../src/sim/missions';
 import { EVENTS, ExpEvent, eventsFor, optionOpen } from '../src/sim/events';
 import { GEAR, gearGaps, emptyStock } from '../src/sim/gear';
+import { souffle } from './souffle';
 
 /**
  * Chaque choix d'un imprévu d'expédition mène à sa propre suite : sur la scène, l'option choisie se joue (objets de l'imprévu,
@@ -168,10 +169,11 @@ describe('chaque choix d’un imprévu a sa propre suite', () => {
   const groups = new Map<number, ExpEvent[]>();
   for (const ev of EVENTS) { const f = fixture(ev); if (f) groups.set(f.age, [...(groups.get(f.age) ?? []), ev]); }
   for (const [age, evs] of [...groups].sort((p, q) => p[0] - q[0])) {
-    it(`âge ${age} : ${evs.map((e) => e.id).join(', ')}`, { timeout: 600000 }, () => {
+    it(`âge ${age} : ${evs.map((e) => e.id).join(', ')}`, { timeout: 600000 }, async () => {
       stubCanvas();
       const bad: string[] = [];
       for (const ev of evs) {
+        await souffle();
         const fx = fixture(ev)!;
         // (une première partie pour rien : les formes mises en cache la première fois tirent au hasard, et décaleraient le relevé)
         for (let i = 0; i < ev.options.length; i++) if (fx.open[i]) play(ev, fx, i);

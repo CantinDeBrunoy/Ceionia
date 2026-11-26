@@ -123,7 +123,7 @@ En commandement (Enfers, île) `CommandUI.key` passe d'abord : `H` tenir, `R` re
 - `src/render/` : tout ce qui se dessine (voir [rendu-modeles.md](rendu-modeles.md)).
 - `src/ui/` : interface (voir [interface.md](interface.md)).
 - `src/save/save.ts` : voir [sauvegarde.md](sauvegarde.md). `src/i18n/` : voir [traduction.md](traduction.md). `src/audio/` : audio.
-- `tests/` (vitest, un fichier par sujet), `public/models/` (modèles `.glb`), `assets-src/`, `tools/bench/`, `docs/` (ce manuel).
+- `tests/` (vitest, un fichier par sujet ; une boucle de test qui dure plus de quelques secondes appelle `await souffle()` de `tests/souffle.ts` à chaque tour : sans pause, au-delà de 60 s vitest compte une erreur « Timeout calling onTaskUpdate » et sort en échec même si tout passe), `public/models/` (modèles `.glb`), `assets-src/`, `tools/bench/`, `docs/` (ce manuel).
 - Build : `vite.config.ts` (`base: './'`, `three` en morceau à part, tests hors `.claude/`), `wrangler.jsonc` (le dossier `dist/` servi tel quel par Cloudflare Workers, repli « application d'une page », aucun code serveur).
 
 ### `window.__game`
