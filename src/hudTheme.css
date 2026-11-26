@@ -1705,3 +1705,13 @@ button.round.off:hover { opacity: 0.85; }
 .showBoard .sc { font-family: var(--hSerif); font-weight: 800; font-size: 19px; padding: 0 4px; letter-spacing: 0.02em; }
 .showBoard small { flex-basis: 100%; text-align: center; color: var(--hInk2); font-size: 11px; }
 .showBoard ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: auto auto auto; gap: 1px 8px; font-size: 11px; }
+
+/* la barre des expéditions tient sur une ligne (retour de l'auteur, 26 nov. 2026 : « Blason » passait à la ligne) :
+   la recherche rétrécit d'abord, puis les boutons resserrent leur marge ; sous 1 100 px, Blason ne garde que son icône */
+.expNav { flex-wrap: nowrap; }
+.expNav button { flex: none; white-space: nowrap; }
+.expNav .grow { flex: 1 1 0; min-width: 0; }
+.expFind { flex: 0 1 190px; min-width: 96px; }
+.expFind input { width: 100%; }
+@media (max-width: 1400px) { .expNav { gap: 6px; } .expNav button { padding: 0 13px; } }
+@media (max-width: 1100px) { .expNav button[data-tab="blason"] { font-size: 0; gap: 0; padding: 0 12px; } }

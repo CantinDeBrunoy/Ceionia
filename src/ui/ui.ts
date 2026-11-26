@@ -3009,7 +3009,7 @@ export class UI {
         <button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('ex-gear', 19, 1.8)}${tr('Équipement')}</button>
         ${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('ex-rail', 19, 1.8)}${tr('Chemin de fer')}</button>` : ''}
         ${waysOn ? `<button data-tab="ways" class="${tab === 'ways' ? 'on' : ''}">${ic('compass', 19, 1.8)}${tr('Grands choix')}</button>` : ''}
-        <button data-tab="blason" class="${tab === 'blason' ? 'on' : ''}">${ic('flag', 19, 1.8)}${tr('Blason')}</button>
+        <button data-tab="blason" title="${tr('Blason')}" class="${tab === 'blason' ? 'on' : ''}">${ic('flag', 19, 1.8)}${tr('Blason')}</button>
       </nav>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
