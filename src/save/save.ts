@@ -1,5 +1,6 @@
 import { tr } from '../i18n';
 import { mapDef } from '../world/mapgen';
+import { AGES } from '../build/catalog';
 
 export interface Settings {
   dayLen: number;
@@ -150,6 +151,11 @@ export function validate(d: any): SaveData {
   const def = mapDef(d.map);
   if (!def) throw new Error(tr('Sauvegarde d’une carte qui n’existe plus (seul le continent reste)'));
   if (!def.sizes.includes(d.world.n)) throw new Error(tr('Sauvegarde d’une ancienne version (carte plus petite)'));
+  // l'âge et la population sont repris tels quels au chargement : un âge hors de la liste (fichier abîmé ou retouché) faisait
+  // planter la partie juste après ; on les ramène dans leurs bornes (âge entier de la liste, population positive)
+  const age = Number(d.age), pop = Number(d.pop);
+  d.age = Number.isFinite(age) ? Math.min(AGES.length - 1, Math.max(0, Math.round(age))) : 0;
+  d.pop = Number.isFinite(pop) ? Math.max(0, pop) : 0;
   return d as SaveData;
 }
 
@@ -175,7 +181,11 @@ function download(text: string, name: string) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
+/** Une sauvegarde pèse quelques mégaoctets : au-delà, ce n'en est pas une, et la lire saturerait la mémoire de l'onglet */
+export const MAX_SAVE_FILE = 64 * 1024 * 1024;
+
 export async function readSaveFile(file: File): Promise<SaveData> {
+  if (file.size > MAX_SAVE_FILE) throw new Error(tr('Fichier de sauvegarde invalide'));
   const text = await file.text();
   return validate(JSON.parse(text));
 }
