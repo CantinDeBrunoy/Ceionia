@@ -1012,6 +1012,9 @@ class Game implements UIHost {
       this.ui.preloadArt();
       // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
       this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
+      // le bâtiment en main se lâche : la vue tourne sur le village, puis la fenêtre du nouvel âge ; gardé, le clic suivant
+      // posait une mine oubliée depuis des minutes (testeur débutant, 26 nov. 2026)
+      if (this.tools.tool === 'build') this.tools.setTool('none');
       // la garnison gagne en vie et en force avec l'âge
       this.war.ageUp(age);
       this.ui.banner(tr('Nouvel âge : {name}', { name: AGES[age].name }), AGES[age].tagline);

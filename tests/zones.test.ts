@@ -2,7 +2,7 @@
 import { World, N, setMapSize, MOUNTAIN_H } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { KINDS, KindId } from '../src/build/catalog';
-import { ZONED, ZoneScan, zoneOrigins, isZoned } from '../src/build/zones';
+import { ZONED, ZoneScan, zoneOrigins, isZoned, nearestCell } from '../src/build/zones';
 
 /** Le continent des tests, toujours la même graine */
 function continent() {
@@ -53,5 +53,16 @@ describe('emplacements des bâtiments à terrain précis', () => {
     while (!sc.step(5000));
     expect(sc.origins).toBe(0);
     expect(sc.emptyMessage('Mine')).toMatch(/^Aucun emplacement pour « Mine » : il faut une montagne\./);
+  });
+  it('« Montrer un endroit possible » : la case de la zone la plus proche de la vue (testeur débutant, 26 nov. 2026)', () => {
+    const sc = new ZoneScan(w, 'mine');
+    while (!sc.step(5000));
+    expect(sc.origins).toBeGreaterThan(0);
+    const at = nearestCell(sc.cells, N / 2, N / 2)!;
+    expect(sc.cells[at[1] * N + at[0]]).toBe(1);
+    // aucune case de la zone n'est plus près
+    const d = Math.hypot(at[0] - N / 2, at[1] - N / 2);
+    for (let k = 0; k < sc.cells.length; k++) if (sc.cells[k]) expect(Math.hypot((k % N) - N / 2, Math.floor(k / N) - N / 2)).toBeGreaterThanOrEqual(d - 1e-9);
+    expect(nearestCell(new Uint8Array(N * N), 3, 3)).toBeNull();
   });
 });

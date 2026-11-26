@@ -641,6 +641,7 @@ registerDict('catalog', {
   'Cliquez du côté de la porte, ou sur le bâtiment pour la laisser où elle est': 'Click on the side of the door, or on the building to leave it where it is',
   // la légende des couleurs du fantôme de pose
   'Vert : on peut bâtir ici': 'Green: you can build here', 'Rouge : pas ici': 'Red: not here', 'Or : la porte': 'Gold: the door',
+  'Montrer un endroit possible': 'Show a possible spot', 'Les endroits possibles se cherchent encore, réessayez dans un instant.': 'Still looking for possible spots, try again in a moment.',
   'Cliquez du côté de l’entrée': 'Click on the entrance side',
   'Cliquez du côté de l’ouverture': 'Click on the opening side',
   // la recherche du menu Bâtir

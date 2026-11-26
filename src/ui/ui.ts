@@ -4,6 +4,7 @@ import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, ty
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, KIND_ALSO, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
 import { rampartTower } from '../build/rampart';
+import { isZoned } from '../build/zones';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
 import { Sim, NeedId, ageGo } from '../sim/sim';
 import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
@@ -792,6 +793,9 @@ export class UI {
       if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
     });
     // (outil Démolir : la bulle suit le bâtiment visé, après que l'outil a regardé sous la souris)
+    // (l'appui aussi : un clic sans mouvement juste avant, ou la souris d'un outil d'essai, laissait la bulle d'un refus à
+    // l'ancienne place du curseur, loin du clic : testeur débutant, 26 nov. 2026)
+    window.addEventListener('pointerdown', (e) => { this.cursorXY = [e.clientX, e.clientY]; }, { passive: true, capture: true });
     window.addEventListener('pointermove', (e) => { this.cursorXY = [e.clientX, e.clientY]; this.onMap = (e.target as HTMLElement).tagName === 'CANVAS'; if (this.hintTxt || this.host.tools.tool === 'bulldoze') requestAnimationFrame(() => this.renderCursorHint()); }, { passive: true });
     // la carte d'explication suit la mise en page de la barre du bas (après le reflux)
     window.addEventListener('resize', () => requestAnimationFrame(() => this.placeCards()));
@@ -1636,7 +1640,17 @@ export class UI {
       <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${this.needUse(k, a)}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${tl.tracingWall && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${rich ? tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) }) : shortLabel(w, cost)}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
       ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && placeWhy && !(cost && !rich && placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : tl.tracingWall ? tr(tl.freeStage === 2 ? 'Cliquez le point B : la ligne se pose d’un trait, en angles droits' : 'Cliquez le point A, puis le point B : la ligne se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de la porte, ou sur le bâtiment pour la laisser où elle est' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}
-      ${tl.tool === 'build' && brief && !lock && k !== 'wall' && !tl.tracingWall ? `<p class="keys glegend"><i class="gok"></i>${tr('Vert : on peut bâtir ici')} <i class="gno"></i>${tr('Rouge : pas ici')}${hasDoor(k) ? ` <i class="gdoor"></i>${tr('Or : la porte')}` : ''}</p>` : ''}`;
+      ${tl.tool === 'build' && brief && !lock && k !== 'wall' && !tl.tracingWall ? `<p class="keys glegend"><span><i class="gok"></i>${tr('Vert : on peut bâtir ici')}</span><span><i class="gno"></i>${tr('Rouge : pas ici')}</span>${hasDoor(k) ? `<span><i class="gdoor"></i>${tr('Or : la porte')}</span>` : ''}</p>` : ''}
+      ${tl.tool === 'build' && brief && !lock && isZoned(k) ? `<button type="button" class="zoneGo">${ic('target', 14, 2.2)} ${tr('Montrer un endroit possible')}</button>` : ''}`;
+    // le port demande une côte, la mine une montagne : le voile doré des endroits possibles pouvait être hors de la vue
+    // (testeur débutant, 26 nov. 2026). Le bouton y mène, au plus près de ce qu'on regarde
+    const go = box.querySelector<HTMLButtonElement>('.zoneGo');
+    if (go) go.onclick = () => {
+      const c = this.host.cam, at = tl.zoneSpot(c.target.x, c.target.z);
+      if (!at) { this.toast(tr('Les endroits possibles se cherchent encore, réessayez dans un instant.')); return; }
+      c.goTo(at[0] + 0.5, at[1] + 0.5, Math.max(c.dist, 14));
+      this.host.audio.sfxClick();
+    };
   }
 
   /**

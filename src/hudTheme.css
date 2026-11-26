@@ -597,9 +597,12 @@ body.hell #resPanel { display: none !important; }
 #info .keys, #tinfo .keys { padding-top: 6px; border-top: 1px dashed rgba(200, 160, 95, 0.5); font-size: 11.5px; color: var(--hInk2); }
 /* la légende du fantôme de pose : ce que veulent dire ses couleurs (testeur débutant, 26 nov. 2026 : « vert, jaune, rouge, sans
    savoir ce que chaque couleur veut dire ») */
-#info .keys.glegend { margin-top: 4px; padding-top: 0; border-top: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; background: none; color: var(--hInk2); font-weight: 600; }
+#info .keys.glegend { margin-top: 4px; padding-top: 0; border-top: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; background: none; color: var(--hInk2); font-weight: 600; }
+#info .glegend span { white-space: nowrap; }
 #info .glegend i { display: inline-block; width: 10px; height: 10px; margin-right: 1px; border-radius: 3px; vertical-align: -1px; }
 #info .glegend .gok { background: #30c060; } #info .glegend .gno { background: #e84040; } #info .glegend .gdoor { background: #ffd04a; }
+/* « Montrer un endroit possible » : la fiche ne prend pas la souris, le bouton si */
+#info .zoneGo { pointer-events: auto; display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--hGold); background: var(--hGoldFill); color: var(--hInk); font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: var(--hGoldShadow); }
 /* le bâtiment choisi : ses actions en pied, la corbeille rouge à part */
 #selCard .ihead .x, #selCard .ihead .xfold { flex: none; align-self: flex-start; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
 #selCard .ihead .xfold { display: none; font-size: 15px; }
