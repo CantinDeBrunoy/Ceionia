@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestSpot, inRect, GONE_MS, type Spot } from '../src/ui/tutorial';
+import { bestSpot, inRect, GONE_MS, LATE_MS, type Spot } from '../src/ui/tutorial';
 
 // testeurs v6 : la bulle cachait ce qu'elle montrait (conditions de l'âge, fiche, équipement, barre du bas)
 describe('place de la bulle du tutoriel', () => {
@@ -35,5 +35,7 @@ describe('la bulle partie ailleurs', () => {
     expect(inRect(r, 1344, 304)).toBe(true);
     expect(inRect(r, 700, 270)).toBe(false);
     expect(GONE_MS).toBeGreaterThanOrEqual(2000);
+    // un joueur qui lit « Bien joué ! » clique « Suivant » deux ou trois secondes après (testeur débutant, 26 nov. 2026)
+    expect(LATE_MS).toBeGreaterThanOrEqual(2500);
   });
 });

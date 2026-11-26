@@ -21,7 +21,7 @@ registerDict('tutorial', {
   'Bienvenue !': 'Welcome!',
   'Votre but : faire grandir un village, des premiers feux de camp jusqu’aux étoiles.': 'Your goal: grow a village, from the first campfires all the way to the stars.',
   'Regardez autour de vous': 'Look around',
-  'Faites glisser la vue avec le clic droit, et zoomez à la molette.': 'Drag the view with the right mouse button, and zoom with the wheel.',
+  'Tournez la vue en glissant avec le clic droit, et zoomez à la molette.': 'Turn the view by dragging with the right mouse button, and zoom with the wheel.',
   'Glissez à deux doigts pour bouger, zoomer et tourner la vue.': 'Slide two fingers to move, zoom and turn the view.',
   'Bouger la vue': 'Move the view',
   'Le jeu est en pause pour l’instant.': 'The game is paused for now.',

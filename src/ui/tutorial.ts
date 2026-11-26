@@ -46,7 +46,7 @@ export const TUTO_TEXT = {
     },
     camera: {
       title: 'Regardez autour de vous',
-      text: 'Faites glisser la vue avec le clic droit, et zoomez à la molette.',
+      text: 'Tournez la vue en glissant avec le clic droit, et zoomez à la molette.',
       touch: 'Glissez à deux doigts pour bouger, zoomer et tourner la vue.',
       /** les touches de la vue, dans la disposition du clavier du joueur (voir `viewKeys`) */
       keys: (move: string, turn: string) => tr('Au clavier : {move} déplacent la vue, {turn} la tournent.', { move, turn }),
@@ -354,8 +354,12 @@ const GATE: Partial<Record<StepId, KindId[]>> = {
   habitat: ['gather', 'house', 'well'],
   food: ['gather', 'house', 'well', 'farm', 'lumber', 'quarry'],
 };
-/** après un passage automatique à l'étape suivante, un « Suivant » arrivé dans ce délai (ms) visait l'étape d'avant : ignoré */
-const LATE_MS = 900;
+/**
+ * après un passage automatique à l'étape suivante, un « Suivant » arrivé dans ce délai (ms) visait l'étape d'avant : ignoré,
+ * et grisé pour qu'on le voie. 0,9 s ne suffisait pas : un joueur qui lit « Bien joué ! » clique deux ou trois secondes après,
+ * et sautait la route et « À l'attaque » (testeur débutant, 26 nov. 2026)
+ */
+export const LATE_MS = 3000;
 /** après un passage automatique, un appui à l'ancienne place de la bulle (partie ailleurs) est ignoré pendant ce temps (ms) */
 export const GONE_MS = 2500;
 /** Le point est dans le rectangle, à 6 px près */
@@ -853,10 +857,14 @@ export class Tutorial {
     const T = TUTO_TEXT, st = s.t ?? T.steps[s.id as StepId], chap = this.ch ? this.chapters[this.ch]! : null;
     const n = chap ? chap.steps.length : this.steps.length, at = chap ? this.ci : this.i, last = at === n - 1;
     const tasks = s.tasks?.() ?? st.tasks, note = this.target().scroll || (s.note?.() ?? ''), more = s.more?.() ?? '', act = s.act?.() ?? null;
-    const key = `${this.ch}|${at}|${this.ticks.join()}|${all}|${note}|${more}|${act?.label}|${tasks.join()}`;
+    // juste après un passage automatique, « Suivant » est grisé (`LATE_MS`) ; une étape finie, qui va passer seule, n'en a
+    // pas : allumé à ce moment-là, il appelait le clic qui sautait l'étape suivante
+    const hold = performance.now() - this.autoAt < LATE_MS;
+    const key = `${this.ch}|${at}|${this.ticks.join()}|${all}|${note}|${more}|${act?.label}|${tasks.join()}|${hold}`;
     if (key === this.key) return;
     this.key = key;
     const fin = all && tasks.length > 0;
+    const next = fin && !s.read ? '' : `<button class="tNext ${all ? 'active' : ''}"${hold ? ' disabled' : ''}>${last ? T.finish : s.read ? T.ok : T.next}</button>`;
     this.box.classList.toggle('done', fin);
     this.box.classList.toggle('chap', !!chap);
     this.body.innerHTML = `
@@ -867,7 +875,7 @@ export class Tutorial {
       ${note ? `<p class="tNote">${fmt(note)}</p>` : ''}
       <ul>${tasks.map((t, j) => `<li class="${this.ticks[j] ? 'ok' : ''}"><i>${this.ticks[j] ? ic('check', 13, 3) : ''}</i>${fmt(t)}</li>`).join('')}</ul>
       ${act ? `<button class="tAct">${act.label}</button>` : ''}
-      <div class="tActs"><button class="tSkip">${chap ? T.skipChapter : T.skip}</button><span class="grow"></span><button class="tNext ${all ? 'active' : ''}">${last ? T.finish : s.read ? T.ok : T.next}</button></div>`;
+      <div class="tActs"><button class="tSkip">${chap ? T.skipChapter : T.skip}</button><span class="grow"></span>${next}</div>`;
   }
 
   /**

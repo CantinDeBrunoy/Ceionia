@@ -442,7 +442,8 @@ const sensText = (v: number) => `×${v.toFixed(1).replace('.', isEnglish() ? '.'
 const FOLD_SIDE = '(max-width: 860px)';
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
 /** une décimale quand il y en a une (« 2,4 » de bien-être ne s'affiche plus « 2 » en rouge) */
-const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
+/** (avec la virgule en français : « 4,7 », pas « 4.7 ») */
+const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : isEnglish() ? v.toFixed(1) : v.toFixed(1).replace('.', ','));
 /** Ce qu'un bâtiment produit ou consomme par jour, en pastilles (« +8 bois / jour », « −2 carburant / jour ») */
 const flowChips = (f: Flow) => (Object.keys(f) as Resource[]).filter((r) => f[r]).sort((a, b) => f[b]! - f[a]!)
   .map((r) => `<span class="eff flow${f[r]! < 0 ? ' neg' : ''}">${resPic(r, 15)} ${tr('{n} {res} / jour', { n: signed(f[r]!), res: tr(RES_NAME[r]) })}</span>`).join('');

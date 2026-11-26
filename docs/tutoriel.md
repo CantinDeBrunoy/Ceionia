@@ -12,8 +12,10 @@ un testeur a cru avoir le point d'eau en main (26 nov. 2026). L'élément caché
 sous la fenêtre de départ d'une expédition) n'a pas d'anneau : il flottait, vide, au milieu de la fenêtre (`follow`).
 Chaque étape a des tâches ; quand elles sont faites, la bulle dit « Bien joué ! » puis passe seule à la suivante.
 Rien n'est bloqué : « Suivant » passe toujours, « Passer le tutoriel » le met de côté.
-Un « Suivant » qui arrive moins de 0,9 s après un passage automatique (`LATE_MS`), ou enfoncé sur l'étape d'avant (`downOn`),
-est ignoré : il visait l'étape qui vient de se cocher et sautait la suivante (étapes 4 et 6 jamais vues, testeur v6).
+Une étape finie, qui va passer seule, n'a plus de bouton « Suivant » : allumé à ce moment, il appelait le clic qui sautait
+l'étape d'après. Un « Suivant » qui arrive moins de 3 s après un passage automatique (`LATE_MS`, grisé pendant ce temps), ou
+enfoncé sur l'étape d'avant (`downOn`), est ignoré : il visait l'étape qui vient de se cocher et sautait la suivante (étapes 4
+et 6 jamais vues, testeur v6 ; avec 0,9 s, la route et « À l'attaque » des Enfers sautaient encore, testeur débutant, 26 nov. 2026).
 Quand la bulle change de place à ce passage, un appui à son ancienne place, dans les 2,5 s (`GONE_MS`, rectangle gardé dans
 `wasAt`), est avalé avant d'atteindre la carte (écouteurs en capture sur `window`) : le « Suivant » visé tombait sur le sol, et
 aux Enfers il désélectionnait les troupes (testeur, 26 nov. 2026).

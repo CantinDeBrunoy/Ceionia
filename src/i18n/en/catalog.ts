@@ -544,7 +544,7 @@ registerDict('catalog', {
   'Maisons au bord de l’eau': 'Houses by the water',
   'Champs': 'Fields',
   'Sécurité (pompiers et police)': 'Security (firefighters and police)',
-  'Forêts où l’on se promène': 'Forests to stroll in',
+  'Forêts près des maisons (au plus {n})': 'Forests near homes (at most {n})',
   'à quai à {name}, attend que le quai de {next} se libère': 'at the platform at {name}, waiting for the platform at {next} to clear',
   'à quai à {name}': 'at the platform at {name}',
   'de {name} vers {next}': 'from {name} to {next}',

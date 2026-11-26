@@ -1173,6 +1173,8 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 #tuto .tAct:hover { background: linear-gradient(180deg, #FFF3CC, #F9D886); }
 #tuto .tNext { background: linear-gradient(180deg, #FFFCF4, #F6E7C9); border: 1.5px solid var(--hEdge); color: var(--hInk); }
 #tuto .tNext.active { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+/* grisé un instant après un passage automatique (`LATE_MS`) : le clic visait l'étape d'avant */
+#tuto .tNext:disabled { opacity: .45; cursor: default; box-shadow: none; }
 #tuto .tSkip { color: var(--hInk2); }
 #tuto .tSkip:hover { color: var(--hInk); }
 #tuto .tArrow { border-color: var(--hEdge); }
