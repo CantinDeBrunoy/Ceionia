@@ -240,6 +240,8 @@ registerDict('ui', {
   'Rouvrir le portail': 'Reopen the portal',
   'Le portail est ouvert : vos troupes vous attendent dans les Enfers.': 'The portal is open: your troops await you in Hell.',
   'Le monde s’est agrandi : les deux îles sont là, au large.': 'The world has grown: the two islands lie offshore.',
+  'Revoir le film de ce choix': 'Watch the film of this choice again',
+  'Revoir la cinématique': 'Watch the cutscene again',
   'Sauvegarde impossible : le monde ne s’est pas agrandi.': 'Save failed: the world did not grow.',
   '📜 Le récit de l’expédition d’abord : le grand choix s’ouvrira juste après.': '📜 The expedition’s story first: the great choice will open right after.',
   '⚠️ Sauvegarde impossible : le navigateur refuse d’écrire (stockage plein ou bloqué). Exportez votre partie (Paramètres › Partie) pour ne rien perdre.': '⚠️ Save failed: the browser refuses to write (storage full or blocked). Export your game (Settings › Game) so nothing is lost.',

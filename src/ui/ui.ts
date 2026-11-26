@@ -40,6 +40,10 @@ import { priceIn, canPay, costLabel, haveLabel, shortLabel, Resource, PRODUCERS,
 import { archipelagoOn } from '../world/expand';
 import { waysTabShown, type Way, type WayState } from '../sim/crossroads';
 import { waysHtml, type ConflictWay } from './ways';
+import { replayFilm } from './filmReplay';
+import { VOY_FILES } from './voyage';
+import { VOY_FILM } from '../voyageCine';
+import { PORTAL_FILM } from '../portalCine';
 import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes, HALL_STEP, SAT_STEP } from '../sim/trade';
 import { flowOf, flowOfBuilding, ledgerOf, LedgerRow, Flow, refundTotal, shortText } from '../sim/ledger';
 import { gap, railBoost, railStation, railWant, freightBonus, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
@@ -3098,6 +3102,14 @@ export class UI {
       h.audio.sfxClick();
       close();
       h.takeWay?.(b.dataset.way as Way);
+    });
+    // « Revoir la cinématique » d'une voie déjà prise : la fenêtre se ferme, le film joue par-dessus le jeu
+    ov.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-replay]');
+      if (!b) return;
+      h.audio.sfxClick();
+      close();
+      replayFilm(b.dataset.replay === 'hell' ? PORTAL_FILM : { ...VOY_FILES, ...VOY_FILM });
     });
     // le conflit des deux îles : la fenêtre se ferme, la carte paix ou guerre s'ouvre (ou la bataille)
     ov.addEventListener('click', (e) => {

@@ -916,6 +916,11 @@ body.hell #resPanel { display: none !important; }
 .expModal .wyGo:hover { background: linear-gradient(180deg, #FFEDB8, #F7CA6A); }
 .expModal .wyGo .pic { width: 26px; height: 26px; }
 .expModal .wyNote { margin: 0; min-height: 52px; display: flex; align-items: center; font-family: var(--hSerif); font-style: italic; font-size: 14.5px; color: var(--hInk2); }
+/* « Revoir la cinématique » sous l'état d'une voie déjà prise (`ui/filmReplay.ts`) */
+.expModal .wyFoot:has(.wyReplay) { flex-direction: column; align-items: center; gap: 6px; }
+.expModal .wyFoot:has(.wyReplay) .wyNote { min-height: 0; }
+.expModal .wyReplay { padding: 6px 16px; border-radius: 999px; cursor: pointer; font-family: var(--hSerif); font-size: 14px; font-weight: 800; color: #4A2C0E; background: rgba(255, 252, 244, 0.9); border: 1.5px solid #D29A35; }
+.expModal .wyReplay:hover { background: linear-gradient(180deg, #FFEDB8, #F7CA6A); }
 .expModal .wayCard.st-none { filter: saturate(0.45); opacity: 0.7; }
 .expModal .wayCard.st-none .wyArt img { opacity: 0.7; }
 @media (max-width: 760px) {

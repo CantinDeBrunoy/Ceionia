@@ -5,7 +5,7 @@ import { FILM_WAIT, fetchFilm, filmOrder, firstFrames } from './filmLoad';
 import { skipAsk } from './skipAsk';
 
 /** Les fichiers du film (`public/voyage/`) : la WebM, puis le MP4 de secours */
-const VOY_FILES = { webm: './voyage/traversee.webm', mp4: './voyage/traversee.mp4' };
+export const VOY_FILES = { webm: './voyage/traversee.webm', mp4: './voyage/traversee.mp4' };
 
 /**
  * Le film de la traversée (« Explorer le monde ») : une vidéo enregistrée, la même pour tous (une caravelle en pleine mer, puis

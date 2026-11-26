@@ -41,7 +41,8 @@ export function waysHtml(ways: { hell: WayState; world: WayState }, conflict: Co
     const label = way === 'hell' ? (st === 'ask' ? tr('Rouvrir le portail') : tr('Ouvrir le portail')) : tr('Explorer le monde');
     const go = b === 'free' ? `<button class="wyGo" data-way="${way}">${hudPic(d.icon, 26)}<span>${label}</span></button>`
       : `<p class="wyNote">${b === 'taken' ? tr(way === 'hell' ? 'Le portail est ouvert : vos troupes vous attendent dans les Enfers.' : 'Le monde s’est agrandi : les deux îles sont là, au large.')
-        : tr(way === 'hell' ? 'Cette carte n’a pas d’île du portail.' : 'Ce monde ne peut plus s’agrandir.')}</p>`;
+        : tr(way === 'hell' ? 'Cette carte n’a pas d’île du portail.' : 'Ce monde ne peut plus s’agrandir.')}</p>${b === 'taken'
+        ? `<button class="wyReplay" data-replay="${way}" title="${tr('Revoir le film de ce choix')}">▶ ${tr('Revoir la cinématique')}</button>` : ''}`;
     return `<article class="wayCard ${way} st-${b}" data-wayc="${way}">
       <div class="wyArt"><img src="${d.img}" alt="" draggable="false" loading="lazy" decoding="async"></div>
       <span class="wyState">${b === 'taken' ? '✓ ' : ''}${tr(BADGE[b])}</span>
