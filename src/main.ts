@@ -3986,8 +3986,9 @@ class Game implements UIHost {
     stepWind(this.elapsed, this.env.rainK);
     const w = this.world;
 
-    // une fenêtre ouverte arrête le jeu, comme la pause (voir UI.menuOpen)
-    const gdt = this.ui?.menuOpen() ? 0 : this.time.update(dt);
+    // une fenêtre ouverte arrête le jeu, comme la pause (voir UI.menuOpen) ; l'écran de chargement aussi : les premières
+    // images et le fondu ne font pas avancer l'horloge (elle filait à ×8 sous l'écran, testeur du 26 nov. 2026)
+    const gdt = this.ui?.menuOpen() || this.warming || document.getElementById('loadScreen') ? 0 : this.time.update(dt);
     const uv = this.mode === 'under' ? this.underView : null;
     const hv = this.mode === 'hell' ? this.hellMode : null;
     this.cam.update(dt, uv ? (x, z) => uv.groundY(x, z) : hv ? (x, z) => hv.view.groundY(x, z) : (x, z) => w.hAt(x, z));

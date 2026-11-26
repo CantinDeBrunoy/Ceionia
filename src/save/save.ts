@@ -132,11 +132,16 @@ export function clockOf(t: { seasonT: number; hour: number; days: number; paused
   return { seasonT: t.seasonT, hour: t.hour, days: t.days, paused: t.paused };
 }
 
-/** Relit l'horloge d'une sauvegarde (les anciennes n'ont ni jours ni pause : jour 0, en marche) */
+/**
+ * Relit l'horloge d'une sauvegarde (les anciennes n'ont pas de jours : jour 0). Une partie reprise commence toujours en
+ * pause, quelle que soit la pause sauvegardée : rechargement, changement de langue ou « Continuer » la retrouvent à l'heure
+ * exacte où on l'a quittée, et le joueur la relance (testeur, 26 nov. 2026 : elle repartait parfois à ×8 sous l'écran de
+ * chargement, avec des morts et un grand choix manqué)
+ */
 export function readClock(t: { seasonT: number; hour: number; days: number; paused: boolean }, d: Partial<Pick<SaveData, 'seasonT' | 'hour' | 'days' | 'paused'>>) {
   t.seasonT = d.seasonT!; t.hour = d.hour!;
   t.days = Number.isFinite(d.days) ? Math.max(0, Math.floor(d.days!)) : 0;
-  t.paused = d.paused === true;
+  t.paused = true;
 }
 
 export function deleteSlot(map: number) {

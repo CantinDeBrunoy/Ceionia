@@ -147,12 +147,19 @@ describe('jours et pause', () => {
     expect(back.seasonT).toBe(2.5);
   });
 
-  it('une ancienne sauvegarde (sans les champs) : jour 0, en marche', () => {
+  it('une partie reprise commence toujours en pause, même sauvegardée en marche', () => {
+    const t = new GameTime();
+    t.paused = false; t.speed = 8;
     const back = new GameTime();
-    back.paused = true;
+    readClock(back, JSON.parse(JSON.stringify(clockOf(t))));
+    expect(back.paused).toBe(true);
+  });
+
+  it('une ancienne sauvegarde (sans les champs) : jour 0, en pause', () => {
+    const back = new GameTime();
     readClock(back, { seasonT: 1, hour: 10 });
     expect(back.days).toBe(0);
-    expect(back.paused).toBe(false);
+    expect(back.paused).toBe(true);
     expect(back.hour).toBe(10);
   });
 });
