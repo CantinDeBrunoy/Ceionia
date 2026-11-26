@@ -28,6 +28,9 @@ export function skylineTier(x: number, z: number) {
   return s < 0.36 ? 0 : s < 0.62 ? 1 : s < 0.86 ? 2 : 3;
 }
 
+/** Au passage d'âge, tout le village change de modèle en tant de secondes au plus */
+const EVO_ALL = 4.5;
+
 interface Entry {
   b: Building;
   group: THREE.Group;
@@ -542,11 +545,17 @@ export class BuildingView implements WorldListener {
     }
     this.evoTimer -= dt;
     if (this.evoTimer <= 0) {
-      this.evoTimer = 0.06;
+      // au passage d'âge, le plus proche de la vue d'abord, et tout le village en `EVO_ALL` secondes au plus (une évolution
+      // toutes les 0,06 s, plus vite s'il y a beaucoup de bâtiments) : la vue du passage d'âge montre la transformation
+      let next: Entry | null = null, best = Infinity, left = 0;
       for (const e of this.entries.values()) {
-        const to = targetAge(e.b, worldAge);
-        if (!e.anim && e.b.age !== to && !this.ruined.has(e.b.id)) { e.anim = { type: 'evolve', t: 0, swapped: false, to }; break; }
+        if (e.anim || e.b.age === targetAge(e.b, worldAge) || this.ruined.has(e.b.id)) continue;
+        left++;
+        const d = view ? Math.hypot(e.b.x - view.x, e.b.z - view.z) : 0;
+        if (d < best) { best = d; next = e; }
       }
+      this.evoTimer = Math.min(0.06, EVO_ALL / Math.max(1, left));
+      if (next) next.anim = { type: 'evolve', t: 0, swapped: false, to: targetAge(next.b, worldAge) };
     }
     for (const e of this.entries.values()) {
       const a = e.anim;

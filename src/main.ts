@@ -181,6 +181,8 @@ const audioSettings = (s: Partial<Settings>) => Object.assign(audio, soundSettin
 VoyageFilm.soundLocked = () => audio.locked && !audio.muteMusic;
 /** distance de la caméra quand elle revient sur le village (assez près pour reconnaître ses maisons) */
 const VILLAGE_DIST = 30;
+/** La vue du passage d'âge : sa durée (s) et son inclinaison (un peu plus rasante que la vue d'ensemble, 0,85) */
+const AGE_SHOT = 5.5, AGE_PITCH = 0.62;
 /** après un appui sur la carte, la vue ne part pas d'elle-même pendant ce temps (ms ; voir `Game.handsBusy`) */
 const HANDS_MS = 3000;
 /** après un appui sur la carte, récits et décisions d'expédition attendent ce temps (ms ; voir `Game.midGesture`) */
@@ -915,7 +917,7 @@ class Game implements UIHost {
     this.expeditions.onNews = (m) => this.ui.toast(m, undefined, m.startsWith('⚔️') ? 'danger' : 'info');
     this.railway.onNews = (m) => this.ui.info(m);
     // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
-    this.cam.onPan = () => { this.hellFollow = false; this.trainCam = null; this.incidentCam = null; this.citizenCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
+    this.cam.onPan = () => { this.ageShot?.stop(); this.hellFollow = false; this.trainCam = null; this.incidentCam = null; this.citizenCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
     // tracer une ligne : un clic sur une gare l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
     this.tools.overlay = this.trackEdit;
@@ -970,6 +972,8 @@ class Game implements UIHost {
       // (au bac à sable, tout est déjà ouvert : pas de liste)
       // (une cinématique en cours, celle du trophée d'une chasse qui vient de finir l'âge par exemple : la fenêtre attend sa fin)
       if (!this.world.sandbox) setTimeout(() => this.afterCinematics(() => this.ui.showNewAge(age)), 3600);
+      // la vue se pose sur le village, un peu en hauteur, et tourne doucement pendant que les bâtiments changent d'âge
+      this.ageShotStart();
       audio.sfxAgeUp();
       this.propsDirty = true;
     };
@@ -1246,6 +1250,35 @@ class Game implements UIHost {
    * tout est calme (`portalCineReady`) : à la surface, ni fenêtre, ni récit d'expédition en attente, ni autre cinématique, ni
    * outil en main ou geste en cours. Déjà dans les Enfers (entré autrement), elle n'a plus lieu d'être
    */
+  /**
+   * La vue du passage d'âge (retour de l'auteur, 26 nov. 2026 : le joueur ne voyait pas la transformation) : la caméra glisse
+   * sur le centre du village, un peu en hauteur, cadré sur son étendue, et tourne doucement `AGE_SHOT` secondes, le temps que
+   * les bâtiments changent d'âge (les plus proches de la vue d'abord, tout le village en 4,5 s au plus : `EVO_ALL`). Passable : un geste (clic, molette, touche, glisser)
+   * rend la main tout de suite. Rien hors de la surface, pendant une autre cinématique ou le tracé d'une ligne
+   */
+  private ageShot: { t: number; stop: () => void } | null = null;
+  private ageShotStart() {
+    const c = this.villageCenter();
+    if (!c || this.mode !== 'surface' || this.railEdit || this.voyageStage.playing || this.kingStage.playing || this.trophyStage.playing || this.portalStage?.playing || this.revealing || this.peaceCine) return;
+    // l'étendue du village : la distance de son centre aux quatre cinquièmes de ses bâtiments
+    const ds = [...this.world.buildings.values()].map((b) => Math.hypot(b.x + sizeOf(b) / 2 - c[0], b.z + sizeOf(b) / 2 - c[1])).sort((a, b) => a - b);
+    const r = ds[Math.floor(ds.length * 0.8)] ?? 8;
+    this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
+    this.cam.aim({ x: c[0], z: c[1], yaw: this.cam.view().yaw, pitch: AGE_PITCH, dist: Math.max(24, Math.min(58, r * 1.5 + 14)) });
+    this.ageShot?.stop();
+    const stop = () => { this.ageShot = null; for (const e of ['pointerdown', 'wheel', 'keydown'] as const) window.removeEventListener(e, stop, true); };
+    for (const e of ['pointerdown', 'wheel', 'keydown'] as const) window.addEventListener(e, stop, true);
+    this.ageShot = { t: 0, stop };
+  }
+  private stepAgeShot(dt: number) {
+    const a = this.ageShot;
+    if (!a) return;
+    a.t += dt;
+    if (a.t > AGE_SHOT || this.mode !== 'surface') { a.stop(); return; }
+    // (un lent quart de tour, qui démarre et finit en douceur)
+    this.cam.rotate(dt * 0.16 * Math.sin(Math.PI * Math.min(1, a.t / AGE_SHOT)));
+  }
+
   /** La carte « baisser la difficulté des Enfers » (`War.easeAsk`) : dans les Enfers, au calme, ni fenêtre ni cinématique */
   private stepHellEase() {
     if (!this.war.easeAsk || this.mode !== 'hell' || this.portalChoice.visible || this.kingStage.playing || this.fading || document.getElementById('loadScreen') || uiRoot.querySelector('.overlay:not(#menu)')) return;
@@ -3961,6 +3994,7 @@ class Game implements UIHost {
     this.lastGdt = gdt;
     this.stepFleet(gdt);
     this.stepFarewell(dt);
+    this.stepAgeShot(dt);
     this.stepKingCrowd();
     this.railway.update(gdt);
     this.expView.update(gdt);
