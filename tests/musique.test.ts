@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'fs';
-import { MUSIC, AGE_OPENERS, AudioEngine, soundSettings, TRACK_TRIM, trackEnd } from '../src/audio/audio';
+import { MUSIC, STINGS, AGE_OPENERS, AudioEngine, soundSettings, TRACK_TRIM, trackEnd } from '../src/audio/audio';
 
 describe('musique allumée par défaut', () => {
   it('le moteur démarre musique et sons allumés', () => {
@@ -37,6 +37,22 @@ describe('musique enregistrée', () => {
   it('l’Industriel s’ouvre sur la Toccata ; un morceau d’ouverture est dans la liste de son âge', () => {
     expect(AGE_OPENERS.age3).toBe('industriel-toccata');
     for (const [key, name] of Object.entries(AGE_OPENERS)) expect(MUSIC[key], key).toContain(name);
+  });
+
+  it('chaque cinématique a son morceau, à elle seule (retour de l’auteur, 26 nov. 2026)', () => {
+    const ages = new Set(['age0', 'age1', 'age2', 'age3', 'age4', 'age5'].flatMap((k) => MUSIC[k]));
+    for (const key of ['opening', 'portal', 'voyage', 'king', 'peace']) {
+      expect(MUSIC[key]?.length, key).toBeGreaterThan(0);
+      for (const name of MUSIC[key]) expect(ages.has(name), name).toBe(false);
+    }
+  });
+
+  it('le coup de musique du trophée a son fichier et n’est dans aucune liste', () => {
+    const all = new Set(Object.values(MUSIC).flat());
+    for (const name of Object.values(STINGS)) {
+      expect(existsSync(`public/sons/musique/${name}.mp3`), name).toBe(true);
+      expect(all.has(name), name).toBe(false);
+    }
   });
 
   it('un morceau n’appartient qu’à une liste', () => {

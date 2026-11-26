@@ -60,7 +60,7 @@ import { loadModels } from './render/assets';
 import { Thumbs } from './render/thumbs';
 import { AgePrep } from './render/agePrep';
 import { ToolController, ToolId } from './build/tools';
-import { AudioEngine, soundSettings, VOL_V } from './audio/audio';
+import { AudioEngine, soundSettings, VOL_V, type MusicScene } from './audio/audio';
 import { UI, showMenu, UIHost, chooseControls } from './ui/ui';
 import { chooseBlason } from './ui/blason';
 import { setTeamBlason } from './render/teamPaint';
@@ -2688,6 +2688,22 @@ class Game implements UIHost {
   private voyageEnds: (() => void)[] = [];
   /** Une cinématique joue (trophée, traversée, portail, ouverture, royaume) : les fenêtres qui s'ouvrent seules l'attendent */
   cinematicPlaying() { return this.trophyStage.playing || this.voyageStage.playing || this.revealing || !!this.portalStage?.playing || !!this.openingStage?.playing || this.kingStage.playing; }
+  /**
+   * La scène musicale du moment (null : la musique de l'âge). Chaque cinématique a la sienne : un film revu depuis « Grands
+   * choix » (`#filmReplay`), la chute du roi et son écran de victoire, la traversée (film puis survol), le portail, l'ouverture
+   * (film puis plan en direct), la paix des îles (la trêve, la cérémonie des Jeux)
+   */
+  private musicScene(ending: boolean): MusicScene | null {
+    const replay = document.querySelector<HTMLElement>('#filmReplay:not(.gone)')?.dataset.scene as MusicScene | undefined;
+    if (replay) return replay;
+    if (this.kingStage.playing || document.querySelector('.overlay.victory.kingdomWin')) return 'king';
+    if (ending) return 'end';
+    if (this.voyageStage.playing || document.querySelector('#loadScreen.voyage')) return 'voyage';
+    if (this.portalStage?.playing) return 'portal';
+    if (this.openingStage?.playing || document.querySelector('#loadScreen.opening')) return 'opening';
+    if (this.peaceCine) return 'peace';
+    return this.mode === 'hell' ? 'hell' : null;
+  }
   /** `f` tout de suite, ou à la fin de la cinématique en cours */
   afterCinematics(f: () => void) { if (!this.cinematicPlaying()) f(); else setTimeout(() => this.afterCinematics(f), 250); }
   /**
@@ -4156,11 +4172,12 @@ class Game implements UIHost {
       // (le bouton reste là tant que la vue glisse vers le village : il disparaissait sous la souris, et un second clic
       // tombait sur un bâtiment)
       this.homeBtn.set(this.awayFromHome() || (this.homeBtn.shown && !this.cam.settled()));
-      // la musique de la fin (chute du roi des Enfers, voyage des colons, écrans de victoire), des Enfers, sinon de l'âge
-      // (le voyage des colons et les écrans de victoire : rien que la musique, plus les feux d'artifice de la fête)
+      // la musique de chaque cinématique (un morceau à elle), de la fin (voyage des colons, écrans de victoire), des Enfers,
+      // sinon de l'âge. (Le voyage des colons et les écrans de victoire : rien que la musique, plus les feux d'artifice de la
+      // fête.) Le trophée n'a qu'un coup de musique, par-dessus (`TrophyStage`)
       const ending = !!uiRoot.querySelector('.overlay.voyage, .overlay.victory');
       audio.hush(ending);
-      audio.music(this.kingStage.playing || ending ? 'end' : this.voyageStage.playing || document.querySelector('#loadScreen.voyage') ? 'voyage' : this.openingStage?.playing || document.querySelector('#loadScreen.opening') ? 'opening' : this.mode === 'hell' ? 'hell' : null);
+      audio.music(this.musicScene(ending));
     }
     // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }

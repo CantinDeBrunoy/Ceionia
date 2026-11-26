@@ -10,13 +10,15 @@ export interface ReplayFilm extends FilmFiles { dur: number; captions: { at: num
  * Revoir le film d'une cinématique déjà jouée (onglet « Grands choix », retour de l'auteur du 26 nov. 2026 : « revoir la
  * cinématique d'un choix déjà fait »). Seulement le film, par-dessus le jeu : le plan en direct qui le suit dépend de la partie
  * (troupes qui sortent du portail, îles survolées au moment de la traversée), il ne se rejoue pas. Bandes noires, bandeaux
- * dorés, « Passer » en deux temps (clic, Échap, Espace), comme les autres cinématiques. La vidéo est lue au fil de l'eau (pas
+ * dorés, « Passer » en deux temps (clic, Échap, Espace), comme les autres cinématiques. `scene` : la scène musicale de la
+ * cinématique (`data-scene`, lue par `main.ts`), sa musique joue pendant le film. La vidéo est lue au fil de l'eau (pas
  * de téléchargement préalable : rien ne calcule derrière). Introuvable ou illisible : la fenêtre se ferme d'elle-même
  */
-export function replayFilm(film: ReplayFilm, done: () => void = () => {}): HTMLElement {
+export function replayFilm(film: ReplayFilm, done: () => void = () => {}, scene = ''): HTMLElement {
   document.getElementById('filmReplay')?.remove();
   const el = document.createElement('div');
   el.id = 'filmReplay';
+  if (scene) el.dataset.scene = scene;
   el.innerHTML = `<video muted playsinline preload="auto" disablepictureinpicture aria-hidden="true"></video>
     <div class="kc-bar t"></div><div class="kc-bar b"></div>
     <button class="kc-skip" type="button">${KINGDOM_TEXT.skip}</button>`;

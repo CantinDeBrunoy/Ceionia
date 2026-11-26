@@ -52,12 +52,17 @@ const SAMPLES: Record<string, { file: string; rate?: number; max?: number }> = {
 /** niveau de crête des enregistrements, proche des cris de synthèse */
 const SAMPLE_PEAK = 0.16;
 
-/** Ambiances musicales hors des âges : le menu principal, la cinématique d'ouverture, les Enfers, la fin (chute du roi, voyage des colons, victoire) */
-export type MusicScene = 'menu' | 'opening' | 'hell' | 'end' | 'voyage';
+/**
+ * Ambiances musicales hors des âges : le menu principal, les Enfers, la fin (voyage des colons, victoire) et chaque
+ * cinématique : l'ouverture, le portail, la traversée (« Explorer le monde »), la chute du roi, la paix des îles
+ */
+export type MusicScene = 'menu' | 'hell' | 'end' | 'opening' | 'portal' | 'voyage' | 'king' | 'peace';
 /**
  * Musique enregistrée, en attendant celle composée pour le jeu : fichiers de `public/sons/musique/` (sans extension),
  * une liste par âge (`age0` … `age5`) et par scène. Sources et licences : `docs/audio.md` et la page Crédits. Une liste
- * vide ou des fichiers absents rendent la musique générée ; `RECORDED_MUSIC = false` la rend partout
+ * vide ou des fichiers absents rendent la musique générée ; `RECORDED_MUSIC = false` la rend partout.
+ * Chaque cinématique a son morceau, qu'on n'entend nulle part ailleurs (retour de l'auteur, 26 nov. 2026 : l'ouverture et
+ * la traversée reprenaient un morceau d'âge, les autres jouaient la musique de l'âge)
  */
 export const MUSIC: Record<string, string[]> = {
   age0: ['prehistoire-tribal', 'prehistoire-ancetres', 'prehistoire-oiseau-tonnerre'],
@@ -67,13 +72,15 @@ export const MUSIC: Record<string, string[]> = {
   age4: ['moderne-the', 'moderne-fleuriste', 'moderne-barman', 'moderne-cafe-chats'],
   age5: ['futuriste-synthwave', 'futuriste-aout', 'futuriste-lifewave'],
   menu: ['menu'], hell: ['enfers-oppression', 'enfers-com-mecha', 'enfers-croisade', 'enfers-rituel'], end: ['fin'],
+  opening: ['cine-ouverture'], portal: ['cine-portail'], voyage: ['cine-traversee'], king: ['cine-roi'], peace: ['cine-paix'],
 };
 /**
- * Les scènes qui reprennent un morceau d'une liste d'âge (un morceau n'appartient qu'à une liste de `MUSIC`) : la cinématique
- * « Explorer le monde » joue celui de l'exploration, du Médiéval ; celle de l'ouverture « The Sky of our Ancestors », qui
- * continue ensuite dans la partie (retour de l'auteur, 26 nov. 2026 : le film passait sur la musique de l'âge)
+ * Les coups de musique : un court morceau joué par-dessus celui en cours, qui baisse le temps qu'il passe (`DUCK`). Pour une
+ * cinématique trop brève pour un fondu enchaîné : le trophée qui rejoint la place (5 s)
  */
-const SCENE_TRACKS: Record<string, string[]> = { voyage: ['medieval-exploration'], opening: ['prehistoire-ancetres'] };
+export const STINGS: Record<string, string> = { trophy: 'cine-trophee' };
+/** niveau du morceau en cours pendant un coup de musique */
+const DUCK = 0.25;
 /**
  * Le morceau qui ouvre un âge, joué en premier quand le village y entre en cours de partie (pas au chargement d'une partie
  * déjà à cet âge) : la Toccata et fugue en ré mineur pour l'Industriel (demande de l'auteur, 17 nov. 2026 : « ça fait bien
@@ -154,6 +161,8 @@ export class AudioEngine {
   sfxChosen = false;
   private master!: GainNode;
   private musicG!: GainNode;
+  /** les morceaux passent par lui : il les baisse le temps d'un coup de musique (`sting`) */
+  private duckG!: GainNode;
   private sfxG!: GainNode;
   private ambG!: GainNode;
   private surfG!: GainNode;
@@ -250,6 +259,7 @@ export class AudioEngine {
     const comp = ctx.createDynamicsCompressor();
     this.master.connect(comp); comp.connect(ctx.destination);
     this.musicG = ctx.createGain(); this.musicG.connect(this.master);
+    this.duckG = ctx.createGain(); this.duckG.connect(this.musicG);
     this.sfxG = ctx.createGain(); this.sfxG.connect(this.master);
     this.ambG = ctx.createGain(); this.ambG.connect(this.master);
     this.loadSamples(ctx);
@@ -327,9 +337,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     const want = this.muteMusic || !RECORDED_MUSIC ? null : this.scene ?? this.ageKey;
     if (this.track?.key === want) return;
-    // (le morceau en cours est aussi dans la nouvelle liste, l'ouverture qui rend la main à la Préhistoire : il continue)
-    const t = this.track;
-    if (t && want && !t.next && (MUSIC[want] ?? SCENE_TRACKS[want] ?? []).includes(t.name)) { t.key = want; this.lastTrack.set(want, t.name); return; }
+    // (un morceau n'appartient qu'à une liste : la cinématique finie, le sien s'efface pendant que celui de l'âge entre)
     this.fadeOut(this.track);
     this.track = null;
     if (want) this.playTrack(want);
@@ -341,7 +349,7 @@ export class AudioEngine {
    * laisse la musique générée
    */
   private playTrack(key: string) {
-    const ctx = this.ctx!, list = (MUSIC[key] ?? SCENE_TRACKS[key] ?? []).filter((n) => !this.missing.has(n));
+    const ctx = this.ctx!, list = (MUSIC[key] ?? []).filter((n) => !this.missing.has(n));
     if (!list.length) { this.track = null; return; }
     const prev = this.lastTrack.get(key), pool = list.length > 1 ? list.filter((n) => n !== prev) : list;
     // (l'âge vient de changer : son morceau d'ouverture d'abord, une seule fois)
@@ -358,7 +366,7 @@ export class AudioEngine {
     if (back && back.t > 0) el.addEventListener('loadedmetadata', () => { if (back.t < el.duration - MUSIC_FADE) el.currentTime = back.t; }, { once: true });
     const src = ctx.createMediaElementSource(el), g = ctx.createGain();
     g.gain.value = 0.0001;
-    src.connect(g); g.connect(this.musicG);
+    src.connect(g); g.connect(this.duckG);
     const t: Track = { key, name, el, src, g, next: false, dropped: false };
     this.track = t;
     const level = TRACK_GAIN * (TRACK_TRIM[name]?.gain ?? 1);
@@ -396,10 +404,41 @@ export class AudioEngine {
     t.src.disconnect(); t.g.disconnect();
   }
 
+  /**
+   * Un coup de musique (`STINGS`) : le court morceau joue une fois par-dessus celui en cours, qui baisse le temps qu'il
+   * passe puis remonte. Rien si la musique est coupée (ni si le navigateur refuse la lecture, faute de geste)
+   */
+  sting(id: string) {
+    const name = STINGS[id];
+    if (!this.ctx || this.muteMusic || !RECORDED_MUSIC || !name || this.missing.has(name)) return;
+    this.stingEl?.pause();
+    const ctx = this.ctx, el = new Audio();
+    el.src = `${import.meta.env.BASE_URL}sons/musique/${name}.mp3`;
+    const src = ctx.createMediaElementSource(el), g = ctx.createGain();
+    g.gain.value = TRACK_GAIN;
+    src.connect(g); g.connect(this.musicG);
+    this.stingEl = el; this.stingName = name;
+    const duck = (k: number, tc: number) => { this.duckG.gain.cancelScheduledValues(ctx.currentTime); this.duckG.gain.setTargetAtTime(k, ctx.currentTime, tc); };
+    let over = false;
+    const end = () => {
+      if (over) return;
+      over = true;
+      if (this.stingEl === el) { this.stingEl = null; this.stingName = null; duck(1, 0.8); }
+      el.pause(); src.disconnect(); g.disconnect();
+    };
+    el.addEventListener('ended', end, { once: true });
+    el.addEventListener('pause', end, { once: true });
+    el.addEventListener('error', () => { this.missing.add(name); end(); }, { once: true });
+    duck(DUCK, 0.15);
+    el.play().catch(end);
+  }
+  private stingEl: HTMLAudioElement | null = null;
+  private stingName: string | null = null;
+
   /** Le morceau en cours (pour vérifier sans écouter : `__game.audio.debugMusic()`) */
   debugMusic() {
     const t = this.track;
-    return { scene: this.scene, age: this.ageKey, track: t?.name ?? null, time: t ? +t.el.currentTime.toFixed(1) : 0, gain: t ? +t.g.gain.value.toFixed(3) : 0, missing: [...this.missing] };
+    return { scene: this.scene, age: this.ageKey, track: t?.name ?? null, time: t ? +t.el.currentTime.toFixed(1) : 0, gain: t ? +t.g.gain.value.toFixed(3) : 0, sting: this.stingName, missing: [...this.missing] };
   }
 
   private tone(freq: number, t: number, dur: number, type: OscillatorType, vol: number, dest: AudioNode, cutoff = 0, attack = 0.01) {

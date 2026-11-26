@@ -19,7 +19,7 @@ export interface TrophyStageHost {
   scene: THREE.Scene;
   root: HTMLElement;
   trophies: Trophies;
-  audio: { sfxTrophy(delay?: number): void };
+  audio: { sfxTrophy(delay?: number): void; sting(id: string): void };
   /** les trophées gagnés */
   won: () => string[];
   /**
@@ -127,6 +127,8 @@ export class TrophyStage {
     h.scene.add(fx.group);
     this.cur = { e, from, close, h: at.h, fx, chimed: false, cheered: false };
     this.show(CAPTION[id]?.() ?? '');
+    // (son coup de musique, par-dessus celui de l'âge qui baisse le temps qu'il passe)
+    h.audio.sting('trophy');
     h.cam.enabled = false;
   }
 

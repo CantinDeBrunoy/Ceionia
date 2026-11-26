@@ -3107,7 +3107,8 @@ export class UI {
       if (!b) return;
       h.audio.sfxClick();
       close();
-      replayFilm(b.dataset.replay === 'hell' ? PORTAL_FILM : { ...VOY_FILES, ...VOY_FILM });
+      // (avec la musique de sa cinématique : le portail ou la traversée)
+      replayFilm(b.dataset.replay === 'hell' ? PORTAL_FILM : { ...VOY_FILES, ...VOY_FILM }, undefined, b.dataset.replay === 'hell' ? 'portal' : 'voyage');
     });
     // le conflit des deux îles : la fenêtre se ferme, la carte paix ou guerre s'ouvre (ou la bataille)
     ov.addEventListener('click', (e) => {
@@ -3918,8 +3919,9 @@ export function showCredits(root: HTMLElement) {
     <section class="credCard">
       <h4>${ic('heart', 18, 2)}${tr('Musiques, en attendant celles composées pour le jeu')}</h4>
       <ul class="credits">
-        <li>${tr('{author}, licence {lic} : {titles}.', { author: a('https://incompetech.com', 'Kevin MacLeod (incompetech.com)'), lic: a(tr('https://creativecommons.org/licenses/by/4.0/deed.fr'), 'CC BY 4.0'), titles: q('The Sky of our Ancestors', 'Thunderbird', 'Temple of the Manes', 'Enchanted Journey', 'Suonatore di Liuto', 'Peaceful Desolation', 'Teller of the Tales') + `, ${q('Toccata and Fugue in D Minor')} (Jean-Sébastien Bach), ${q('Gymnopedie No 1', 'Gymnopedie No 3')} (Erik Satie), ${q('Danse Morialta', 'Frost Waltz', 'The Parting')}, ${q('Thaxted')} (Gustav Holst), ${q('Oppressive Gloom', 'Crusade', 'Ritual')}` })}</li>
+        <li>${tr('{author}, licence {lic} : {titles}.', { author: a('https://incompetech.com', 'Kevin MacLeod (incompetech.com)'), lic: a(tr('https://creativecommons.org/licenses/by/4.0/deed.fr'), 'CC BY 4.0'), titles: q('The Sky of our Ancestors', 'Thunderbird', 'Temple of the Manes', 'Enchanted Journey', 'Suonatore di Liuto', 'Peaceful Desolation', 'Teller of the Tales') + `, ${q('Toccata and Fugue in D Minor')} (Jean-Sébastien Bach), ${q('Gymnopedie No 1', 'Gymnopedie No 3')} (Erik Satie), ${q('Danse Morialta', 'Frost Waltz', 'The Parting')}, ${q('Thaxted')} (Gustav Holst), ${q('Oppressive Gloom', 'Crusade', 'Ritual')}, ${q('Ascending the Vale', 'Lightless Dawn')}, ${q('Egmont Overture Finale')} (Ludwig van Beethoven), ${q('Master of the Feast', 'Discovery Hit')}` })}</li>
         <li>${tr('{author}, licence {lic} : {titles}.', { author: a('https://opengameart.org/users/matthew-pablo', 'Matthew Pablo'), lic: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC BY 3.0'), titles: q('Beyond The Clouds', 'Theme of Com-Mecha') })}</li>
+        <li>${tr('{author}, licence {lic} : {titles}.', { author: a('https://opengameart.org/users/wolfgang', 'Wolfgang_'), lic: a(tr('https://creativecommons.org/licenses/by/4.0/deed.fr'), 'CC BY 4.0'), titles: q('Ocean Theme (Brave New Ocean)') })}</li>
         <li>${tr('Via {src}, en CC0 : {list}.', { src: a('https://opengameart.org', 'OpenGameArt'), list: [[q('Tribal'), 'Of Far Different Nature'], [q('Medieval: Exploration', 'Medieval: The Old Tower Inn'), 'RandomMind'], [q('A cup of tea', 'Florist', 'Bartender', 'Cat caffe'), 'TAD'], [q('Calm Ambient 1 (Synthwave 4k)', 'Another August', 'Calm Ambient 3 (Lifewave 2k)'), 'The Cynic Project']].map(([t, by]) => tr('{titles} par {author}', { titles: t, author: by })).join('. ') })}</li>
       </ul>
     </section>

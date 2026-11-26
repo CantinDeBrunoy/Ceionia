@@ -12,19 +12,17 @@ export const VOY_FILES = { webm: './voyage/traversee.webm', mp4: './voyage/trave
  * la brume ; `public/voyage/`, voir docs/grand-choix.md). Elle tient lieu d'écran de chargement : elle joue pendant la
  * sauvegarde, l'agrandissement du monde et le rechargement de la page, puis pendant la préparation de la partie agrandie. Le
  * rechargement la coupe : elle reprend après, là où elle s'était arrêtée (`VOY_KEY` dans `sessionStorage`). Finie avant que la partie ne
- * soit prête, elle laisse la brume peinte (navire en ombre, nappes qui passent) jusqu'au bout. Une vidéo joue même quand le
+ * soit prête, elle laisse la brume peinte (des nappes qui passent) jusqu'au bout. Une vidéo joue même quand le
  * fil principal est pris (agrandissement, construction du monde, shaders) : c'est pour cela qu'elle remplace l'acte en direct
  */
 
-/** Une caravelle en ombre chinoise (coque, trois mâts, voiles), sur fond transparent */
-const SHIP = `<svg class="vyShip" viewBox="0 0 200 150" aria-hidden="true"><g fill="#5b6d76">
-<path d="M18 104 L182 104 L166 128 Q100 138 34 128 Z"/><path d="M150 104 L176 92 L184 98 L170 106 Z"/>
-<rect x="66" y="22" width="3" height="84"/><rect x="104" y="10" width="3.4" height="96"/><rect x="140" y="34" width="2.6" height="72"/>
-<path d="M48 30 Q68 50 48 74 L88 74 Q96 52 88 30 Z"/><path d="M84 18 Q106 44 84 78 L128 78 Q136 48 128 18 Z"/>
-<path d="M143 40 L170 86 L143 86 Z"/><path d="M106 6 L124 12 L106 16 Z"/></g></svg>`;
-
-/** La brume et le navire, sous la vidéo : ce qui reste quand elle est finie (styles « La traversée » de `style.css`) */
-export const VOYAGE_PLATE = `<div class="vyPlate" aria-hidden="true"><i class="vyMist m0"></i>${SHIP}<i class="vyMist m1"></i><i class="vyMist m2"></i></div>`;
+/**
+ * La brume seule, sous la vidéo : avant le film (le rechargement, le téléchargement), puis ce qui reste quand il est fini
+ * (styles « La traversée » de `style.css`). Plus de caravelle en ombre au milieu (retour de l'auteur, 26 nov. 2026 : la
+ * silhouette paraissait dans le brouillard puis s'effaçait sous le film, « ça ne fait pas sens ») : la brume s'ouvre sur le film,
+ * et le film finit dans la même brume
+ */
+export const VOYAGE_PLATE = `<div class="vyPlate" aria-hidden="true"><i class="vyMist m0"></i><i class="vyMist m1"></i><i class="vyMist m2"></i></div>`;
 
 /** Où en est le film d'une page à l'autre (`sessionStorage`) : le temps de la vidéo, l'heure où on l'a noté, passé ou non */
 export const VOY_KEY = 'village-lowpoly:voyage';
