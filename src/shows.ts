@@ -220,7 +220,7 @@ export class ShowDirector {
   update(dt: number) {
     const r = this.run;
     if (!r) { this.showBoard(null); return; }
-    const h = this.h, ag = h.agents;
+    const h = this.h;
     // le bâtiment démoli en plein spectacle : on rentre, sans récompense
     if (!h.world.buildings.has(r.b.id)) { this.stop(); return; }
     r.t += dt;

@@ -460,58 +460,6 @@ const paladin: Kit = {
   },
 };
 
-/** Cuirassier de l'âge industriel : cuirasse d'acier sur l'habit bleu, casque à crinière noire, sabre, sans bouclier */
-const cuirassier: Kit = {
-  leg: WHITE, boot: BLACK, hip: COAT, torso: COAT, arm: COAT, hand: WHITE, hold: 'blade',
-  dress(p) {
-    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, COAT);
-    p.box(0.086, 0.075, 0.062, 0, 0.13, 0, 0xd8dce2);
-    p.box(0.088, 0.006, 0.064, 0, 0.2, 0, GOLD);
-    for (const s of [-1, 1]) p.box(0.028, 0.012, 0.042, s * 0.048, 0.205, 0, TEAM_B);
-    p.box(0.088, 0.01, 0.064, 0, 0.125, 0, WHITE);
-  },
-  head(p) {
-    p.sphere(0.032, 0, 0.25, 0, 0xd8dce2, 1, 0.85);
-    p.box(0.012, 0.016, 0.06, 0, 0.274, -0.004, GOLD);
-    p.add(new THREE.BoxGeometry(0.012, 0.07, 0.016), 0, 0.23, -0.04, BLACK, 0, false, 0, 0.4);
-    p.box(0.05, 0.004, 0.022, 0, 0.236, 0.028, 0x2a2a2e);
-  },
-  right(p) {
-    // sabre droit à garde de laiton
-    p.box(0.01, 0.024, 0.01, 0, -0.014, 0, BLACK); p.box(0.03, 0.008, 0.014, 0, 0.0, 0, GOLD);
-    p.box(0.008, 0.12, 0.004, 0, 0.004, 0, STEEL);
-  },
-  left() {},
-};
-
-/** Grand bouclier rectangulaire (moderne : polycarbonate fumé ; futuriste : champ de force) */
-function bigShield(p: Parts, c: number, rim: number, glow: boolean) {
-  p.box(0.008, 0.13, 0.075, 0.01, -0.08, 0.008, c, 0, glow ? 'neon' : false);
-  p.box(0.01, 0.006, 0.077, 0.01, 0.048, 0.008, rim); p.box(0.01, 0.006, 0.077, 0.01, -0.082, 0.008, rim);
-}
-
-/** Lourd moderne : treillis, gilet épais, casque à visière, grand bouclier, matraque-épée */
-const heavyNow: Kit = {
-  ...modern, hold: 'blade',
-  head(p) {
-    modern.head(p);
-    p.box(0.05, 0.024, 0.006, 0, 0.222, 0.031, 0x6a8090);
-  },
-  right(p) { p.box(0.01, 0.024, 0.01, 0, -0.014, 0, BLACK); p.box(0.012, 0.1, 0.006, 0, 0.004, 0, 0x3c3c40); },
-  left: (p) => bigShield(p, 0x8aa0b0, 0x2a2a2e, false),
-};
-
-/** Chevalier futuriste : exo-armure à liserés d'or, lame d'énergie, bouclier de champ de force */
-const heavyFuture: Kit = {
-  ...future, hold: 'blade',
-  dress(p) {
-    future.dress(p);
-    for (const s of [-1, 1]) p.box(0.036, 0.03, 0.064, s * 0.05, 0.19, 0, 0xe8c66a);
-  },
-  right(p) { p.box(0.01, 0.024, 0.01, 0, -0.014, 0, 0x3a4250); p.box(0.03, 0.008, 0.012, 0, 0.0, 0, 0xe8c66a); p.box(0.01, 0.12, 0.004, 0, 0.006, 0, 0x5af0ff, 0, 'neon'); },
-  left: (p) => bigShield(p, 0x5af0ff, 0xe8c66a, true),
-};
-
 /** Long fusil porté droit (le long de +y depuis la main) : crosse, platine, canon de `len` ; lunette ou rail lumineux au besoin */
 export function longRifle(p: Parts, o: { wood: number; metal: number; len: number; scope?: boolean; neon?: boolean; band?: number; sling?: number }) {
   p.box(0.014, 0.05, 0.02, 0, -0.04, 0, o.wood);
@@ -704,7 +652,7 @@ const exoLauncher: Kit = {
 /** Les chevaliers : chevalier en armure (dès l'Antiquité s'il le faut), hallebardier (âge industriel), bazooka (moderne), exo-lanceur (futuriste) */
 const KNIGHTS = [paladin, paladin, paladin, halberdier, bazooka, exoLauncher];
 
-const NAVY = 0x22305a, BUFF = 0xe8c060, SILVER = 0xd8dce2, SIENNA = 0x8a5a3a;
+const NAVY = 0x22305a, BUFF = 0xe8c060, SILVER = 0xd8dce2;
 
 /** Bicorne noir porté en bataille (pointes au-dessus des épaules), galon d'argent, cocarde tricolore */
 function bicorne(p: Parts, y: number) {

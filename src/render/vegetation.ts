@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { still } from './still';
 import {
-  World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
+  World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, CAVE_TUNNEL,
   BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, BIOME_SNOW, SNOW_LINE, LavaPool, seaMargin, marginFloor, marginOff,
 } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
@@ -10,7 +10,7 @@ import { SeasonState } from './season';
 import { Parts } from './parts';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
-import { bakeStatic, splitTrees, meshVariants, MeshPart, ModelName } from './assets';
+import { bakeStatic, meshVariants, MeshPart, ModelName } from './assets';
 import { linearMask } from '../build/decor';
 import { WALL_N, WALL_E, WALL_S, WALL_W } from './hellBase';
 import { birchShape, roundTreeShape, bareBirchShape, fernShape, pineShape, bushShape, rockShapes } from './treeShapes';
@@ -1787,7 +1787,6 @@ function caveMoundGeo(f: { x: number; y: number; z: number; yaw: number }, at: (
   const k1 = seed * 61, k2 = seed * 37, k3 = seed * 93;
   const bump = (x: number, y: number, z: number) => Math.sin(x * 3.1 + y * 1.7 + k1) * Math.sin(z * 2.3 - y * 1.9 + k2) * 0.55
     + Math.sin(x * 5.7 - z * 4.1 + y * 2.2 + k3) * 0.3 + Math.sin(x * 11.3 + y * 9.1 - z * 7.7 + k1) * 0.12;
-  const zRim = CZ + Math.cos((MOUTH / H) * Math.PI) * RZ;
   const c = Math.cos(f.yaw), sn = Math.sin(f.yaw);
   const depth = new Float32Array(pos.count), ly = new Float32Array(pos.count), shade = new Float32Array(pos.count);
   for (let i = 0; i < pos.count; i++) {

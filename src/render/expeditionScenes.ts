@@ -550,11 +550,6 @@ const boilerGeo = () => geo('boiler', (p) => {
 });
 const coreGeo = () => geo('core', (p) => { p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.16, 6).rotateZ(Math.PI / 2), 0, 0.018, 0, 0x5a5650); p.add(new THREE.CylinderGeometry(0.019, 0.019, 0.04, 6).rotateZ(Math.PI / 2), 0.03, 0.018, 0, 0x2a2826); });
 const stakeFlagGeo = () => geo('stakeflag', (p) => { p.box(0.02, 0.34, 0.02, 0, 0, 0, 0x8a6a4a); p.cone(0.012, 0.03, 4, 0, 0.34, 0, 0x6a4a34); p.box(0.005, 0.07, 0.1, 0, 0.25, 0.05, 0xf0902a); p.box(0.006, 0.02, 0.1, 0, 0.27, 0.05, 0xf8e0a0); });
-const mapTableGeo = () => geo('maptable', (p) => {
-  for (const s of [-1, 1]) { p.add(new THREE.BoxGeometry(0.012, 0.11, 0.1), s * 0.08, 0.05, 0, 0x6a4a34, 0, false, 0, 0); }
-  p.box(0.22, 0.014, 0.14, 0, 0.1, 0, 0x9a7a5a); p.box(0.16, 0.003, 0.1, 0, 0.114, 0, 0xf2e8d0, 0.12);
-  for (const [x, z, c] of [[-0.04, 0.02, 0xc8443a], [0.03, -0.02, 0x3c3530], [0.05, 0.03, 0xc8443a]] as [number, number, number][]) p.box(0.01, 0.01, 0.01, x, 0.117, z, c);
-});
 const flagGeo = () => geo('flag', (p) => { p.cyl(0.006, 0.008, 0.42, 5, 0, 0, 0, 0xd8d8d8); p.box(0.006, 0.08, 0.13, 0, 0.32, 0.065, TEAM_FLAG); p.sphere(0.012, 0, 0.43, 0, 0xe8c66a); });
 const stationGeo = () => geo('station', (p) => {
   p.box(0.012, 0.36, 0.012, 0, 0, 0, 0xd8d8d8);
@@ -1124,7 +1119,6 @@ export class ExpeditionScene {
   private stagings: Staging[] = [];
   /** temps passé à attendre (la barque reste amarrée pendant ce temps) */
   private idle = 0;
-  private failed = false;
   /** on explore une grotte : chacun tient une torche de fortune ; leur éclat (1 : normal), et celui vers lequel il va */
   private lit = false;
   private torches = new Map<number, THREE.Object3D>();
@@ -4408,7 +4402,6 @@ export class ExpeditionScene {
 
   /** L'eau la plus proche : un point assez profond pour une barque, et le dernier point sec avant lui */
   private findWater(cx: number, cz: number) {
-    const w = this.world;
     let best: { wet: [number, number]; bank: [number, number]; level: number } | null = null, bd = 1e9;
     for (let dz = -3.5; dz <= 3.5; dz += 0.25)
       for (let dx = -3.5; dx <= 3.5; dx += 0.25) {

@@ -245,9 +245,6 @@ export function sideStep(px: number, pz: number, dx: number, dz: number, lat: nu
 const SHOWN = 0.85 / 4, MAX_SHOWN = Math.floor(MAX_AGENTS / 4);
 /** Part de la population en âge et en état de partir en expédition */
 const ABLE = 0.6;
-const HUMAN_HEIGHT = HUMAN;
-/** les bancs sont faits pour des habitants de 0,3 : assis, un habitant plus petit se pose un peu plus haut */
-const SIT_LIFT = 0.4 * (0.3 - HUMAN);
 
 const BODY_COLS = [
   [0xb98a5e, 0xa07850, 0xc9a070],
@@ -451,7 +448,6 @@ export class Agents {
   burning: (id: number) => boolean = () => false;
   private spotKey = '';
   private lastVersion = -1;
-  private lastAge = -1;
   private d = new THREE.Object3D();
   private col = new THREE.Color();
   /** population du village (donnée à chaque image) */
@@ -1730,7 +1726,7 @@ export class Agents {
   }
 
   private render(age: number, dt: number) {
-    const w = this.world, d = this.d;
+    const d = this.d;
     const palette = BODY_COLS[Math.min(age, 5)];
     const cam = this.camera?.position, farSq = (FOLK_FAR * this.detail) ** 2;
     let n = 0;

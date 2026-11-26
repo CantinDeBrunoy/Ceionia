@@ -1,6 +1,6 @@
 import { KINDS, KindId } from '../build/catalog';
 import { ic } from './icons';
-import { tr, localize, colon } from '../i18n';
+import { tr, localize } from '../i18n';
 import type { UI, UIHost } from './ui';
 import { layoutKeys } from '../core/controls';
 import { GEAR, GEAR_BY, GearId, dangersOf, gearCurrent } from '../sim/gear';

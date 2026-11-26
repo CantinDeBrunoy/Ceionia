@@ -4,7 +4,7 @@ import { ferryRoute, FerryRoute } from '../world/ferry';
 import type { War } from '../sim/war';
 import { TRAIN_SLOTS, TROOPS, TroopKind, Recruit } from '../sim/army';
 import { galleyGeo } from './expeditionScenes';
-import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
+import { makeSoldier, soldierStep, Soldier } from './soldiers';
 import { troopLook } from './battleUnits';
 import { Parts } from './parts';
 import { mats } from './materials';
@@ -25,7 +25,6 @@ export const CROSS = 8;
 const WALK = 1.6, BACK = 7, GROW = 0.5;
 /** Galères à la fois, passagers par galère */
 const MAX_TRIPS = 4, SEATS = 6;
-const ROLE: Record<TroopKind, SoldierRole> = { soldier: 'spearman', archer: 'archer', knight: 'knight', cavalry: 'spearman' };
 
 type Phase = 'board' | 'sail' | 'land' | 'back';
 interface Walker { s: Soldier; a: THREE.Vector3; b: THREE.Vector3 }

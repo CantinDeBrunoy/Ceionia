@@ -706,7 +706,7 @@ export class Emergencies {
    * le couchent sur la civière et la portent jusqu'à l'ambulance, où ils le chargent
    */
   private stepHealth(u: Unit, tb: Building, dt: number) {
-    const w = this.world, s = sizeOf(tb), tx = tb.x + s / 2, tz = tb.z + s / 2;
+    const w = this.world;
     if (!u.crew) {
       const c = (u.crew = this.crewFor(u, tb));
       for (let i = 0; i < 2; i++) c.men.push(this.man('medic', u.home + i, c.exit[0], c.exit[1]));
@@ -783,7 +783,8 @@ export class Emergencies {
       chase.mode = 'guard';
       c.stage = 0.5;
     }
-    const knockAt = this.stepMan(knock, c.root, dt), chaseAt = this.stepMan(chase, c.root, dt);
+    const knockAt = this.stepMan(knock, c.root, dt);
+    this.stepMan(chase, c.root, dt);
     // il frappe à la porte
     if (c.stage === 0.5 && knockAt) knock.mode = Math.floor(c.t * 2) % 3 === 0 ? 'fight' : 'idle';
     if (c.stage === 0.5 && knockAt && c.t > 4) {

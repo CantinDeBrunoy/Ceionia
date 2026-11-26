@@ -60,7 +60,7 @@ export class TourneyView implements ShowView {
   private rnd: () => number;
   private s: number;
 
-  constructor(private age: number, private rounds: (0 | 1)[], private kit: Kit, private ev: TourneyEvents = {}) {
+  constructor(private age: number, private rounds: (0 | 1)[], kit: Kit, private ev: TourneyEvents = {}) {
     let sd = (kit.seed >>> 0) || 17;
     this.rnd = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
     this.bout = arenaBout(age);

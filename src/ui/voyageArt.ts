@@ -18,7 +18,6 @@ const clamp = (t: number, a = 0, b = 1) => Math.min(b, Math.max(a, t));
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const mixc = (a: RGB, b: RGB, k: number): RGB => [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)];
 const css = (c: RGB, a = 1) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`;
-const hex = (n: number): RGB => [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 
 /** Un polygone plein (une facette) */
 function poly(c: CanvasRenderingContext2D, pts: number[][], fill: string | CanvasGradient) {

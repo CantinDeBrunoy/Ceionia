@@ -3,7 +3,7 @@ import { claimArrival } from './pens';
 import * as THREE from 'three';
 import { still, refresh } from './still';
 import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO, VEG_CAVE, VEG_FOREST } from '../world/world';
-import { KINDS, sizeOf } from '../build/catalog';
+import { sizeOf } from '../build/catalog';
 import { hash2, mulberry32, wrapAngle } from '../core/rng';
 import { Parts } from './parts';
 import { makeActor, releaseActor, play, hasModel, Actor, ModelName } from './assets';

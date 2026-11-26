@@ -42,7 +42,6 @@ export class RaceView implements ShowView {
   private runners: Runner[] = [];
   private starter: { f: Folk; x: number; z: number; heading: number; phase: number };
   private t = 0;
-  private k = 0;
   private trk: typeof TRACKS.big;
   private len: number[] = [];
   private tables: Float32Array[] = [];
@@ -54,7 +53,7 @@ export class RaceView implements ShowView {
   private rnd: () => number;
   private finished = 0;
 
-  constructor(private times: number[], big: boolean, private kit: Kit, private ev: RaceEvents = {}) {
+  constructor(times: number[], big: boolean, private kit: Kit, private ev: RaceEvents = {}) {
     let s = (kit.seed >>> 0) || 5;
     this.rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
     this.trk = big ? TRACKS.big : TRACKS.small;

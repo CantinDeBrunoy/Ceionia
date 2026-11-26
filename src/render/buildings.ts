@@ -161,7 +161,6 @@ export class BuildingView implements WorldListener {
   group = new THREE.Group();
   entries = new Map<number, Entry>();
   private evoTimer = 0;
-  private spinT = 0;
   private q = new THREE.Quaternion();
   onPlaced: ((b: Building) => void) | null = null;
   /** les bâtiments dessinés sans leurs personnages du milieu, le temps d'un spectacle (le tournoi de l'arène, voir shows.ts) */

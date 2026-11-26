@@ -12,7 +12,7 @@ import type { Rider } from './riders';
  * les dégâts restent ceux de l'unité
  */
 
-const BLUE = 0x3a6ab8, GOLD = 0xe8c66a, WHITE = 0xeef2f6, WHITE2 = 0xdde3ea, ANTHRA = 0x2e333b, ANTHRA2 = 0x464d58, CYAN = 0x5af0ff, VIOLET = 0xb070ff, RED = 0xff3a4a;
+const WHITE = 0xeef2f6, WHITE2 = 0xdde3ea, ANTHRA = 0x2e333b, ANTHRA2 = 0x464d58, CYAN = 0x5af0ff, VIOLET = 0xb070ff, RED = 0xff3a4a;
 /** hauteur du ventre du char au-dessus du sol (unités du modèle) */
 const HOVER = 0.075;
 

@@ -45,7 +45,6 @@ export class Streams {
   group = new THREE.Group();
   private lakeMesh: THREE.Mesh;
   private flowMesh: THREE.Mesh;
-  private paths: [number, number][][] = [];
   private sprays: Spray[] = [];
   /** points le long des torrents (x, z, raideur), pour le son de l'eau vive */
   private samples: number[] = [];
@@ -251,7 +250,7 @@ export class Streams {
       if (path) { geos.push(this.ribbon(path, sprays, samples)); paths.push(path); }
       if (si % 3 === 2) yield;
     }
-    this.sprays = sprays; this.samples = samples; this.paths = paths;
+    this.sprays = sprays; this.samples = samples;
     this.streamCells = new Set();
     // cases que le ruban traverse vraiment (près de leur centre) : une route qui y passe reçoit un pont (voir `crossings.ts`)
     const crossed = new Set<number>();

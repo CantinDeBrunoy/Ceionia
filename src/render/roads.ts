@@ -190,8 +190,6 @@ function rectSdf(rects: number[][]) {
  * quart de cercle, carrefours aux coins arrondis, bordures et trottoirs du côté des maisons, places pavées, passages
  * piétons, ligne médiane. Les ponts sont des ouvrages (tablier, rampes, piles, garde-corps)
  */
-/** Sommets d'une boîte (coins 0 à 7), deux triangles par face, dans l'ordre des faces */
-const BOX_TRIS = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 4, 7, 3], [1, 2, 6, 5], [3, 7, 6, 2], [0, 1, 5, 4]].flatMap((f) => [f[0], f[1], f[2], f[0], f[2], f[3]]);
 
 /** Couleurs des petits objets, par valeur hexadécimale (sans en recréer une à chaque objet posé) */
 const HEX_COLS = new Map<number, THREE.Color>();
@@ -990,11 +988,6 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
 
     // ponts et cailloux
     const sp: number[] = [], sc: number[] = [];
-    const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, cl: THREE.Color) => {
-      const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
-      noteDeck(cl, 36);
-      for (const i of BOX_TRIS) { const p = v[i]; sp.push(p[0], p[1], p[2]); sc.push(cl.r, cl.g, cl.b); }
-    };
     // tablier des ponts : teinte sans neige ; ses sommets sont notés pour que la neige s'y pose ensuite sans tout refaire
     const deck = DECK_COL[a].clone(), pile = age >= 5 ? new THREE.Color(0xe9eef2) : PILE_COL[a];
     if (age >= 5) deck.set(0xeef2f5);

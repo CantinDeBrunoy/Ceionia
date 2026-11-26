@@ -258,8 +258,6 @@ const pct = (r: number) => pctText(Math.round(r * 100));
 const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
 /** Les gains en pastilles d'icônes (la phrase complète en infobulle) */
 const chipsHtml = (effects: Parameters<typeof effectChips>[0]) => effectChips(effects).map((c) => `<span class="chip" title="${c.title}">${c.icon}${c.n ? ` ${c.n}` : ''}</span>`).join('') || `<span class="chip" title="${tr('rien')}">∅</span>`;
-/** Un danger en icône (le nom en infobulle) */
-const DANGER_ICON: Record<string, string> = { beast: '🐺', fall: '🧗', water: '🌊', dark: '🌑', weather: '⛈️', monster: '👹' };
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
 const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> = {
@@ -632,11 +630,6 @@ const GEAR_ART = new Set<GearId>([
   'spear', 'rope', 'torch', 'bow', 'boat', 'sword', 'crossbow', 'armor', 'kit', 'rifle', 'lamp', 'assault', 'grenade',
   'plasma', 'energyArmor', 'fieldShield', 'obsidianSpear', 'obsidianSword',
 ]);
-/** Icône au trait de la carte d'équipement : celles du pack de la maquette, sinon l'icône de la pièce */
-const GEAR_LINE: Partial<Record<GearId, string>> = {
-  rifle: 'eq-rifle', assault: 'eq-rifle', plasma: 'eq-plasma', rope: 'eq-rope', lamp: 'eq-lamp', boat: 'eq-boat', armor: 'eq-armor',
-  energyArmor: 'eq-energyArmor', fieldShield: 'eq-fieldShield',
-};
 /** Une pièce sans décor à `img` px, ou son icône au trait à `line` px si elle n'est pas encore illustrée */
 const gearPic = (g: Gear, img: number, line: number, stroke = 1.8) => GEAR_ART.has(g.id)
   ? `<img class="gpic" src="./icons/gear/${g.id}.webp" width="${img}" height="${img}" alt="" draggable="false" decoding="async">`

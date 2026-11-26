@@ -366,11 +366,9 @@ export class Salvage {
   private hose: THREE.Line | null = null;
   private pickW: THREE.Vector3[] = [];
   private kinds: LootKind[][];
-  private shown = 0;
   private prizeShown = false;
   private hookY = 0;
   private diverIn = false;
-  private diverSplash = 0;
   private hidden = false;
   private crew: number[];
   /** les sources de bulles (position, actif) : le plongeur, les écoutilles de l'épave, le crochet */
@@ -596,7 +594,6 @@ export class Salvage {
     this.prizeShown = loot.prize;
     this.prize.visible = loot.prize;
     for (const g of this.glints) if (g.m.parent === this.barge && g.base > 1) g.m.visible = loot.prize;
-    this.shown = loot.items;
     // ---- les étincelles d'or
     this.glints.forEach((g, i) => {
       const a = Math.abs(Math.sin(t * 2.6 + g.ph)), s = (0.25 + 0.95 * a * a * a) * g.base;

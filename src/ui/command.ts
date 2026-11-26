@@ -4,7 +4,7 @@ import type { BattleLayer } from '../render/battleUnits';
 import type { PointerInfo, ToolInput } from '../core/camera';
 import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGearMissing, gearToCraft, troopForm, troopName, troopLabel, gearName, andJoin } from '../sim/army';
 import type { GearId } from '../sim/gear';
-import { tr, plural, nplural, pct } from '../i18n';
+import { tr, plural, nplural } from '../i18n';
 import { clockText, waveForce, type War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
 import { INVASION_DELAY, INVASION_WAVES } from '../sim/hell';
@@ -14,7 +14,7 @@ import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } f
 import { planHellRecruit, orderHellRecruit, stepHellWaiting, shortWhy } from '../sim/recruitPlan';
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 import { nextGoal, goalLine, HellGoal, sealedWhy } from '../sim/objective';
-import { pic, withPic, hudPic } from './pics';
+import { pic, hudPic } from './pics';
 import { staffIcon } from './staffIcon';
 import { ic } from './icons';
 import { cardData } from './xcard';

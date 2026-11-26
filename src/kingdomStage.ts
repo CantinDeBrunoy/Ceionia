@@ -66,7 +66,6 @@ export class KingdomStage {
   private shakeK = 0;
   private drumT = 0;
   private beat = 0;
-  private phase = 0;
   private fin: Finale | null = null;
   private cine: { el: HTMLElement; veil: HTMLElement; cap: HTMLElement } | null = null;
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -135,7 +134,6 @@ export class KingdomStage {
       this.drumT -= dt;
       if (this.drumT <= 0) { this.drumT = f.phase === 2 ? 0.42 : 0.6; h.audio.sfxWarDrum(this.beat++ % 4 === 0); }
     } else this.beat = 0;
-    if (f) this.phase = f.phase;
     // la barre de vie : le roi réveillé, puis sa citadelle quand il est tombé
     let bar: Parameters<BossBar['set']>[0] = null;
     if (inHell && f && !this.fin) {

@@ -54,7 +54,7 @@ export class RiteView implements ShowView {
   /** ce qui se tient devant le parvis, posé sur le terrain (il peut monter devant le temple, posé plus bas) */
   private front = new THREE.Group();
 
-  constructor(private age: number, seed: number, private ev: RiteEvents = {}, ground: (x: number, z: number) => number = () => 0) {
+  constructor(age: number, seed: number, private ev: RiteEvents = {}, ground: (x: number, z: number) => number = () => 0) {
     let s = (seed >>> 0) || 11;
     this.rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
     this.group.add(this.front);
