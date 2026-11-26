@@ -232,7 +232,8 @@ registerDict('war', {
 
   // ---- murs (palissade, porte) ----
   'Trop long : {n} pans au plus d’un coup (cliquez plus près, puis prolongez).': 'Too long: {n} pieces at most in one go (click closer, then extend).',
-  'Pas de passage : lave, paroi, bâtiment ou limite du camp barrent le mur.': 'No way through: lava, rock wall, buildings or the camp limit block the wall.',
+  'Pas de mur sur un pont : fermez de part et d’autre.': 'No wall on a bridge: close it off on either side.',
+  ', avec une porte pour vos troupes': ', with a gate for your troops',
   'Il y a déjà un pan ici.': 'There is already a wall piece here.',
   '{n} pans de {name} posés': '{n} {name} pieces built',
   '{name} : c’est posé': '{name}: built',

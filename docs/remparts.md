@@ -38,7 +38,7 @@ Un rempart est fait de bâtiments de taille 1 : le pan de mur (`wall`) et la por
 - Placement : [placement-construction.md](placement-construction.md) (`canPlace`, verrou, annuler).
 - Routes : le mur saute les routes, la porte les enjambe ; la rue sous une porte est dessinée droite (`RoadView.gated`), [routes.md](routes.md).
 - Île du portail : tour, caserne, mur et porte sont des `DEFENSES` ; elles se posent aussi sur l'île, [portail-ile.md](portail-ile.md).
-- Enfers : la base avancée a ses palissades et sa porte (`BaseKind` `palisade`, `gate` dans `sim/hellBase.ts`) ; `wallLine` est commun, le reste est distinct, [enfers.md](enfers.md).
+- Enfers : la base avancée a ses palissades et sa porte (`BaseKind` `palisade`, `gate` dans `sim/hellBase.ts`) ; `wallLine` est commun, le reste est distinct (le tracé y saute paroi, lave et bâtiments, s'accroche à la paroi, reçoit une porte s'il ferme le passage), [enfers.md](enfers.md).
 - Sécurité : la tour de garde compte comme un poste de police ; les remparts n'apportent aucun besoin (ni logement, ni travail).
 - Modèles : [rendu-modeles.md](rendu-modeles.md) (les défenses futuristes sont dessinées aussi dans `futureModel`).
 

@@ -16,6 +16,7 @@ import { KingFx } from './kingFx';
 import { RuinSmoke } from './isleRuins';
 import { siteParts } from './hellSites';
 import { HellDecor } from './hellDecor';
+import { DecorSweep } from './decorSweep';
 import { HellCritters } from './hellCritters';
 
 /**
@@ -70,6 +71,8 @@ export class HellView {
   private wallGeos = new Map<string, THREE.BufferGeometry>();
   private gateParts: ReturnType<typeof gateGeo> | null = null;
   private ghostLines = new THREE.Group();
+  /** les bouts de mur qui entrent dans la paroi (ou la lave) : la roche dessinée est en retrait de sa case, le mur va la toucher */
+  private anchors = new THREE.Group();
   private ghostLineKey = '';
   /** la fumée des ruines */
   private smoke = new RuinSmoke(0x2a2228);
@@ -104,8 +107,12 @@ export class HellView {
   /** le décor vivant (végétation infernale, torches, cages, cascades de lave, fumerolles, cendre) et les petites bêtes */
   private decor: HellDecor | null = null;
   private critters: HellCritters | null = null;
+  /** le décor au sol que la base rase (cristaux, rochers…), case par case ; `sweptV` : la version de la carte déjà rasée */
+  readonly sweep: DecorSweep;
+  private sweptV = -1;
 
   constructor(readonly map: HellMap, public hell: Hell) {
+    this.sweep = new DecorSweep(map.W);
     this.scene.background = BG.clone();
     this.scene.fog = this.fog;
     // lumière chaude d'en bas (la lave), violette d'en haut : les reliefs se lisent sans rien de noir
@@ -130,7 +137,7 @@ export class HellView {
     this.buildPools();
     this.buildBridges();
     this.buildDecor();
-    this.decor = new HellDecor(this.map, this.uTime, WALL);
+    this.decor = new HellDecor(this.map, this.uTime, WALL, this.sweep);
     this.content.add(this.decor.group);
     this.sources.push(...this.decor.sources);
     this.critters = new HellCritters(this.map, this.uTime);
@@ -349,15 +356,15 @@ export class HellView {
       ribs.push({ m: this.d.matrix.clone(), c: new THREE.Color(0xf2e8d2) });
     }
     const lit = (key: string) => caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, flatShading: true }), key);
-    this.instanced(stalagGeo(), lit('hell-stalag'), stal);
+    this.instanced(stalagGeo(), lit('hell-stalag'), stal, true);
     this.instanced(stalagGeo(), lit('hell-stalag'), spikes);
     this.instanced(stalagGeo().rotateX(Math.PI), lit('hell-stalag'), hang);
-    this.instanced(paint(new THREE.BoxGeometry(1, 1, 1), 0xffffff), new THREE.MeshBasicMaterial({ vertexColors: true }), cracks);
-    this.instanced(boneGeo(), lit('hell-bone'), bones);
+    this.instanced(paint(new THREE.BoxGeometry(1, 1, 1), 0xffffff), new THREE.MeshBasicMaterial({ vertexColors: true }), cracks, true);
+    this.instanced(boneGeo(), lit('hell-bone'), bones, true);
     this.instanced(ribGeo(), lit('hell-bone'), ribs);
-    this.instanced(paint(new THREE.OctahedronGeometry(0.5, 0).scale(1, 1, 1).translate(0, 0.45, 0), 0xffffff), glowMaterial(0.55, 'hell-crystal', { transparent: true, opacity: 0.92 }), crystals);
-    this.instanced(paint(new THREE.ConeGeometry(1, 1, 5, 1).translate(0, 0.5, 0), 0xffffff, (y) => 0.8 + y * 0.6), lit('hell-spire'), spires);
-    this.instanced(paint(new THREE.IcosahedronGeometry(1, 0).translate(0, 0.4, 0), 0xffffff, (y) => 0.75 + y * 0.35), lit('hell-rock'), rocks);
+    this.instanced(paint(new THREE.OctahedronGeometry(0.5, 0).scale(1, 1, 1).translate(0, 0.45, 0), 0xffffff), glowMaterial(0.55, 'hell-crystal', { transparent: true, opacity: 0.92 }), crystals, true);
+    this.instanced(paint(new THREE.ConeGeometry(1, 1, 5, 1).translate(0, 0.5, 0), 0xffffff, (y) => 0.8 + y * 0.6), lit('hell-spire'), spires, true);
+    this.instanced(paint(new THREE.IcosahedronGeometry(1, 0).translate(0, 0.4, 0), 0xffffff, (y) => 0.75 + y * 0.35), lit('hell-rock'), rocks, true);
   }
 
   /** Braises qui montent de la lave et des fissures, en tourbillonnant (animées dans le shader : rien à refaire par image) */
@@ -540,9 +547,38 @@ export class HellView {
     return g;
   }
 
-  /** Côtés reliés d'une case de mur, selon les cases voisines qui en portent un (`has`) */
+  /**
+   * Côtés reliés d'une case de mur, selon les cases voisines qui en portent un (`has`), ou qui ferment d'elles-mêmes (paroi,
+   * lave) dans le prolongement du mur
+   */
   private wallMask(cx: number, cz: number, has: (x: number, z: number) => boolean) {
-    return (has(cx, cz - 1) ? WALL_N : 0) | (has(cx + 1, cz) ? WALL_E : 0) | (has(cx, cz + 1) ? WALL_S : 0) | (has(cx - 1, cz) ? WALL_W : 0);
+    const on = (dx: number, dz: number) => has(cx + dx, cz + dz) || this.tipAt(cx, cz, dx, dz, has);
+    return (on(0, -1) ? WALL_N : 0) | (on(1, 0) ? WALL_E : 0) | (on(0, 1) ? WALL_S : 0) | (on(-1, 0) ? WALL_W : 0);
+  }
+  /** Le mur de cette case continue dans la roche de ce côté : la roche y touche, et un pan voisin est de l'autre côté */
+  private tipAt(cx: number, cz: number, dx: number, dz: number, has: (x: number, z: number) => boolean) {
+    return this.rockAt(cx + dx, cz + dz) && has(cx - dx, cz - dz);
+  }
+  /** Une case de paroi ou de lave (sans pont) : un mur qui la touche s'y prolonge */
+  private rockAt(x: number, z: number) {
+    const m = this.map;
+    if (!m.inside(x, z)) return true;
+    const k = z * m.W + x;
+    return !m.open[k] || (!!m.pool[k] && !m.bridge[k]);
+  }
+  /**
+   * Les bouts de mur dans la roche : pour chaque case de `cells` qui touche une paroi ou la lave, un demi-pan et un poteau dans
+   * la case voisine, à la hauteur du mur (la roche dessinée s'arrête avant le bord de sa case : sans eux, un trou semblait rester)
+   */
+  private anchorsOf(group: THREE.Group, cells: { x: number; z: number; mat: THREE.Material }[], has: (x: number, z: number) => boolean, age = baseAgeOf(this.age)) {
+    for (const c of [...group.children]) group.remove(c);
+    for (const { x, z, mat } of cells) for (const [dx, dz, bit] of [[0, -1, WALL_S], [1, 0, WALL_W], [0, 1, WALL_N], [-1, 0, WALL_E]] as const) {
+      if (!this.tipAt(x, z, dx, dz, has)) continue;
+      const m = new THREE.Mesh(this.wallShape('palisade', bit, age), mat);
+      m.position.set(x + dx + 0.5, this.map.groundY(x + 0.5, z + 0.5), z + dz + 0.5);
+      m.renderOrder = group.renderOrder;
+      group.add(m);
+    }
   }
   private wallCells() {
     const cells = new Set<string>();
@@ -556,6 +592,9 @@ export class HellView {
     if (this.wallV === this.map.version && this.wallAge === age) return;
     this.wallV = this.map.version; this.wallAge = age;
     const cells = this.wallCells(), has = (x: number, z: number) => cells.has(`${x},${z}`);
+    if (!this.anchors.parent) this.content.add(this.anchors);
+    const lit = this.mats().lit;
+    this.anchorsOf(this.anchors, [...cells].map((k) => { const [x, z] = k.split(',').map(Number); return { x, z, mat: lit }; }), has, age);
     for (const [id, h] of this.houses) {
       const w = h.wall, b = this.hell.buildings.get(id);
       if (!w || !b) continue;
@@ -585,19 +624,27 @@ export class HellView {
   }
 
   /** Aperçu d'une ligne de murs à poser : chaque case raccordée à sa voisine, verte (posable) ou rouge */
-  private showLine(kind: 'palisade' | 'gate', line: { x: number; z: number; ok: boolean; gate?: boolean }[]) {
+  private showLine(kind: 'palisade' | 'gate', line: { x: number; z: number; ok: boolean; gate?: boolean; dim?: boolean }[]) {
     if (!this.ghostLines.parent) { this.ghostLines.renderOrder = 8; this.content.add(this.ghostLines); }
-    const age = baseAgeOf(this.age), key = `${kind}|${age}|${this.map.version}|${line.map((c) => `${Math.floor(c.x)},${Math.floor(c.z)}${c.ok ? 1 : 0}${c.gate ? 'g' : ''}`).join(';')}`;
+    const age = baseAgeOf(this.age), key = `${kind}|${age}|${this.map.version}|${line.map((c) => `${Math.floor(c.x)},${Math.floor(c.z)}${c.ok ? 1 : 0}${c.gate ? 'g' : ''}${c.dim ? 'd' : ''}`).join(';')}`;
     this.ghostLines.visible = true;
     if (key === this.ghostLineKey) return;
     this.ghostLineKey = key;
     for (const c of [...this.ghostLines.children]) this.ghostLines.remove(c);
-    const mats = (this.ghostMats ??= [0x7dff8a, 0xff5a4a].map((color) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false, fog: false })));
+    // vert : posé ; rouge vif : la case qui refuse ; rouge sombre : le reste d'un tracé refusé
+    const mats = (this.ghostMats ??= ([[0x7dff8a, 0.5], [0xff3a2a, 0.75], [0x8a3a3a, 0.35]] as const).map(([color, opacity]) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, fog: false })));
+    // le décor des cases où le mur va se poser s'efface déjà : l'aperçu montre le mur tel qu'il sera
+    this.sweep.peek(line.filter((c) => c.ok).map((c) => Math.floor(c.z) * this.map.W + Math.floor(c.x)));
     const cells = this.wallCells();
     for (const c of line) cells.add(`${Math.floor(c.x)},${Math.floor(c.z)}`);
     const has = (x: number, z: number) => cells.has(`${x},${z}`);
+    // (les bouts qui entrent dans la paroi, à part : un groupe dans le groupe)
+    const tips = new THREE.Group();
+    tips.renderOrder = 8;
+    this.anchorsOf(tips, line.map((c) => ({ x: Math.floor(c.x), z: Math.floor(c.z), mat: mats[c.ok ? 0 : c.dim ? 2 : 1] })), has, age);
+    this.ghostLines.add(tips);
     for (const c of line) {
-      const cx = Math.floor(c.x), cz = Math.floor(c.z), m = new THREE.Mesh(this.wallShape(c.gate ? 'gate' : kind, this.wallMask(cx, cz, has), age), mats[c.ok ? 0 : 1]);
+      const cx = Math.floor(c.x), cz = Math.floor(c.z), m = new THREE.Mesh(this.wallShape(c.gate ? 'gate' : kind, this.wallMask(cx, cz, has), age), mats[c.ok ? 0 : c.dim ? 2 : 1]);
       m.position.set(cx + 0.5, this.map.groundY(cx + 0.5, cz + 0.5) + 0.02, cz + 0.5);
       m.renderOrder = 8;
       this.ghostLines.add(m);
@@ -692,6 +739,13 @@ export class HellView {
       this.baseSources.delete(id);
     }
     this.refreshWalls();
+    // le décor sous les bâtiments posés disparaît (cristaux, rochers, ronces : comme la végétation rasée au village)
+    if (this.sweptV !== this.map.version) {
+      this.sweptV = this.map.version;
+      const m = this.map, cells: number[] = [];
+      for (let k = 0; k < m.block.length; k++) if (m.block[k] || m.gate[k]) cells.push(k);
+      this.sweep.clear(cells);
+    }
     // la brume recule autour des braseros debout (les plus proches de la vue)
     const braziers = [...this.hell.buildings.values()].filter((b) => b.kind === 'brazier' && !b.down);
     this.uClear.value.forEach((v, i) => { const b = braziers[i]; v.set(b ? b.site.x : 0, b ? b.site.z : 0, b ? 4.5 : 0); });
@@ -701,11 +755,11 @@ export class HellView {
    * Le fantôme d'un bâtiment à poser, sous le curseur (vert : on peut ; rouge : non), et le cercle où la base peut s'étendre
    * autour de son camp ; `kind` null : rien
    */
-  ghost(kind: BaseKind | null, x = 0, z = 0, ok = false, camp: [number, number] | null = null, line?: { x: number; z: number; ok: boolean; gate?: boolean }[]) {
+  ghost(kind: BaseKind | null, x = 0, z = 0, ok = false, camp: [number, number] | null = null, line?: { x: number; z: number; ok: boolean; gate?: boolean; dim?: boolean }[]) {
     // un mur (palissade, porte) : une ligne de cases raccordées plutôt qu'un seul fantôme
     const wallLine = !!kind && !!line?.length && (kind === 'palisade' || kind === 'gate');
     if (wallLine) this.showLine(kind as 'palisade' | 'gate', line!);
-    else if (this.ghostLines.visible) { this.ghostLines.visible = false; this.ghostLineKey = ''; }
+    else if (this.ghostLines.visible) { this.ghostLines.visible = false; this.ghostLineKey = ''; this.sweep.peek([]); }
     if (wallLine) kind = null;
     if (kind !== this.ghostKind || (kind && this.ghostAge !== baseAgeOf(this.age))) {
       this.ghostAge = baseAgeOf(this.age);
@@ -938,12 +992,14 @@ export class HellView {
     return { m: this.d.matrix.clone(), c: c.clone() };
   }
 
-  private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, items: Item[]) {
+  /** `ground` : du décor au sol, que la base rase (voir `DecorSweep`) */
+  private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, items: Item[], ground = false) {
     if (!items.length) return;
     const mesh = new THREE.InstancedMesh(geo, mat, items.length);
     items.forEach((it, i) => { mesh.setMatrixAt(i, it.m); mesh.setColorAt(i, it.c); });
     mesh.computeBoundingSphere();
     this.content.add(mesh);
+    if (ground) this.sweep.add(mesh);
   }
 }
 

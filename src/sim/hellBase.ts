@@ -36,6 +36,10 @@ export const isBaseKind = (k: unknown): k is BaseKind => typeof k === 'string' &
 
 /** Les bâtiments d'une base tiennent à BASE_R cases au plus de son camp ; soins et forge agissent à CARE_R cases d'eux */
 export const BASE_R = 14, CARE_R = 9;
+/** Un mur peut enfermer jusqu'à ce nombre de cases contre la paroi (un recoin) sans être refusé pour le passage */
+export const POCKET = 6;
+/** Options de la pose : `path` faux, sans vérifier le passage (la ligne le vérifie d'un coup) ; `lone`, une porte sans pan voisin */
+export interface BuildOpt { path?: boolean; lone?: boolean }
 /** Un camp de base se pose à CAMP_MARGIN rangées au moins de la zone suivante, si elle est encore aux démons */
 export const CAMP_MARGIN = 6;
 /** Soins par seconde (points de vie) près du camp et de l'infirmerie */
@@ -185,7 +189,7 @@ export class HellBase {
   posts() { return this.countOf('post'); }
 
   /** Ce qu'il manque pour bâtir ici (null : on peut) ; `x`, `z` ramenés au centre de la case */
-  canBuild(kind: BaseKind, x: number, z: number, purse?: Purse, planned = 0): string | null {
+  canBuild(kind: BaseKind, x: number, z: number, purse?: Purse, planned = 0, opt: BuildOpt = {}): string | null {
     const d = BASE_DEFS[kind], h = this.hell, m = this.map;
     const cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5, zone = zoneOfZ(Math.floor(cz));
     if (!m.inside(cx, cz)) return tr('Hors de la carte');
@@ -205,12 +209,12 @@ export class HellBase {
     for (const k of cells) if (m.gate[k]) return tr('Il y a déjà une porte ici.');
     // une porte se pose sur un pan de palissade (elle le remplace), ou dans son prolongement
     const wall = kind === 'gate' ? this.wallAt(cx, cz) : null;
-    if (kind === 'gate' && !wall && !this.wallNear(cx, cz)) return tr('Une porte se pose sur une palissade, ou à son bout.');
+    if (kind === 'gate' && !wall && !opt.lone && !this.wallNear(cx, cz)) return tr('Une porte se pose sur une palissade, ou à son bout.');
     for (const k of cells) if (!wall && (!m.walkable(k % m.W, Math.floor(k / m.W)) || m.bridge[k])) return tr('Il faut un sol libre (ni lave, ni pont, ni paroi, ni bâtiment).');
     // les troupes au combat ne se laissent pas emmurer : il faut une place libre (une porte laisse passer les nôtres)
     for (const u of h.alive()) if ((kind !== 'gate' || u.side === 'hell') && Math.hypot(u.x - cx, u.z - cz) < d.r + u.stats.radius - 0.1 && cells.includes(m.cell(u.x, u.z))) return tr('Des troupes se tiennent là : choisissez une place libre.');
     if (purse && !canAfford(purse, d.cost)) return tr('Il faut {cost}.', { cost: costText(d.cost) });
-    if (kind !== 'gate' && !this.keepsPath(cells)) return tr('Laissez un passage : ce bâtiment fermerait le chemin.');
+    if (kind !== 'gate' && opt.path !== false && !this.keepsPath(cells)) return tr('Laissez un passage : ce bâtiment fermerait le chemin.');
     return null;
   }
 
@@ -250,27 +254,78 @@ export class HellBase {
   }
 
   /**
-   * Pose en ligne (palissade glissée) : pour chaque case, la raison du refus (null : on peut) ; ce que cela coûte ; les cases
-   * se comptent l'une après l'autre (argent, nombre permis, passage laissé libre), comme à la pose
+   * Ce qu'est une case pour un mur tracé : `ok` (un pan s'y pose), `wall` (un pan ou une porte y tient déjà), `seal` (la paroi,
+   * la lave, un bâtiment : elle ferme d'elle-même, le tracé la saute sans laisser de trou), ou la raison qui l'interdit
    */
-  planLine(kind: BaseKind, cells: [number, number][], purse?: Purse): { why: (string | null)[]; cost: BaseCost; n: number } {
-    const d = BASE_DEFS[kind], m = this.map, cost: BaseCost = { wood: 0, stone: 0, ore: 0 }, why: (string | null)[] = [], blocked: number[] = [];
-    let n = 0;
+  wallCell(x: number, z: number): 'ok' | 'wall' | 'seal' | string {
+    const m = this.map, h = this.hell, cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5;
+    if (!m.inside(cx, cz)) return 'seal';
+    const k = m.cell(cx, cz);
+    if (m.gate[k] || this.wallAt(cx, cz)) return 'wall';
+    if (!m.walkable(Math.floor(cx), Math.floor(cz))) return 'seal';
+    if (m.bridge[k]) return tr('Pas de mur sur un pont : fermez de part et d’autre.');
+    const zone = zoneOfZ(Math.floor(cz)), camp = this.camp(zone);
+    if (zone > h.frontier) return tr('La brume barre {zone} : conquérez d’abord la zone d’avant.', { zone: zoneThe(zone) });
+    if (!h.held(zone)) return tr('Il faut d’abord conquérir {zone} : abattez sa forteresse.', { zone: zoneThe(zone) });
+    if (!camp) return tr('Posez d’abord un camp de base dans cette zone.');
+    if (Math.hypot(camp.site.x - cx, camp.site.z - cz) > BASE_R) return tr('Trop loin du camp de base ({n} cases au plus).', { n: BASE_R });
+    if (Math.hypot(m.portal[0] - cx, m.portal[1] - cz) < 3.2) return tr('Trop près du portail : laissez le passage.');
+    return 'ok';
+  }
+  /** Cette case touche par un côté ce qui ferme de soi-même (paroi, lave, bâtiment, mur) : un mur qui s'y arrête ne laisse pas de trou */
+  sealed(x: number, z: number) {
+    const ix = Math.floor(x), iz = Math.floor(z), m = this.map;
+    return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => !m.walkable(ix + dx, iz + dz) || !!m.gate[(iz + dz) * m.W + ix + dx]);
+  }
+
+  /**
+   * Pose en ligne (palissade glissée) : pour chaque case, la raison du refus (null : on peut) ; ce que cela coûte ; les cases
+   * se comptent l'une après l'autre (argent, nombre permis), comme à la pose. Un mur qui fermerait tout le passage reçoit une
+   * porte (`gate` : son rang ; la case la plus proche du chemin) : les nôtres passent, les démons non. `gateAt` : la porte
+   * voulue (touche G, au bout du tracé)
+   */
+  planLine(kind: BaseKind, cells: [number, number][], purse?: Purse, gateAt = -1): { why: (string | null)[]; cost: BaseCost; n: number; gate: number } {
+    const d = BASE_DEFS[kind], m = this.map, G = BASE_DEFS.gate, cost: BaseCost = { wood: 0, stone: 0, ore: 0 }, why: (string | null)[] = [], taken: number[] = [];
+    const add = (c: BaseCost, s = 1) => { cost.wood += c.wood * s; cost.stone += c.stone * s; cost.ore += c.ore * s; };
+    const plus = (a: BaseCost, b: BaseCost, s = 1): BaseCost => ({ wood: a.wood + b.wood * s, stone: a.stone + b.stone * s, ore: a.ore + b.ore * s });
+    let n = 0, gates = 0;
+    cells.forEach(([x, z], i) => {
+      const gate = i === gateAt, k: BaseKind = gate ? 'gate' : kind, dk = BASE_DEFS[k];
+      let r = !gate && this.sameWall(kind, x, z) ? tr('Il y a déjà un pan ici.') : this.canBuild(k, x, z, undefined, gate ? gates : n, { path: false, lone: gate });
+      if (!r && purse && !canAfford(purse, plus(cost, dk.cost))) r = tr('Il faut {cost}.', { cost: costText(plus(cost, dk.cost)) });
+      why.push(r);
+      if (r) return;
+      taken.push(i); add(dk.cost);
+      if (gate) gates++; else n++;
+    });
+    const gateOk = () => (gateAt >= 0 && why[gateAt] === null ? gateAt : -1);
+    if (kind === 'gate') return { why, cost, n, gate: -1 };
+    const foot = (i: number) => m.footprintCells({ x: Math.floor(cells[i][0]) + 0.5, z: Math.floor(cells[i][1]) + 0.5, r: d.r });
+    const walls = taken.filter((i) => i !== gateAt);
+    if (!walls.length || this.keepsPath(walls.flatMap(foot))) return { why, cost, n, gate: gateOk() };
+    // le mur ferme le passage : une porte sur la case la plus proche du chemin, si elle le rouvre
+    if (gateAt < 0) {
+      const off = (i: number) => Math.abs(cells[i][0] - m.spine[Math.min(m.L - 1, Math.max(0, Math.floor(cells[i][1])))] - 0.5);
+      for (const g of [...walls].sort((a, b) => off(a) - off(b))) {
+        const [x, z] = cells[g];
+        if (this.canBuild('gate', x, z, undefined, 0, { path: false, lone: true })) continue;
+        if (purse && !canAfford(purse, plus(plus(cost, d.cost, -1), G.cost))) continue;
+        if (!this.keepsPath(walls.filter((i) => i !== g).flatMap(foot))) continue;
+        add(d.cost, -1); add(G.cost); n--;
+        return { why, cost, n, gate: g };
+      }
+    }
+    // sinon, comme avant : les cases qui fermeraient le passage sont refusées, une à une
+    const blocked: number[] = [];
     try {
-      for (const [x, z] of cells) {
-        const sum: BaseCost = { wood: cost.wood + d.cost.wood, stone: cost.stone + d.cost.stone, ore: cost.ore + d.cost.ore };
-        let r = this.sameWall(kind, x, z) ? tr('Il y a déjà un pan ici.') : this.canBuild(kind, x, z, undefined, n);
-        if (!r && purse && !canAfford(purse, sum)) r = tr('Il faut {cost}.', { cost: costText(sum) });
-        why.push(r);
-        if (r) continue;
-        n++; cost.wood = sum.wood; cost.stone = sum.stone; cost.ore = sum.ore;
-        // (la case compte comme prise pour la suivante : le passage doit rester libre)
-        if (kind !== 'gate') for (const k of m.footprintCells({ x: Math.floor(x) + 0.5, z: Math.floor(z) + 0.5, r: d.r })) { blocked.push(k, m.block[k]); m.block[k] = 1; }
-        // (l'accessibilité de la carte est à refaire avec cette case prise)
+      for (const i of walls) {
+        const f = foot(i);
+        if (!this.keepsPath(f)) { why[i] = tr('Laissez un passage : ce bâtiment fermerait le chemin.'); n--; add(d.cost, -1); continue; }
+        for (const k of f) { blocked.push(k, m.block[k]); m.block[k] = 1; }
         this.reach.v = -1;
       }
     } finally { for (let i = blocked.length - 2; i >= 0; i -= 2) m.block[blocked[i]] = blocked[i + 1]; this.reach.v = -1; }
-    return { why, cost, n };
+    return { why, cost, n, gate: gateOk() };
   }
   /** Un pan de palissade tient déjà dans cette case (on ne le repose pas) */
   private sameWall(kind: BaseKind, x: number, z: number) {
@@ -278,16 +333,24 @@ export class HellBase {
     return kind === 'palisade' && (!!this.wallAt(cx, cz) || !!this.gateAt(cx, cz));
   }
 
-  /** Bâtit une ligne (payée par `purse`) : combien de cases posées, et la première raison de refus rencontrée */
-  buildLine(kind: BaseKind, cells: [number, number][], purse?: Purse): { built: number; why: string | null } {
-    let built = 0, why: string | null = null;
-    for (const [x, z] of cells) {
-      if (this.sameWall(kind, x, z)) continue;
+  /**
+   * Bâtit une ligne (payée par `purse`), comme l'a prévue `planLine` (porte comprise) : combien de cases posées, la première
+   * raison de refus rencontrée, et si une porte s'y est ouverte
+   */
+  buildLine(kind: BaseKind, cells: [number, number][], purse?: Purse, gateAt = -1): { built: number; why: string | null; gate: boolean } {
+    const plan = this.planLine(kind, cells, purse, gateAt), same = tr('Il y a déjà un pan ici.');
+    let built = 0, why: string | null = null, gate = false;
+    cells.forEach(([x, z], i) => {
+      if (plan.why[i] !== null) { if (plan.why[i] !== same) why ??= plan.why[i]; return; }
+      if (i === plan.gate) return;
       const r = this.build(kind, x, z, purse);
-      if (typeof r === 'string') { why ??= r; if (purse && !canAfford(purse, BASE_DEFS[kind].cost)) break; continue; }
-      built++;
+      if (typeof r === 'string') why ??= r; else built++;
+    });
+    if (plan.gate >= 0) {
+      const [x, z] = cells[plan.gate], r = this.build('gate', x, z, purse, { lone: true });
+      if (typeof r === 'string') why ??= r; else { built++; gate = true; }
     }
-    return { built, why };
+    return { built, why, gate };
   }
 
   /** La carte reste d'un seul tenant (depuis le portail) si l'on bouche ces cases */
@@ -299,12 +362,12 @@ export class HellBase {
     for (const k of cells) m.block[k] = 1;
     const n = count();
     cells.forEach((k, i) => (m.block[k] = saved[i]));
-    return n >= this.reach.n - cells.length;
+    return n >= this.reach.n - cells.length - POCKET;
   }
 
   /** Bâtit (payé par `purse`) : renvoie le bâtiment, ou la raison du refus */
-  build(kind: BaseKind, x: number, z: number, purse?: Purse): HellBuilding | string {
-    const why = this.canBuild(kind, x, z, purse);
+  build(kind: BaseKind, x: number, z: number, purse?: Purse, opt: BuildOpt = {}): HellBuilding | string {
+    const why = this.canBuild(kind, x, z, purse, 0, opt);
     if (why) return why;
     if (purse) pay(purse, BASE_DEFS[kind].cost);
     return this.place(kind, Math.floor(x) + 0.5, Math.floor(z) + 0.5);

@@ -4,6 +4,7 @@ import { caveLit, glowMaterial } from './caveLight';
 import { paint, merge } from './battleUnits';
 import { hash2 } from '../core/rng';
 import type { CombatFx } from './combatFx';
+import type { DecorSweep } from './decorSweep';
 
 /**
  * Le décor vivant des Enfers, en plus du relief et des grandes pièces de `HellView` : la « végétation » infernale (arbres
@@ -31,7 +32,7 @@ export class HellDecor {
   sources: DecorSource[] = [];
   private vents: Vent[] = [];
 
-  constructor(readonly map: HellMap, private uTime: { value: number }, wall: THREE.Color[]) {
+  constructor(readonly map: HellMap, private uTime: { value: number }, wall: THREE.Color[], private sweep?: DecorSweep) {
     this.build(wall);
   }
 
@@ -149,25 +150,25 @@ export class HellDecor {
 
     const lit = (key: string) => caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, flatShading: true }), key);
     const glow = (key: string, k = 0.9) => glowMaterial(k, key);
-    this.instanced(deadTreeGeo(), lit('hell-tree'), trees);
-    this.instanced(thornGeo(), lit('hell-thorn'), thorns);
-    this.instanced(flowerGeo(), glow('hell-flower', 0.8), flowers);
-    this.instanced(shroomStemGeo(), lit('hell-shroom'), shrooms);
-    this.instanced(shroomCapGeo(), glow('hell-cap', 0.9), caps);
-    this.instanced(paint(new THREE.IcosahedronGeometry(1, 0), 0xffffff, (t) => 0.75 + t * 0.35), lit('hell-pebble'), pebbles);
-    this.instanced(skullGeo(), lit('hell-bone'), skulls);
-    this.instanced(cageGeo(), lit('hell-iron'), cages);
-    this.instanced(chainGeo(), lit('hell-iron'), chains);
-    this.instanced(pikeGeo(), lit('hell-pike'), pikes);
-    this.instanced(torchGeo(), lit('hell-pike'), poles);
-    this.instanced(merge([paint(new THREE.ConeGeometry(0.11, 0.34, 5).translate(0, 0.17, 0), 0xffffff, (t) => 1.1 - t * 0.3), paint(new THREE.ConeGeometry(0.06, 0.2, 4).translate(0.02, 0.1, 0), 0xffe890)]), torchFlame(this.uTime), flames);
-    this.instanced(obeliskGeo(), lit('hell-obelisk'), obelisks);
-    this.instanced(runeGeo(), new THREE.MeshBasicMaterial({ vertexColors: true }), runes);
-    this.instanced(giantSkullGeo(), lit('hell-bone'), giants);
-    this.instanced(paint(new THREE.OctahedronGeometry(1, 0).translate(0, 0.7, 0), 0xffffff), glowMaterial(0.6, 'hell-crystal', { transparent: true, opacity: 0.9 }), bigCryst);
-    this.instanced(pillarGeo(), lit('hell-pillar'), pillars);
-    this.instanced(ventGeo(), lit('hell-vent'), vents);
-    this.instanced(paint(new THREE.CylinderGeometry(0.1, 0.06, 0.04, 6).translate(0, 0.2, 0), 0xffffff), new THREE.MeshBasicMaterial({ vertexColors: true }), ventGlow);
+    this.instanced(deadTreeGeo(), lit('hell-tree'), trees, true);
+    this.instanced(thornGeo(), lit('hell-thorn'), thorns, true);
+    this.instanced(flowerGeo(), glow('hell-flower', 0.8), flowers, true);
+    this.instanced(shroomStemGeo(), lit('hell-shroom'), shrooms, true);
+    this.instanced(shroomCapGeo(), glow('hell-cap', 0.9), caps, true);
+    this.instanced(paint(new THREE.IcosahedronGeometry(1, 0), 0xffffff, (t) => 0.75 + t * 0.35), lit('hell-pebble'), pebbles, true);
+    this.instanced(skullGeo(), lit('hell-bone'), skulls, true);
+    this.instanced(cageGeo(), lit('hell-iron'), cages, true);
+    this.instanced(chainGeo(), lit('hell-iron'), chains, true);
+    this.instanced(pikeGeo(), lit('hell-pike'), pikes, true);
+    this.instanced(torchGeo(), lit('hell-pike'), poles, true);
+    this.instanced(merge([paint(new THREE.ConeGeometry(0.11, 0.34, 5).translate(0, 0.17, 0), 0xffffff, (t) => 1.1 - t * 0.3), paint(new THREE.ConeGeometry(0.06, 0.2, 4).translate(0.02, 0.1, 0), 0xffe890)]), torchFlame(this.uTime), flames, true);
+    this.instanced(obeliskGeo(), lit('hell-obelisk'), obelisks, true);
+    this.instanced(runeGeo(), new THREE.MeshBasicMaterial({ vertexColors: true }), runes, true);
+    this.instanced(giantSkullGeo(), lit('hell-bone'), giants, true);
+    this.instanced(paint(new THREE.OctahedronGeometry(1, 0).translate(0, 0.7, 0), 0xffffff), glowMaterial(0.6, 'hell-crystal', { transparent: true, opacity: 0.9 }), bigCryst, true, 0.45);
+    this.instanced(pillarGeo(), lit('hell-pillar'), pillars, true);
+    this.instanced(ventGeo(), lit('hell-vent'), vents, true);
+    this.instanced(paint(new THREE.CylinderGeometry(0.1, 0.06, 0.04, 6).translate(0, 0.2, 0), 0xffffff), new THREE.MeshBasicMaterial({ vertexColors: true }), ventGlow, true);
     this.buildFalls();
     this.buildAsh();
   }
@@ -248,12 +249,14 @@ export class HellDecor {
     this.group.add(pts);
   }
 
-  private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, items: Item[]) {
+  /** `ground` : posé au sol, la base le rase (voir `DecorSweep`), à `pad` cases de débord */
+  private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, items: Item[], ground = false, pad?: number) {
     if (!items.length) return;
     const mesh = new THREE.InstancedMesh(geo, mat, items.length);
     items.forEach((it, i) => { mesh.setMatrixAt(i, it.m); mesh.setColorAt(i, it.c); });
     mesh.computeBoundingSphere();
     this.group.add(mesh);
+    if (ground) this.sweep?.add(mesh, pad);
   }
 
   /** Les fumerolles proches de la vue crachent par moments : un panache de fumée et une gerbe de braises */

@@ -257,9 +257,9 @@ export class War {
     return b.build(kind, x, z, this.world);
   }
   /** Pose une ligne de palissades (ou une case) : combien de cases posées, et la première raison de refus */
-  buildBaseLine(kind: BaseKind, cells: [number, number][]) {
+  buildBaseLine(kind: BaseKind, cells: [number, number][], gateAt = -1) {
     const b = this.ensureFaction() && this.base;
-    return b ? b.buildLine(kind, cells, this.world) : { built: 0, why: tr('Les Enfers ne sont pas ouverts.') as string | null };
+    return b ? b.buildLine(kind, cells, this.world, gateAt) : { built: 0, why: tr('Les Enfers ne sont pas ouverts.') as string | null, gate: false };
   }
   /** L'aperçu d'une ligne à poser : refus par case, coût */
   planBaseLine(kind: BaseKind, cells: [number, number][]) { return this.base?.planLine(kind, cells, this.world) ?? null; }
