@@ -152,7 +152,7 @@ registerDict('menu', {
   'Routes auto': 'Auto roads',
   'Suivre les équipes': 'Follow teams', 'Au départ': 'On departure', 'À l’œil seulement': 'With the eye only',
   'Au départ : la vue suit chaque équipe qui part en expédition. À l’œil seulement : la vue ne bouge pas, l’œil de la carte de l’équipe la suit.': 'On departure: the view follows every team that sets off on an expedition. With the eye only: the view stays put, the eye on the team’s card follows it.',
-  '🧭 L’équipe est partie. L’œil de sa carte, à gauche, permet de la suivre.': '🧭 The team has set off. The eye on its card, on the left, lets you follow it.',
+  '🧭 L’équipe est partie. Cliquez ici pour la suivre, ou sur l’œil de sa carte à gauche.': '🧭 The team has set off. Click here to follow it, or the eye on its card on the left.',
   'Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.': 'A path links each new building to the nearest road, unless it already touches one.',
   'Flèches d’amélioration': 'Upgrade arrows',
   'Masquées': 'Hidden',

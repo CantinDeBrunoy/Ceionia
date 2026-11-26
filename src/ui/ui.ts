@@ -3258,7 +3258,7 @@ export class UI {
       // la caméra suit l'équipe seulement si le joueur l'a voulu (Paramètres › Partie), à la même distance (elle se collait au
       // sol, testeurs v6) ; sinon un mot dit que l'œil de sa carte (à gauche) la suit
       if (followOnLaunch()) h.follow(a.id, true);
-      else this.info(tr('🧭 L’équipe est partie. L’œil de sa carte, à gauche, permet de la suivre.'));
+      else this.toast(tr('🧭 L’équipe est partie. Cliquez ici pour la suivre, ou sur l’œil de sa carte à gauche.'), () => { if (h.expeditions.active.includes(a)) h.follow(a.id, true); }, 'notice');
       this.update();
     });
   }
