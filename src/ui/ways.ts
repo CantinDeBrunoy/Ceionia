@@ -15,7 +15,7 @@ export interface ConflictWay { ally: People; badge: 'free' | 'wait' | 'taken'; b
 const WAYS: Record<Way, { img: string; icon: string; title: string; pitch: string; gives: string[] }> = {
   hell: {
     img: './ui/portail.webp', icon: 'militaire', title: 'Les Enfers',
-    pitch: 'Derrière l’arche noire de l’île au large, des démons attendent. Oserez-vous passer de l’autre côté ?',
+    pitch: 'Sous la grande place, la terre gronde autour du bâton du fondateur. Derrière l’arche noire de l’île au large, des démons attendent.',
     gives: ['Une troupe et un camp au Seuil', 'Les Enfers et leur roi'],
   },
   world: {

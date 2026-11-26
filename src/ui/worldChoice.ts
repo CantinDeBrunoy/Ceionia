@@ -13,7 +13,10 @@ export interface WorldChoiceHost {
   world(): void;
   /** « Ni l'un ni l'autre » : on reste sur son île (le grand choix est fait) */
   neither(): void;
-  /** les démons ont volé le bâton du fondateur (et il n'est pas encore repris) : la voie des Enfers devient « Reprendre le bâton » */
+  /**
+   * les démons ont volé le bâton du fondateur (et il n'est pas encore repris) : la voie des Enfers devient « Reprendre le
+   * bâton ». Sur la place, elle dit la menace qui gronde dessous : le vol se joue quand on la prend (voir `docs/lore-enfers.md`)
+   */
   staffLost(): boolean;
 }
 
@@ -69,7 +72,7 @@ export class WorldChoice {
       <p class="pcSub">${lost ? tr('L’Antiquité s’achève, et le bâton du fondateur a disparu sous terre. Quelle voie pour votre peuple ?') : tr('L’Antiquité s’achève. Quelle voie pour votre peuple ?')}</p>
       <div class="wcWays">
         ${lost ? tile('hell', './ui/portail.webp', 'militaire', tr('Reprendre le bâton'), tr('Les démons l’ont emporté aux Enfers. Le portail de l’île au large s’ouvre : une petite troupe part le reprendre.'), tr('Cette carte n’a pas d’île du portail.'))
-          : tile('hell', './ui/portail.webp', 'militaire', tr('Les Enfers'), tr('Le portail de l’île au large s’ouvre : une petite troupe passe aussitôt de l’autre côté, chez les démons.'), tr('Cette carte n’a pas d’île du portail.'))}
+          : tile('hell', './ui/portail.webp', 'militaire', tr('Les Enfers'), tr('Sous la grande place, la terre gronde. Le portail de l’île au large s’ouvre : une petite troupe passe aussitôt chez les démons.'), tr('Cette carte n’a pas d’île du portail.'))}
         ${tile('world', './expeditions/dio-caravel.webp', 'boussole', tr('Explorer le monde'), tr('La carte s’agrandit : au-delà de l’horizon, deux grandes îles et leurs peuples.'), tr('Ce monde ne peut plus s’agrandir.'))}
       </div>
       <small class="pcNote">${lost ? tr('Il faut choisir pour passer au Médiéval. Rien n’est définitif : le bâton attendra aux Enfers, et l’autre voie restera ouverte.') : tr('Il faut choisir pour passer au Médiéval. Rien n’est définitif : l’autre voie restera ouverte.')}</small>
@@ -84,7 +87,7 @@ export class WorldChoice {
     if (way === 'hell') return `<img class="pcDio" src="./ui/portail.webp" alt="" draggable="false">
       <h4>${lost ? tr('Reprendre le bâton') : tr('Les Enfers')}</h4>
       <p class="pcSub">${tr('Ouvrir le portail de l’île au large ?')}</p>
-      <div class="pcHow"><p>${lost ? tr('Les démons gardent le bâton du fondateur au fond des Enfers, aux mains de leur roi. Une petite troupe passe aussitôt, avec un camp et une caserne pour en recruter d’autres.') : tr('Des démons rôdent de l’autre côté. Une petite troupe passe aussitôt, avec un camp et une caserne pour en recruter d’autres.')}</p></div>
+      <div class="pcHow"><p>${lost ? tr('Les démons gardent le bâton du fondateur au fond des Enfers, aux mains de leur roi. Une petite troupe passe aussitôt, avec un camp et une caserne pour en recruter d’autres.') : tr('Sous la grande place, la terre gronde autour du bâton du fondateur. Des démons rôdent de l’autre côté. Une petite troupe passe aussitôt, avec un camp et une caserne pour en recruter d’autres.')}</p></div>
       <div class="pcBtns">${choice('hell', 'pcGo', 'militaire', tr('Ouvrir le portail'), tr('Enfers, base, royaume'))}${later}</div>`;
     return `<img class="pcDio" src="./expeditions/dio-caravel.webp" alt="" draggable="false">
       <h4>${tr('Explorer le monde ?')}</h4>

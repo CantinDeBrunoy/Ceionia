@@ -95,7 +95,7 @@ import { PavingView } from './render/paving';
 import { Festivities } from './render/festivities';
 import { Trophies, trophiesWon } from './render/trophies';
 import { FounderStaff } from './render/founderStaff';
-import { STAFF_PERK, staffOfOld, staffNow, theftBeforeChoice, theftBeforePortal } from './sim/staff';
+import { STAFF_PERK, staffOfOld, staffOfOpen, staffNow, theftBeforePortal } from './sim/staff';
 import { hellFallen } from './sim/kingdom';
 import { HomeButton, awayFromHome } from './ui/homeButton';
 import { PenView } from './render/pens';
@@ -623,6 +623,8 @@ class Game implements UIHost {
     // le bâton du fondateur d'une partie d'avant lui : repris si le roi est tombé, volé si les Enfers ont été vus, sinon sur la place
     // (le vol viendra en son temps, jamais à l'improviste : voir `sim/staff.ts`)
     if (w.staff === null) w.staff = staffOfOld({ kingFallen: hellFallen(w), hellSeen: this.war.visited || this.war.intro === 'seen' });
+    // (les Enfers déjà ouverts avec le bâton sur la place, à cause de l'ancienne règle : volé, sans cinématique)
+    w.staff = staffOfOpen(w.staff, this.war.pve === 'on' || this.war.pve === 'off');
     if (hellFallen(w) && !w.exp.perks.includes(STAFF_PERK)) w.exp.perks.push(STAFF_PERK);
     w.staff = staffNow(w.staff, hellFallen(w));
     // les couleurs du blason sur tous les drapeaux et les troupes (shader commun, voir render/teamPaint.ts)
@@ -913,10 +915,11 @@ class Game implements UIHost {
       enterHell: (quiet) => void this.enterHell(quiet),
       arrived: () => this.portalArrived(),
     });
-    // le vol du bâton du fondateur : juste avant la carte du grand choix (ou, à défaut, avant la cinématique du portail)
+    // le vol du bâton du fondateur : la première partie de la cinématique du portail, au choix des Enfers
     this.staffStage = new StaffStage({
       cam: this.cam, scene: this.scene, ui: { root: uiRoot }, staff: this.founderStaff, audio,
       groundY: (x, z) => w.surfaceAt(x, z),
+      sync: () => { this.trophyT = 0; this.syncTrophies(); },
     });
     this.trophyStage = new TrophyStage({
       cam: this.cam, scene: this.scene, root: uiRoot, trophies: this.trophies, audio,
@@ -1334,8 +1337,9 @@ class Game implements UIHost {
   }
 
   /**
-   * La cinématique du portail, précédée du vol du bâton s'il est encore sur la place (bac à sable, ancienne partie qui ouvre le
-   * portail après avoir fait le grand choix sans lui) : le vol est la raison d'y aller
+   * La cinématique du portail, en deux parties : le vol du bâton s'il est encore sur la place, puis le film du portail. Le vol
+   * justifie l'invasion sur le moment : il se joue quand le joueur prend la voie des Enfers (grand choix, onglet « Grands
+   * choix », bac à sable), jamais avant (voir `docs/lore-enfers.md`)
    */
   private playPortalCine() {
     if (theftBeforePortal(this.world.staff ?? 'home') && this.mode === 'surface') { this.stealStaff(() => this.portalStage.play()); return; }
@@ -1356,18 +1360,18 @@ class Game implements UIHost {
   }
 
   /**
-   * La carte du grand choix, précédée du vol du bâton à la fin de l'Antiquité (`theftBeforeChoice`) : le vol donne un sens au
-   * choix dans les deux voies (les Enfers pour le reprendre, ou le laisser perdu)
+   * Revoir la cinématique des Enfers depuis l'onglet « Grands choix » : le vol du bâton (son film, ou le remplacement en
+   * direct sur la place, la vue d'avant rendue à la fin), puis `then` (le film du portail). Hors de la surface, `then` seul
    */
-  private showGrandChoice() {
-    const { hell } = this.ways();
-    if (theftBeforeChoice({ staff: this.world.staff ?? 'home', hellPossible: hell !== 'none', age: this.sim.age, crossroadsAge: CROSSROADS_AGE })) {
-      this.popups.taken();
-      this.stealStaff(() => this.worldChoice.show());
-      return;
-    }
-    this.worldChoice.show();
+  replayTheft(then: () => void) {
+    if (this.mode !== 'surface' || this.staffStage.playing || this.cinematicPlaying()) { then(); return; }
+    this.tools.setTool('none');
+    this.follow(null);
+    this.staffStage.play(() => { this.trophyT = 0; this.syncTrophies(); then(); }, { keepView: true });
   }
+
+  /** La carte du grand choix (le vol du bâton n'y est plus : il ouvre la cinématique du portail, au choix des Enfers) */
+  private showGrandChoice() { this.worldChoice.show(); }
 
   /** Où regarder en entrant dans les Enfers : le groupe des troupes les plus avancées, sinon le camp le plus avancé, sinon le portail */
   private hellFocus(hm: HellMode): [number, number] {

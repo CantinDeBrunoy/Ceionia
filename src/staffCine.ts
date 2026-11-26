@@ -1,14 +1,50 @@
 /**
  * La cinématique du vol du bâton du fondateur (voir `docs/lore-enfers.md`) : sa partition, sans rien de graphique (la mise en
- * scène est dans `staffStage.ts`). Jouée en direct dans le moteur, comme celles du portail et de la chute du roi (l'auteur n'a
- * que l'offre gratuite de Flow : pas de vidéo), une fois par partie, juste avant la carte du grand choix de la fin de
- * l'Antiquité (ou, à défaut, juste avant la cinématique du portail). Quatre plans sur la grande place :
- * - **le calme** : la vue descend vers le bâton, planté sur la place depuis la fondation ; le ciel s'assombrit ;
- * - **la faille** : la terre tremble, une faille rouge s'ouvre à côté du bâton ;
- * - **les démons** : trois démons en sortent, le chef arrache le bâton ;
- * - **sous terre** : ils redescendent avec lui, la faille se referme, il ne reste qu'une brûlure et le socle vide.
+ * scène est dans `staffStage.ts`). Une fois par partie, quand le joueur prend la voie des Enfers (au grand choix, ou plus tard
+ * depuis l'onglet « Grands choix ») : c'est la première partie de la cinématique du portail, qui suit aussitôt. Le vol
+ * justifie l'invasion sur le moment (retour de l'auteur, 26 nov. 2026 : avant, il se jouait juste avant la carte du grand
+ * choix). Comme les autres films du jeu :
+ * - **le film** (`STAFF_FILM`, une vidéo faite par l'auteur avec Flow, `public/vol/`) : la place de l'Antiquité, le bâton
+ *   devant sa pierre levée, la terre qui tremble, la faille rouge, les démons qui l'arrachent et replongent, la faille qui se
+ *   referme, le noir. Prompts : `.claude/prompts-video-vol-baton.md` ;
+ * - **sans film** (fichier absent ou illisible), le **remplacement en direct**, joué dans le moteur sur la vraie place, en
+ *   quatre plans :
+ *   - **le calme** : la vue descend vers le bâton, planté sur la place depuis la fondation ; le ciel s'assombrit ;
+ *   - **la faille** : la terre tremble, une faille rouge s'ouvre à côté du bâton ;
+ *   - **les démons** : trois démons en sortent, le chef arrache le bâton ;
+ *   - **sous terre** : ils redescendent avec lui, la faille se referme, il ne reste qu'une brûlure et le socle vide.
  * Habillage des autres cinématiques : bandes noires, bandeaux dorés avec un sous-titre, « Passer » en deux temps.
  */
+
+/**
+ * Le film (s) : sa durée prévue, ses fichiers, ses bandeaux et ses bruitages (la vidéo est muette), au temps de la vidéo. À
+ * recaler sur la vraie vidéo une fois branchée (voir `docs/lore-enfers.md`, « La vidéo »)
+ */
+export const STAFF_FILM = {
+  // (deux plans Flow de 8 s collés par un fondu d'une demi-seconde : la faille s'ouvre, puis les démons)
+  dur: 15.5,
+  webm: './vol/vol.webm',
+  mp4: './vol/vol.mp4',
+  captions: [
+    { at: 0.8, dur: 3.6, text: 'Le bâton du fondateur', sub: 'Planté le premier jour du village' },
+    { at: 8.2, dur: 3, text: 'Les démons surgissent', sub: 'Ils arrachent le bâton' },
+    { at: 11.6, dur: 3.2, text: 'Le bâton est aux Enfers', sub: 'Sous la terre, chez le roi démon' },
+  ] as { at: number; dur: number; text: string; sub?: string }[],
+  /** le grondement de la terre (la faille s'ouvre, puis se referme) et le cri des démons, au temps de la vidéo */
+  rumble: [3.5, 12.5] as number[],
+  roar: 8.4,
+};
+
+/** Le film qui ne joue toujours pas au bout de ce temps (s, réseau lent, lecture bloquée) : le remplacement en direct */
+export const STAFF_FILM_WAIT = 8;
+/** Le noir du départ se lève en ce temps (s) au début du remplacement en direct */
+export const THEFT_LIFT = 0.5;
+
+/** Le bandeau du film au temps `t` de la vidéo, ou null */
+export function staffFilmCaptionAt(t: number): { text: string; sub?: string; alpha: number } | null {
+  const c = STAFF_FILM.captions.find((x) => t >= x.at && t < x.at + x.dur);
+  return c ? { text: c.text, sub: c.sub, alpha: Math.min(1, (t - c.at) / 0.6, (c.at + c.dur - t) / 0.6) } : null;
+}
 
 export type TheftShot = 'calm' | 'rift' | 'demons' | 'gone';
 

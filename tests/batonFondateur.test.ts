@@ -3,11 +3,11 @@ import { existsSync } from 'node:fs';
 import { World, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
-import { CROSSROADS_AGE } from '../src/sim/crossroads';
-import { STAFF_KINDS, STAFF_PERK, STAFF_YIELD, readStaff, staffNow, staffOfOld, staffYield, theftBeforeChoice, theftBeforePortal } from '../src/sim/staff';
+import { STAFF_KINDS, STAFF_PERK, STAFF_YIELD, readStaff, staffNow, staffOfOld, staffOfOpen, staffYield, theftBeforePortal } from '../src/sim/staff';
 import { perkYield, SULFUR_MINE } from '../src/sim/legacy';
 import { claimKingdom, KINGDOM_PERK } from '../src/sim/kingdom';
-import { THEFT_PLAN, THEFT_TOTAL, THEFT_CAPTIONS, theftShotAt, theftShotStart, theftCaptionAt, riftOpenAt, theftBlackAt, theftTintAt, GRAB_AT } from '../src/staffCine';
+import { THEFT_PLAN, THEFT_TOTAL, THEFT_CAPTIONS, theftShotAt, theftShotStart, theftCaptionAt, riftOpenAt, theftBlackAt, theftTintAt, GRAB_AT, STAFF_FILM, STAFF_FILM_WAIT, staffFilmCaptionAt } from '../src/staffCine';
+import { readFileSync } from 'node:fs';
 import { END_PLAN, endShotStart, staffRiseAt } from '../src/kingdomEnd';
 import { goalLine } from '../src/sim/objective';
 import { waysHtml } from '../src/ui/ways';
@@ -66,23 +66,71 @@ describe('le bâton du fondateur : son état et les sauvegardes', () => {
 });
 
 describe('le bâton du fondateur : quand le vol se joue', () => {
-  it('avant la carte du grand choix, à l’Antiquité, si la voie des Enfers existe', () => {
-    const base = { staff: 'home' as const, hellPossible: true, age: CROSSROADS_AGE - 1, crossroadsAge: CROSSROADS_AGE };
-    expect(theftBeforeChoice(base)).toBe(true);
-    // déjà volé : pas deux fois
-    expect(theftBeforeChoice({ ...base, staff: 'stolen' })).toBe(false);
-    expect(theftBeforeChoice({ ...base, staff: 'back' })).toBe(false);
-    // pas d'île du portail : le vol n'aurait pas de suite
-    expect(theftBeforeChoice({ ...base, hellPossible: false })).toBe(false);
-    // une ancienne partie déjà au Médiéval qui voit la carte tard : pas à l'improviste
-    expect(theftBeforeChoice({ ...base, age: CROSSROADS_AGE })).toBe(false);
-    expect(theftBeforeChoice({ ...base, age: 4 })).toBe(false);
+  it('plus avant la carte du grand choix : le bâton reste sur la place tant qu’on ne prend pas les Enfers', () => {
+    const main = readFileSync('src/main.ts', 'utf8');
+    expect(main).not.toContain('theftBeforeChoice');
+    // (la carte s'ouvre sans rien jouer avant elle)
+    expect(main).toMatch(/private showGrandChoice\(\) \{ this\.worldChoice\.show\(\); \}/);
   });
 
   it('avant la cinématique du portail, seulement si le bâton est encore sur la place', () => {
     expect(theftBeforePortal('home')).toBe(true);
     expect(theftBeforePortal('stolen')).toBe(false);
     expect(theftBeforePortal('back')).toBe(false);
+    // (la cinématique du portail commence par le vol : `playPortalCine` le joue d'abord, puis le film du portail)
+    const main = readFileSync('src/main.ts', 'utf8');
+    expect(main).toMatch(/theftBeforePortal\([^)]*\) && this\.mode === 'surface'\) \{ this\.stealStaff\(\(\) => this\.portalStage\.play\(\)\)/);
+  });
+
+  it('les anciennes parties : les Enfers déjà ouverts avec le bâton sur la place, il est volé, sans cinématique', () => {
+    expect(staffOfOpen('home', true)).toBe('stolen');
+    // pas encore ouverts (grand choix à faire, « Explorer le monde », « Ni l'un ni l'autre », bac à sable en attente) : sur la place
+    expect(staffOfOpen('home', false)).toBe('home');
+    // déjà volé, ou repris : rien ne change
+    expect(staffOfOpen('stolen', true)).toBe('stolen');
+    expect(staffOfOpen('stolen', false)).toBe('stolen');
+    expect(staffOfOpen('back', true)).toBe('back');
+  });
+
+  it('les anciennes parties : un bâton volé le reste au chargement', () => {
+    const w = village();
+    w.staff = 'stolen';
+    const back = reload(w);
+    expect(back.staff).toBe('stolen');
+    expect(staffOfOpen(back.staff!, false)).toBe('stolen');
+    expect(staffNow(back.staff!, false)).toBe('stolen');
+  });
+});
+
+describe('le film du vol : la vidéo, sinon le direct', () => {
+  it('ses fichiers, à côté de ceux du portail', () => {
+    expect(STAFF_FILM.webm).toBe('./vol/vol.webm');
+    expect(STAFF_FILM.mp4).toBe('./vol/vol.mp4');
+    expect(STAFF_FILM_WAIT).toBeGreaterThan(2);
+  });
+
+  it('ses bandeaux tiennent dans le film, un seul à la fois, sans point-virgule', () => {
+    let last = -1;
+    for (const c of STAFF_FILM.captions) {
+      expect(c.at).toBeGreaterThan(last);
+      expect(c.at + c.dur).toBeLessThanOrEqual(STAFF_FILM.dur);
+      expect(staffFilmCaptionAt(c.at + c.dur / 2)?.text).toBe(c.text);
+      expect(c.text + (c.sub ?? '')).not.toContain(';');
+      last = c.at + c.dur;
+    }
+    expect(staffFilmCaptionAt(STAFF_FILM.dur + 1)).toBeNull();
+    for (const t of [...STAFF_FILM.rumble, STAFF_FILM.roar]) { expect(t).toBeGreaterThan(0); expect(t).toBeLessThan(STAFF_FILM.dur); }
+  });
+
+  it('le direct reste là tant que la vidéo n’existe pas', () => {
+    const stage = readFileSync('src/staffStage.ts', 'utf8');
+    expect(stage).toContain('toLive');
+    expect(stage).toContain('STAFF_FILM.mp4');
+  });
+
+  it('revoir la cinématique des Enfers rejoue les deux parties à la suite', () => {
+    const ui = readFileSync('src/ui/ui.ts', 'utf8');
+    expect(ui).toMatch(/h\.replayTheft\(portal\)/);
   });
 });
 
@@ -163,6 +211,8 @@ describe('le bâton du fondateur : ce que voit le joueur', () => {
     setLang('fr');
     const ways = { hell: 'open' as const, world: 'taken' as const };
     expect(waysHtml(ways)).not.toContain('Reprendre le bâton');
+    // (sur la place, la menace qui gronde dessous)
+    expect(waysHtml(ways)).toContain('la terre gronde');
     expect(waysHtml(ways, null, 'stolen')).toContain('Reprendre le bâton');
     expect(waysHtml({ hell: 'taken', world: 'taken' }, null, 'back')).toContain('Le bâton du fondateur est revenu sur la place du village.');
   });
@@ -185,7 +235,11 @@ describe('le bâton du fondateur : ce que voit le joueur', () => {
   it('les textes ont leur anglais', () => {
     setLang('en');
     for (const s of ['Reprendre le bâton', 'Le bâton du fondateur', 'Les démons surgissent', 'Le bâton est aux Enfers', 'Le bâton du fondateur revient sur la place',
-      'Objectif : abattre la citadelle et reprendre le bâton', 'Le bâton', 'Au-delà, le bâton volé', 'Ici, le chef planta son bâton']) expect(tr(s)).not.toBe(s);
+      'Objectif : abattre la citadelle et reprendre le bâton', 'Le bâton', 'Au-delà, le bâton volé', 'Ici, le chef planta son bâton',
+      'Sous la grande place, la terre gronde. Le portail de l’île au large s’ouvre : une petite troupe passe aussitôt chez les démons.',
+      'Sous la grande place, la terre gronde autour du bâton du fondateur. Des démons rôdent de l’autre côté. Une petite troupe passe aussitôt, avec un camp et une caserne pour en recruter d’autres.',
+      'Sous la grande place, la terre gronde autour du bâton du fondateur. Derrière l’arche noire de l’île au large, des démons attendent.',
+      ...STAFF_FILM.captions.flatMap((c) => [c.text, c.sub ?? 'Le bâton'])]) expect(tr(s)).not.toBe(s);
     setLang('fr');
   });
 });

@@ -6,13 +6,15 @@ import { Parts } from './render/parts';
 import { mats } from './render/materials';
 import { demonParts } from './render/battleUnits';
 import type { DemonKind } from './sim/hell';
-import { CLOSE_AT, GRAB_AT, riftOpenAt, theftBlackAt, theftCaptionAt, theftShakeAt, theftShotAt, theftShotStart, theftTintAt } from './staffCine';
+import { CLOSE_AT, GRAB_AT, STAFF_FILM, STAFF_FILM_WAIT, THEFT_LIFT, riftOpenAt, staffFilmCaptionAt, theftBlackAt, theftCaptionAt, theftShakeAt, theftShotAt, theftShotStart, theftTintAt } from './staffCine';
 import { KINGDOM_TEXT } from './ui/kingdom';
 import { tr } from './i18n';
 import { skipAsk } from './ui/skipAsk';
 
 /**
- * La mise en scène du vol du bâton du fondateur (partition dans `staffCine.ts`), en direct sur la grande place : la vue descend
+ * La mise en scène du vol du bâton du fondateur (partition dans `staffCine.ts`). D'abord **le film** (`public/vol/`, WebM
+ * puis MP4 de secours), opaque par-dessus le jeu, comme celui du portail. Sans film (fichiers absents ou illisibles, lecture
+ * refusée, rien au bout de `STAFF_FILM_WAIT`), **le remplacement en direct** sur la grande place : la vue descend
  * vers le bâton, le ciel s'assombrit, la terre tremble et une faille rouge s'ouvre à côté de lui ; trois démons en sortent, le
  * chef arrache le bâton, et tous redescendent avec lui ; la faille se referme sur une brûlure. Les démons, la faille et ses
  * braises sont des maillages à part, dans les matériaux communs (`mats.body`, `mats.glow` : aucun shader neuf à préparer en
@@ -26,6 +28,8 @@ export interface StaffStageHost {
   groundY(x: number, z: number): number;
   staff: FounderStaff;
   audio: { sfxRumble(dur: number): void; sfxRoar(k?: number): void };
+  /** remet la place à jour (le monument et son bâton), juste avant le remplacement en direct */
+  sync(): void;
 }
 
 /** Mouvement doux (départ et arrivée lents) */
@@ -84,7 +88,14 @@ interface Ember { m: THREE.Mesh; x: number; z: number; t: number; v: number }
 
 export class StaffStage {
   private t = 0;
-  private el: { root: HTMLElement; veil: HTMLElement; cap: HTMLElement; tint: HTMLElement; glow: HTMLElement } | null = null;
+  /** `film` : la vidéo (ou l'attente de ses premières images) ; `live` : le remplacement en direct */
+  private phase: 'film' | 'live' = 'film';
+  /** le temps passé à attendre le film, et s'il joue */
+  private filmT = 0;
+  private rolling = false;
+  /** la vue d'avant, à rendre à la fin (le film revu depuis « Grands choix ») */
+  private keep: { x: number; z: number; yaw: number; pitch: number; dist: number } | null = null;
+  private el: { root: HTMLElement; veil: HTMLElement; cap: HTMLElement; tint: HTMLElement; glow: HTMLElement; film: HTMLElement; video: HTMLVideoElement } | null = null;
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
   private group: THREE.Group | null = null;
   private rift: THREE.Group | null = null;
@@ -94,41 +105,64 @@ export class StaffStage {
   /** les repères : le pied du bâton, le centre de la faille, la droite de l'écran et la direction de la vue */
   private pts: { s: THREE.Vector3; r: THREE.Vector3; right: THREE.Vector3; fwd: THREE.Vector3 } | null = null;
   private onDone: (() => void) | null = null;
-  private said = { rumble: false, roar: false, close: false };
+  private said = { rumble: false, roar: false, close: false, filmRumble: 0 };
 
   constructor(private host: StaffStageHost) {}
 
   get playing() { return !!this.el; }
 
-  /** Lance la cinématique ; `done` est appelé à sa fin (ou si on la passe). Sans grande place, rien à montrer : `done` tout de suite */
-  play(done: () => void): boolean {
+  /**
+   * Lance la cinématique ; `done` est appelé à sa fin (ou si on la passe). Le film d'abord ; sans lui, le remplacement en
+   * direct, et sans grande place il n'y a rien à montrer : `done` tout de suite. `keepView` : la vue d'avant est rendue à la
+   * fin (le film revu)
+   */
+  play(done: () => void, opts: { keepView?: boolean } = {}): boolean {
     if (this.el) return false;
-    const h = this.host, foot = h.staff.staffWorld();
-    if (!foot) { done(); return false; }
     this.onDone = done;
-    this.t = 0;
-    this.said = { rumble: false, roar: false, close: false };
+    this.t = 0; this.filmT = 0; this.rolling = false; this.phase = 'film';
+    this.keep = opts.keepView ? this.host.cam.view() : null;
+    this.said = { rumble: false, roar: false, close: false, filmRumble: 0 };
+    document.body.classList.add('cinematic');
+    this.buildUi();
+    this.startFilm();
+    return true;
+  }
+
+  /** Le film introuvable, illisible ou trop lent : le vol joué en direct sur la grande place */
+  private toLive() {
+    const c = this.el;
+    if (!c || this.phase !== 'film') return;
+    c.video.pause(); c.video.removeAttribute('src'); c.video.load();
+    c.film.style.display = 'none';
+    c.veil.style.opacity = '1';
+    this.setCap('', '', 0);
+    // (la place remise à jour : le monument montre son bâton le temps de la cinématique)
+    const h = this.host;
+    h.sync();
+    const foot = h.staff.staffWorld();
+    if (!foot) { this.finish(); return; }
+    this.phase = 'live'; this.t = 0;
     const right = new THREE.Vector3(Math.cos(YAW), 0, -Math.sin(YAW)), fwd = new THREE.Vector3(Math.sin(YAW), 0, Math.cos(YAW));
     // la faille s'ouvre à côté du bâton, du côté le plus loin du milieu de la place (pas dans sa fontaine ni sur ses étals),
     // un peu repoussée vers le dehors
-    const c = h.staff.center, out = new THREE.Vector3(foot.x - c.x, 0, foot.z - c.z).normalize();
-    const side = [-1, 1].map((k) => foot.clone().addScaledVector(right, k * 0.42)).sort((a, b) => Math.hypot(b.x - c.x, b.z - c.z) - Math.hypot(a.x - c.x, a.z - c.z))[0];
+    const ct = h.staff.center, out = new THREE.Vector3(foot.x - ct.x, 0, foot.z - ct.z).normalize();
+    const side = [-1, 1].map((k) => foot.clone().addScaledVector(right, k * 0.42)).sort((a, b) => Math.hypot(b.x - ct.x, b.z - ct.z) - Math.hypot(a.x - ct.x, a.z - ct.z))[0];
     const r = side.addScaledVector(out, 0.12);
     r.y = h.groundY(r.x, r.z) + 0.004;
     this.pts = { s: foot.clone(), r, right, fwd };
-    document.body.classList.add('cinematic');
     this.build3d();
-    this.buildUi();
-    return true;
   }
 
   /** Une image (temps réel, plafonné) ; la caméra est posée après sa propre mise à jour */
   step(dt: number) {
-    if (!this.el || !this.pts) return;
+    if (!this.el) return;
+    if (this.phase === 'film') { this.stepFilm(dt); return; }
+    if (!this.pts) return;
     this.t += dt;
-    const t = this.t, c = this.el, P = this.pts, h = this.host;
+    const t = this.t, c = this.el, h = this.host;
     c.tint.style.opacity = String(theftTintAt(t));
-    c.veil.style.opacity = String(theftBlackAt(t));
+    // (le noir du départ se lève, celui de la fin tombe)
+    c.veil.style.opacity = String(Math.max(theftBlackAt(t), 1 - t / THEFT_LIFT));
     const open = riftOpenAt(t);
     c.glow.style.opacity = String(open * 0.9);
     const cap = theftCaptionAt(t);
@@ -141,6 +175,40 @@ export class StaffStage {
     if (!this.said.close && cur.shot === 'gone' && cur.local > CLOSE_AT) { this.said.close = true; h.audio.sfxRumble(1.4); }
     this.animate(t, dt, open);
     this.camera(cur.shot, cur.k, t);
+  }
+
+  /** Le film : ses bandeaux et ses bruitages au temps de la vidéo ; rien au bout de `STAFF_FILM_WAIT`, le direct */
+  private stepFilm(dt: number) {
+    const c = this.el!, h = this.host;
+    this.filmT += dt;
+    if (!this.rolling) { if (this.filmT > STAFF_FILM_WAIT) this.toLive(); return; }
+    const t = c.video.currentTime || 0;
+    const cap = staffFilmCaptionAt(t);
+    this.setCap(cap ? tr(cap.text) : '', cap?.sub ? tr(cap.sub) : '', cap ? cap.alpha : 0);
+    const rb = STAFF_FILM.rumble;
+    if (this.said.filmRumble < rb.length && t >= rb[this.said.filmRumble]) { h.audio.sfxRumble(this.said.filmRumble ? 1.4 : 2.4); this.said.filmRumble++; }
+    if (!this.said.roar && t >= STAFF_FILM.roar) { this.said.roar = true; h.audio.sfxRoar(0.7); }
+  }
+
+  /** La WebM, puis le MP4 de secours ; illisibles, introuvables ou refusés : le remplacement en direct */
+  private startFilm() {
+    const c = this.el!, video = c.video;
+    let fallback = false;
+    const live = () => { if (this.el?.video === video) this.toLive(); };
+    const fail = () => {
+      if (!fallback && !video.currentSrc.endsWith('.mp4')) {
+        fallback = true;
+        video.src = STAFF_FILM.mp4;
+        void video.play().catch(live);
+        return;
+      }
+      live();
+    };
+    video.addEventListener('error', fail);
+    video.querySelectorAll('source')[1]?.addEventListener('error', fail);
+    video.addEventListener('playing', () => { if (this.el?.video === video) this.rolling = true; });
+    video.addEventListener('ended', () => { if (this.el?.video === video && this.phase === 'film') this.finish(); });
+    void video.play().catch(live);
   }
 
   /** Passer : tout de suite à la fin (le bâton est volé) */
@@ -270,6 +338,10 @@ export class StaffStage {
 
   private finish() {
     this.close();
+    // (le film revu : la vue d'avant)
+    const k = this.keep;
+    this.keep = null;
+    if (k) this.host.cam.jump(k, this.host.groundY(k.x, k.z));
     const done = this.onDone;
     this.onDone = null;
     done?.();
@@ -277,7 +349,7 @@ export class StaffStage {
 
   private close() {
     if (this.keyHandler) { window.removeEventListener('keydown', this.keyHandler, true); this.keyHandler = null; }
-    this.el?.root.remove();
+    if (this.el) { this.el.video.pause(); this.el.video.removeAttribute('src'); this.el.video.load(); this.el.root.remove(); }
     this.el = null;
     if (this.group) {
       this.host.scene.remove(this.group);
@@ -293,7 +365,9 @@ export class StaffStage {
   private buildUi() {
     const root = document.createElement('div');
     root.id = 'staffCine';
-    root.innerHTML = `<div class="sc-tint"></div><div class="sc-glow"></div><div class="kc-veil" style="background:#000"></div><div class="kc-bar t"></div><div class="kc-bar b"></div><div class="kc-cap"><b></b><small></small></div>
+    root.innerHTML = `<div class="sc-tint"></div><div class="sc-glow"></div><div class="kc-veil" style="background:#000"></div>
+      <div class="scFilm"><video muted playsinline preload="auto" disablepictureinpicture aria-hidden="true">
+        <source src="${STAFF_FILM.webm}" type="video/webm"><source src="${STAFF_FILM.mp4}" type="video/mp4"></video></div><div class="kc-bar t"></div><div class="kc-bar b"></div><div class="kc-cap"><b></b><small></small></div>
       <button class="kc-skip" type="button">${KINGDOM_TEXT.skip}</button>`;
     this.host.ui.root.appendChild(root);
     // (un clic n'importe où passe, en deux temps : le premier appui demande « Vraiment passer ? », voir `skipAsk`)
@@ -305,7 +379,7 @@ export class StaffStage {
       if (!e.repeat) ask();
     };
     window.addEventListener('keydown', this.keyHandler, true);
-    this.el = { root, veil: root.querySelector('.kc-veil')!, cap: root.querySelector('.kc-cap')!, tint: root.querySelector('.sc-tint')!, glow: root.querySelector('.sc-glow')! };
+    this.el = { root, veil: root.querySelector('.kc-veil')!, cap: root.querySelector('.kc-cap')!, tint: root.querySelector('.sc-tint')!, glow: root.querySelector('.sc-glow')!, film: root.querySelector('.scFilm')!, video: root.querySelector('video')! };
     // (la lueur de la faille, à sa place à l'écran : posée une fois, la vue bouge peu)
     this.el.glow.style.setProperty('--gx', '58%');
     this.el.glow.style.setProperty('--gy', '62%');

@@ -2,8 +2,9 @@ import type { KindId } from '../build/catalog';
 
 /**
  * Le bâton du fondateur (voir `docs/lore-enfers.md`) : le chef des nomades le plante au bord de la rivière dans le film
- * d'ouverture, il reste sur la grande place à travers les âges, les démons le volent à la fin de l'Antiquité et on le reprend
- * au roi démon. Ici, les règles pures : son état, la relecture des anciennes parties, quand le vol se joue, le bonus
+ * d'ouverture, il reste sur la grande place à travers les âges, les démons le volent quand le joueur prend la voie des Enfers
+ * (juste avant la cinématique du portail) et on le reprend au roi démon. Ici, les règles pures : son état, la relecture des
+ * anciennes parties, quand le vol se joue, le bonus
  */
 
 /** Sur la place (`home`), volé par les démons (`stolen`), repris au roi (`back`) */
@@ -22,8 +23,8 @@ export function readStaff(v: unknown): StaffState | null {
 
 /**
  * L'état du bâton d'une partie d'avant lui. Le royaume tombé : repris. Les Enfers déjà visités (ou la cinématique du portail
- * déjà vue) : volé, sans cinématique. Sinon sur la place : le vol viendra en son temps, à la carte du grand choix (encore à
- * l'Antiquité) ou juste avant la cinématique du portail ; jamais à l'improviste
+ * déjà vue) : volé, sans cinématique. Sinon sur la place : le vol viendra en son temps, juste avant la cinématique du portail ;
+ * jamais à l'improviste
  */
 export function staffOfOld(s: { kingFallen: boolean; hellSeen: boolean }): StaffState {
   if (s.kingFallen) return 'back';
@@ -36,15 +37,21 @@ export function staffNow(state: StaffState, kingFallen: boolean): StaffState {
 }
 
 /**
- * Le vol se joue-t-il avant la carte du grand choix ? Le bâton est sur la place, la voie des Enfers existe sur cette carte
- * (sinon le vol n'a pas de suite), et le village est encore à l'Antiquité (`age < crossroadsAge`) : une ancienne partie déjà
- * au Médiéval qui voit la carte tard ne le voit pas là, mais juste avant la cinématique du portail, si elle prend les Enfers
+ * Le bâton d'une partie chargée dont les Enfers sont déjà ouverts (les démons affrontés, `pve` à `on`, ou le portail refermé
+ * depuis, `off`) : volé, sans cinématique. Jusqu'au 26 nov. 2026, le vol se jouait avant la carte du grand choix, et une
+ * partie pouvait ouvrir les Enfers avec le bâton encore sur la place (sauvegardée entre le choix et la cinématique) ;
+ * maintenant les Enfers ne s'ouvrent jamais sans lui
  */
-export function theftBeforeChoice(s: { staff: StaffState; hellPossible: boolean; age: number; crossroadsAge: number }): boolean {
-  return s.staff === 'home' && s.hellPossible && s.age < s.crossroadsAge;
+export function staffOfOpen(staff: StaffState, hellOpened: boolean): StaffState {
+  return staff === 'home' && hellOpened ? 'stolen' : staff;
 }
 
-/** Le vol se joue-t-il avant la cinématique du portail ? Toujours si le bâton est encore sur la place */
+/**
+ * Le vol se joue-t-il avant la cinématique du portail ? Toujours si le bâton est encore sur la place : c'est la première
+ * partie de cette cinématique, au moment où le joueur prend la voie des Enfers (grand choix, onglet « Grands choix », bac à
+ * sable). Le vol n'a plus lieu avant la carte du grand choix (retour de l'auteur, 26 nov. 2026) : « Explorer le monde » et
+ * « Ni l'un ni l'autre » laissent le bâton sur la place
+ */
 export function theftBeforePortal(staff: StaffState): boolean {
   return staff === 'home';
 }

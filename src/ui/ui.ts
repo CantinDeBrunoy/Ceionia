@@ -102,6 +102,8 @@ export interface UIHost {
   /** la carte du conflit des deux îles dans l'onglet « Grands choix » (null : pas d'archipel ou pas d'allié) */
   conflictWay?(): ConflictWay | null;
   takeWay?(way: Way): void;
+  /** revoir le vol du bâton du fondateur (son film, ou le remplacement en direct), puis `then` : le film du portail */
+  replayTheft?(then: () => void): void;
   /** rouvrir la carte du grand choix (condition du passage au Médiéval) */
   openCrossroads?(): void;
   /** la diplomatie de l'archipel : la ligne du conflit des deux îles (rayon Vie) et sa carte */
@@ -3107,8 +3109,11 @@ export class UI {
       if (!b) return;
       h.audio.sfxClick();
       close();
-      // (avec la musique de sa cinématique : le portail ou la traversée)
-      replayFilm(b.dataset.replay === 'hell' ? PORTAL_FILM : { ...VOY_FILES, ...VOY_FILM }, undefined, b.dataset.replay === 'hell' ? 'portal' : 'voyage');
+      // (avec la musique de sa cinématique : le portail ou la traversée ; les Enfers en deux parties, le vol du bâton puis le
+      // film du portail)
+      if (b.dataset.replay !== 'hell') { replayFilm({ ...VOY_FILES, ...VOY_FILM }, undefined, 'voyage'); return; }
+      const portal = () => { replayFilm(PORTAL_FILM, undefined, 'portal'); };
+      if (h.replayTheft) h.replayTheft(portal); else portal();
     });
     // le conflit des deux îles : la fenêtre se ferme, la carte paix ou guerre s'ouvre (ou la bataille)
     ov.addEventListener('click', (e) => {

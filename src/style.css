@@ -2434,3 +2434,6 @@ body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsB
 /* La cinématique du vol du bâton (staffStage.ts) : le ciel qui s'assombrit, rouge sombre sur les bords, et la lueur de la faille */
 #staffCine .sc-tint { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at 50% 55%, rgba(40, 8, 12, 0) 30%, rgba(40, 6, 12, 0.55) 75%, rgba(18, 2, 6, 0.85) 100%), rgba(30, 8, 20, 0.28); }
 #staffCine .sc-glow { position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at var(--gx, 50%) var(--gy, 60%), rgba(255, 90, 30, 0.35), rgba(255, 60, 20, 0) 32%); mix-blend-mode: screen; }
+/* Le film du vol (public/vol/), opaque par-dessus le jeu comme celui du portail ; sans film, caché : le vol en direct */
+#staffCine .scFilm { position: absolute; inset: 0; background: #000; overflow: hidden; }
+#staffCine .scFilm video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
