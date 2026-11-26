@@ -15,6 +15,7 @@ import { planHellRecruit, orderHellRecruit, stepHellWaiting, shortWhy } from '..
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 import { nextGoal, goalLine, HellGoal, sealedWhy } from '../sim/objective';
 import { pic, withPic, hudPic } from './pics';
+import { staffIcon } from './staffIcon';
 import { ic } from './icons';
 import { cardData } from './xcard';
 
@@ -104,6 +105,8 @@ export interface CommandHost {
   camKeys: Set<string>;
   /** le nom de la zone regardée dans les Enfers (pour la frise) */
   zoneName?(): string | null;
+  /** le bâton du fondateur est aux mains du roi démon (volé, pas encore repris) : la frise et l'objectif le disent */
+  staffLost?(): boolean;
   /** la vue suit les troupes (Enfers) : lire, ou la mettre en marche / l'arrêter */
   following?(): boolean;
   follow?(on: boolean): void;
@@ -1331,6 +1334,7 @@ export class CommandUI implements ToolInput {
     alerts.sort((a, b) => a.rank - b.rank);
     const hot = new Set(alerts.map((a) => a.zone));
     let nodes = '';
+    const lost = !!this.host.staffLost?.();
     if (f && f.gate) {
       nodes = HELL_ZONES.map((zd, i) => {
         const held = f.held(i) || f.victory, ageLock = ZONE_AGE[i] > age;
@@ -1339,13 +1343,16 @@ export class CommandUI implements ToolInput {
         const link = i ? `<i class="zl${held ? ' ok' : ''}"></i>` : '';
         // l'emblème peint de la zone dans un médaillon de fer ; l'état en pastille (coche, cadenas) et en couleur
         const badge = st === 'ok' ? hudPic('coche', 16, 'zs') : st === 'lock' || st === 'shut' ? hudPic('cadenas', 15, 'zs') : '';
-        return `${link}<span class="zn ${st}" title="${tip.replace(/"/g, '&quot;')}"><span class="zc"><img class="ze" src="./icons/hell/zone-${i}.webp" alt="" draggable="false" decoding="async">${badge}</span><span class="zt"><small>${i ? i : 'P'}</small>${tr(CommandUI.ZSHORT[i])}</span></span>`;
+        // le dernier palier, celui de la couronne : le bâton du fondateur y attend, aux mains du roi démon (le but de la descente)
+        const staff = lost && i === HELL_ZONES.length - 1;
+        const tipS = staff ? `${tip} · ${tr('Le bâton du fondateur est ici, aux mains du roi démon')}` : tip;
+        return `${link}<span class="zn ${st}${staff ? ' staff' : ''}" title="${tipS.replace(/"/g, '&quot;')}"><span class="zc"><img class="ze" src="./icons/hell/zone-${i}.webp" alt="" draggable="false" decoding="async">${badge}${staff ? staffIcon(22, 'zst') : ''}</span><span class="zt"><small>${i ? i : 'P'}</small>${staff ? tr('Le bâton') : tr(CommandUI.ZSHORT[i])}</span></span>`;
       }).join('');
     }
     const al = alerts[0];
     const zn = this.host.zoneName?.();
     // au bout de la frise, l'objectif (la distance se met à jour à part, sans refaire la barre) : un clic y centre la vue
-    const g = this.goal, goal = g ? (g.x !== undefined ? `<button data-a="goal" class="tfg" title="${tr('Centrer la vue sur l’objectif')}">${hudPic('militaire', 18)}<span class="tgo">${goalLine(g, null)}<b class="tgd"></b></span></button>` : `<button data-a="locked" class="tfg" title="${tr('Pourquoi la zone est fermée')}">${pic('🔒', 18)}<span class="tgo">${goalLine(g, null)}</span></button>`) : '';
+    const g = this.goal, goal = g ? (g.x !== undefined ? `<button data-a="goal" class="tfg" title="${lost ? tr('Centrer la vue sur l’objectif. Le but : reprendre le bâton du fondateur, au fond des Enfers') : tr('Centrer la vue sur l’objectif')}">${hudPic('militaire', 18)}<span class="tgo">${goalLine(g, null, lost)}<b class="tgd"></b></span></button>` : `<button data-a="locked" class="tfg" title="${tr('Pourquoi la zone est fermée')}">${pic('🔒', 18)}<span class="tgo">${goalLine(g, null)}</span></button>`) : '';
     // dessous, seulement quand les démons menacent la base
     const row = al ? `<div class="tgoal"><span class="tfa" title="${al.text.replace(/"/g, '&quot;')}">${pic('⚠️', 16)} ${al.text}</span></div>` : '';
     return `<div class="tstate tfcol"><div class="tfrise hellf">${zn ? `<span class="tfn" title="${tr('La zone où se trouve la vue. Un clic sur le portail ramène au village')}"><img class="tfb" src="./icons/hell/banniere.webp" alt="" draggable="false" decoding="async"><span class="tft"><b>${tr('Les Enfers')}</b><small>${zn}</small></span></span>` : ''}<div class="tfz">${nodes}</div>${goal}</div>${row}</div>`;

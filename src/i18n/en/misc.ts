@@ -193,7 +193,7 @@ registerDict('misc', {
   'La terre était sauvage': 'The land was wild',
   'Un peuple errait': 'A people wandered',
   'cherchant sa terre': 'in search of a home',
-  'Ici, ils allaient bâtir leur foyer': 'Here, they would build their home',
+  'Ici, le chef planta son bâton': 'Here, the chief planted his staff',
   'Cinématique d’ouverture': 'Opening cinematic',
   'Au début d’une partie': 'At the start of a game',
   'Activée': 'On',

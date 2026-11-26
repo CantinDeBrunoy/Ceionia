@@ -54,9 +54,10 @@ const SAMPLE_PEAK = 0.16;
 
 /**
  * Ambiances musicales hors des âges : le menu principal, les Enfers, la fin (voyage des colons, victoire) et chaque
- * cinématique : l'ouverture, le portail, la traversée (« Explorer le monde »), la chute du roi, la paix des îles
+ * cinématique : l'ouverture, le vol du bâton du fondateur, le portail, la traversée (« Explorer le monde »), la chute du roi,
+ * la paix des îles
  */
-export type MusicScene = 'menu' | 'hell' | 'end' | 'opening' | 'portal' | 'voyage' | 'king' | 'peace';
+export type MusicScene = 'menu' | 'hell' | 'end' | 'opening' | 'portal' | 'voyage' | 'king' | 'peace' | 'theft';
 /**
  * Musique enregistrée, en attendant celle composée pour le jeu : fichiers de `public/sons/musique/` (sans extension),
  * une liste par âge (`age0` … `age5`) et par scène. Sources et licences : `docs/audio.md` et la page Crédits. Une liste
@@ -73,6 +74,8 @@ export const MUSIC: Record<string, string[]> = {
   age5: ['futuriste-synthwave', 'futuriste-aout', 'futuriste-lifewave'],
   menu: ['menu'], hell: ['enfers-oppression', 'enfers-com-mecha', 'enfers-croisade', 'enfers-rituel'], end: ['fin'],
   opening: ['cine-ouverture'], portal: ['cine-portail'], voyage: ['cine-traversee'], king: ['cine-roi'], peace: ['cine-paix'],
+  // le vol du bâton du fondateur : « The Descent », une irruption sombre de cuivres et de percussions
+  theft: ['cine-vol'],
 };
 /**
  * Les coups de musique : un court morceau joué par-dessus celui en cours, qui baisse le temps qu'il passe (`DUCK`). Pour une

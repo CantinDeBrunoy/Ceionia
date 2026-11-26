@@ -4,6 +4,7 @@ import type { Hell, HellUnit, HellBuilding } from './hell';
 import type { GearId } from './gear';
 import type { NeedKey } from './missions';
 import { SECURE_WAVES } from './hell';
+import { STAFF_PERK } from './staff';
 
 /**
  * Le royaume des Enfers : le combat du roi, au pied de sa citadelle, et ce que rapporte sa chute. Le roi dort sur son trône
@@ -235,7 +236,7 @@ export const FORGE_CRAFT = 1.5, FORGE_RISK = 0.85;
 /** Le royaume des Enfers est tombé dans cette partie (l'île du portail est purifiée, le portail éteint) */
 export function hellFallen(w: { exp: { perks: readonly string[] } }) { return w.exp.perks.includes(KINGDOM_PERK); }
 
-export interface KingdomReward { ore: number; gear: [GearId, number][]; joy: number }
+export interface KingdomReward { ore: number; gear: [GearId, number][]; joy: number; /** le bâton du fondateur repris (absent : une récompense d'avant lui) */ staff?: boolean }
 
 /** Ce que touche le village pour la chute du royaume */
 export interface KingdomPurse {
@@ -253,9 +254,11 @@ export function claimKingdom(w: KingdomPurse, secure = SECURE_WAVES): KingdomRew
   if (w.exp.perks.includes(KINGDOM_PERK)) return null;
   w.exp.perks.push(KINGDOM_PERK);
   if (!w.exp.perks.includes(FORGE_PERK)) w.exp.perks.push(FORGE_PERK);
+  // le bâton du fondateur, que le roi tenait comme un sceptre : il rentre au village (voir `sim/staff.ts`)
+  if (!w.exp.perks.includes(STAFF_PERK)) w.exp.perks.push(STAFF_PERK);
   w.ore += KINGDOM_ORE;
   for (const [g, n] of KINGDOM_GEAR) w.exp.gear[g] = (w.exp.gear[g] ?? 0) + n;
   w.exp.bonus.joy += KINGDOM_JOY;
   w.isleGuard.waves = Math.max(w.isleGuard.waves, secure);
-  return { ore: KINGDOM_ORE, gear: KINGDOM_GEAR.map(([g, n]) => [g, n]), joy: KINGDOM_JOY };
+  return { ore: KINGDOM_ORE, gear: KINGDOM_GEAR.map(([g, n]) => [g, n]), joy: KINGDOM_JOY, staff: true };
 }

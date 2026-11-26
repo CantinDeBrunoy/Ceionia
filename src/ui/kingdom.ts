@@ -3,6 +3,8 @@ import { FORGE_CRAFT, FORGE_RISK } from '../sim/kingdom';
 import { GEAR_BY } from '../sim/gear';
 import { ic } from './icons';
 import { pic } from './pics';
+import { staffIcon } from './staffIcon';
+import { STAFF_YIELD } from '../sim/staff';
 import { tr, t, localize, registerKeys } from '../i18n';
 
 /**
@@ -18,7 +20,7 @@ export const KINGDOM_TEXT = {
   fallen: 'Le roi est tombé : abattez sa citadelle',
   focus: 'Centrer la vue sur le roi',
   banner: 'Le royaume des Enfers',
-  bannerSub: 'La citadelle du roi se dresse derrière ses douves de lave. Approchez avec toute votre armée (facultatif).',
+  bannerSub: 'La citadelle du roi se dresse derrière ses douves de lave : il y tient le bâton du fondateur. Approchez avec toute votre armée (facultatif).',
   title: 'Le royaume des Enfers est tombé',
   story: 'La citadelle s’est effondrée dans la lave, le roi des Enfers n’est plus. Sur l’île, le portail s’est éteint dans un éclat de lumière dorée : plus aucun démon ne viendra menacer vos rivages. Le village fête ses héros !',
   rewards: 'Récompenses',
@@ -27,6 +29,7 @@ export const KINGDOM_TEXT = {
   ore: (n: number) => tr('{n} minerai', { n }),
   joy: (n: number) => tr('+{n} bien-être, pour toujours', { n }),
   isle: 'L’île du portail est purifiée : fini les incursions',
+  staff: (k: number) => tr('Le bâton du fondateur revient sur la place : bois, pierre, minerai et briques +{n} %', { n: Math.round((k - 1) * 100) }),
   cont: 'Continuer',
   // « Passer » est déjà pris (avancer d'âge) : clé stable
   get skip() { return t('kingdom.skip'); },
@@ -79,14 +82,14 @@ export function showKingdomVictory(root: HTMLElement, r: KingdomReward | null, o
   ov.className = 'overlay victory kingdomWin';
   const gear = r ? r.gear.map(([g, n]) => `${n} ${tr(n > 1 ? GEAR_BY[g].plural : GEAR_BY[g].name).toLowerCase()}`).join(', ') : '';
   const items = r ? [
-    ['🏆', T.trophy], ['🔥', T.forge(FORGE_CRAFT, FORGE_RISK)], ['⛏️', T.ore(r.ore)], ['⚔️', gear], ['😊', T.joy(r.joy)], ['🌿', T.isle],
+    ...(r.staff ? [[staffIcon(28), T.staff(STAFF_YIELD)]] : []), ['🏆', T.trophy], ['🔥', T.forge(FORGE_CRAFT, FORGE_RISK)], ['⛏️', T.ore(r.ore)], ['⚔️', gear], ['😊', T.joy(r.joy)], ['🌿', T.isle],
   ] : [['🌿', T.isle]];
   ov.innerHTML = `<div class="modal panel victoryCard">
     <canvas width="1040" height="400"></canvas>
     <h2>${T.title}</h2>
     <p class="story">${T.story}</p>
     <h4 class="kwHead">${T.rewards}</h4>
-    <ul class="kwRewards">${items.map(([i, t]) => `<li><b>${pic(i, 28)}</b><span>${t}</span></li>`).join('')}</ul>
+    <ul class="kwRewards">${items.map(([i, t]) => `<li><b>${i.startsWith('<') ? i : pic(i, 28)}</b><span>${t}</span></li>`).join('')}</ul>
     <div class="row"><button class="home">${ic('house', 16)} ${T.home}</button><span class="grow"></span><button class="active ok">${T.cont}</button></div>
   </div>`;
   root.appendChild(ov);

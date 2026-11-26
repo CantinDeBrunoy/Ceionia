@@ -13,7 +13,7 @@ describe('La cinématique de fin du volet militaire : la partition', () => {
   it('dure entre 25 et 30 secondes, en cinq plans qui se suivent sans trou', () => {
     expect(END_TOTAL).toBeGreaterThanOrEqual(25);
     expect(END_TOTAL).toBeLessThanOrEqual(30);
-    expect(END_PLAN.map((p) => p.id)).toEqual(['collapse', 'travel', 'portal', 'isle', 'village']);
+    expect(END_PLAN.map((p) => p.id)).toEqual(['collapse', 'travel', 'portal', 'isle', 'village', 'staff']);
     let t = 0;
     for (const p of END_PLAN) {
       expect(endShotStart(p.id)).toBeCloseTo(t);
@@ -33,7 +33,7 @@ describe('La cinématique de fin du volet militaire : la partition', () => {
   });
 
   it('trois bandeaux, chacun dans son plan, qui apparaissent et s’effacent en douceur', () => {
-    expect(END_CAPTIONS.map((c) => c.text)).toEqual(['Le roi des Enfers est tombé', 'Le portail s’éteint', 'L’île est sauvée']);
+    expect(END_CAPTIONS.map((c) => c.text)).toEqual(['Le roi des Enfers est tombé', 'Le portail s’éteint', 'L’île est sauvée', 'Le bâton du fondateur revient sur la place']);
     for (const c of END_CAPTIONS) {
       const t0 = endShotStart(c.shot), dur = END_PLAN.find((p) => p.id === c.shot)!.dur;
       expect(c.at + c.dur).toBeLessThanOrEqual(dur);

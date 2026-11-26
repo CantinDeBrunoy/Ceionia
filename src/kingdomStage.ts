@@ -6,7 +6,7 @@ import { Z_KINGDOM, zoneOfZ } from './world/hell';
 import { hellFallen } from './sim/kingdom';
 import { GoldenBurst } from './render/goldenBurst';
 import { KingdomEndFx } from './render/kingdomEndFx';
-import { END_PLAN, EndShot, endShotAt, endShotStart, endFlashAt, endBlackAt, endCaptionAt, shouldPlayKingdomEnd } from './kingdomEnd';
+import { END_PLAN, EndShot, endShotAt, endShotStart, endFlashAt, endBlackAt, endCaptionAt, shouldPlayKingdomEnd, staffRiseAt } from './kingdomEnd';
 import { BossBar, KINGDOM_TEXT, showKingdomVictory } from './ui/kingdom';
 import { tr } from './i18n';
 import { skipAsk } from './ui/skipAsk';
@@ -40,6 +40,8 @@ export interface StageHost {
   crowd(on: boolean, x: number, z: number): void;
   /** la vue revient sur la grande place */
   goHome(): void;
+  /** le bâton du fondateur sur la grande place : où il est, et le faire remonter de terre (0 : sous terre, 1 : à sa place) */
+  staff?: { at(): { x: number; y: number; z: number; h: number } | null; rise(k: number): void };
   ui: { root: HTMLElement; banner(title: string, sub: string): void; toast(m: string, act?: () => void, level?: 'info' | 'notice' | 'danger' | 'action'): void };
   audio: { sfxRoar(k?: number): void; sfxWarDrum(accent?: boolean): void; sfxGoldBurst(): void; sfxRumble(dur: number): void; sfxAgeUp(): void };
 }
@@ -167,6 +169,8 @@ export class KingdomStage {
     const inHell = h.mode() === 'hell' && !!hv;
     if (force) this.portalOut = false;
     this.fin = { t: inHell ? 0 : endShotStart('portal'), shot: null, burst: null, fx: null, dist: h.cam.dist, force, hold: true, yaw: h.cam.view().yaw, dissolved: false, rocketAt: -9 };
+    // le bâton du fondateur attend sous terre son plan à lui (pas la rediffusion du mode développeur)
+    if (!force) h.staff?.rise(0);
     if (inHell) {
       hv!.startCollapse();
       h.audio.sfxRumble(END_PLAN[0].dur);
@@ -230,8 +234,29 @@ export class KingdomStage {
       h.cam.jump({ x: p.x, z: p.z, yaw: fin.yaw + cur.local * 0.1, pitch: 0.62 + e * 0.4, dist: 17 + e * 20 }, gy);
       return;
     }
-    // le village fête ses héros : la vue glisse jusqu'à lui, feux d'artifice et habitants qui sautent de joie
     if (fin.hold) { fin.hold = false; fin.fx!.regreen(); }
+    if (cur.shot === 'staff') {
+      // le bâton du fondateur remonte de terre sur la grande place, dans une gerbe dorée ; la vue s'y pose un instant
+      const s = h.staff?.at();
+      if (!s) { if (cur.local > 0.5) this.endFinale(); return; }
+      if (!fin.force) h.staff!.rise(staffRiseAt(cur.local));
+      if (first && !fin.force) {
+        fin.burst = new GoldenBurst(s.x, s.y, s.z);
+        fin.burst.group.scale.setScalar(0.22);
+        h.scene.add(fin.burst.group);
+        h.audio.sfxGoldBurst();
+      }
+      if (fin.burst && !fin.burst.update(dt)) this.dropBurst();
+      const e = ease(Math.min(1, cur.k * 1.8)), v = h.village() ?? [s.x, s.z];
+      const x = v[0] + (s.x - v[0]) * e, z = v[1] + (s.z - v[1]) * e;
+      const c = h.cam, md = c.minDist;
+      c.minDist = 0.3;
+      c.jump({ x, z, yaw: 0.75 + (1 - e) * 0.25, pitch: 0.8 - e * 0.36, dist: 19 - e * 17.3 }, s.y + e * s.h * 0.5);
+      c.minDist = md;
+      if (cur.local - fin.rocketAt > 1.6 && v) { fin.rocketAt = cur.local; h.fest(v[0], v[1]); }
+      return;
+    }
+    // le village fête ses héros : la vue glisse jusqu'à lui, feux d'artifice et habitants qui sautent de joie
     const v = h.village();
     if (!v) return;
     const e = ease(Math.min(1, cur.k * 1.5)), x = p.x + (v[0] - p.x) * e, z = p.z + (v[1] - p.z) * e;
@@ -296,6 +321,8 @@ export class KingdomStage {
 
   private endFinale() {
     const h = this.host, f = this.fin;
+    // (passée en route, le bâton est à sa place)
+    h.staff?.rise(1);
     if (f) {
       this.dropBurst();
       if (f.fx) { h.scene.remove(f.fx.group); f.fx.dispose(); }

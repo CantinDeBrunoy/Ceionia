@@ -1,4 +1,5 @@
 import type { KindId } from '../build/catalog';
+import { staffYield } from './staff';
 
 /**
  * Ce que laisse une expédition réussie, quand ce n'est pas un bâtiment à bâtir : un savoir-faire durable (`exp.perks`), qui
@@ -42,9 +43,11 @@ export const SULFUR_MINE = 1.3;
 export const COAL_CRAFT = 1.25, COAL_BRICKS = 1.3;
 /** Production d'un bâtiment de ressources selon les savoir-faire (mines, briqueteries) */
 export function perkYield(w: Perks, kind: KindId) {
-  if (kind === 'mine' && hasPerk(w, 'sulfur')) return SULFUR_MINE;
-  if (kind === 'brickworks' && hasPerk(w, 'coalfire')) return COAL_BRICKS;
-  return 1;
+  // (le bâton du fondateur repris se cumule aux autres savoir-faire)
+  const k = staffYield(w, kind);
+  if (kind === 'mine' && hasPerk(w, 'sulfur')) return SULFUR_MINE * k;
+  if (kind === 'brickworks' && hasPerk(w, 'coalfire')) return COAL_BRICKS * k;
+  return k;
 }
 
 /** Le tracé du chemin de fer : trains plus rapides, et un train de marchandises qui fait produire ×2 au lieu de ×1,75 */

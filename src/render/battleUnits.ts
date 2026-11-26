@@ -629,13 +629,22 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
   ]);
   const handY = -armLen;
   const weaponR: Record<DemonKind, THREE.BufferGeometry[]> = {
-    // fourche du diablotin, massue cloutée de la brute, hache du chef, sceptre à orbe du roi ; le gardien frappe du poing
+    // fourche du diablotin, massue cloutée de la brute, hache du chef, le bâton du fondateur pour le roi ; le gardien frappe du poing
     imp: [paint(new THREE.CylinderGeometry(0.015, 0.015, 0.55, 4).rotateX(Math.PI / 2).translate(0, handY, 0.15), 0x5a3a24), ...[-0.04, 0, 0.04].map((x) => paint(new THREE.ConeGeometry(0.015, 0.09, 3).rotateX(Math.PI / 2).translate(x, handY, 0.46), 0xd0d0d8))],
     archer: [],
     brute: [paint(new THREE.CylinderGeometry(0.07, 0.035, 0.5, 6).rotateX(Math.PI / 2).translate(0, handY, 0.25), 0x6a4a30), ...[0, 1, 2, 3].map((i) => paint(new THREE.ConeGeometry(0.025, 0.07, 3).rotateZ(Math.PI / 2 + (i * Math.PI) / 2).translate(Math.cos(i * 1.57) * 0.07, handY + Math.sin(i * 1.57) * 0.07, 0.42), 0xd8d0c0))],
     chief: [paint(new THREE.CylinderGeometry(0.018, 0.018, 0.6, 4).rotateX(Math.PI / 2).translate(0, handY, 0.2), 0x3a2a24), paint(new THREE.CylinderGeometry(0.12, 0.12, 0.02, 3, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).translate(0, handY + 0.05, 0.45), 0xd8d8e0)],
     guardian: [],
-    king: [paint(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 5).rotateX(Math.PI / 2).translate(0, handY, 0.25), 0xe0b040), paint(new THREE.IcosahedronGeometry(0.07, 1).translate(0, handY, 0.66), 0xff3a6a)],
+    // le roi brandit le bâton du fondateur, volé sur la place du village (voir `docs/lore-enfers.md`) : bois noueux, poignée de
+    // cuir, bandes rouges et or, la pierre bleue au bout, deux plumes qui pendent
+    king: [
+      paint(new THREE.CylinderGeometry(0.02, 0.026, 0.86, 6).rotateX(Math.PI / 2).translate(0, handY, 0.24), 0x7a5232),
+      paint(new THREE.CylinderGeometry(0.031, 0.031, 0.1, 6).rotateX(Math.PI / 2).translate(0, handY, 0.02), 0x5a3a22),
+      ...[[0.56, 0xb8402a], [0.6, 0xe8c060], [0.64, 0xb8402a]].map(([z, c]) => paint(new THREE.CylinderGeometry(0.027, 0.027, 0.025, 6).rotateX(Math.PI / 2).translate(0, handY, z), c)),
+      ...[-1, 1].map((sd) => paint(new THREE.ConeGeometry(0.012, 0.09, 4).rotateX(Math.PI / 2).rotateY(sd * 0.35).translate(sd * 0.025, handY, 0.71), 0x4e321e)),
+      paint(new THREE.OctahedronGeometry(0.055, 0).scale(1, 1, 1.3).translate(0, handY, 0.78), 0x3aa8e8),
+      ...[[-1, 0xf2ead8], [1, 0xd89a3a]].map(([sd, c]) => paint(new THREE.ConeGeometry(0.03, 0.16, 4).scale(1, 1, 0.25).rotateZ(Math.PI).translate(sd * 0.035, handY - 0.08, 0.6), c)),
+    ],
     elite: [paint(new THREE.CylinderGeometry(0.016, 0.016, 0.75, 4).rotateX(Math.PI / 2).translate(0, handY, 0.22), 0x3a2a24), paint(new THREE.CylinderGeometry(0.11, 0.11, 0.02, 3, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).translate(0, handY + 0.04, 0.55), 0xe8c060), paint(new THREE.ConeGeometry(0.025, 0.12, 4).rotateX(Math.PI / 2).translate(0, handY, 0.64), 0xd8d8e0)],
     // le golem frappe du poing de lave ; le démon cornu, d'une grande hache de pierre ; le seigneur, d'une épée de flamme ; le titan, d'un maillet de basalte
     golem: [],

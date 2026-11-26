@@ -34,7 +34,7 @@ export const OPEN_LIVE = 6.5;
 /** La nuée se lève en `OPEN_LIFT` secondes au début du direct */
 export const OPEN_LIFT = 1.8;
 /** Le bandeau du direct */
-export const OPEN_LIVE_CAPTION = { at: 1.4, dur: 4.6, text: 'Ici, ils allaient bâtir leur foyer' };
+export const OPEN_LIVE_CAPTION = { at: 1.4, dur: 4.6, text: 'Ici, le chef planta son bâton' };
 
 const fade = (t: number, at: number, dur: number) => Math.max(0, Math.min(1, (t - at) / 0.6, (at + dur - t) / 0.6));
 

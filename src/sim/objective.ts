@@ -35,12 +35,13 @@ export function nextGoal(h: Hell, from: [number, number]): HellGoal {
 }
 
 /** « Objectif : abattre la forteresse (à 24 cases) » : une phrase courte */
-export function goalLine(g: HellGoal, dist: number | null): string {
+export function goalLine(g: HellGoal, dist: number | null, staffLost = false): string {
   const d = dist === null ? '' : ` ${tr('(à {n})', { n: nplural(Math.max(1, Math.round(dist)), 'case', 'cases') })}`;
   switch (g.kind) {
     case 'outpost': return `${tr('Objectif : abattre l’avant-poste')}${d}`;
     case 'fortress': return `${tr('Objectif : abattre la forteresse')}${d}`;
-    case 'kingdom': return `${tr('Objectif : abattre la citadelle du royaume')}${d}`;
+    // (le bâton du fondateur est dans la citadelle, aux mains du roi : voir `docs/lore-enfers.md`)
+    case 'kingdom': return `${staffLost ? tr('Objectif : abattre la citadelle et reprendre le bâton') : tr('Objectif : abattre la citadelle du royaume')}${d}`;
     case 'locked': return tr('Zone suivante fermée : il faut {age} au village', { age: zoneAgeText(g.zone) });
     default: return tr('Les Enfers sont vaincus');
   }

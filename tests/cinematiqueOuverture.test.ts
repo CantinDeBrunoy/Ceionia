@@ -41,7 +41,7 @@ describe('la cinématique d’ouverture : la partition', () => {
     expect(openCloudAt(0)).toBe(1);
     expect(openCloudAt(OPEN_LIFT)).toBe(0);
     expect(OPEN_LIVE_CAPTION.at + OPEN_LIVE_CAPTION.dur).toBeLessThanOrEqual(OPEN_LIVE);
-    expect(openLiveCaptionAt(OPEN_LIVE_CAPTION.at + 2)?.text).toBe('Ici, ils allaient bâtir leur foyer');
+    expect(openLiveCaptionAt(OPEN_LIVE_CAPTION.at + 2)?.text).toBe('Ici, le chef planta son bâton');
     const to = { x: 90, z: 100, yaw: 0.75, pitch: 0.85, dist: 34 };
     const start = openViewAt(0, { x: 80, z: 120 }, to), end = openViewAt(1, { x: 80, z: 120 }, to);
     // (du ciel, au-dessus de la bête, en plongée)

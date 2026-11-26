@@ -94,6 +94,9 @@ import { ExpeditionView, followPoint } from './render/expeditionView';
 import { PavingView } from './render/paving';
 import { Festivities } from './render/festivities';
 import { Trophies, trophiesWon } from './render/trophies';
+import { FounderStaff } from './render/founderStaff';
+import { STAFF_PERK, staffOfOld, staffNow, theftBeforeChoice, theftBeforePortal } from './sim/staff';
+import { hellFallen } from './sim/kingdom';
 import { HomeButton, awayFromHome } from './ui/homeButton';
 import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
@@ -115,6 +118,7 @@ import { War, clockText } from './sim/war';
 import { INVASION_WAVES } from './sim/hell';
 import { KingdomStage } from './kingdomStage';
 import { PortalStage } from './portalStage';
+import { StaffStage } from './staffStage';
 import { portalCineReady } from './portalCine';
 import { TrophyStage } from './trophyStage';
 import { cineCalm, trophyOfMission } from './trophyCine';
@@ -126,7 +130,7 @@ import { PortalChoice } from './ui/portalChoice';
 import { WorldChoice } from './ui/worldChoice';
 import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld, repairCoast } from './world/expand';
-import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
+import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
 import type { ConflictWay } from './ui/ways';
 import { bindPostReady, pathDue, ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, conflictState, endgameOpen, endgameWhy, peopleName, isleName, isleOf, rivalOf, settleLate, battleReady, loseAllyBattle, claimVictory, chooseVictors, WAR_SPOILS, RETRY_DAYS, type Victors } from './sim/diplomacy';
@@ -354,6 +358,8 @@ class Game implements UIHost {
   /** les trophées des gros monstres vaincus, sur la grande place ; quand on les remet à jour */
   trophies: Trophies;
   private trophyT = 0;
+  /** le bâton du fondateur, sur la grande place (voir `docs/lore-enfers.md`) */
+  founderStaff: FounderStaff;
   /** bruitages de proximité : prochain choix des sources (s), volcans de la carte (cases) et version du monde où on les a comptés */
   private spotT = 0;
   /** prochain cri d'un animal sauvage près de la vue */
@@ -370,6 +376,8 @@ class Game implements UIHost {
   kingStage: KingdomStage;
   /** la cinématique du portail, à l'ouverture du portail (`portalStage.ts`) */
   portalStage: PortalStage;
+  /** la cinématique du vol du bâton du fondateur (voir `docs/lore-enfers.md`) */
+  staffStage: StaffStage;
   /** la pause et la vitesse d'avant la cinématique du portail */
   private portalPace: { paused: boolean; speed: number } | null = null;
   /** le temps d'avant le plan en direct de l'ouverture (la pause du tutoriel), rendu à sa fin */
@@ -612,6 +620,11 @@ class Game implements UIHost {
       if (w.sandbox) this.sim.age = Math.max(0, Math.min(AGES.length - 1, Math.round(startAge) || 0));
     }
     this.war.load(w.war);
+    // le bâton du fondateur d'une partie d'avant lui : repris si le roi est tombé, volé si les Enfers ont été vus, sinon sur la place
+    // (le vol viendra en son temps, jamais à l'improviste : voir `sim/staff.ts`)
+    if (w.staff === null) w.staff = staffOfOld({ kingFallen: hellFallen(w), hellSeen: this.war.visited || this.war.intro === 'seen' });
+    if (hellFallen(w) && !w.exp.perks.includes(STAFF_PERK)) w.exp.perks.push(STAFF_PERK);
+    w.staff = staffNow(w.staff, hellFallen(w));
     // les couleurs du blason sur tous les drapeaux et les troupes (shader commun, voir render/teamPaint.ts)
     setTeamBlason(w.blason);
     Object.assign(this.time, { dayLen: settings.dayLen === undefined || settings.dayLen === OLD_DAY_LEN ? 130 : settings.dayLen, seasonLen: settings.seasonLen === undefined || settings.seasonLen === OLD_SEASON_LEN ? 240 : settings.seasonLen, speed: settings.speed ?? 1 });
@@ -720,6 +733,8 @@ class Game implements UIHost {
     this.funeral = new Funeral(w);
     this.trophies = new Trophies(w);
     this.scene.add(this.trophies.group);
+    this.founderStaff = new FounderStaff(w);
+    this.scene.add(this.founderStaff.group);
     this.parade.onPop = () => this.audio.sfxBang(0.12);
     this.expView.fx.onClash = (k) => this.audio.sfxClash(k);
     // le chemin de fer : un train par ligne, de gare en gare
@@ -803,6 +818,7 @@ class Game implements UIHost {
     this.command = new CommandUI(uiRoot, {
       war: this.war, canvas, camKeys: this.cam.keys,
       zoneName: () => (this.mode === 'hell' && this.hellMode ? this.hellMode.zoneName(this.cam.target.z) : null),
+      staffLost: () => this.world.staff === 'stolen',
       age: () => this.sim.age, pop: () => this.sim.pop,
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), refuse: (m) => this.ui.refuse(m), click: () => audio.sfxClick(),
@@ -838,6 +854,7 @@ class Game implements UIHost {
       click: () => audio.sfxClick(), ways: () => this.ways(),
       hell: () => this.openHell(), world: () => void this.exploreWorld(),
       neither: () => { this.world.crossroads = true; this.ui.update(); this.saveNow(); },
+      staffLost: () => this.world.staff === 'stolen',
     });
     this.diploChoice = new DiploChoice(uiRoot, {
       diplo: () => this.world.diplo, why: () => endgameWhy(this.world, this.sim.age), click: () => audio.sfxClick(), battle: () => { this.startRivalBattle(); },
@@ -880,6 +897,7 @@ class Game implements UIHost {
       raiders: () => { const i = this.war.isle; return i ? i.raiders().map((u) => ({ x: u.x + i.map.ox, z: u.z + i.map.oz })) : []; },
       age: () => this.sim.age,
       village: () => this.villageCenter(), fest: (x, z) => this.festAt(x, z), crowd: (on, x, z) => this.kingCrowd(on, x, z),
+      staff: { at: () => this.founderStaff.where(), rise: (k) => this.founderStaff.lift(-(1 - k) * (this.founderStaff.where()?.h ?? 0.32) * 1.25) },
     });
     // la cinématique du portail : à l'ouverture du portail (le choix « Les Enfers »), le film (l'arche, la plongée) puis le Seuil des Enfers en direct
     this.portalStage = new PortalStage({
@@ -894,6 +912,11 @@ class Game implements UIHost {
       },
       enterHell: (quiet) => void this.enterHell(quiet),
       arrived: () => this.portalArrived(),
+    });
+    // le vol du bâton du fondateur : juste avant la carte du grand choix (ou, à défaut, avant la cinématique du portail)
+    this.staffStage = new StaffStage({
+      cam: this.cam, scene: this.scene, ui: { root: uiRoot }, staff: this.founderStaff, audio,
+      groundY: (x, z) => w.surfaceAt(x, z),
     });
     this.trophyStage = new TrophyStage({
       cam: this.cam, scene: this.scene, root: uiRoot, trophies: this.trophies, audio,
@@ -1187,7 +1210,7 @@ class Game implements UIHost {
     if (closed) { this.ui.toast(closed, this.war.pve === 'on' ? undefined : () => this.openPortalChoice()); return; }
     // la toute première entrée (le choix « Les Enfers », l'arche, le bouton du village) : la cinématique du portail la fait à sa
     // place ; une ancienne partie jamais entrée (`none`) la voit aussi
-    if (!quiet && (this.war.intro === 'due' || (this.war.intro === 'none' && this.war.direct)) && !this.portalStage.playing) { this.portalStage.play(); return; }
+    if (!quiet && (this.war.intro === 'due' || (this.war.intro === 'none' && this.war.direct)) && !this.portalStage.playing) { if (!this.staffStage.playing) this.playPortalCine(); return; }
     this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
@@ -1241,7 +1264,9 @@ class Game implements UIHost {
   private portalArrived() {
     const hm = this.hellMode;
     if (!hm || this.mode !== 'hell') return;
-    this.ui.banner(tr('Monde des Enfers'), tr('{zone} : le royaume démoniaque est tout au fond. L’expédition est facultative, et le portail ramène au village.', { zone: hm.zoneName(this.cam.target.z) }), 'hell');
+    this.ui.banner(tr('Monde des Enfers'), this.world.staff === 'stolen'
+      ? tr('{zone} : le bâton du fondateur est tout au fond, aux mains du roi démon. L’expédition est facultative, et le portail ramène au village.', { zone: hm.zoneName(this.cam.target.z) })
+      : tr('{zone} : le royaume démoniaque est tout au fond. L’expédition est facultative, et le portail ramène au village.', { zone: hm.zoneName(this.cam.target.z) }), 'hell');
     // la première entrée : le chapitre du tutoriel sur les Enfers (la cible, les troupes, l'attaque, le retour)
     this.tutorial.chapter('hell');
     this.ui.update();
@@ -1261,7 +1286,7 @@ class Game implements UIHost {
   private ageShot: { t: number; stop: () => void; c: [number, number]; off: number } | null = null;
   private ageShotStart() {
     const c = this.villageCenter();
-    if (!c || this.mode !== 'surface' || this.railEdit || this.voyageStage.playing || this.kingStage.playing || this.trophyStage.playing || this.portalStage?.playing || this.revealing || this.peaceCine) return;
+    if (!c || this.mode !== 'surface' || this.railEdit || this.voyageStage.playing || this.kingStage.playing || this.trophyStage.playing || this.portalStage?.playing || this.staffStage?.playing || this.revealing || this.peaceCine) return;
     // l'étendue du village : la distance de son centre aux quatre cinquièmes de ses bâtiments
     const ds = [...this.world.buildings.values()].map((b) => Math.hypot(b.x + sizeOf(b) / 2 - c[0], b.z + sizeOf(b) / 2 - c[1])).sort((a, b) => a - b);
     const r = ds[Math.floor(ds.length * 0.8)] ?? 8;
@@ -1296,7 +1321,7 @@ class Game implements UIHost {
     const ps = this.portalStage;
     ps.tick();
     if (ps.playing) { ps.step(dt); return; }
-    if (this.war.intro !== 'due') return;
+    if (this.war.intro !== 'due' || this.staffStage.playing) return;
     if (this.mode === 'hell') { this.war.intro = 'seen'; return; }
     const ready = portalCineReady({
       due: !!this.world.portal && this.world.portalOpen, surface: this.mode === 'surface',
@@ -1305,7 +1330,43 @@ class Game implements UIHost {
       busyHands: this.midGesture() || this.tools.tool !== 'none' || !!this.islePlace,
       otherCine: this.voyageStage.playing || this.kingStage.playing || this.revealing || !!this.peaceCine,
     });
-    if (ready) { this.popups.taken(); this.portalStage.play(); }
+    if (ready) { this.popups.taken(); this.playPortalCine(); }
+  }
+
+  /**
+   * La cinématique du portail, précédée du vol du bâton s'il est encore sur la place (bac à sable, ancienne partie qui ouvre le
+   * portail après avoir fait le grand choix sans lui) : le vol est la raison d'y aller
+   */
+  private playPortalCine() {
+    if (theftBeforePortal(this.world.staff ?? 'home') && this.mode === 'surface') { this.stealStaff(() => this.portalStage.play()); return; }
+    this.portalStage.play();
+  }
+
+  /**
+   * Les démons volent le bâton du fondateur (`staffStage.ts`), puis `then`. Le bâton est noté volé dès le départ : une partie
+   * rechargée pendant la cinématique ne la rejoue pas (la place le montre encore tant qu'elle joue)
+   */
+  private stealStaff(then: () => void) {
+    this.tools.setTool('none');
+    this.follow(null);
+    this.syncTrophies();
+    this.world.staff = 'stolen';
+    this.saveNow();
+    this.staffStage.play(() => { this.syncTrophies(); this.saveNow(); then(); });
+  }
+
+  /**
+   * La carte du grand choix, précédée du vol du bâton à la fin de l'Antiquité (`theftBeforeChoice`) : le vol donne un sens au
+   * choix dans les deux voies (les Enfers pour le reprendre, ou le laisser perdu)
+   */
+  private showGrandChoice() {
+    const { hell } = this.ways();
+    if (theftBeforeChoice({ staff: this.world.staff ?? 'home', hellPossible: hell !== 'none', age: this.sim.age, crossroadsAge: CROSSROADS_AGE })) {
+      this.popups.taken();
+      this.stealStaff(() => this.worldChoice.show());
+      return;
+    }
+    this.worldChoice.show();
   }
 
   /** Où regarder en entrant dans les Enfers : le groupe des troupes les plus avancées, sinon le camp le plus avancé, sinon le portail */
@@ -2555,7 +2616,8 @@ class Game implements UIHost {
     // le récit d'une expédition (et la cinématique de son trophée) passe avant : on choisissait sa voie avant de savoir qu'on
     // avait vaincu le kraken, et « Explorer le monde » rechargeait la page par-dessus le récit (Bernard, Karim, v6)
     if (this.reportsDue.size || this.trophyStage.playing) return;
-    if (this.crossroadsWanted && this.portalCalm > 3 && this.popups.open) { this.crossroadsWanted = false; this.popups.taken(); this.worldChoice.show(); return; }
+    if (this.staffStage.playing) return;
+    if (this.crossroadsWanted && this.portalCalm > 3 && this.popups.open) { this.crossroadsWanted = false; this.popups.taken(); this.showGrandChoice(); return; }
     if (this.crossroadsAsked || this.portalCalm <= 3 || !this.popups.open || this.tutorial.active) return;
     const ap = this.sim.ageProgress(), others = !!ap && ap.items.every((i) => i.label === CHOICE_LABEL || i.have >= i.need);
     // (dû dès le chargement : un message qui mène à la carte, pas la carte elle-même, voir `diploLoad`)
@@ -2564,7 +2626,7 @@ class Game implements UIHost {
     if (crossroadsDue(w, this.sim.age, hell, world, others)) {
       this.crossroadsAsked = true;
       if (quiet) this.ui.toast(tr('🧭 Le grand choix vous attend. Cliquez ici pour le faire.'), () => this.openCrossroads(), 'action');
-      else { this.popups.taken(); this.worldChoice.show(); }
+      else { this.popups.taken(); this.showGrandChoice(); }
     }
   }
   /** la carte du grand choix s'est déjà ouverte d'elle-même dans cette session (fermée sans choix, elle ne revient pas seule) */
@@ -2576,7 +2638,8 @@ class Game implements UIHost {
     if (crossroadsSettled(this.world, hell, world)) return;
     // un récit d'expédition attend : il passe d'abord, la carte s'ouvre juste après (`stepCrossroads`)
     if (this.reportsDue.size || this.trophyStage.playing) { this.crossroadsWanted = true; this.ui.toast(tr('📜 Le récit de l’expédition d’abord : le grand choix s’ouvrira juste après.')); return; }
-    this.worldChoice.show();
+    if (this.staffStage.playing) return;
+    this.showGrandChoice();
   }
   /** la carte du grand choix demandée pendant qu'un récit d'expédition attendait : elle s'ouvre après lui */
   private crossroadsWanted = false;
@@ -2632,7 +2695,7 @@ class Game implements UIHost {
    */
   private popupBusy() {
     return !!document.getElementById('loadScreen') || !!uiRoot.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible
-      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.openingStage?.playing || this.trophyStage?.playing || this.voyageStage?.playing || this.mode !== 'surface'
+      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.portalStage?.playing || this.staffStage?.playing || this.openingStage?.playing || this.trophyStage?.playing || this.voyageStage?.playing || this.mode !== 'surface'
       || document.body.classList.contains('photo');
   }
 
@@ -2687,7 +2750,7 @@ class Game implements UIHost {
   }
   private voyageEnds: (() => void)[] = [];
   /** Une cinématique joue (trophée, traversée, portail, ouverture, royaume) : les fenêtres qui s'ouvrent seules l'attendent */
-  cinematicPlaying() { return this.trophyStage.playing || this.voyageStage.playing || this.revealing || !!this.portalStage?.playing || !!this.openingStage?.playing || this.kingStage.playing; }
+  cinematicPlaying() { return this.trophyStage.playing || this.voyageStage.playing || this.revealing || !!this.portalStage?.playing || !!this.staffStage?.playing || !!this.openingStage?.playing || this.kingStage.playing; }
   /**
    * La scène musicale du moment (null : la musique de l'âge). Chaque cinématique a la sienne : un film revu depuis « Grands
    * choix » (`#filmReplay`), la chute du roi et son écran de victoire, la traversée (film puis survol), le portail, l'ouverture
@@ -2700,6 +2763,7 @@ class Game implements UIHost {
     if (ending) return 'end';
     if (this.voyageStage.playing || document.querySelector('#loadScreen.voyage')) return 'voyage';
     if (this.portalStage?.playing) return 'portal';
+    if (this.staffStage?.playing) return 'theft';
     if (this.openingStage?.playing || document.querySelector('#loadScreen.opening')) return 'opening';
     if (this.peaceCine) return 'peace';
     return this.mode === 'hell' ? 'hell' : null;
@@ -3213,8 +3277,12 @@ class Game implements UIHost {
   }
 
   private syncTrophies() {
-    const c = this.villageCenter();
-    this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp).filter((id) => !this.trophyStage.hidden(id)));
+    const c = this.villageCenter(), plaza = c ? this.plazaNear(c[0], c[1]) : null;
+    this.trophies.sync(plaza, trophiesWon(this.world.exp).filter((id) => !this.trophyStage.hidden(id)));
+    // le bâton du fondateur, sur la même place (le royaume tombé, il est repris quoi qu'il arrive)
+    this.world.staff = staffNow(this.world.staff ?? 'home', hellFallen(this.world));
+    // (pendant le vol, la place le montre encore : la cinématique l'anime à part)
+    this.founderStaff.sync(plaza, this.staffStage?.playing ? 'home' : this.world.staff);
   }
 
   /** l'outil que la cinématique d'un trophée a posé, rendu à sa fin */
@@ -3227,7 +3295,7 @@ class Game implements UIHost {
       away: this.mode !== 'surface' || this.isleCmd || this.fading || this.revealing || this.voyageStage.playing,
       placing: this.tools.pressing || !!this.railEdit || !!this.islePlace || this.command.active,
       window: !!this.ui.root.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible || !!document.querySelector('#warAlert.show'),
-      other: this.kingStage.playing || document.body.classList.contains('photo') || document.hidden,
+      other: this.kingStage.playing || !!this.staffStage?.playing || document.body.classList.contains('photo') || document.hidden,
       banner: !!document.querySelector('#banner.show'),
       notice: this.ui.popupShowing(),
     }, banner);
@@ -3918,7 +3986,8 @@ class Game implements UIHost {
       this.cam.camera.position.add(new THREE.Vector3(Math.sin(t * 47) + Math.sin(t * 29) * 0.5, Math.sin(t * 53) * 0.6, Math.sin(t * 41) + Math.sin(t * 23) * 0.5).multiplyScalar(a));
     }
     if (this.mode === 'surface') this.tools.update(dt);
-    // (après la caméra : la cinématique du portail pose la vue elle-même, temps réel)
+    // (après la caméra : les cinématiques du vol du bâton et du portail posent la vue elles-mêmes, temps réel)
+    if (this.staffStage.playing) this.staffStage.step(dt);
     this.stepPortalCine(dt);
     this.stepHellEase();
 

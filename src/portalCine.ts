@@ -21,7 +21,8 @@ export const PORTAL_FILM = {
   webm: './portail/passage.webm',
   mp4: './portail/passage.mp4',
   captions: [
-    { at: 1, dur: 5.5, text: 'Le portail s’éveille', sub: 'Au-delà, un autre monde' },
+    // (le portail s'ouvre toujours après le vol du bâton du fondateur : voir `docs/lore-enfers.md`)
+    { at: 1, dur: 5.5, text: 'Le portail s’éveille', sub: 'Au-delà, le bâton volé' },
   ] as { at: number; dur: number; text: string; sub?: string }[],
 };
 

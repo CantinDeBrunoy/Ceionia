@@ -1,5 +1,6 @@
 import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize, isRampart, isDecor } from '../build/catalog';
 import { readPortal } from './portal';
+import { readStaff, type StaffState } from '../sim/staff';
 import { tr } from '../i18n';
 import { smoothstep } from '../core/rng';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
@@ -419,6 +420,11 @@ export class World {
    * d'être (une voie déjà prise) : sa carte ne s'ouvre plus d'elle-même (sauvegardé ; voir `sim/crossroads.ts`)
    */
   crossroads = false;
+  /**
+   * Le bâton du fondateur (`sim/staff.ts`) : sur la place, volé par les démons, ou repris au roi (sauvegardé). null : une
+   * sauvegarde d'avant lui, l'état se déduit de la partie une fois la guerre chargée (`staffOfOld`, dans `main.ts`)
+   */
+  staff: StaffState | null = 'home';
   /** Le blason du village : ses couleurs teignent les drapeaux et les troupes (sauvé ; absent : le blason par défaut) */
   blason: Blason = { ...DEFAULT_BLASON };
   /** Le joueur a vu la fenêtre du blason (choisi, ou « Plus tard ») : elle ne s'ouvre plus d'elle-même (sauvé) */
@@ -1982,6 +1988,7 @@ export class World {
       ...(this.isles ? { isles: this.isles } : {}),
       ...(this.explore === 'no' ? { explore: 'no' } : {}),
       ...(this.crossroads ? { crossroads: true } : {}),
+      ...(this.staff ? { staff: this.staff } : {}),
       blason: this.blason,
       ...(this.blasonSeen ? { blasonSeen: 1 } : {}),
       ...(this.isleName !== DEFAULT_ISLE ? { isleName: this.isleName } : {}),
@@ -2139,6 +2146,7 @@ export class World {
     this.isles = this.gen === GEN_ARCH ? archLayout(this.seed, N) : null;
     this.explore = d.explore === 'no' ? 'no' : 'ask';
     this.crossroads = d.crossroads === true;
+    this.staff = readStaff(d.staff);
     this.blason = readBlason(d.blason);
     this.isleName = readIsleName(d.isleName);
     // une ancienne partie (sans blason) ne voit pas la fenêtre s'ouvrir d'elle-même : le blason se change dans les paramètres

@@ -3,6 +3,7 @@ import { wayBadge, type Way, type WayBadge, type WayState } from '../sim/crossro
 import { hudPic } from './pics';
 import type { People } from '../world/archipelago';
 import { crest } from './diploChoice';
+import type { StaffState } from '../sim/staff';
 
 /**
  * La carte du conflit des deux îles dans l'onglet (archipel et allié choisi) : `free`, à régler (le bouton ouvre la carte paix
@@ -24,6 +25,20 @@ const WAYS: Record<Way, { img: string; icon: string; title: string; pitch: strin
   },
 };
 
+/** La voie des Enfers une fois le bâton du fondateur volé (`stolen`), puis repris (`back`) */
+const STAFF_WAY: Record<'stolen' | 'back', { img: string; icon: string; title: string; pitch: string; gives: string[] }> = {
+  stolen: {
+    img: './ui/portail.webp', icon: 'militaire', title: 'Reprendre le bâton',
+    pitch: 'Les démons ont emporté le bâton du fondateur sous terre. Il est au fond des Enfers, aux mains de leur roi.',
+    gives: ['Une troupe et un camp au Seuil', 'Le bâton, chez le roi démon'],
+  },
+  back: {
+    img: './ui/portail.webp', icon: 'militaire', title: 'Les Enfers',
+    pitch: 'Le roi démon est tombé et le bâton du fondateur a retrouvé sa place.',
+    gives: ['Les Enfers vaincus', 'Le bâton repris'],
+  },
+};
+
 /** Le pavé d'état, en haut à droite de la carte */
 const BADGE: Record<WayBadge, string> = { taken: 'Choix fait', free: 'Disponible', none: 'Pas sur cette carte' };
 
@@ -35,13 +50,14 @@ const BADGE: Record<WayBadge, string> = { taken: 'Choix fait', free: 'Disponible
  * deux après « Ni l'un ni l'autre ») ; ouverte, elle le dit ; impossible sur la carte, grisée. L'onglet n'existe qu'une fois
  * le grand choix fait (`waysTabShown`). Rien ne mène ici (ni message ni bulle) : le joueur le découvre en ouvrant les expéditions
  */
-export function waysHtml(ways: { hell: WayState; world: WayState }, conflict: ConflictWay | null = null) {
+export function waysHtml(ways: { hell: WayState; world: WayState }, conflict: ConflictWay | null = null, staff: StaffState = 'home') {
   const card = (way: Way) => {
-    const st = ways[way], b = wayBadge(st), d = WAYS[way];
+    // (le bâton du fondateur volé : la voie des Enfers devient « Reprendre le bâton », voir `docs/lore-enfers.md`)
+    const st = ways[way], b = wayBadge(st), d = way === 'hell' && staff !== 'home' ? STAFF_WAY[staff] : WAYS[way];
     const label = way === 'hell' ? (st === 'ask' ? tr('Rouvrir le portail') : tr('Ouvrir le portail')) : tr('Explorer le monde');
     const go = b === 'free' ? `<button class="wyGo" data-way="${way}">${hudPic(d.icon, 26)}<span>${label}</span></button>`
       : `<p class="wyNote">${b === 'taken' ? tr(way === 'hell' ? 'Le portail est ouvert : vos troupes vous attendent dans les Enfers.' : 'Le monde s’est agrandi : les deux îles sont là, au large.')
-        : tr(way === 'hell' ? 'Cette carte n’a pas d’île du portail.' : 'Ce monde ne peut plus s’agrandir.')}</p>${b === 'taken'
+        : tr(way === 'hell' ? 'Cette carte n’a pas d’île du portail.' : 'Ce monde ne peut plus s’agrandir.')}</p>${way === 'hell' && b === 'taken' && staff === 'back' ? `<p class="wyNote">${tr('Le bâton du fondateur est revenu sur la place du village.')}</p>` : ''}${b === 'taken'
         ? `<button class="wyReplay" data-replay="${way}" title="${tr('Revoir le film de ce choix')}">▶ ${tr('Revoir la cinématique')}</button>` : ''}`;
     return `<article class="wayCard ${way} st-${b}" data-wayc="${way}">
       <div class="wyArt"><img src="${d.img}" alt="" draggable="false" loading="lazy" decoding="async"></div>

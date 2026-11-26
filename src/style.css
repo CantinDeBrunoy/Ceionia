@@ -1869,14 +1869,14 @@ body.cinematic #hud, body.cinematic #dock, body.cinematic #expList, body.cinemat
 body.cinematic #warAlert, body.cinematic #hellGoal, body.cinematic #tinfo, body.cinematic #tuto, body.cinematic #tutoRing, body.cinematic #warTip, body.cinematic #homeBtn { display: none !important; }
 /* la cinématique de fin du volet militaire : voile (lumière ou noir), bandeaux de texte, bouton « Passer », bandes de cinéma */
 body.cinematic #bannerWrap { display: none !important; }
-:is(#kingCine, #portalCine) { position: absolute; inset: 0; z-index: 35; pointer-events: none !important; }
-:is(#kingCine, #portalCine) .kc-veil { position: absolute; inset: 0; opacity: 0; }
-:is(#kingCine, #portalCine) .kc-bar { position: absolute; left: 0; right: 0; height: 7vh; background: #000; }
-:is(#kingCine, #portalCine) .kc-bar.t { top: 0; }
-:is(#kingCine, #portalCine) .kc-bar.b { bottom: 0; }
-:is(#kingCine, #portalCine) .kc-cap { position: absolute; left: 0; right: 0; bottom: 14vh; text-align: center; font-size: clamp(22px, 4vw, 40px); font-weight: 800; letter-spacing: 0.04em; color: #fff4d0; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8), 0 0 28px rgba(255, 190, 70, 0.55); opacity: 0; }
-:is(#kingCine, #portalCine) .kc-skip { position: absolute; right: 16px; bottom: calc(7vh + 12px); pointer-events: auto !important; padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 10, 20, 0.55); color: #f4ecd8; font: inherit; font-weight: 700; cursor: pointer; opacity: 0.8; }
-:is(#kingCine, #portalCine) .kc-skip:hover { opacity: 1; background: rgba(40, 30, 20, 0.8); }
+:is(#kingCine, #portalCine, #staffCine) { position: absolute; inset: 0; z-index: 35; pointer-events: none !important; }
+:is(#kingCine, #portalCine, #staffCine) .kc-veil { position: absolute; inset: 0; opacity: 0; }
+:is(#kingCine, #portalCine, #staffCine) .kc-bar { position: absolute; left: 0; right: 0; height: 7vh; background: #000; }
+:is(#kingCine, #portalCine, #staffCine) .kc-bar.t { top: 0; }
+:is(#kingCine, #portalCine, #staffCine) .kc-bar.b { bottom: 0; }
+:is(#kingCine, #portalCine, #staffCine) .kc-cap { position: absolute; left: 0; right: 0; bottom: 14vh; text-align: center; font-size: clamp(22px, 4vw, 40px); font-weight: 800; letter-spacing: 0.04em; color: #fff4d0; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8), 0 0 28px rgba(255, 190, 70, 0.55); opacity: 0; }
+:is(#kingCine, #portalCine, #staffCine) .kc-skip { position: absolute; right: 16px; bottom: calc(7vh + 12px); pointer-events: auto !important; padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 10, 20, 0.55); color: #f4ecd8; font: inherit; font-weight: 700; cursor: pointer; opacity: 0.8; }
+:is(#kingCine, #portalCine, #staffCine) .kc-skip:hover { opacity: 1; background: rgba(40, 30, 20, 0.8); }
 /* « Passer » en deux temps (`ui/skipAsk.ts`) : au premier appui, le bouton demande « Vraiment passer ? », bien visible */
 :is(.kc-skip, .tc-skip, .skip).ask { opacity: 1 !important; border-color: rgba(232, 190, 100, 0.9) !important; background: rgba(70, 48, 14, 0.88) !important; color: #ffe9b0 !important; box-shadow: 0 0 12px rgba(232, 190, 100, 0.45); }
 /* ---------- La cinématique d'ouverture (`ui/opening.ts`, `openingStage.ts`) ----------
@@ -1930,9 +1930,9 @@ body.cinematic #bannerWrap { display: none !important; }
 #loadScreen.opening.wait :is(.kc-bar, .kc-skip, .opFilet) { opacity: 0; pointer-events: none; }
 #loadScreen.opening :is(.kc-bar, .kc-skip, .opFilet) { transition: opacity 0.6s ease; }
 /* la cinématique du portail (portalStage.ts) : un clic n'importe où la passe ; le bandeau porte un sous-titre */
-#portalCine { pointer-events: auto !important; cursor: pointer; }
-#portalCine .kc-cap b { display: block; font-weight: inherit; }
-#portalCine .kc-cap small { display: block; margin-top: 6px; font-size: 0.5em; font-weight: 600; letter-spacing: 0.06em; color: #f1dfb6; }
+#portalCine, #staffCine { pointer-events: auto !important; cursor: pointer; }
+#portalCine .kc-cap b, #staffCine .kc-cap b { display: block; font-weight: inherit; }
+#portalCine .kc-cap small, #staffCine .kc-cap small { display: block; margin-top: 6px; font-size: 0.5em; font-weight: 600; letter-spacing: 0.06em; color: #f1dfb6; }
 /* le film (opaque : les Enfers se préparent derrière) ; sans vidéo, le tourbillon peint qui grandit (fondu de remplacement) */
 #portalCine .ptFilm { position: absolute; inset: 0; background: #000; overflow: hidden; }
 #portalCine .ptFilm video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -2430,3 +2430,7 @@ body.hell #goalBox, body.commanding #goalBox, body.hell #hudL, body.hell #needsB
 #filmReplay .kc-cap small { font-size: clamp(14px, 2vw, 20px); font-weight: 700; letter-spacing: 0.03em; color: #f2e6c6; }
 #filmReplay .kc-skip { position: absolute; right: 16px; bottom: calc(7vh + 12px); z-index: 3; padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 10, 20, 0.55); color: #f4ecd8; font: inherit; font-weight: 700; cursor: pointer; opacity: 0.8; }
 #filmReplay .kc-skip:hover { opacity: 1; background: rgba(40, 30, 20, 0.8); }
+
+/* La cinématique du vol du bâton (staffStage.ts) : le ciel qui s'assombrit, rouge sombre sur les bords, et la lueur de la faille */
+#staffCine .sc-tint { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at 50% 55%, rgba(40, 8, 12, 0) 30%, rgba(40, 6, 12, 0.55) 75%, rgba(18, 2, 6, 0.85) 100%), rgba(30, 8, 20, 0.28); }
+#staffCine .sc-glow { position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at var(--gx, 50%) var(--gy, 60%), rgba(255, 90, 30, 0.35), rgba(255, 60, 20, 0) 32%); mix-blend-mode: screen; }

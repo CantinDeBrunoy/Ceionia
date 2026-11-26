@@ -1,19 +1,22 @@
 /**
  * La cinématique de fin du volet militaire (la chute du roi des Enfers) : sa partition, sans rien de graphique. Cinq plans qui
  * s'enchaînent (l'effondrement vu des Enfers, la remontée par le portail, le portail qui s'éteint à la surface, l'île qui
- * reverdit, le village en fête), des bandeaux de texte, et les fondus. Le jeu ne s'arrête pas : après elle, l'écran des
+ * reverdit, le village en fête), puis le bâton du fondateur qui remonte de terre sur la grande place (voir
+ * `docs/lore-enfers.md`), des bandeaux de texte, et les fondus. Le jeu ne s'arrête pas : après elle, l'écran des
  * récompenses puis la partie continue
  */
 
-export type EndShot = 'collapse' | 'travel' | 'portal' | 'isle' | 'village';
+export type EndShot = 'collapse' | 'travel' | 'portal' | 'isle' | 'village' | 'staff';
 
-/** Durée de chaque plan, en secondes (≈ 27 s en tout) */
+/** Durée de chaque plan, en secondes (30 s en tout) */
 export const END_PLAN: readonly { id: EndShot; dur: number }[] = [
   { id: 'collapse', dur: 8 },
   { id: 'travel', dur: 2 },
   { id: 'portal', dur: 5.5 },
   { id: 'isle', dur: 6 },
-  { id: 'village', dur: 5.5 },
+  { id: 'village', dur: 4 },
+  // le bâton du fondateur, repris au roi, remonte de terre sur la grande place ; la vue s'y pose un instant
+  { id: 'staff', dur: 4.5 },
 ];
 export const END_TOTAL = END_PLAN.reduce((s, p) => s + p.dur, 0);
 /** Le dernier fondu au noir (secondes, à la fin du dernier plan) */
@@ -24,6 +27,7 @@ export const END_CAPTIONS: { shot: EndShot; at: number; dur: number; text: strin
   { shot: 'collapse', at: 1, dur: 4.5, text: 'Le roi des Enfers est tombé' },
   { shot: 'portal', at: 0.4, dur: 4, text: 'Le portail s’éteint' },
   { shot: 'isle', at: 0.8, dur: 4.4, text: 'L’île est sauvée' },
+  { shot: 'staff', at: 0.7, dur: 3, text: 'Le bâton du fondateur revient sur la place' },
 ];
 
 /** Où en est la cinématique à l'instant t : le plan, et l'avancée dans ce plan (0 … 1) ; null une fois finie */
@@ -34,6 +38,12 @@ export function endShotAt(t: number): { shot: EndShot; k: number; local: number 
     t0 += p.dur;
   }
   return null;
+}
+
+/** Le bâton qui remonte de terre au plan « bâton » (0 : sous terre, 1 : à sa place), à l'instant `local` du plan */
+export function staffRiseAt(local: number) {
+  const k = Math.max(0, Math.min(1, (local - 0.3) / 1.6));
+  return k * k * (3 - 2 * k);
 }
 
 /** L'instant où commence un plan (une cinématique lancée de la surface saute les plans des Enfers) */

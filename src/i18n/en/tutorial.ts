@@ -190,7 +190,7 @@ registerDict('tutorial', {
   'Le roi est tombé : abattez sa citadelle': 'The king has fallen: bring down his citadel',
   'Centrer la vue sur le roi': 'Center the view on the king',
   'Le royaume des Enfers': 'The Kingdom of Hell',
-  'La citadelle du roi se dresse derrière ses douves de lave. Approchez avec toute votre armée (facultatif).': 'The king’s citadel rises behind its moat of lava. Come with your whole army (optional).',
+  'La citadelle du roi se dresse derrière ses douves de lave : il y tient le bâton du fondateur. Approchez avec toute votre armée (facultatif).': 'The king’s citadel rises behind its moat of lava: he holds the founder’s staff there. Come with your whole army (optional).',
   'Le royaume des Enfers est tombé': 'The Kingdom of Hell has fallen',
   'La citadelle s’est effondrée dans la lave, le roi des Enfers n’est plus. Sur l’île, le portail s’est éteint dans un éclat de lumière dorée : plus aucun démon ne viendra menacer vos rivages. Le village fête ses héros !': 'The citadel has collapsed into the lava, and Hell King is no more. On the island, the portal faded in a flash of golden light: no more demons will threaten your shores. The village celebrates its heroes!',
   'Récompenses': 'Rewards',
