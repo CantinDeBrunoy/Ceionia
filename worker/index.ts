@@ -6,23 +6,26 @@
  */
 import { creditedSeconds, KEEP_DAYS, MAX_BODY, MAX_NEW_PLAYERS_DAY, MAX_NEW_SESSIONS_DAY, parisDay, parisMidnight, parsePing, readBody, type Ping } from './ping';
 import { loadReport, purge } from './stats';
-import { loginPage, noDbPage, reportPage } from './bo';
-import { cookieOf, keyMatches, newSession, sessionValid, SESSION_DAYS, setCookie, type Secrets } from './auth';
+import { connectedPage, loginPage, noDbPage, reportPage } from './bo';
+import { authorizeUrl, cookieOf, githubAccountId, newSession, newState, sessionValid, SESSION_DAYS, setCookie, setStateCookie, STATE_COOKIE, STATE_SECONDS, stateMatches, type GitHubApp, type Secrets } from './auth';
 import type { D1Database, RateLimit } from './d1';
 
 export interface Env {
   /** la base (absente tant qu'elle n'est pas créée et déclarée dans wrangler.jsonc) */
   DB?: D1Database;
   ASSETS?: { fetch(req: Request): Promise<Response> };
-  /** la clé du back-office (secret Wrangler) */
-  BO_KEY?: string;
-  /** sel des sessions (secret Wrangler, facultatif) : le changer déconnecte tout le monde */
+  /** l'application OAuth GitHub du back-office (secrets Wrangler) */
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  /** l'identifiant numérique du seul compte GitHub admis (variable de wrangler.jsonc) : le login, lui, peut changer */
+  BO_GITHUB_ID?: string;
+  /** sel des sessions (secret Wrangler) : le changer déconnecte tout le monde */
   BO_SALT?: string;
   /** débit par joueur (identifiant tiré au hasard) */
   PING_LIMIT?: RateLimit;
   /** débit par adresse IP : la clé ne vit qu'en mémoire chez Cloudflare, elle n'est jamais écrite */
   PING_IP?: RateLimit;
-  /** essais de connexion au back-office, par adresse IP (en mémoire seulement) */
+  /** connexions au back-office (/bo/login et /bo/callback), par adresse IP (en mémoire seulement) */
   BO_LOGIN?: RateLimit;
 }
 
@@ -92,22 +95,44 @@ export async function ping(req: Request, env: Env, now = nowSec()): Promise<Resp
 
 export async function backOffice(req: Request, env: Env, now = nowSec()): Promise<Response> {
   const url = new URL(req.url);
-  if (!env.BO_KEY) return html('<p>Back-office fermé : le secret BO_KEY n’est pas posé.</p>', 503);
-  const secrets: Secrets = { key: env.BO_KEY, salt: env.BO_SALT };
+  const allowedId = env.BO_GITHUB_ID?.trim() ?? '';
+  if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET || !/^\d+$/.test(allowedId)) {
+    return html('<p>Back-office fermé : la connexion GitHub n’est pas configurée (voir docs/mesure-audience.md).</p>', 503);
+  }
+  const app: GitHubApp = { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET };
+  // (le compte admis signe aussi les sessions : le changer les révoque toutes)
+  const secrets: Secrets = { key: `${app.clientSecret}\u0000${allowedId}`, salt: env.BO_SALT };
+  const redirectUri = `${url.origin}/bo/callback`;
+  const clearState = setStateCookie('', 0);
+
   if (url.pathname === '/bo/sortie') {
     if (req.method !== 'POST') return empty(405, { allow: 'POST' });
     return empty(303, { location: '/bo', 'set-cookie': setCookie('', 0) });
   }
-  if (url.pathname !== '/bo') return html('<p>Page inconnue.</p>', 404);
-  // la connexion : la clé par le formulaire (POST) seulement, quelques essais par minute
-  if (req.method === 'POST') {
-    if (!(await allowed(env.BO_LOGIN, ipKey(req)))) return html(loginPage(false, true), 429);
-    let given = '';
-    try { given = String((await req.formData()).get('key') ?? ''); } catch { return html(loginPage(), 400); }
-    if (!(await keyMatches(given, secrets))) return html(loginPage(true), 401);
-    return empty(303, { location: '/bo', 'set-cookie': setCookie(await newSession(secrets, now), SESSION_DAYS * 86400), 'cache-control': 'no-store' });
+  // la connexion : un aller et retour par GitHub, quelques essais par minute
+  if (url.pathname === '/bo/login' || url.pathname === '/bo/callback') {
+    if (req.method !== 'GET') return empty(405, { allow: 'GET' });
+    if (!(await allowed(env.BO_LOGIN, ipKey(req)))) return html(loginPage('lent'), 429);
+    if (url.pathname === '/bo/login') {
+      const state = newState();
+      return empty(302, { location: authorizeUrl(app, state, redirectUri), 'set-cookie': setStateCookie(state, STATE_SECONDS), 'cache-control': 'no-store' });
+    }
+    const q = url.searchParams;
+    if (!stateMatches(q.get('state'), cookieOf(req.headers.get('cookie'), STATE_COOKIE))) return html(loginPage('expire'), 400, { 'set-cookie': clearState });
+    if (q.get('error')) return html(loginPage('annule'), 403, { 'set-cookie': clearState });
+    const code = q.get('code') ?? '';
+    if (!code || code.length > 256) return html(loginPage('expire'), 400, { 'set-cookie': clearState });
+    let id: number | null;
+    try { id = await githubAccountId(app, code, redirectUri); } catch { id = null; }
+    if (id === null) return html(loginPage('github'), 502, { 'set-cookie': clearState });
+    // le même refus pour tout autre compte, sans rien dire du compte admis
+    if (String(id) !== allowedId) return html(loginPage('refuse'), 403, { 'set-cookie': clearState });
+    const res = html(connectedPage(), 200, { 'set-cookie': clearState });
+    res.headers.append('set-cookie', setCookie(await newSession(secrets, now), SESSION_DAYS * 86400));
+    return res;
   }
-  if (req.method !== 'GET') return empty(405, { allow: 'GET, POST' });
+  if (url.pathname !== '/bo') return html('<p>Page inconnue.</p>', 404);
+  if (req.method !== 'GET') return empty(405, { allow: 'GET' });
   if (!(await sessionValid(cookieOf(req.headers.get('cookie')), secrets, now))) return html(loginPage(), 401);
   if (!env.DB) return html(noDbPage());
   const page = Math.max(0, Math.min(10000, Math.floor(Number(url.searchParams.get('page')) || 0)));

@@ -37,22 +37,40 @@ table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nu
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--soft); font-weight: 600; font-size: 13px; }
 code { font-size: 13px; }
-form { display: flex; margin: 0; gap: 8px; flex-wrap: wrap; } input { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); min-width: 240px; }
+.btn { display: inline-block; padding: 10px 16px; border-radius: 8px; background: var(--ink); color: var(--bg); text-decoration: none; font-weight: 600; }
 button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; background: var(--bar); color: #fff; cursor: pointer; }
 .err { color: #c0392b; }
 .inline { display: inline; } .link { background: none; color: inherit; padding: 0; text-decoration: underline; font-size: inherit; }
 .pages { display: flex; gap: 14px; margin-top: 10px; } .pages a { color: inherit; }
 `;
 
-const page = (title: string, body: string) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>${title}</title><style>${STYLE}</style></head><body><main>${body}</main></body></html>`;
+const page = (title: string, body: string, head = '') => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">${head}<title>${title}</title><style>${STYLE}</style></head><body><main>${body}</main></body></html>`;
 
-/** La page de connexion (clé `BO_KEY`) ; `error` : clé refusée, `slow` : trop d'essais */
-export function loginPage(error = false, slow = false): string {
+/** Pourquoi la page de connexion revient : rien, trop d'essais, `state` faux ou échu, connexion annulée, compte refusé, GitHub en panne */
+export type LoginNote = '' | 'lent' | 'expire' | 'annule' | 'refuse' | 'github';
+const NOTES: Record<LoginNote, string> = {
+  '': '',
+  lent: 'Trop d’essais. Réessayez dans une minute.',
+  expire: 'La connexion a expiré ou n’a pas été lancée depuis cette page. Recommencez.',
+  annule: 'Connexion annulée sur GitHub.',
+  refuse: 'Ce compte GitHub n’a pas accès au back-office.',
+  github: 'GitHub ne répond pas comme prévu. Réessayez dans un moment.',
+};
+
+/** La page de connexion : un bouton vers GitHub (un lien, pas un formulaire : la CSP limite les formulaires au site) */
+export function loginPage(note: LoginNote = ''): string {
   return page('Ceionia : back-office', `<h1>Ceionia : back-office</h1>
-<p class="sub">La mesure d'audience du jeu. Entrez la clé pour voir les chiffres.</p>
-${error ? '<p class="err">Clé incorrecte.</p>' : ''}${slow ? '<p class="err">Trop d’essais. Réessayez dans une minute.</p>' : ''}
-<form method="post" action="/bo"><input type="password" name="key" placeholder="Clé" autofocus required><button>Entrer</button></form>`);
+<p class="sub">La mesure d'audience du jeu. Connectez-vous avec le compte GitHub de l'auteur pour voir les chiffres.</p>
+${note ? `<p class="err">${NOTES[note]}</p>` : ''}
+<p><a class="btn" href="/bo/login">Se connecter avec GitHub</a></p>`);
+}
+
+/** Connexion réussie : la page renvoie elle-même vers /bo. (Une redirection directe venue de github.com serait vue comme
+ * une navigation d'un autre site, et le navigateur n'enverrait pas le cookie `SameSite=Strict` tout juste posé) */
+export function connectedPage(): string {
+  return page('Ceionia : back-office', `<h1>Ceionia : back-office</h1><p class="sub">Connecté. <a href="/bo">Voir les chiffres</a></p>`,
+    '<meta http-equiv="refresh" content="0;url=/bo">');
 }
 
 /** La page sans base : le Worker tourne, la base D1 n'est pas encore branchée (voir docs/mesure-audience.md) */
