@@ -771,7 +771,32 @@ export class RailView {
       m.block(x, y + 0.08, z, h, 0.3, 0.06, 0.03, 0xd8553c);
       for (const sd of [-0.08, 0.08]) m.block(x + Math.cos(h) * sd, y + 0.1, z - Math.sin(h) * sd, h, 0.06, 0.03, 0.035, 0xf2f2f2);
     };
-    for (const g of net.segs) lay((s) => along(g.pts, g.cum, s), (s) => this.segAt(g, s), 0, g.len);
+    // une voie que plusieurs lignes empruntent (le tracé d'une ligne collé sur celui d'une autre, `snapOnto`) ne se dessine
+    // qu'une fois : chaque tronçon ne pose que ses morceaux qui ne passent pas déjà sur une voie dessinée
+    const drawn = new Map<number, [number, number][]>(), cellKey = (x: number, z: number) => Math.floor(z * 2) * 4096 + Math.floor(x * 2);
+    const onDrawn = (x: number, z: number) => {
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) for (const q of drawn.get(cellKey(x + dx * 0.5, z + dz * 0.5)) ?? []) if (Math.hypot(q[0] - x, q[1] - z) < 0.12) return true;
+      return false;
+    };
+    for (const g of net.segs) {
+      const n = Math.max(1, Math.ceil(g.len / STEP)), shared: boolean[] = [];
+      for (let i = 0; i <= n; i++) { const [x, z] = along(g.pts, g.cum, (g.len * i) / n); shared.push(onDrawn(x, z)); }
+      // (un petit écart au milieu d'une portion partagée, la corde d'une courbe : partagé aussi)
+      for (let i = 0; i <= n; i++) if (!shared[i]) {
+        let j = i;
+        while (j + 1 <= n && !shared[j + 1]) j++;
+        if (i > 0 && j < n && j - i < 4) for (let k = i; k <= j; k++) shared[k] = true;
+        i = j;
+      }
+      for (let i = 0; i <= n; i++) if (!shared[i]) {
+        let j = i;
+        while (j + 1 <= n && !shared[j + 1]) j++;
+        // (un pas de plus de part et d'autre : le morceau rejoint la voie déjà dessinée)
+        lay((s) => along(g.pts, g.cum, s), (s) => this.segAt(g, s), (g.len * Math.max(0, i - 1)) / n, (g.len * Math.min(n, j + 1)) / n);
+        i = j;
+      }
+      for (let i = 0; i <= n; i++) { const [x, z] = along(g.pts, g.cum, (g.len * i) / n), k = cellKey(x, z); if (!drawn.has(k)) drawn.set(k, []); drawn.get(k)!.push([x, z]); }
+    }
     // l'emprise de la voie est dégagée : ni arbres ni rochers sur le ballast, sous la caténaire ou contre les poteaux
     for (const g of net.segs) for (let s = 0; s <= g.len; s += 0.25) { const [x, z] = along(g.pts, g.cum, s); w.clearTrees(x, z, 0.42); }
     for (const s of net.stops) {

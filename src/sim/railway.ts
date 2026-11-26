@@ -114,6 +114,11 @@ export class Railway {
   private stops = new Map<string, Stop | null>();
   private lanes = new Map<string, number>();
   private segs = new Map<string, Seg | null>();
+  /**
+   * Les voies déjà posées (tronçons calculés depuis le dernier `refresh`, dans l'ordre des lignes) : leurs cases, qui coûtent
+   * moins (`TRACK_REUSE`), et leurs tracés, sur lesquels un nouveau tracé se colle quand il les longe (`snapOnto`)
+   */
+  private laid = { cells: new Set<number>(), lines: [] as [number, number][][] };
   /** tracés calculés pour l'éditeur de ligne (le même tronçon se redemande à chaque image) */
   private plans = new Map<string, { seg: Seg | null; pieces: (number[] | null)[] }>();
   private key = '';
@@ -324,6 +329,7 @@ export class Railway {
     const key = keyOf();
     if (key === this.key && !force) return;
     this.stops.clear(); this.segs.clear(); this.lanes.clear();
+    this.laid = { cells: new Set(), lines: [] };
     this.key = key;
     this.version++;
     // à la gare centrale, chaque ligne a sa voie (celle du milieu d'abord) : les trains de plusieurs lignes y sont à quai ensemble
@@ -497,7 +503,12 @@ export class Railway {
   private seg(A: Stop, B: Stop, via: number[] = []): Seg | null {
     const flip = A.b.id > B.b.id, [P, Q] = flip ? [B, A] : [A, B], v = flip ? [...via].reverse() : via;
     const key = `${stopKey(P)}|${stopKey(Q)}${v.length ? `|${v.join(',')}` : ''}`;
-    if (!this.segs.has(key)) this.segs.set(key, this.lay(P, Q, v).seg);
+    if (!this.segs.has(key)) {
+      const r = this.lay(P, Q, v);
+      this.segs.set(key, r.seg);
+      // (les lignes suivantes reprennent cette voie)
+      if (r.seg) { for (const p of r.pieces) for (const k of p ?? []) this.laid.cells.add(k); this.laid.lines.push(r.seg.pts); }
+    }
     return this.segs.get(key)!;
   }
 
@@ -539,7 +550,8 @@ export class Railway {
     const w = this.world;
     const cellOf = (p: [number, number]) => (w.inCells(Math.floor(p[0]), Math.floor(p[1])) ? Math.floor(p[1]) * N + Math.floor(p[0]) : -1);
     const along = (s: Stop, k: number): [number, number] => [s.c[0] + s.u[0] * k, s.c[1] + s.u[1] * k];
-    const cost = (k: number) => this.cost(k);
+    // (une case où passe déjà une voie coûte moins : le tracé la reprend au lieu d'en poser une à côté)
+    const laid = this.laid.cells, cost = (k: number) => this.cost(k) * (laid.has(k) ? TRACK_REUSE : 1);
     // sorties : dans l'axe du quai, sur deux cases si l'on peut (la courbe qui suit en est plus douce)
     const exits = (s: Stop) => [1, -1].filter((sg) => !s.ends || s.ends.includes(sg)).flatMap((sg) => {
       // au-delà de l'emprise de la gare
@@ -598,8 +610,43 @@ export class Railway {
       out.push(pts[pts.length - 1]);
       pts = out;
     }
+    pts = snapOnto(pts, this.laid.lines);
     const cum = [0];
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
     return { seg: { a: A.b.id, b: B.b.id, la: A.lane, lb: B.lane, ea: sa.sg, eb: sb.sg, pts, cum, len: cum[cum.length - 1] }, pieces };
   }
+}
+
+/** Une case où passe déjà une voie coûte tant de fois moins (le tracé automatique la reprend) */
+export const TRACK_REUSE = 0.35;
+/** Un nouveau tracé se colle sur une voie posée quand il en passe à moins de tant de cases, dans le même sens (à 30° près) */
+export const SNAP_DIST = 0.6, SNAP_COS = 0.87;
+/** …sauf près des quais (cases de part et d'autre) : chaque ligne y garde son entrée */
+export const SNAP_FREE = 1.2;
+
+/**
+ * Colle un tracé sur les voies déjà posées là où il les longe : chaque point à moins de `SNAP_DIST` d'une voie, dans son sens,
+ * est ramené sur elle (projeté sur son tracé). Retour de l'auteur (26 nov. 2026) : deux lignes qui passaient par les mêmes
+ * cases posaient deux voies l'une à côté de l'autre. Un croisement (sens différent) n'est pas collé ; les bouts près des quais
+ * non plus
+ */
+export function snapOnto(pts: [number, number][], lines: readonly [number, number][][]): [number, number][] {
+  if (!lines.length || pts.length < 3) return pts;
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const len = cum[cum.length - 1], out = pts.map((p) => [p[0], p[1]] as [number, number]);
+  for (let i = 1; i < pts.length - 1; i++) {
+    if (cum[i] < SNAP_FREE || len - cum[i] < SNAP_FREE) continue;
+    const [px, pz] = pts[i], tx = pts[i + 1][0] - pts[i - 1][0], tz = pts[i + 1][1] - pts[i - 1][1], tl = Math.hypot(tx, tz) || 1;
+    let best = SNAP_DIST, at: [number, number] | null = null;
+    for (const L of lines) for (let j = 0; j + 1 < L.length; j++) {
+      const [ax, az] = L[j], dx = L[j + 1][0] - ax, dz = L[j + 1][1] - az, dl = Math.hypot(dx, dz);
+      if (dl < 1e-6) continue;
+      if (Math.abs((dx * tx + dz * tz) / (dl * tl)) < SNAP_COS) continue;
+      const f = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dl * dl))), qx = ax + dx * f, qz = az + dz * f, d = Math.hypot(px - qx, pz - qz);
+      if (d < best) { best = d; at = [qx, qz]; }
+    }
+    if (at) out[i] = at;
+  }
+  return out;
 }
