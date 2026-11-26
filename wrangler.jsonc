@@ -12,9 +12,8 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/bo", "/bo/*"]
   },
-  // La base D1 n'est pas encore déclarée : le Worker ignore alors les signaux, et le déploiement ne casse rien.
-  // Une fois la base créée, ajouter ici, au premier niveau (voir « Mise en service » dans docs/mesure-audience.md) :
-  //   "d1_databases": [{ "binding": "DB", "database_name": "ceionia-audience", "database_id": "<id>", "migrations_dir": "migrations" }],
+  // La base D1 de la mesure d'audience (créée le 26 nov. 2026, région Europe de l'Ouest ; voir docs/mesure-audience.md)
+  "d1_databases": [{ "binding": "DB", "database_name": "ceionia-audience", "database_id": "1f09deaa-664d-4aef-b62d-998d1d65d286", "migrations_dir": "migrations" }],
   // Les limiteurs comptent en mémoire chez Cloudflare, rien n'est écrit : par joueur (identifiant tiré au hasard),
   // par adresse IP (jamais enregistrée), et les essais de connexion au back-office
   "ratelimits": [
