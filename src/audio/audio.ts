@@ -62,8 +62,9 @@ export type MusicScene = 'menu' | 'hell' | 'end' | 'opening' | 'portal' | 'voyag
  * Musique enregistrée, en attendant celle composée pour le jeu : fichiers de `public/sons/musique/` (sans extension),
  * une liste par âge (`age0` … `age5`) et par scène. Sources et licences : `docs/audio.md` et la page Crédits. Une liste
  * vide ou des fichiers absents rendent la musique générée ; `RECORDED_MUSIC = false` la rend partout.
- * Chaque cinématique a son morceau, qu'on n'entend nulle part ailleurs (retour de l'auteur, 26 nov. 2026 : l'ouverture et
- * la traversée reprenaient un morceau d'âge, les autres jouaient la musique de l'âge)
+ * Chaque cinématique a sa liste (retour de l'auteur, 26 nov. 2026). Le 27 nov., il a choisi ses morceaux sur les films : le vol
+ * du bâton et le portail partagent « Crusade », des Enfers, d'un seul tenant (le morceau continue d'une scène à l'autre, puis
+ * aux Enfers : `syncMusic`) ; la traversée prend « Thaxted », celui de l'accueil
  */
 export const MUSIC: Record<string, string[]> = {
   age0: ['prehistoire-tribal', 'prehistoire-ancetres', 'prehistoire-oiseau-tonnerre'],
@@ -73,9 +74,9 @@ export const MUSIC: Record<string, string[]> = {
   age4: ['moderne-the', 'moderne-fleuriste', 'moderne-barman', 'moderne-cafe-chats'],
   age5: ['futuriste-synthwave', 'futuriste-aout', 'futuriste-lifewave'],
   menu: ['menu'], hell: ['enfers-oppression', 'enfers-com-mecha', 'enfers-croisade', 'enfers-rituel'], end: ['fin'],
-  opening: ['cine-ouverture'], portal: ['cine-portail'], voyage: ['cine-traversee'], king: ['cine-roi'], peace: ['cine-paix'],
-  // le vol du bâton du fondateur : « The Descent », une irruption sombre de cuivres et de percussions
-  theft: ['cine-vol'],
+  opening: ['cine-ouverture'], portal: ['enfers-croisade'], voyage: ['menu'], king: ['cine-roi'], peace: ['cine-paix'],
+  // le vol du bâton du fondateur, enchaîné au portail : le même morceau, qui continue
+  theft: ['enfers-croisade'],
 };
 /**
  * Les coups de musique : un court morceau joué par-dessus celui en cours, qui baisse le temps qu'il passe (`DUCK`). Pour une
@@ -344,6 +345,8 @@ export class AudioEngine {
     // de l'auteur, 26 nov. 2026)
     const t = this.track;
     if (t && t.key === 'opening' && want?.startsWith('age') && !t.next) { t.key = want; return; }
+    // (la nouvelle liste contient le morceau en cours, du vol au portail puis aux Enfers : il continue sans coupure)
+    if (t && want && !t.next && (MUSIC[want] ?? []).includes(t.name)) { t.key = want; this.lastTrack.set(want, t.name); return; }
     // (un morceau n'appartient qu'à une liste : la cinématique finie, le sien s'efface pendant que celui de l'âge entre)
     this.fadeOut(this.track);
     this.track = null;

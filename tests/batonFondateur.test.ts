@@ -194,10 +194,10 @@ describe('la cinématique du vol : sa partition', () => {
     expect(theftTintAt(theftShotStart('demons'))).toBeGreaterThan(0.9);
   });
 
-  it('son morceau à elle, présent dans aucune autre liste', () => {
-    expect(MUSIC.theft).toEqual(['cine-vol']);
-    for (const [k, list] of Object.entries(MUSIC)) if (k !== 'theft') expect(list).not.toContain('cine-vol');
-    expect(existsSync('public/sons/musique/cine-vol.mp3')).toBe(true);
+  it('le vol et le portail partagent un seul morceau, « Crusade » (choix de l’auteur, 27 nov. 2026)', () => {
+    expect(MUSIC.theft).toEqual(['enfers-croisade']);
+    expect(MUSIC.portal).toEqual(MUSIC.theft);
+    expect(existsSync('public/sons/musique/enfers-croisade.mp3')).toBe(true);
   });
 });
 

@@ -55,9 +55,15 @@ describe('musique enregistrée', () => {
     }
   });
 
-  it('un morceau n’appartient qu’à une liste', () => {
-    const all = Object.values(MUSIC).flat();
+  it('un morceau n’appartient qu’à une liste, sauf les partages choisis par l’auteur (27 nov. 2026)', () => {
+    // le vol et le portail reprennent « Crusade » des Enfers, la traversée « Thaxted » de l'accueil
+    const shared = new Set(['enfers-croisade', 'menu']);
+    const all = Object.values(MUSIC).flat().filter((n) => !shared.has(n));
     expect(new Set(all).size).toBe(all.length);
+    expect(MUSIC.theft).toEqual(['enfers-croisade']);
+    expect(MUSIC.portal).toEqual(['enfers-croisade']);
+    expect(MUSIC.hell).toContain('enfers-croisade');
+    expect(MUSIC.voyage).toEqual(['menu']);
   });
 
   it('volumes : l’ancienne échelle, trop forte, est oubliée ; la nouvelle se relit', () => {
