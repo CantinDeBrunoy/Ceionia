@@ -183,6 +183,8 @@ VoyageFilm.soundLocked = () => audio.locked && !audio.muteMusic;
 const VILLAGE_DIST = 30;
 /** La vue du passage d'âge : sa durée (s) et son inclinaison (un peu plus rasante que la vue d'ensemble, 0,85) */
 const AGE_SHOT = 5.5, AGE_PITCH = 0.62;
+/** …visée en deçà du centre du village, vers la caméra, de cette part de la distance (le village au-dessus de la bannière) */
+const AGE_OFF = 0.2;
 /** après un appui sur la carte, la vue ne part pas d'elle-même pendant ce temps (ms ; voir `Game.handsBusy`) */
 const HANDS_MS = 3000;
 /** après un appui sur la carte, récits et décisions d'expédition attendent ce temps (ms ; voir `Game.midGesture`) */
@@ -1256,7 +1258,7 @@ class Game implements UIHost {
    * les bâtiments changent d'âge (les plus proches de la vue d'abord, tout le village en 4,5 s au plus : `EVO_ALL`). Passable : un geste (clic, molette, touche, glisser)
    * rend la main tout de suite. Rien hors de la surface, pendant une autre cinématique ou le tracé d'une ligne
    */
-  private ageShot: { t: number; stop: () => void } | null = null;
+  private ageShot: { t: number; stop: () => void; c: [number, number]; off: number } | null = null;
   private ageShotStart() {
     const c = this.villageCenter();
     if (!c || this.mode !== 'surface' || this.railEdit || this.voyageStage.playing || this.kingStage.playing || this.trophyStage.playing || this.portalStage?.playing || this.revealing || this.peaceCine) return;
@@ -1264,11 +1266,13 @@ class Game implements UIHost {
     const ds = [...this.world.buildings.values()].map((b) => Math.hypot(b.x + sizeOf(b) / 2 - c[0], b.z + sizeOf(b) / 2 - c[1])).sort((a, b) => a - b);
     const r = ds[Math.floor(ds.length * 0.8)] ?? 8;
     this.follow(null); this.trainCam = null; this.incidentCam = null; this.citizenCam = null;
-    this.cam.aim({ x: c[0], z: c[1], yaw: this.cam.view().yaw, pitch: AGE_PITCH, dist: Math.max(24, Math.min(58, r * 1.5 + 14)) });
+    // (la visée un peu en deçà du centre, vers la caméra : le village paraît au-dessus de la bannière « Nouvel âge »)
+    const yaw = this.cam.view().yaw, dist = Math.max(24, Math.min(58, r * 1.5 + 14)), off = dist * AGE_OFF;
+    this.cam.aim({ x: c[0] + Math.sin(yaw) * off, z: c[1] + Math.cos(yaw) * off, yaw, pitch: AGE_PITCH, dist });
     this.ageShot?.stop();
     const stop = () => { this.ageShot = null; for (const e of ['pointerdown', 'wheel', 'keydown'] as const) window.removeEventListener(e, stop, true); };
     for (const e of ['pointerdown', 'wheel', 'keydown'] as const) window.addEventListener(e, stop, true);
-    this.ageShot = { t: 0, stop };
+    this.ageShot = { t: 0, stop, c, off };
   }
   private stepAgeShot(dt: number) {
     const a = this.ageShot;
@@ -1277,6 +1281,9 @@ class Game implements UIHost {
     if (a.t > AGE_SHOT || this.mode !== 'surface') { a.stop(); return; }
     // (un lent quart de tour, qui démarre et finit en douceur)
     this.cam.rotate(dt * 0.16 * Math.sin(Math.PI * Math.min(1, a.t / AGE_SHOT)));
+    // (la visée tourne avec la vue : le village reste au même endroit de l'écran)
+    const yaw = this.cam.view().yaw;
+    this.cam.glide(a.c[0] + Math.sin(yaw) * a.off, a.c[1] + Math.cos(yaw) * a.off);
   }
 
   /** La carte « baisser la difficulté des Enfers » (`War.easeAsk`) : dans les Enfers, au calme, ni fenêtre ni cinématique */

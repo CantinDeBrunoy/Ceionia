@@ -14596,7 +14596,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   // à l'âge futuriste : le modèle dessiné pour lui, sinon celui de l'époque moderne, rehaussé (voir futureExtras)
   const zoned = zoneModel(p, kind, age, o.v, size);
   const future = !zoned && age >= 5 && futureModel(p, kind, o, size), extras = !zoned && age >= 5 && !future;
-  if (extras) age = 4;
+  // (le port de pêche a son modèle du futur à lui, le port aquacole : il garde l'âge 5, les ajouts du futur viennent en plus)
+  if (extras && kind !== 'pier') age = 4;
   if (!future && !zoned) switch (kind) {
     case 'house': house(p, age, o); break;
     case 'farm': farm(p, age); break;

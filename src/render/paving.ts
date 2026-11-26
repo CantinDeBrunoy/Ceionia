@@ -11,7 +11,7 @@ const LIFT = 0.004;
  * laissait l'herbe percer là où le relief se bombe), de la teinte des joints de l'âge ; à la Préhistoire, aucun : les
  * pierres sont posées dans l'herbe */
 const G = 6;
-const BED = [0, 0xc8bca4, 0x8a847a, 0x8a5a4a, 0x8a8884, 0x2a7a8a];
+const BED = [0, 0xc8bca4, 0x8a847a, 0x5e5c58, 0x8a8884, 0x2a7a8a];
 /** Le lit passe sous les routes (leur matériau a un décalage de profondeur plus fort) et au-dessus de l'herbe du relief */
 const bedMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
 
