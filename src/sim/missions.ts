@@ -1153,6 +1153,28 @@ export function penHerds(w: World, flock: HerdKind[] = w.exp.herd) {
   return { pens, stables, rest: herd.slice(i) };
 }
 
+/** Un poulain naît dans une écurie qui a une place libre toutes les `FOAL_S` secondes de jeu (environ deux jours) */
+export const FOAL_S = 200;
+
+/**
+ * Les écuries (haras, centre équestre) élèvent des chevaux : tant qu'une stalle est libre, un poulain naît toutes les
+ * `FOAL_S` secondes de jeu, pour toutes les écuries ensemble, sans couple de départ (demande de l'auteur, 26 nov. 2026 :
+ * les cavaliers des Enfers manquaient de chevaux alors que le village avait des haras). Les chevaux montés ou partis
+ * en expédition ne prennent pas de stalle. Renvoie le nombre de poulains nés
+ */
+export function breedHorses(w: World, dt: number): number {
+  const e = w.exp;
+  let stalls = 0;
+  for (const b of w.buildings.values()) if (b.kind === 'stable') stalls += STABLE_CAP;
+  const free = stalls - Math.max(0, e.herd.filter((k) => k === 'horse').length - e.riding);
+  if (free <= 0 || dt <= 0) { e.foal = 0; return 0; }
+  e.foal += dt;
+  let n = 0;
+  while (e.foal >= FOAL_S && n < free) { e.foal -= FOAL_S; e.herd.push('horse'); n++; }
+  if (n >= free) e.foal = 0;
+  return n;
+}
+
 /** Les missions obligatoires de l'âge : toutes à réussir pour ouvrir l'âge suivant (deux à la Préhistoire) */
 /** Les trophées des grandes légendes : une expédition qui en rapporte un est « légendaire » */
 /** Les expéditions du volcan : sur son île, qu'on gagne en barque (ou à pied, s'il est sur la terre du village) */
@@ -1193,12 +1215,14 @@ export interface ExpState {
   recent: string[];
   /** 1 une fois le volet maritime connu de la partie (les anciennes sauvegardes n'ont pas ce champ : voir `readExpState`) */
   sea: number;
+  /** temps écoulé vers le prochain poulain des écuries (secondes de jeu, voir `breedHorses` ; 0 pour les anciennes sauvegardes) */
+  foal: number;
 }
 
 /** Imprévus récents dont on se souvient (les deux ou trois dernières expéditions) */
 export const RECENT_EVENTS = 6;
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), away: emptyStock(), craft: [], craftT: 0, riding: 0, recent: [], sea: 1 });
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), away: emptyStock(), craft: [], craftT: 0, riding: 0, recent: [], sea: 1, foal: 0 });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
@@ -1220,6 +1244,7 @@ export function readExpState(d: any): ExpState {
   for (const k of Object.keys(s.bonus) as NeedKey[]) s.bonus[k] = +d.bonus?.[k] || 0;
   s.temp = Array.isArray(d.temp) ? d.temp.filter((t: any) => t && t.need in s.bonus && isFinite(t.n) && isFinite(t.until)) : [];
   s.clock = +d.clock || 0;
+  s.foal = Math.max(0, +d.foal || 0);
   for (const k of Object.keys(s.gear) as GearId[]) s.gear[k] = Math.max(0, Math.floor(+d.gear?.[k] || 0));
   // l'équipement des équipes en route revient en réserve (elles ne sont pas sauvegardées ; les anciennes sauvegardes le perdaient)
   for (const k of Object.keys(s.gear) as GearId[]) s.gear[k] += Math.max(0, Math.floor(+d.away?.[k] || 0));

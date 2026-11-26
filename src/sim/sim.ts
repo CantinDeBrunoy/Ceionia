@@ -5,7 +5,7 @@ import { World, N } from '../world/world';
 import { WISH_JOY, WISH_JOY_MAX } from './wishes';
 import { showJoy } from './shows';
 import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine, DECOR, DECOR_JOY_MAX } from '../build/catalog';
-import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
+import { mandatoriesFor, needBonus, MISSIONS, VICTORY, breedHorses } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
 import { MAKER, Shortage, shortages, shortText } from './ledger';
@@ -566,6 +566,8 @@ export class Sim {
     // horloge des expéditions : les effets passagers s'éteignent
     const e = this.world.exp;
     e.clock += dt;
+    // les écuries élèvent des chevaux (un poulain par place libre, environ tous les deux jours)
+    if (breedHorses(this.world, dt)) this.world.version++;
     if (e.temp.length && e.temp.some((t) => t.until <= e.clock)) e.temp = e.temp.filter((t) => t.until > e.clock);
     const ills = this.world.ills;
     if (ills.length && ills.some((i) => i.until <= e.clock)) this.world.ills = ills.filter((i) => i.until > e.clock);
