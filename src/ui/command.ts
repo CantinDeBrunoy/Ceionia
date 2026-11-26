@@ -18,6 +18,7 @@ import { pic, withPic, hudPic } from './pics';
 import { staffIcon } from './staffIcon';
 import { ic } from './icons';
 import { cardData } from './xcard';
+import { esc } from '../core/esc';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle
@@ -1052,7 +1053,6 @@ export class CommandUI implements ToolInput {
    */
   private waveStatus(next: number | null, raid: boolean) {
     const w = this.host.war, f = w.faction, k = w.invStep(), m = INVASION_WAVES;
-    const esc = (s: string) => s.replace(/"/g, '&quot;');
     // (le PvE en cours : « Refermer le portail », à tout moment, au bout du bandeau ; le portail éteint, il n'y a plus rien à refermer)
     const shut = () => w.pve === 'on' && !w.portalOut ? `<button data-a="pveChoice" class="twb twx ico" title="${esc(tr('Refermer le portail : plus aucune vague, les troupes des Enfers rentrent sur l’île'))}">${pic('🔒', 20)}<span class="twl">${tr('Refermer')}</span></button>` : '';
     const box = (mod: string, hot: boolean, icon: string, line: string, act = '') => {
@@ -1121,7 +1121,6 @@ export class CommandUI implements ToolInput {
     const w = this.host.war, tab = this.isleTab;
     const queue = w.army.queue.length || this.waiting.length
       ? `<small class="q">${tr('En route :')} ${[...this.waiting.map((k) => `${pic(troopForm(k, age).icon, 16)}${pic('🛠', 14)}`), ...w.army.queue.map((q) => `${pic(troopForm(q.kind, age).icon, 16)} ${Math.ceil(q.left)} s`)].join(' · ')}</small>` : '';
-    const esc = (s: string) => s.replace(/"/g, '&quot;');
     let inner: string;
     if (tab === 'rec') {
       inner = `<div class="tfam"><div class="tbuilds">${TROOP_KINDS.filter((k) => age >= TROOPS[k].age).map((k) => {

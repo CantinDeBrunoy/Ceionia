@@ -65,6 +65,7 @@ import { placeCard } from './xcard';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
 import type { CalamityKind } from '../sim/calamity';
 import { audienceOff, setAudienceOff } from '../audience';
+import { esc } from '../core/esc';
 
 export interface UIHost {
   tools: ToolController;
@@ -1890,7 +1891,7 @@ export class UI {
     el.dataset.v = key;
     el.className = `tone-${tone}${k || ready || exp || rail || gold || choice || conflict ? ' link' : ''}`;
     el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : gold ? tr('Cliquer pour ouvrir le comptoir des voisins') : choice ? tr('Cliquer pour faire le grand choix') : conflict ? tr('Cliquer pour régler le conflit des deux îles') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
-    const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const text = esc(sim.message);
     // un picto selon le ton (manque, objectif, tout va bien) ; un conseil qui mène quelque part finit par son geste et un chevron
     const go = (w: string) => `<b class="go">${w}<i>›</i></b>`;
     el.innerHTML = `<span class="mi">${pic(tone === 'warn' ? '⚠' : tone === 'goal' ? '⬆' : '✅', 24)}</span><span>${text}</span>${k ? go(tr('Bâtir')) : exp ? go(tr('Ouvrir')) : rail ? go(tr('Tracer')) : gold ? go(tr('Échanger')) : choice ? go(tr('Choisir…')) : ready ? go(tr('Passer')) : ''}`;
@@ -2334,7 +2335,6 @@ export class UI {
 
   private renderNotifPanel() {
     const p = $('#notifPanel'), h = this.notifs.history;
-    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     p.innerHTML = `<div class="npHead"><b>${tr('Notifications')}</b>${h.length ? `<button class="npClear" type="button">${tr('Tout effacer')}</button>` : ''}</div>`
       + (h.length ? `<ul>${h.map((x) => `<li class="${x.level}">${withPic(esc(x.text), 18)}${x.count > 1 ? ` <em>×${x.count}</em>` : ''}</li>`).join('')}</ul>` : `<p class="npNone">${tr('Rien de nouveau.')}</p>`);
     p.querySelector<HTMLElement>('.npClear')?.addEventListener('click', () => { this.notifs.clearHistory(); this.renderNotifPanel(); this.renderNotifs(); });
@@ -2435,7 +2435,7 @@ export class UI {
     };
     // (en tête, pour l'écran allégé dont la barre ne garde que l'âge et sa jauge : le nom de l'île, le pourcentage, les
     // conditions remplies ; caché sinon, la carte du village le dit déjà)
-    const isle = this.host.world.isleName.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const isle = esc(this.host.world.isleName);
     const reqHead = `<div class="rqHead"><b>${isle}</b><em>${ap ? `${pctText(pct)} · ${tr('{met}/{n} conditions', { met, n: ap.items.length })}` : ''}</em></div>`;
     const reqHtml = sbReq ?? (ap
       ? `${reqHead}<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${goAttr(i)}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')

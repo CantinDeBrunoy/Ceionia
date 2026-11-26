@@ -19,6 +19,7 @@ import { RiteView } from './render/shows/rite';
 import { PlayView } from './render/shows/play';
 import { TourneyView } from './render/shows/tourney';
 import { tr } from './i18n';
+import { esc } from './core/esc';
 
 /** Ce que les spectacles demandent au jeu */
 export interface ShowHost {
@@ -359,6 +360,5 @@ const RIGHT_OF = (f: readonly number[]): [number, number] => [-f[1], f[0]];
 const rng = (seed: number) => { let s = (seed % 2147483646) + 1; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; };
 /** « 46,12 » : un temps au centième, à la virgule française */
 const secs = (t: number) => t.toFixed(2).replace('.', tr(','));
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export { SHOWS };
