@@ -52,8 +52,8 @@ const SAMPLES: Record<string, { file: string; rate?: number; max?: number }> = {
 /** niveau de crête des enregistrements, proche des cris de synthèse */
 const SAMPLE_PEAK = 0.16;
 
-/** Ambiances musicales hors des âges : le menu principal, les Enfers, la fin (chute du roi, voyage des colons, victoire) */
-export type MusicScene = 'menu' | 'hell' | 'end' | 'voyage';
+/** Ambiances musicales hors des âges : le menu principal, la cinématique d'ouverture, les Enfers, la fin (chute du roi, voyage des colons, victoire) */
+export type MusicScene = 'menu' | 'opening' | 'hell' | 'end' | 'voyage';
 /**
  * Musique enregistrée, en attendant celle composée pour le jeu : fichiers de `public/sons/musique/` (sans extension),
  * une liste par âge (`age0` … `age5`) et par scène. Sources et licences : `docs/audio.md` et la page Crédits. Une liste
@@ -70,9 +70,10 @@ export const MUSIC: Record<string, string[]> = {
 };
 /**
  * Les scènes qui reprennent un morceau d'une liste d'âge (un morceau n'appartient qu'à une liste de `MUSIC`) : la cinématique
- * « Explorer le monde » joue celui de l'exploration, du Médiéval
+ * « Explorer le monde » joue celui de l'exploration, du Médiéval ; celle de l'ouverture « The Sky of our Ancestors », qui
+ * continue ensuite dans la partie (retour de l'auteur, 26 nov. 2026 : le film passait sur la musique de l'âge)
  */
-const SCENE_TRACKS: Record<string, string[]> = { voyage: ['medieval-exploration'] };
+const SCENE_TRACKS: Record<string, string[]> = { voyage: ['medieval-exploration'], opening: ['prehistoire-ancetres'] };
 /**
  * Le morceau qui ouvre un âge, joué en premier quand le village y entre en cours de partie (pas au chargement d'une partie
  * déjà à cet âge) : la Toccata et fugue en ré mineur pour l'Industriel (demande de l'auteur, 17 nov. 2026 : « ça fait bien
@@ -326,6 +327,9 @@ export class AudioEngine {
     if (!this.ctx) return;
     const want = this.muteMusic || !RECORDED_MUSIC ? null : this.scene ?? this.ageKey;
     if (this.track?.key === want) return;
+    // (le morceau en cours est aussi dans la nouvelle liste, l'ouverture qui rend la main à la Préhistoire : il continue)
+    const t = this.track;
+    if (t && want && !t.next && (MUSIC[want] ?? SCENE_TRACKS[want] ?? []).includes(t.name)) { t.key = want; this.lastTrack.set(want, t.name); return; }
     this.fadeOut(this.track);
     this.track = null;
     if (want) this.playTrack(want);
@@ -363,7 +367,7 @@ export class AudioEngine {
       if (this.track !== t || t.next) return;
       t.next = true;
       this.fadeOut(t, fade);
-      this.playTrack(key);
+      this.playTrack(t.key);
     };
     // (un morceau coupé avant sa fin, `TRACK_TRIM` : il s'efface plus lentement, à partir de son point de coupe)
     el.addEventListener('timeupdate', () => { const e = trackEnd(name, el.duration); if (e.at - el.currentTime < e.fade) relay(e.fade); });
@@ -371,7 +375,7 @@ export class AudioEngine {
     el.addEventListener('error', () => {
       if (t.dropped) return;
       this.missing.add(name);
-      if (this.track === t) { this.drop(t); this.track = null; this.playTrack(key); }
+      if (this.track === t) { this.drop(t); this.track = null; this.playTrack(t.key); }
     });
     el.play().catch(() => { /* lecture refusée sans geste : on réessaie au prochain réglage */ });
   }

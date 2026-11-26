@@ -4160,7 +4160,7 @@ class Game implements UIHost {
       // (le voyage des colons et les écrans de victoire : rien que la musique, plus les feux d'artifice de la fête)
       const ending = !!uiRoot.querySelector('.overlay.voyage, .overlay.victory');
       audio.hush(ending);
-      audio.music(this.kingStage.playing || ending ? 'end' : this.voyageStage.playing || document.querySelector('#loadScreen.voyage') ? 'voyage' : this.mode === 'hell' ? 'hell' : null);
+      audio.music(this.kingStage.playing || ending ? 'end' : this.voyageStage.playing || document.querySelector('#loadScreen.voyage') ? 'voyage' : this.openingStage?.playing || document.querySelector('#loadScreen.opening') ? 'opening' : this.mode === 'hell' ? 'hell' : null);
     }
     // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }
@@ -4217,6 +4217,8 @@ async function boot() {
     screen = null;
     // (le film d'abord, une fois chargé : le monde ne se bâtit qu'avec ses premières images à l'écran, sinon la vidéo
     // restait figée sur sa première image le temps de la construction, puis sautait ; voir `ui/filmLoad.ts`)
+    // (le film d'ouverture a sa musique, qui continue ensuite dans la partie)
+    if (ld.film instanceof OpeningFilm) audio.music('opening');
     if (ld.film) await ld.film.roll();
     ld.step('Construction du monde…', 0.22);
     await painted();
