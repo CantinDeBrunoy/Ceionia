@@ -184,11 +184,13 @@ describe('démarrage du tutoriel', () => {
     expect(by('hellPick').check()).toEqual([false]);
     selected = 3;
     expect(by('hellPick').check()).toEqual([true]);
-    // un clic droit au sol : une marche (une attaque ne compte pas pour cette étape)
+    // un clic droit : une marche, ou une attaque (un clic au sol près d'un démon), compte
     by('hellMove').begin!();
-    order = { kind: 'attack' };
     expect(by('hellMove').check()).toEqual([false]);
     order = { kind: 'move' };
+    expect(by('hellMove').check()).toEqual([true]);
+    by('hellMove').begin!();
+    order = { kind: 'attack' };
     expect(by('hellMove').check()).toEqual([true]);
     // un clic droit sur la cible
     by('hellAttack').begin!();

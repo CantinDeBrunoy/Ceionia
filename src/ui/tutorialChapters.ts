@@ -306,10 +306,12 @@ export function chapters(tuto: Tutorial, ui: UI, h: ChapterHost): Record<Exclude
       anchor: () => q('#troopBar .tall') ?? q('#troopBar .tcard') ?? bar('garrison'),
       note: () => (q('#troopBar .tcard') ? '' : E.pick.none),
     }),
-    // (la bulle se tient à l'écart : le sol et la cible doivent rester libres sous le curseur)
+    // (la bulle se tient à l'écart : le sol et la cible doivent rester libres sous le curseur). Tout ordre du clic droit compte :
+    // un clic au sol près d'un démon devient une attaque, et la case restait vide alors que les troupes marchaient (testeur,
+    // 26 nov. 2026)
     step('hellMove', E.move, {
       begin: () => (order = h.lastOrder()),
-      check: () => { const o = h.lastOrder(); return [!!o && o !== order && o.kind === 'move']; },
+      check: () => { const o = h.lastOrder(); return [!!o && o !== order]; },
       anchor: () => null,
       note: () => (h.selected() ? '' : E.pick.text),
     }),

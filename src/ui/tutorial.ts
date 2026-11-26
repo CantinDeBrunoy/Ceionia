@@ -356,6 +356,12 @@ const GATE: Partial<Record<StepId, KindId[]>> = {
 };
 /** après un passage automatique à l'étape suivante, un « Suivant » arrivé dans ce délai (ms) visait l'étape d'avant : ignoré */
 const LATE_MS = 900;
+/** après un passage automatique, un appui à l'ancienne place de la bulle (partie ailleurs) est ignoré pendant ce temps (ms) */
+export const GONE_MS = 2500;
+/** Le point est dans le rectangle, à 6 px près */
+export function inRect(r: { left: number; right: number; top: number; bottom: number }, x: number, y: number) {
+  return x >= r.left - 6 && x <= r.right + 6 && y >= r.top - 6 && y <= r.bottom + 6;
+}
 /** les bâtiments que le tutoriel fait poser : un village qui en compte d'autres n'est plus un village neuf */
 const GUIDED = new Set<string>(['gather', 'house', 'well', 'farm', 'lumber', 'quarry']);
 
@@ -392,6 +398,8 @@ export class Tutorial {
   /** l'étape où le bouton de la bulle a été enfoncé, et l'instant du dernier passage automatique (voir `LATE_MS`) */
   private downOn = '';
   private autoAt = -Infinity;
+  /** la place de la bulle juste avant le dernier passage automatique (voir `GONE_MS`) */
+  private wasAt: DOMRect | null = null;
   private at() { return this.ch ? `${this.ch}|${this.ci}` : `|${this.i}`; }
   /** clics repérés pendant l'étape : un bouton à `data-a` (son action) */
   private clicks = new Set<string>();
@@ -551,6 +559,18 @@ export class Tutorial {
     // un clic sur la bulle ne tombe jamais sur la carte (ni ne pose un bâtiment avec l'outil en main)
     for (const t of ['pointerdown', 'pointerup', 'mousedown', 'touchstart']) this.box.addEventListener(t, (e) => e.stopPropagation());
     this.box.addEventListener('pointerdown', () => (this.downOn = this.at()));
+    // la bulle passée d'elle-même à l'étape suivante part souvent ailleurs : le clic visé sur son « Suivant » tombait sur la carte,
+    // juste dessous (aux Enfers, il désélectionnait les troupes : testeur, 26 nov. 2026). Peu après le passage, un appui à
+    // l'ancienne place de la bulle est ignoré
+    const swallow = (e: Event) => {
+      const r = this.wasAt;
+      if (!r || performance.now() - this.autoAt > GONE_MS || this.box.contains(e.target as Node)) return;
+      const p = 'touches' in e ? (e as TouchEvent).touches[0] : (e as MouseEvent);
+      if (!p || !inRect(r, p.clientX, p.clientY)) return;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    for (const t of ['pointerdown', 'mousedown', 'touchstart', 'click']) window.addEventListener(t, swallow, true);
     this.box.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button');
       if (!b) return;
@@ -774,7 +794,12 @@ export class Tutorial {
     const all = this.ticks.filter(Boolean).length >= (s.need ?? this.ticks.length);
     if (all && !s.read) {
       if (!this.doneAt) this.doneAt = performance.now();
-      else if (performance.now() - this.doneAt > 1000) { this.autoAt = performance.now(); this.next(); return; }
+      else if (performance.now() - this.doneAt > 1000) {
+        this.wasAt = this.box.hidden ? null : this.box.getBoundingClientRect();
+        this.autoAt = performance.now();
+        this.next();
+        return;
+      }
     }
     // une fenêtre ouverte (réglages, récit, décision) cache la bulle, sauf celle des expéditions à leur étape ; un chapitre
     // attend que le joueur soit là où il se passe ; la suite principale se cache sous terre et dans les Enfers ; tout se tait

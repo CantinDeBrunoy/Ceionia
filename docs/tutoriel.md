@@ -10,6 +10,9 @@ Chaque étape a des tâches ; quand elles sont faites, la bulle dit « Bien jou�
 Rien n'est bloqué : « Suivant » passe toujours, « Passer le tutoriel » le met de côté.
 Un « Suivant » qui arrive moins de 0,9 s après un passage automatique (`LATE_MS`), ou enfoncé sur l'étape d'avant (`downOn`),
 est ignoré : il visait l'étape qui vient de se cocher et sautait la suivante (étapes 4 et 6 jamais vues, testeur v6).
+Quand la bulle change de place à ce passage, un appui à son ancienne place, dans les 2,5 s (`GONE_MS`, rectangle gardé dans
+`wasAt`), est avalé avant d'atteindre la carte (écouteurs en capture sur `window`) : le « Suivant » visé tombait sur le sol, et
+aux Enfers il désélectionnait les troupes (testeur, 26 nov. 2026).
 Plus tard dans la partie, des chapitres courts se lancent sur un événement : la première entrée dans les Enfers, le choix
 de l'allié, la première ligne de train. Ils ne se montrent qu'une fois.
 
@@ -85,7 +88,7 @@ de l'allié, la première ligne de train. Ils ne se montrent qu'une fois.
 - **Chapitre « Les Enfers »** (`hell`, 8 étapes), à la première entrée dans les Enfers (à la fin de la cinématique du portail). Se passe (« Passer ce chapitre »), ne se montre qu'une fois, la bulle à côté de ce qu'elle montre. Les gestes attendent d'être faits (24 nov. 2026, demande de l'auteur : il manquait comment déplacer les troupes et où attaquer) :
   1. `hellGoal` « Où attaquer » : l'anneau entoure le 🎯 à l'écran (`#hellGoal.show .hgPin`, ou sa flèche au bord quand la cible est hors de vue ; sinon l'objectif de la frise) ; cliquer l'objectif au bout de la frise centre la vue.
   2. `hellPick` « Vos troupes » : clic sur une troupe, cadre glissé, ou « Tous » (`selected` > 0).
-  3. `hellMove` « Se déplacer » : un clic droit au sol, une marche en formation (`lastOrder` neuf de genre `move`). La bulle se tient à l'écart ; sans troupe choisie, elle redit comment choisir.
+  3. `hellMove` « Se déplacer » : un clic droit, une marche en formation (`lastOrder` neuf, de tout genre : un clic au sol près d'un démon devient une attaque, et la case ne se cochait jamais, testeur du 26 nov. 2026). La bulle se tient à l'écart ; sans troupe choisie, elle redit comment choisir.
   4. `hellAttack` « À l'attaque » : un clic droit sur la cible (`lastOrder` neuf de genre `attack`).
   5. `hellRetreat` « Revenir au camp » : la touche R replie les troupes choisies au camp (`Command.retreats`, compté seulement avec des troupes choisies).
   6. `hellCamp` « Le camp de base » (à lire, 22 nov. 2026) : le camp offert au Seuil, où les troupes se soignent ; « Bâtir » pose les autres bâtiments autour. L'anneau entoure l'onglet Bâtir.
