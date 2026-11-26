@@ -212,6 +212,14 @@ function trainWhere(r: Railway, t: Train) {
 const dot = (c: number) => `<i class="lineDot" style="background:${hex(c)}"></i>`;
 /** clé du `localStorage` : la barre du bas repliée ('1') ou dépliée ('0') */
 const DOCK_MIN_KEY = 'ceionia.basReplie';
+/**
+ * La vue suit-elle d'office l'équipe qui part en expédition ? Non par défaut : un débutant ne voyait pas le lien et croyait
+ * que la souris avait glissé, la vue partait vers la forêt au milieu d'une pose (testeur débutant, 26 nov. 2026). L'œil de
+ * la carte de l'équipe la suit toujours ; Paramètres › Partie rend le suivi d'office
+ */
+const FOLLOW_KEY = 'ceionia.suiviEquipe';
+export function followOnLaunch() { try { return localStorage.getItem(FOLLOW_KEY) === '1'; } catch { return false; } }
+function setFollowOnLaunch(on: boolean) { try { localStorage.setItem(FOLLOW_KEY, on ? '1' : '0'); } catch { /* sans stockage */ } }
 /** Texte sûr dans un attribut (info-bulle) */
 const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 /** Un texte long en fiche : son début, et la suite repliée derrière « En savoir plus » (data-k garde l'état ouvert d'un rendu à l'autre) */
@@ -3247,9 +3255,10 @@ export class UI {
       close();
       closeMain();
       h.audio.sfxClick();
-      // la caméra suit l'équipe d'office, à la même distance (elle se collait au sol, testeurs v6) ; l'œil de sa carte (à gauche)
-      // la lâche ou la reprend de près
-      h.follow(a.id, true);
+      // la caméra suit l'équipe seulement si le joueur l'a voulu (Paramètres › Partie), à la même distance (elle se collait au
+      // sol, testeurs v6) ; sinon un mot dit que l'œil de sa carte (à gauche) la suit
+      if (followOnLaunch()) h.follow(a.id, true);
+      else this.info(tr('🧭 L’équipe est partie. L’œil de sa carte, à gauche, permet de la suivre.'));
       this.update();
     });
   }
@@ -3686,6 +3695,8 @@ export class UI {
         <p class="hint">${tr('Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.')}</p>
         <div class="row"><label>${tr('Catastrophes naturelles')}</label>${CALAM_FX.map(([k, i, l]) => `<button data-calam="${k}" aria-pressed="${h.calamities[k]}" class="${h.calamities[k] ? 'active' : ''}">${ic(i, 16)} ${l()}</button>`).join('')}</div>
         <p class="hint">${tr('Une au plus par âge, annoncée juste avant : une crue après une forte averse, un séisme, une pluie de météorites la nuit. Chacune se coupe à part.')}</p>
+        <div class="row"><label>${tr('Suivre les équipes')}</label><button id="gFollow" class="${followOnLaunch() ? 'active' : ''}">${tr(followOnLaunch() ? 'Au départ' : 'À l’œil seulement')}</button></div>
+        <p class="hint">${tr('Au départ : la vue suit chaque équipe qui part en expédition. À l’œil seulement : la vue ne bouge pas, l’œil de la carte de l’équipe la suit.')}</p>
         <div class="row"><label>${tr('Routes auto')}</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${tr(h.autoRoads ? 'Activées' : 'Désactivées')}</button></div>
         <p class="hint">${tr('Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.')}</p>
         <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
@@ -3860,6 +3871,11 @@ export class UI {
       this.setHelp(!this.help);
       q('#gHelp').textContent = tr(this.help ? 'Affichés' : 'Masqués');
       q('#gHelp').classList.toggle('active', this.help);
+    };
+    q('#gFollow').onclick = () => {
+      setFollowOnLaunch(!followOnLaunch());
+      q('#gFollow').textContent = tr(followOnLaunch() ? 'Au départ' : 'À l’œil seulement');
+      q('#gFollow').classList.toggle('active', followOnLaunch());
     };
     q('#gGoals').onclick = () => {
       h.setHideGoals(!h.hideGoals);
