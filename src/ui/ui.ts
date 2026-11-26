@@ -31,7 +31,7 @@ import { isleName, kindOffered, allyPostReadyNow, boonsMatter, talkRisk, TALK_RI
 import { peoplesView } from '../sim/peoples';
 import { peoplesHtml } from './peoples';
 import { legacyOf } from '../sim/legacy';
-import { boonText, effectSummary, effectChips, giftChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
+import { boonText, effectSummary, effectChips, giftChips, splitIntro, mandatoriesFor, isLegendary, Mission, MISSIONS, VICTORY, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, GearGap, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent, gearKnown, gearPower } from '../sim/gear';
@@ -2963,8 +2963,8 @@ export class UI {
     // pastilles (équipe, durée, risque), les gains, ce qu'elle débloque ou ce qui manque, et un bouton qui ouvre la petite
     // fenêtre de départ (les choix, l'équipement, le risque)
     const card = (m: Mission) => {
-      const done = ex.done(m), run = ex.running(m), redo = done, leg = isLegendary(m), mil = isMilitary(m);
-      const tags = `${m.mandatory ? `<span class="mtag must">${pic('★', 14)} ${tr('Obligatoire')}</span>` : ''}${leg ? `<span class="mtag leg">${pic('✨', 14)} ${tr('Légendaire')}</span>` : ''}${mil ? `<span class="mtag mil">${pic('⚔️', 14)} ${tr('Militaire')}</span>` : ''}`;
+      const done = ex.done(m), run = ex.running(m), redo = done, leg = isLegendary(m);
+      const tags = `${m.mandatory ? `<span class="mtag must">${pic('★', 14)} ${tr('Obligatoire')}</span>` : ''}${leg ? `<span class="mtag leg">${pic('✨', 14)} ${tr('Légendaire')}</span>` : ''}`;
       const label = tr(run ? 'Équipe en route…' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe');
       const art = missionArt(m);
       // une mission réussie passe en carte compacte, dans la grille du bas : « ✓ réussie », vignette, titre, âge et « Refaire »,
@@ -2972,12 +2972,12 @@ export class UI {
       if (redo && !run) {
         const thumb = MISSION_DIO.has(m.id) ? `<img src="./expeditions/dio-${m.id}.webp" alt="" loading="lazy" decoding="async">` : art.src ? `<img class="cover" src="${art.src}" alt="" loading="lazy" decoding="async">` : pic(m.icon, 44);
         const build = m.unlocks && this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}" title="${tr('Bâtir')} : ${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}" aria-label="${tr('Bâtir')}">${ic('hammer', 15, 2)}</button>` : '';
-        return `<div class="mission done small ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
+        return `<div class="mission done small ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}">
           <div class="cthumb ${art.dest}">${thumb}</div>
           <div class="cbody"><span class="cstate">✓ ${tr('réussie')}</span><h4 title="${m.title}">${m.title}</h4><small>${AGES[m.age].name}</small></div>
           ${build}<button class="sendBtn redo" data-send="${m.id}" title="${tr('Refaire l’expédition')}">${ic('restart', 15, 2)} ${tr('Refaire')}</button></div>`;
       }
-      return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
+      return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}">
         <div class="mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" loading="lazy" decoding="async">` : art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${pic(m.icon, 96)}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
         <div class="mbody">
           <div class="mhead"><b class="mbadge">${pic(m.icon, 30)}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div></div>
@@ -2996,14 +2996,13 @@ export class UI {
     const compact = (m: Mission) => ex.done(m) && !ex.running(m), doneList = sorted.filter(compact);
     const cards = sorted.filter((m) => !compact(m)).map(card).join('')
       + (doneList.length ? `<div class="doneBox"><h5 class="doneHead">✓ ${tr('Réussies')} <small>(${doneList.length})</small></h5><div class="doneGrid">${doneList.map(card).join('')}</div></div>` : '');
-    const nMil = sorted.filter(isMilitary).length, nLeg = sorted.filter(isLegendary).length;
+    const nLeg = sorted.filter(isLegendary).length;
     // l'en-tête : la rose des vents, le titre et une phrase ; puis une seule barre : les filtres des missions (toutes,
-    // militaires, légendaires), et à droite l'équipement et le chemin de fer
+    // légendaires), et à droite l'équipement et le chemin de fer
     const head = `${EXP_EMBLEM}<span class="exTitle"><span>${tr('Expéditions')}</span><small>${tr('Envoyez des équipes explorer de nouveaux territoires et rapporter des ressources ou des savoir-faire.')}</small></span>`;
     const { ov, close } = modal(this.root, 'expModal', head, `
       <nav class="expNav">
         <button data-tab="missions" data-f="all" class="${tab === 'missions' ? 'on' : ''}">${ic('ex-all', 19, 1.8)}${tr('Toutes')} <small>(${sorted.length})</small></button>
-        <button data-f="mil">${ic('ex-mil', 19, 1.8)}${tr('Militaires')} <small>(${nMil})</small></button>
         <button data-f="leg">${ic('ex-leg', 19, 1.8)}${tr('Légendaires')} <small>(${nLeg})</small></button>
         <label class="expFind" ${tab === 'missions' ? '' : 'hidden'}>${ic('search', 15, 2.2)}<input type="search" autocomplete="off" spellcheck="false" placeholder="${tr('Rechercher…')}" aria-label="${tr('Rechercher une expédition')}"></label>
         <span class="grow"></span>
@@ -3028,7 +3027,7 @@ export class UI {
     bindBlasonPicker($('[data-sec="blason"]', ov), h.world.blason, (b) => h.setBlason(b), { name: h.world.isleName, change: (n) => h.setIsleName(n) });
     $('.expModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, age))}.webp)`);
 
-    // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section
+    // la barre : un filtre montre les missions (toutes, légendaires), l'équipement et le chemin de fer leur section
     // le filtre en cours et la recherche (le titre de la mission, en français comme en anglais, sans accents)
     let f = 'all';
     const find = $<HTMLInputElement>('.expFind input', ov);
@@ -3037,7 +3036,7 @@ export class UI {
       let shown = 0;
       ov.querySelectorAll<HTMLElement>('.mission').forEach((el) => {
         const m = MISSIONS.find((x) => x.id === el.dataset.id);
-        el.hidden = (f === 'mil' ? el.dataset.mil !== '1' : f === 'leg' ? el.dataset.leg !== '1' : false) || (!!q && !!m && !matches(q, [...bothOf(m, 'title'), ...bothOf(AGES[m.age], 'name')]));
+        el.hidden = (f === 'leg' && el.dataset.leg !== '1') || (!!q && !!m && !matches(q, [...bothOf(m, 'title'), ...bothOf(AGES[m.age], 'name')]));
         if (!el.hidden) shown++;
       });
       // l'intertitre et la grille des réussies disparaissent quand le filtre n'en garde aucune
@@ -3047,7 +3046,6 @@ export class UI {
       if (em) {
         em.hidden = shown > 0;
         em.textContent = q ? tr('Aucune expédition ne répond à « {q} ».', { q })
-          : f === 'mil' ? tr('Aucune expédition militaire à cet âge. Les expéditions armées (le loup des bois…) apparaissent au fil des âges : revenez après avoir progressé.')
           : f === 'leg' ? tr('Aucune expédition légendaire à cet âge. Les grands exploits (mammouth, kraken, mégalodon, dragon, JO…) arrivent à des âges précis.')
           : tr('Aucune expédition disponible pour le moment.');
       }

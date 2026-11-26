@@ -1277,7 +1277,6 @@ body.cinematic #railPin, body.photo #railPin { display: none !important; }
 .mtag { font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .mtag.must { color: #a05c00; background: #fff0cf; }
 .mtag.leg { color: #7a4e00; background: linear-gradient(90deg, #ffe9a8, #f7c948); }
-.mtag.mil { color: #8a2230; background: #fbe1e4; }
 .mission button.sendBtn { margin-top: auto; }
 .mission p:last-of-type { margin-bottom: 10px; }
 button.sendBtn { margin-top: 10px; width: 100%; min-height: 44px; justify-content: center; gap: 7px; border: none; border-radius: 12px; background: #2b6cf0; color: #fff; font-size: 13.5px; font-weight: 800; box-shadow: none; }

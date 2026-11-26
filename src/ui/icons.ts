@@ -32,7 +32,6 @@ const P: Record<string, string> = {
   'eq-fieldShield': '<path d="M12 2.4 20.6 6v6.6c0 4-3 7.1-8.6 9.2-5.6-2.1-8.6-5.2-8.6-9.2V6Z"/><path d="M12 6.8v10.5m-4.4-5.1H16"/>',
   'eq-craft': '<path d="m4.2 19.8 10.4-10.4m-4-4 7.7 7.7M15.4 3l5.5 5.5-2.4 2.4L13 5.4ZM3 18l3 3-2.1 1.2L2 20.1Z"/>',
   'ex-all': '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.8"/><path d="m12 7.3 1.8 4.3-4.7 4.3 1.1-5Z" fill="currentColor" stroke="none"/>',
-  'ex-mil': '<path d="m4 4 15.7 15.7M20 4 4.3 19.7"/><path d="m3 6 3-3m12 0 3 3M2.8 17.7l3.5 3.5m11.4 0 3.5-3.5M9 9l-1 3m7-3 1 3"/>',
   'ex-leg': '<path d="M2 19.5 9.2 6l4.1 7.1L16.2 9 22 19.5Z"/><path d="m6 12.2 3.2 1.8 2.1-1.5m4.6 2.8 2.4 1.4"/>',
   'ex-gear': '<rect x="5.8" y="4.5" width="12.4" height="16.5" rx="3"/><path d="M9 4.5V3a3 3 0 0 1 6 0v1.5M5.8 10H3.9v7H6m12-7h2.2v7H18M8.4 12.3h7.2v5.2H8.4zM9.3 7.4h5.4"/>',
   'ex-rail': '<rect x="5" y="3" width="14" height="15" rx="3"/><path d="M7.7 7.1h8.6m-8.6 3h8.6M7 18l-2.5 3M17 18l2.5 3M8.4 14.4h.1m7.2 0h.1"/><circle cx="8.5" cy="14.4" r=".7"/><circle cx="15.6" cy="14.4" r=".7"/>',

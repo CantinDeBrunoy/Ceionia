@@ -167,7 +167,6 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 .mtag { border: 1px solid transparent; }
 .mtag.must { color: #7A4A0E; background: #FCE7B6; border-color: rgba(226, 180, 94, 0.6); }
 .mtag.leg { color: #6B4210; background: var(--hGoldFill); border-color: var(--hGold); }
-.mtag.mil { color: #7E2A22; background: #F8DCD2; border-color: rgba(214, 120, 100, 0.45); }
 .mgains, .sGifts { background: rgba(214, 196, 150, 0.25); border: 1px solid rgba(225, 195, 140, 0.45); }
 .mgains .chip { background: #FFFAF0; box-shadow: 0 0 0 1px rgba(225, 195, 140, 0.6); }
 .gift.g0, .gift.g1, .gift.g2, .gift.g3 { background: #FFFAF0; border: 1.5px solid rgba(225, 195, 140, 0.7); }
