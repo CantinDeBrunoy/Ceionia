@@ -9,6 +9,16 @@ describe('style des choix (prudent, audacieux)', () => {
     expect(choiceStyles([mk(0.2)])).toEqual([{ style: null, effect: null }]);
   });
 
+  it('le style suit le risque affiché, équipement compris (dragon : « Prudent » à 50 %, « Audacieux » à 46 %)', () => {
+    const bold = mk(0.45), smoke = mk(0.3);
+    const shown = new Map([[bold, 0.46], [smoke, 0.5]]);
+    const st = choiceStyles([bold, smoke], (c) => shown.get(c as any)!);
+    expect(st[0].style).toBe('cautious');
+    expect(st[1].style).toBe('bold');
+    // sans équipement qui change l'ordre, rien ne bouge
+    expect(choiceStyles([bold, smoke], (c) => c.risk).map((s) => s.style)).toEqual(['bold', 'cautious']);
+  });
+
   it('des risques égaux : aucune étiquette', () => {
     expect(choiceStyles([mk(0.2), mk(0.2)]).every((s) => !s.style)).toBe(true);
   });

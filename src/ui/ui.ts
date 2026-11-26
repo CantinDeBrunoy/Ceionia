@@ -3238,7 +3238,7 @@ export class UI {
 
   /** Le choix montré d'avance à l'ouverture de la fenêtre de départ : l'équilibré, sinon le premier qu'on peut faire */
   private defaultChoice(m: Mission) {
-    const ex = this.host.expeditions, cs = m.choices, st = choiceStyles(cs);
+    const ex = this.host.expeditions, cs = m.choices, st = choiceStyles(cs, (c) => ex.preview(c).risk);
     const ok = (i: number) => !ex.why(m, cs[i]);
     // la façon de partir choisie la dernière fois pour cette mission (fenêtre refermée, mission ratée qu'on relance)
     const last = this.lastChoice.get(m.id);
@@ -3264,7 +3264,7 @@ export class UI {
    */
   private sendHtml(m: Mission, sel: number) {
     const h = this.host, ex = h.expeditions, age = h.sim.age, st = ex.state;
-    const cs = m.choices, styles = choiceStyles(cs);
+    const cs = m.choices, styles = choiceStyles(cs, (c) => ex.preview(c).risk);
     const i = Math.min(sel, cs.length - 1), c = cs[i], done = ex.done(m), run = ex.running(m), redo = done;
     const why = run ? tr('Une équipe est déjà en route.') : ex.why(m, c);
     const pv = ex.preview(c);
@@ -3319,7 +3319,12 @@ export class UI {
     const roadLeft = todo.filter((g) => g.road);
     // (sur sa propre ligne, au-dessus de la consigne)
     const roadNote = roadLeft.length ? `<span class="gRoad">${roadLeft.map((g) => tr('{gear} : utile en route, pour « {opt} »', { gear: tr(g.gear.name), opt: g.road!.option.label })).join(' · ')}</span>` : '';
-    const gearNote = todo.length ? `<p class="gnote">${roadNote}${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
+    // le minerai d'une condition d'âge : « Tout fabriquer » prenait les 8 minerais qui comptaient pour l'âge industriel, et la
+    // condition retombait à 0 sans un mot (testeur débutant, 26 nov. 2026). On le dit avant de fabriquer
+    const oreAge = h.world.unlimited ? null : h.sim.ageProgress()?.items.find((x) => x.label === 'minerai' && x.have > 0);
+    const oreWarn = oreAge && total.ore > 0 && Math.floor(h.world.ore - total.ore) < oreAge.need
+      ? `<span class="gOre">${ic('alert', 13, 2.4)} ${tr('Ce minerai compte pour l’âge {age} ({have}/{need}) : la fabrication le dépense.', { age: tr(AGES[h.sim.age + 1].name), have: oreAge.have, need: oreAge.need })}</span>` : '';
+    const gearNote = todo.length ? `<p class="gnote">${roadNote}${oreWarn}${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
     // la boîte de « Tout fabriquer » doit contenir les boutons des pièces (voir le gestionnaire)
     // l'équipement en une ligne fine sous les cartes : titre, pièces, consigne, nombre d'habitants
     const gearBox = `<div class="sPanel sGear gearNeed sSlim"><span class="sgT">${ic('shield', 20, 2)}<b>${tr('Équipement conseillé')}</b></span>
