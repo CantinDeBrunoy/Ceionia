@@ -11,7 +11,7 @@ const WANT = 320, MIN_SIDE = 280;
  * - au téléphone (≤ 600 px), sur toute la largeur, au-dessus de la barre du bas.
  * `top` est la limite haute (le bas des panneaux du haut) : la carte défile plutôt que de passer dessous
  */
-export function placeCard(card: HTMLElement, menu: Element | null, corner: Element | null, top: number) {
+export function placeCard(card: HTMLElement, menu: Element | null, corner: Element | null, top: number, over: (Element | null)[] = []) {
   if (!menu || !corner) return;
   const m = menu.getBoundingClientRect(), c = corner.getBoundingClientRect(), vw = innerWidth, vh = innerHeight;
   if (!m.width || !c.width) return;
@@ -25,6 +25,13 @@ export function placeCard(card: HTMLElement, menu: Element | null, corner: Eleme
     // (au-dessus du coin ; si elle déborde au-dessus du menu, au-dessus du menu aussi)
     width = Math.min(WANT, vw - 24); left = Math.max(12, Math.min(c.right, vw - 12) - width);
     bottom = vh - (left < m.right ? Math.min(c.top, m.top) : c.top) + 10; at = 'above';
+  }
+  // les panneaux posés au-dessus du coin (aux Enfers, les troupes sur le terrain et « Tous ») : la carte passe au-dessus d'eux.
+  // La fiche d'une recrue était cachée dessous, on ne lisait pas pourquoi elle était verrouillée (testeur débutant, 26 nov. 2026)
+  for (const o of over) {
+    const r = o?.getBoundingClientRect();
+    if (!r || !r.width || r.right <= left || r.left >= left + width || r.top >= vh - bottom || r.bottom <= vh - bottom - card.offsetHeight) continue;
+    bottom = Math.max(bottom, vh - r.top + 8);
   }
   const maxH = Math.max(120, vh - bottom - top - 10);
   const st = card.style, px = (n: number) => `${Math.round(n)}px`;

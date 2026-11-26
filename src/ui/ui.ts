@@ -1572,7 +1572,7 @@ export class UI {
       const bar = document.getElementById('troopBar');
       if (foot && tool && bar) { const l = `${Math.round(tool.getBoundingClientRect().left - foot.getBoundingClientRect().left)}px`; if (bar.style.getPropertyValue('--tbL') !== l) bar.style.setProperty('--tbL', l); }
       const t = document.getElementById('tinfo');
-      if (t) placeCard(t, document.querySelector('#troopBar .tmenu'), document.querySelector('#troopBar .tcorner'), top);
+      if (t) placeCard(t, document.querySelector('#troopBar .tmenu'), document.querySelector('#troopBar .tcorner'), top, [document.querySelector('#troopBar .tbot')]);
       return;
     }
     // (au téléphone, la barre ne forme plus qu'un panneau, `#dockRow` : le menu et le coin se mesurent sur lui)
