@@ -4050,7 +4050,7 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
       <div class="mModes" role="radiogroup" aria-label="${tr('Mode')}">${DIFFICULTIES.map((d) => `<button type="button" role="radio" class="mMode ${d}${d === DEFAULT_DIFFICULTY ? ' rec' : ''}" data-d="${d}" title="${attr(DIFF_TEXT.points[d].join(' · '))}">
         <span class="mGem" aria-hidden="true"></span>
         <span class="mArt"><img src="./menu/mode-${d}.webp" alt="" decoding="async"></span>
-        <span class="mRec">${d === DEFAULT_DIFFICULTY ? DIFF_TEXT.recommended : ''}</span>
+        <span class="mRec${d === 'normal' && d !== DEFAULT_DIFFICULTY ? ' alt' : ''}">${d === DEFAULT_DIFFICULTY ? DIFF_TEXT.recommended : d === 'normal' ? DIFF_TEXT.challenge : ''}</span>
         <h2>${DIFF_TEXT.mode(d)}</h2><em>${DIFF_TEXT.blurb[d]}</em>${CHEVRON}</button>`).join('')}</div>
       <div class="mPlay"><button class="mResume" hidden>${playIcon()}<span>${tr('Continuer')}</span></button><button class="mGo">${playIcon()}<span>${tr('Nouvelle partie')}</span></button></div>
       <p class="mSave" hidden></p>

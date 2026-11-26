@@ -5,7 +5,7 @@
 > Voir aussi : [economie-ressources.md](economie-ressources.md), [besoins-population.md](besoins-population.md), [ages.md](ages.md), [bac-a-sable.md](bac-a-sable.md), [sauvegarde.md](sauvegarde.md), [expeditions.md](expeditions.md).
 
 ## En bref
-Trois difficultés, choisies au début d'une partie et sauvegardées avec elle : **Bac à sable** (`sandbox`), **Facile** (`easy`) et **Normal** (`normal`, valeur par défaut `DEFAULT_DIFFICULTY`, mise en avant « Conseillé »). Tous les réglages chiffrés sont dans la table `DIFFICULTY` ; on lit toujours les règles par `rulesOf(world.difficulty)` (Facile pour une valeur inconnue). On ne change pas de difficulté en cours de partie : « Recommencer cette carte » en relance une neuve.
+Trois difficultés, choisies au début d'une partie et sauvegardées avec elle : **Bac à sable** (`sandbox`), **Facile** (`easy`) et **Normal** (`normal`). Facile est la valeur par défaut (`DEFAULT_DIFFICULTY`), mise en avant « Conseillé » et choisie d'avance à l'accueil ; Normal porte « Pour plus de défi » (`DIFF_TEXT.challenge`). Normal était conseillé jusqu'au 26 nov. 2026 : un nouveau venu le prenait et butait sur les expéditions légendaires et les Enfers (testeur débutant, décision de l'auteur). Une partie sauvegardée garde sa difficulté (`readDifficulty`) ; seule une valeur inconnue d'une sauvegarde récente retombe sur `DEFAULT_DIFFICULTY`, donc Facile, comme `rulesOf`. Tous les réglages chiffrés sont dans la table `DIFFICULTY` ; on lit toujours les règles par `rulesOf(world.difficulty)` (Facile pour une valeur inconnue). On ne change pas de difficulté en cours de partie : « Recommencer cette carte » en relance une neuve.
 
 ## Règles du jeu
 
@@ -41,7 +41,7 @@ Le bac à sable et Facile ne diffèrent que par `unlimited`. Les petits objectif
 - Textes : `DIFF_TEXT` (nom, devise, points forts affichés à l'accueil, messages « Disette », « Le village se remet d'un manque », « (en plus) ») ; les chaînes brutes `RAW` sont traduites par `tr` à chaque lecture (la langue peut changer).
 
 ### Choix et reprise
-- Accueil : une carte par mode ; Normal est « Conseillé » et lance directement la partie. Le menu « Recommencer » permet de changer.
+- Accueil : une carte par mode ; Facile est « Conseillé » et choisi d'avance, Normal dit « Pour plus de défi ». Le menu « Recommencer » permet de changer.
 - Sauvegarde : `world.difficulty` et `diffV = DIFF_VERSION` (1) dans `World.toJSON`. `readDifficulty(valeur, version)` relit les anciennes parties : sans version (avant le changement de noms), `normal` ou rien devient `easy`, `challenge` et `defi` deviennent `normal`, `sandbox` reste ; avec version 1 ou plus, valeur connue sinon `DEFAULT_DIFFICULTY`.
 
 ## Fonctionnement dans le code

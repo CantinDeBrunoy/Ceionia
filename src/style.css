@@ -612,6 +612,8 @@ body.under #selCard, body.photo #selCard { display: none; }
 /* même cadre pour les trois illustrations (de hauteurs différentes) : titres et textes alignés d'une carte à l'autre */
 .mArt img { display: block; width: 100%; height: auto; aspect-ratio: 560 / 355; object-fit: contain; }
 .mRec { min-height: 16px; line-height: 16px; font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: #b47a10; }
+/* Normal, sous Facile conseillé : une mention plus discrète (décision de l'auteur, 26 nov. 2026) */
+.mRec.alt { letter-spacing: 0.08em; color: #8a7a66; }
 .mMode h2 { margin: 2px 0 6px; font-family: 'Fraunces', Georgia, serif; font-size: clamp(20px, 1.7vw, 26px); font-weight: 600; line-height: 1.1; transition: font-size 0.25s; }
 .mMode em { font-size: 15px; font-weight: 500; line-height: 1.35; color: #3b3e48; }
 .mChev { flex: none; box-sizing: content-box; margin-top: auto; padding-top: 14px; color: #262832; }

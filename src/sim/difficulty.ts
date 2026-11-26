@@ -1,6 +1,6 @@
 /**
  * Difficulté d'une partie : choisie en la commençant, sauvegardée avec elle. Trois modes : « Bac à sable », « Facile » (les
- * règles de l'ancien « Normal » : seuls les grands bâtiments se paient) et « Normal » (l'ancien « Défi », mode par défaut).
+ * règles de l'ancien « Normal » : seuls les grands bâtiments se paient) et « Normal » (l'ancien « Défi »). Facile est le mode conseillé et choisi d'avance.
  * Les anciennes sauvegardes se relisent avec `readDifficulty` (voir `DIFF_VERSION`). Tous les paramètres sont dans la table
  * `DIFFICULTY`, tous les textes dans `DIFF_TEXT`
  */
@@ -12,7 +12,9 @@ export type Difficulty = 'sandbox' | 'easy' | 'normal';
 export const DIFFICULTIES: Difficulty[] = ['sandbox', 'easy', 'normal'];
 
 /** Difficulté d'une nouvelle partie quand le joueur n'en choisit pas */
-export const DEFAULT_DIFFICULTY: Difficulty = 'normal';
+// (Facile depuis le 26 nov. 2026, décision de l'auteur : un nouveau venu d'Instagram prenait Normal, « Conseillé », et butait
+// sur les expéditions légendaires et les Enfers. Une partie sauvegardée garde sa difficulté, voir `readDifficulty`)
+export const DEFAULT_DIFFICULTY: Difficulty = 'easy';
 
 /**
  * Version du nom des difficultés dans la sauvegarde. Avant (absente) : « normal » était le mode facile d'aujourd'hui et
@@ -116,8 +118,8 @@ const RAW = {
   /** les points clés en une phrase, pour l'écran d'accueil sur téléphone */
   summary: {
     sandbox: 'Choisissez votre âge : tout est débloqué, gratuit et sans besoin à tenir, pour bâtir et explorer librement.',
-    easy: 'Les grands bâtiments se paient en bois et en pierre, les petits sont gratuits. Le village grandit quand ses besoins sont comblés.',
-    normal: 'Tout se paie et on mange plus : chaque pierre compte. Le mode conseillé.',
+    easy: 'Les grands bâtiments se paient en bois et en pierre, les petits sont gratuits. Le village grandit quand ses besoins sont comblés. Le mode conseillé.',
+    normal: 'Tout se paie et on mange plus : chaque pierre compte. Pour plus de défi.',
   } as Record<Difficulty, string>,
   /** la phrase d'une carte de mode, à l'écran d'accueil */
   blurb: {
@@ -127,6 +129,8 @@ const RAW = {
   } as Record<Difficulty, string>,
   /** mode mis en avant à l'accueil */
   recommended: 'Conseillé',
+  /** la mention de Normal à l'accueil, sous le mode conseillé */
+  challenge: 'Pour plus de défi',
   /** bouton de l'écran d'accueil qui lance une nouvelle partie dans ce mode */
   play: (d: Difficulty) => `Jouer en ${RAW.name[d]}`,
   /** bac à sable : l'âge où la partie commence, et le changement d'âge en jeu */
@@ -164,6 +168,7 @@ export const DIFF_TEXT = {
   get points() { return trRecs(RAW.points); },
   get summary() { return trRec(RAW.summary); },
   get recommended() { return tr(RAW.recommended); },
+  get challenge() { return tr(RAW.challenge); },
   get blurb() { return trRec(RAW.blurb); },
   /** le titre d'une carte de l'accueil : « Mode Facile » */
   mode: (d: Difficulty) => tr('Mode {name}', { name: tr(RAW.name[d]) }),
