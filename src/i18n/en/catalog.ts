@@ -638,7 +638,9 @@ registerDict('catalog', {
   'Train de voyageurs': 'Passenger train',
   'L’entrée est marquée en or': 'The entrance is marked in gold',
   'Un clic : l’endroit, un second : le côté de l’entrée (en or)': 'One click: the spot, a second: the entrance side (in gold)',
-  'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)': 'Click on the entrance side (on the building: toward the road)',
+  'Cliquez du côté de la porte, ou sur le bâtiment pour la laisser où elle est': 'Click on the side of the door, or on the building to leave it where it is',
+  // la légende des couleurs du fantôme de pose
+  'Vert : on peut bâtir ici': 'Green: you can build here', 'Rouge : pas ici': 'Red: not here', 'Or : la porte': 'Gold: the door',
   'Cliquez du côté de l’entrée': 'Click on the entrance side',
   'Cliquez du côté de l’ouverture': 'Click on the opening side',
   // la recherche du menu Bâtir

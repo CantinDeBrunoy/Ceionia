@@ -1219,7 +1219,7 @@ export class UI {
       this.clearSearch();
       this.tab = b.dataset.t!;
       // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
-      if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
+      if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) { this.foldTool = 'none'; this.host.tools.setTool('none'); }
       this.renderDock(); this.host.audio.sfxClick();
     }));
     const quick = $('#quickL');
@@ -1284,7 +1284,8 @@ export class UI {
       this.land = b.dataset.l as LandSub;
       this.clearSearch();
       const lt = landOfTool(this.host.tools.tool);
-      if (lt && lt !== this.land) this.host.tools.setTool('none');
+      // (lâché par le changement de rayon, pas par le joueur : la barre reste ouverte sur le nouveau rayon)
+      if (lt && lt !== this.land) { this.foldTool = 'none'; this.host.tools.setTool('none'); }
       this.renderItems(); this.host.audio.sfxClick();
     }));
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = (ev) => {
@@ -1295,7 +1296,9 @@ export class UI {
       this.clearSearch();
       // le bâtiment en main est d'un autre rayon : on le lâche, sinon refreshTools ramènerait son rayon
       const tl = this.host.tools;
-      if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) tl.setTool('none');
+      // (lâché par le changement de rayon, pas par le joueur : la barre ne se replie pas. Juste après une pose, le bâtiment encore
+      // en main faisait replier la barre au clic sur un autre rayon, et le clic suivant tombait sur la carte : testeur débutant, 26 nov. 2026)
+      if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) { this.foldTool = 'none'; tl.setTool('none'); }
       this.renderItems(); this.host.audio.sfxClick();
     }));
     let html: string;
@@ -1632,7 +1635,8 @@ export class UI {
     box.innerHTML = `<div class="ihead">${this.cardThumb(k, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub">${d.size} × ${d.size} · ${AGES[a].name}</small><small class="xcount">${count}</small></div></div>
       <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${this.needUse(k, a)}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${tl.tracingWall && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${rich ? tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) }) : shortLabel(w, cost)}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && placeWhy && !(cost && !rich && placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : tl.tracingWall ? tr(tl.freeStage === 2 ? 'Cliquez le point B : la ligne se pose d’un trait, en angles droits' : 'Cliquez le point A, puis le point B : la ligne se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de l’entrée (sur le bâtiment : vers la route)' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}`;
+      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && placeWhy && !(cost && !rich && placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : tl.tracingWall ? tr(tl.freeStage === 2 ? 'Cliquez le point B : la ligne se pose d’un trait, en angles droits' : 'Cliquez le point A, puis le point B : la ligne se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de la porte, ou sur le bâtiment pour la laisser où elle est' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}
+      ${tl.tool === 'build' && brief && !lock && k !== 'wall' && !tl.tracingWall ? `<p class="keys glegend"><i class="gok"></i>${tr('Vert : on peut bâtir ici')} <i class="gno"></i>${tr('Rouge : pas ici')}${hasDoor(k) ? ` <i class="gdoor"></i>${tr('Or : la porte')}` : ''}</p>` : ''}`;
   }
 
   /**

@@ -595,6 +595,11 @@ body.hell #resPanel { display: none !important; }
 #tinfo .cost { font-weight: 700; }
 #info .lock, #tinfo .lock { display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 10px; background: rgba(200, 72, 43, 0.08); color: #A53A1C; font-weight: 700; }
 #info .keys, #tinfo .keys { padding-top: 6px; border-top: 1px dashed rgba(200, 160, 95, 0.5); font-size: 11.5px; color: var(--hInk2); }
+/* la légende du fantôme de pose : ce que veulent dire ses couleurs (testeur débutant, 26 nov. 2026 : « vert, jaune, rouge, sans
+   savoir ce que chaque couleur veut dire ») */
+#info .keys.glegend { margin-top: 4px; padding-top: 0; border-top: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; background: none; color: var(--hInk2); font-weight: 600; }
+#info .glegend i { display: inline-block; width: 10px; height: 10px; margin-right: 1px; border-radius: 3px; vertical-align: -1px; }
+#info .glegend .gok { background: #30c060; } #info .glegend .gno { background: #e84040; } #info .glegend .gdoor { background: #ffd04a; }
 /* le bâtiment choisi : ses actions en pied, la corbeille rouge à part */
 #selCard .ihead .x, #selCard .ihead .xfold { flex: none; align-self: flex-start; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
 #selCard .ihead .xfold { display: none; font-size: 15px; }
@@ -1684,6 +1689,17 @@ button.round.off:hover { opacity: 0.85; }
 #info .xneed .xbar u { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #3A2A18; text-decoration: none; }
 #info .xneed small { display: block; color: #5A4630; font-size: 11.5px; }
 #info .xneed.short small { color: #A33A1E; font-weight: 700; }
+/* un petit écran (768 px de haut) : les jauges plus serrées, sur deux lignes. La fiche de la halle aux poissons (trois jauges)
+   passait sous la barre du bas, sa dernière ligne coupée, et l'on ne fait pas défiler une fiche survolée (testeur débutant,
+   26 nov. 2026) */
+@media (max-height: 820px) {
+  #info .xneed { margin-top: 5px; padding: 4px 9px 5px; border-radius: 10px; }
+  #info .xneed .xnh b { font-size: 11.5px; }
+  #info .xneed .xbar { height: 6px; margin: 3px 0; }
+  #info .xneed small { font-size: 10.5px; line-height: 1.25; }
+  #info .effs { margin-top: 4px; }
+  #info .xdesc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}
 
 /* ---------- L'âge de chaque bâtiment dans le menu de construction : une petite pastille à son image (`ageMk`), à gauche sous
    la taille, aux couleurs des âges (terre, marbre, vert, brique, verre, néon) ; celle de l'âge du village bordée d'or.
