@@ -4,6 +4,7 @@ import { Hell } from '../src/sim/hell';
 import { troopStats } from '../src/sim/army';
 import { HellBase, counterSize, ageLag, RECLAIM_FIRST, RECLAIM_WARN, COUNTER_MAX, LAG_BONUS } from '../src/sim/hellBase';
 import { AGES } from '../src/build/catalog';
+import { sealedWhy } from '../src/sim/objective';
 
 const run = (h: Hell, b: HellBase | null, t: number) => { for (let i = 0; i < t * 10; i++) { h.step(0.1); b?.step(0.1); h.events.length = 0; } };
 /** Les zones 1 à `upTo` conquises (forteresses abattues, garnisons balayées) */
@@ -43,6 +44,16 @@ describe('les Enfers : l’âge plafonne les zones', () => {
     // un âge de plus : la zone s'ouvre
     h.age = 2;
     expect(h.frontier).toBe(Z_CLIFFS);
+  });
+
+  it('un clic dans une zone fermée dit pourquoi : l’âge à atteindre au village, sinon la forteresse d’avant', () => {
+    const { h } = setup(Z_RIVER, 1);
+    expect(sealedWhy(h, HELL_ZONES[Z_RIVER].z0 + 2)).toBeNull();
+    expect(sealedWhy(h, HELL_ZONES[Z_CLIFFS].z0 + 2)).toBe('🔒 Zone fermée : il faut atteindre l’âge Médiéval au village pour aller aux Falaises cendrées.');
+    // plus loin, l'âge de cette zone-là
+    expect(sealedWhy(h, HELL_ZONES[Z_KINGDOM].z0 + 2)).toContain('l’âge Futuriste');
+    const c = setup(0, 5).h;
+    expect(sealedWhy(c, HELL_ZONES[Z_CLIFFS].z0 + 2)).toContain('abattez d’abord la forteresse');
   });
 
   it('avant d’avoir conquis la zone d’avant, la brume est « de conquête », pas « d’âge »', () => {

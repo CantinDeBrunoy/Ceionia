@@ -1,5 +1,5 @@
 import type { Hell } from './hell';
-import { Z_KINGDOM, zoneAgeText, zoneThe } from '../world/hell';
+import { Z_KINGDOM, ZONE_AGE, zoneAgeText, zoneThe, zoneTo, zoneOf, zoneOfZ } from '../world/hell';
 import { tr, nplural } from '../i18n';
 
 /**
@@ -41,10 +41,22 @@ export function goalLine(g: HellGoal, dist: number | null): string {
     case 'outpost': return `${tr('Objectif : abattre l’avant-poste')}${d}`;
     case 'fortress': return `${tr('Objectif : abattre la forteresse')}${d}`;
     case 'kingdom': return `${tr('Objectif : abattre la citadelle du royaume')}${d}`;
-    case 'locked': return tr('Zone suivante fermée : il faut {age}', { age: zoneAgeText(g.zone) });
+    case 'locked': return tr('Zone suivante fermée : il faut {age} au village', { age: zoneAgeText(g.zone) });
     default: return tr('Les Enfers sont vaincus');
   }
 }
 
 /** Le nom de la zone visée avec son article (pour les infobulles) */
 export const goalZone = (g: HellGoal) => zoneThe(g.zone);
+
+/**
+ * Pourquoi la rangée `z` est hors d'atteinte (null si on peut y aller) : l'âge du village (la zone la demande plus haut), sinon
+ * la forteresse d'avant à abattre. Retour de l'auteur (26 nov. 2026) : la ligne de la frise passait inaperçue, le joueur cliquait
+ * et envoyait ses troupes dans la brume sans comprendre. La phrase va dans la bulle sous le curseur (`CommandHost.refuse`)
+ */
+export function sealedWhy(h: Hell, z: number): string | null {
+  const zone = zoneOfZ(Math.floor(z));
+  if (!h.gate || zone <= h.frontier) return null;
+  if (h.age < ZONE_AGE[zone]) return tr('🔒 Zone fermée : il faut atteindre {age} au village pour aller {zone}.', { age: zoneAgeText(zone), zone: zoneTo(zone) });
+  return tr('🔒 Zone fermée : abattez d’abord la forteresse {prev}.', { prev: zoneOf(h.frontier) });
+}

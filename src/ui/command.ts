@@ -13,7 +13,7 @@ import type { BaseCost } from '../sim/hellBase';
 import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
 import { planHellRecruit, orderHellRecruit, stepHellWaiting, shortWhy } from '../sim/recruitPlan';
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
-import { nextGoal, goalLine, HellGoal } from '../sim/objective';
+import { nextGoal, goalLine, HellGoal, sealedWhy } from '../sim/objective';
 import { pic, withPic, hudPic } from './pics';
 import { ic } from './icons';
 import { cardData } from './xcard';
@@ -671,7 +671,12 @@ export class CommandUI implements ToolInput {
       else this.cmd.select([u.id]);
       this.lastClick = { t: now, kind: u.kind };
       this.host.click();
-    } else if (!add) this.cmd.clear();
+    } else {
+      if (!add) this.cmd.clear();
+      // un clic dans une zone fermée : pourquoi on n'y va pas
+      const sealed = t.kind === 'hell' ? sealedWhy(t.sim, p[1]) : null;
+      if (sealed) this.deny(sealed);
+    }
     this.render();
   }
 
@@ -709,7 +714,10 @@ export class CommandUI implements ToolInput {
     if (!this.cmd.armed && t.atPortal?.(p[0], p[1]) && this.canCross()) { this.crossPortal(); return; }
     // un ordre sur le 🎯 : on attaque la cible (le marqueur flotte au-dessus d'elle, le clic tombait au sol bien avant)
     const aim = this.goalHit(x, y);
+    // une zone hors d'atteinte : on le dit sous le curseur (les troupes marchent quand même jusqu'à la brume)
+    const sealed = aim === null && t.kind === 'hell' ? sealedWhy(t.sim, p[1]) : null;
     const r = aim !== null ? (this.cmd.attack(t.sim, aim) ? 'attack' : null) : this.cmd.orderAt(t.sim, p[0], p[1]);
+    if (sealed) this.deny(sealed);
     if (r) {
       t.layer.mark = { ...this.cmd.lastOrder!, t: 0 };
       this.host.click();
@@ -832,6 +840,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'pause') this.host.togglePause();
     else if (a === 'help') { this.helpOpen = !this.helpOpen; this.helpAt = performance.now(); }
     else if (a === 'goal') { this.centerGoal(); return; }
+    else if (a === 'locked') { const g = this.goal; if (g) this.deny(tr('🔒 Zone fermée : il faut atteindre {age} au village pour aller {zone}.', { age: zoneAgeText(g.zone), zone: zoneTo(g.zone) })); return; }
     else if (a === 'base') { this.baseOpen = !this.baseOpen; if (!this.baseOpen) { if (this.placing) this.stopPlacing(); if (this.tool !== 'select') this.dropTool(); } }
     else if (a.startsWith('grp:')) { const n = +a.slice(4); if (e.shiftKey || e.ctrlKey) this.cmd.setGroup(n); else if (this.cmd.recall(n)) this.focusSelection(); }
     else if (a === 'portal') {
@@ -1328,7 +1337,7 @@ export class CommandUI implements ToolInput {
     const al = alerts[0];
     const zn = this.host.zoneName?.();
     // au bout de la frise, l'objectif (la distance se met à jour à part, sans refaire la barre) : un clic y centre la vue
-    const g = this.goal, goal = g ? (g.x !== undefined ? `<button data-a="goal" class="tfg" title="${tr('Centrer la vue sur l’objectif')}">${hudPic('militaire', 18)}<span class="tgo">${goalLine(g, null)}<b class="tgd"></b></span></button>` : `<span class="tfg">${pic('🔒', 18)}<span class="tgo">${goalLine(g, null)}</span></span>`) : '';
+    const g = this.goal, goal = g ? (g.x !== undefined ? `<button data-a="goal" class="tfg" title="${tr('Centrer la vue sur l’objectif')}">${hudPic('militaire', 18)}<span class="tgo">${goalLine(g, null)}<b class="tgd"></b></span></button>` : `<button data-a="locked" class="tfg" title="${tr('Pourquoi la zone est fermée')}">${pic('🔒', 18)}<span class="tgo">${goalLine(g, null)}</span></button>`) : '';
     // dessous, seulement quand les démons menacent la base
     const row = al ? `<div class="tgoal"><span class="tfa" title="${al.text.replace(/"/g, '&quot;')}">${pic('⚠️', 16)} ${al.text}</span></div>` : '';
     return `<div class="tstate tfcol"><div class="tfrise hellf">${zn ? `<span class="tfn" title="${tr('La zone où se trouve la vue. Un clic sur le portail ramène au village')}"><img class="tfb" src="./icons/hell/banniere.webp" alt="" draggable="false" decoding="async"><span class="tft"><b>${tr('Les Enfers')}</b><small>${zn}</small></span></span>` : ''}<div class="tfz">${nodes}</div>${goal}</div>${row}</div>`;
