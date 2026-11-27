@@ -81,6 +81,7 @@ depuis 13 mois (`KEEP_DAYS`, `worker/ping.ts`, `purge`). Au refus, l'identifiant
 - Au bac à sable, l'âge de départ se choisit : il ne compte pas dans l'âge le plus haut du joueur (`max_age` reste à -1 s'il
   n'a joué qu'au bac à sable).
 - **L'âge atteint du rapport** (`REACHED_SQL`, `worker/stats.ts`) se calcule sur les parties : le plus haut des parties neuves (`launch` = `new`) ou de celles où l'âge a monté. Rouvrir une vieille sauvegarde ne compte pas : le 27 nov. 2026, un joueur qui avait ouvert 20 s une partie au Moderne puis mené une partie neuve de la Préhistoire au Médiéval apparaissait « Moderne ». Sans partie de ce genre, l'âge le plus haut de ses parties hors bac à sable, et sans partie du tout (purgées), `players.max_age`.
+- **Le temps passé dans chaque âge** (table `player_ages`, remplie par `recordPing`) : chaque signal crédite ses secondes à l'âge du joueur, hors bac à sable. Le signal `age` porte le temps joué avant le changement : il va à l'âge d'avant (le `max_age` de la partie). Le rapport en fait une barre par âge, un morceau par joueur, de la couleur de `playerColor` (`worker/bo.ts`, tirée de l'identifiant, la même que la pastille de la liste). Un joueur compte ainsi dans chaque âge joué (demande de l'auteur, 27 nov. 2026). Les parties d'avant ont été reprises par la migration 0003 : leur temps partagé à parts égales entre les âges traversés, donc approché.
 - Les limiteurs (`ratelimits` de `wrangler.jsonc`) sont approximatifs et propres à chaque lieu de Cloudflare : ce sont des
   freins, pas des comptes exacts. Les plafonds par jour, eux, sont comptés dans la base.
 
@@ -92,6 +93,8 @@ depuis 13 mois (`KEEP_DAYS`, `worker/ping.ts`, `purge`). Au refus, l'identifiant
 - `days` : `day` (AAAA-MM-JJ, heure de Paris), `player`, `seconds`. Sert aux joueurs par jour.
 - `0002_index_rapport.sql` : index sur `last_at`, `first_at`, `started_at` et `seconds`, pour le rapport, les plafonds et la
   purge.
+- `player_ages` (`0003_temps_par_age.sql`) : `player`, `age`, `seconds`, clé (`player`, `age`). La purge efface les lignes des
+  joueurs effacés.
 
 ### Le back-office `/bo`
 - **Connexion par GitHub (OAuth)**, réservée à un seul compte, celui de l'auteur. Plus de clé à garder.

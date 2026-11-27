@@ -33,6 +33,8 @@ export interface Report {
   /** joueurs par âge le plus haut atteint (indice de `AGE_NAMES`), et ceux qui n'ont joué qu'au bac à sable */
   ages: { name: string; players: number }[];
   sandboxOnly: number;
+  /** le temps passé dans chaque âge (indice de `AGE_NAMES`), joueur par joueur : un joueur compte dans chaque âge joué */
+  ageTime: { player: string; age: number; seconds: number }[];
   /** les 30 derniers jours, du plus ancien à aujourd'hui (les jours sans joueur à zéro) */
   days: DayRow[];
   /** une page de joueurs, de la dernière visite à la plus ancienne */
@@ -68,7 +70,7 @@ export async function loadReport(db: D1Database, now: number, page = 0): Promise
   const today = parisDay(now), midnight = parisMidnight(now);
   // (sept jours de calendrier, aujourd'hui compris ; une heure de jeu en plus ou en moins au changement d'heure : sans effet)
   const week = midnight - 6 * 86400, first = dayBefore(today, 29);
-  const [p, s, mp, ms, ages, days, list] = await db.batch([
+  const [p, s, mp, ms, ages, days, list, ageTime] = await db.batch([
     db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(last_at >= ?1), 0) AS today, COALESCE(SUM(last_at >= ?2), 0) AS week,
       COALESCE(SUM(seconds), 0) AS secs, COALESCE(SUM(seconds = 0), 0) AS idle FROM players`).bind(midnight, week),
     db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(started_at >= ?1), 0) AS today, COALESCE(SUM(seconds), 0) AS secs FROM sessions').bind(midnight),
@@ -78,6 +80,7 @@ export async function loadReport(db: D1Database, now: number, page = 0): Promise
     db.prepare('SELECT day, COUNT(*) AS players, SUM(seconds) AS seconds FROM days WHERE day >= ?1 GROUP BY day').bind(first),
     db.prepare(`SELECT id, first_at, last_at, seconds, ${REACHED_SQL} AS max_age, lang, (SELECT COUNT(*) FROM sessions s WHERE s.player = p.id) AS sessions
       FROM players p ORDER BY last_at DESC LIMIT ?1 OFFSET ?2`).bind(PAGE, page * PAGE),
+    db.prepare('SELECT player, age, seconds FROM player_ages WHERE seconds > 0 ORDER BY age, seconds DESC'),
   ]);
   const one = <T>(r: { results: unknown[] }) => r.results[0] as T;
   const P = one<{ total: number; today: number; week: number; secs: number; idle: number }>(p);
@@ -105,6 +108,7 @@ export async function loadReport(db: D1Database, now: number, page = 0): Promise
     },
     ages: spread,
     sandboxOnly,
+    ageTime: ageTime.results as { player: string; age: number; seconds: number }[],
     days: last30,
     list: list.results as PlayerRow[],
     page,
@@ -118,6 +122,7 @@ export async function purge(db: D1Database, now: number, days: number) {
     db.prepare('DELETE FROM sessions WHERE last_at < ?1').bind(cut),
     db.prepare('DELETE FROM days WHERE day < ?1').bind(parisDay(cut)),
     db.prepare('DELETE FROM players WHERE last_at < ?1').bind(cut),
+    db.prepare('DELETE FROM player_ages WHERE player NOT IN (SELECT id FROM players)'),
   ]);
 }
 

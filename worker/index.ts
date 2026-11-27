@@ -46,7 +46,7 @@ export type PingResult = 'ok' | 'conflit' | 'inconnue' | 'plafond';
  * partie (et ne crédite rien) ; un autre signal d'une partie inconnue est refusé. Les créations ont un plafond par jour
  */
 export async function recordPing(db: D1Database, ping: Ping, now: number): Promise<PingResult> {
-  const sess = await db.prepare('SELECT player, last_at FROM sessions WHERE id = ?1').bind(ping.s).first<{ player: string; last_at: number }>();
+  const sess = await db.prepare('SELECT player, last_at, max_age FROM sessions WHERE id = ?1').bind(ping.s).first<{ player: string; last_at: number; max_age: number }>();
   if (sess && sess.player !== ping.p) return 'conflit';
   if (!sess) {
     if (ping.k !== 'start') return 'inconnue';
@@ -57,6 +57,8 @@ export async function recordPing(db: D1Database, ping: Ping, now: number): Promi
   const sec = sess ? creditedSeconds(ping, now, sess.last_at) : 0;
   // (au bac à sable, l'âge de départ se choisit : il ne dit pas où le joueur s'est arrêté)
   const age = ping.m === 'sandbox' || ping.d === 'sandbox' ? -1 : ping.a;
+  // (le signal d'un changement d'âge porte le temps joué avant lui : il va à l'âge d'avant)
+  const spentIn = age < 0 ? -1 : ping.k === 'age' && sess ? sess.max_age : age;
   await db.batch([
     db.prepare(`INSERT INTO players (id, first_at, last_at, seconds, max_age, lang, version, sessions) VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7)
       ON CONFLICT (id) DO UPDATE SET last_at = excluded.last_at, seconds = seconds + excluded.seconds, max_age = MAX(max_age, excluded.max_age),
@@ -67,6 +69,9 @@ export async function recordPing(db: D1Database, ping: Ping, now: number): Promi
       .bind(ping.s, ping.p, now, sec, ping.a, ping.m, ping.d, ping.r ?? null, ping.b),
     db.prepare('INSERT INTO days (day, player, seconds) VALUES (?1, ?2, ?3) ON CONFLICT (day, player) DO UPDATE SET seconds = seconds + excluded.seconds')
       .bind(parisDay(now), ping.p, sec),
+    // (le temps passé dans chaque âge, hors bac à sable : la répartition par âge du rapport)
+    ...(spentIn >= 0 && sec > 0 ? [db.prepare('INSERT INTO player_ages (player, age, seconds) VALUES (?1, ?2, ?3) ON CONFLICT (player, age) DO UPDATE SET seconds = seconds + excluded.seconds')
+      .bind(ping.p, spentIn, sec)] : []),
   ]);
   return 'ok';
 }

@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGE_NAMES, creditedSeconds, MAX_NEW_PLAYERS_DAY, MAX_SECONDS, parisDay, parisMidnight, parsePing, readBody, type Ping } from '../worker/ping';
 import { dayBefore, duration, loadReport, PAGE, purge } from '../worker/stats';
-import { loginPage, reportPage } from '../worker/bo';
+import { loginPage, playerColor, reportPage } from '../worker/bo';
 import { newSession, sessionValid, SESSION_DAYS, STATE_SECONDS } from '../worker/auth';
 import { backOffice, ping, recordPing, type Env } from '../worker/index';
 import type { D1Database, D1Statement, RateLimit } from '../worker/d1';
@@ -13,7 +13,7 @@ import { audienceOff, ID_DAYS, payload, playerId, setAudienceOff, startAudience,
 // ---------- un faux D1 : la vraie base SQLite en mémoire, avec le schéma des migrations ----------
 function fakeD1(): D1Database & { sql: DatabaseSync } {
   const sql = new DatabaseSync(':memory:');
-  for (const f of ['0001_mesure_audience.sql', '0002_index_rapport.sql']) sql.exec(readFileSync(`migrations/${f}`, 'utf8'));
+  for (const f of ['0001_mesure_audience.sql', '0002_index_rapport.sql', '0003_temps_par_age.sql']) sql.exec(readFileSync(`migrations/${f}`, 'utf8'));
   const stmt = (q: string, v: unknown[] = []): D1Statement & { exec(): unknown[] } => ({
     bind: (...b: unknown[]) => stmt(q, b),
     exec: () => sql.prepare(q).all(...(v as never[])).map((r) => ({ ...r })),
@@ -94,16 +94,22 @@ describe('mesure d’audience : enregistrement', () => {
     expect(await recordPing(db, pingOf({ k: 'tick', t: 60 }), NOW)).toBe('inconnue');
     expect(row('SELECT COUNT(*) AS n FROM players').n).toBe(0);
     expect(await recordPing(db, pingOf({ k: 'start', t: 0, r: 'new', a: 1 }), NOW)).toBe('ok');
-    expect(await recordPing(db, pingOf({ k: 'tick', t: 60 }), NOW + 30)).toBe('ok');
+    expect(await recordPing(db, pingOf({ k: 'tick', t: 60, a: 1 }), NOW + 30)).toBe('ok');
     expect(await recordPing(db, pingOf({ k: 'age', t: 50, a: 3 }), NOW + 90)).toBe('ok');
     expect(row('SELECT seconds, max_age, sessions FROM players')).toEqual({ seconds: 40 + 50, max_age: 3, sessions: 1 });
     expect(row('SELECT seconds, start_age, max_age, launch FROM sessions')).toEqual({ seconds: 90, start_age: 1, max_age: 3, launch: 'new' });
     expect(row('SELECT day, seconds FROM days')).toEqual({ day: '2026-11-26', seconds: 90 });
+    // le temps d'avant le changement d'âge reste à l'âge d'avant, la suite va au nouvel âge
+    await recordPing(db, pingOf({ k: 'tick', t: 60, a: 3 }), NOW + 150);
+    expect(db.sql.prepare('SELECT age, seconds FROM player_ages ORDER BY age').all().map((x) => ({ ...(x as object) })))
+      .toEqual([{ age: 1, seconds: 90 }, { age: 3, seconds: 60 }]);
   });
   it('une partie d’un autre joueur est refusée, le bac à sable ne compte pas dans l’âge atteint', async () => {
     await recordPing(db, pingOf({ k: 'start', m: 'sandbox', d: 'sandbox', a: 5 }), NOW);
     expect(await recordPing(db, pingOf({ k: 'tick', p: uuid() }), NOW + 60)).toBe('conflit');
     expect(row('SELECT max_age FROM players').max_age).toBe(-1);
+    await recordPing(db, pingOf({ k: 'tick', m: 'sandbox', d: 'sandbox', a: 5, t: 60 }), NOW + 60);
+    expect(row('SELECT COUNT(*) AS n FROM player_ages').n).toBe(0);
   });
   it('plafond des nouveaux joueurs par jour', async () => {
     const ins = db.sql.prepare("INSERT INTO players VALUES (?, ?, ?, 0, -1, 'fr', 'x', 1)");
@@ -121,6 +127,9 @@ describe('mesure d’audience : enregistrement', () => {
     expect(row('SELECT COUNT(*) AS n FROM players').n).toBe(1);
     expect(row('SELECT COUNT(*) AS n FROM sessions').n).toBe(1);
     expect(row('SELECT COUNT(*) AS n FROM days').n).toBe(1);
+    db.sql.exec("INSERT INTO player_ages VALUES ('parti', 0, 60)");
+    await purge(db, NOW, 396);
+    expect(row('SELECT COUNT(*) AS n FROM player_ages').n).toBe(0);
   });
 });
 
@@ -360,6 +369,25 @@ describe('mesure d’audience : rapport calculé par la base', () => {
     const r = await loadReport(db, NOW);
     expect(r.ages.map((a) => a.players)).toEqual([0, 0, 1, 0, 1, 0]);
     expect(r.list.find((p) => p.id === 'ami')?.max_age).toBe(2);
+  });
+  it('temps par âge : la reprise des anciennes parties, un morceau coloré par joueur et par âge joué', async () => {
+    const db = fakeD1();
+    db.sql.exec('DELETE FROM player_ages');
+    db.sql.prepare("INSERT INTO players VALUES ('ami', ?, ?, 900, 2, 'fr', 'x', 2)").run(NOW - 900, NOW);
+    db.sql.prepare("INSERT INTO players VALUES ('bac', ?, ?, 600, -1, 'fr', 'x', 1)").run(NOW - 600, NOW);
+    const se = db.sql.prepare("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', 'x')");
+    se.run('a1', 'ami', NOW, NOW, 600, 0, 2, 'normal', 'normal'); // 200 s dans chacun des trois âges
+    se.run('a2', 'ami', NOW, NOW, 300, 2, 2, 'normal', 'normal');
+    se.run('b1', 'bac', NOW, NOW, 600, 4, 4, 'sandbox', 'sandbox');
+    // (la reprise de la migration, rejouée sur ces parties)
+    const mig = readFileSync('migrations/0003_temps_par_age.sql', 'utf8');
+    db.sql.exec(mig.slice(mig.indexOf('INSERT OR IGNORE')));
+    const r = await loadReport(db, NOW);
+    expect(r.ageTime).toEqual([{ player: 'ami', age: 0, seconds: 200 }, { player: 'ami', age: 1, seconds: 200 }, { player: 'ami', age: 2, seconds: 500 }]);
+    const html = reportPage(r);
+    expect(html.match(/<b title="ami :/g)).toHaveLength(3);
+    expect(html).toContain(`background:${playerColor('ami')}`);
+    expect(playerColor('ami')).not.toBe(playerColor('bac'));
   });
   it('médiane impaire et base vide, pagination', async () => {
     const db = fakeD1();
