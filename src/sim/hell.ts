@@ -378,7 +378,10 @@ export class Hell {
       b.down = false; b.hp = Math.round(b.maxHp * 0.5); b.target = null;
       this.map.reblock?.(b.site);
       const ring = this.postsAround(b.site as HellSite, 4);
-      this.spawn('guardian', ...this.frontOf(b.site), zone);
+      // (un seul gardien par zone : celui qui serait encore debout reprend sa place devant la forteresse)
+      const keeper = this.guardians(zone)[0];
+      if (keeper) { keeper.home = this.frontOf(b.site); keeper.target = null; keeper.path = null; keeper.state = 'guard'; }
+      else this.spawn('guardian', ...this.frontOf(b.site), zone);
       (['brute', 'imp', 'imp'] as DemonKind[]).forEach((k, i) => this.spawn(k, ring[i % ring.length][0], ring[i % ring.length][1], zone));
     }
     this.events.push({ type: 'lost', zone });
@@ -560,6 +563,8 @@ export class Hell {
   alive(side?: Side) { return [...this.units.values()].filter((u) => u.hp > 0 && (!side || u.side === side)); }
   /** Garnison vivante d'une zone */
   garrison(zone: number) { return this.alive('hell').filter((u) => u.zone === zone); }
+  /** Les gardiens debout d'une zone (un seul en principe), le plus solide d'abord */
+  guardians(zone: number) { return this.garrison(zone).filter((u) => u.kind === 'guardian').sort((a, b) => b.hp - a.hp); }
   /** Bâtiments debout d'une zone */
   standing(zone?: number) { return [...this.buildings.values()].filter((b) => !b.down && (zone === undefined || b.zone === zone)); }
   /** Une unité ou un bâtiment, vivant, par son identifiant */
@@ -784,10 +789,13 @@ export class Hell {
       if (!cur || this.gap(t, cur) > t.stats.range) t.target = source;
       if (t.side === 'hell') this.raiseAlert(t.zone, src.x, src.z);
     }
-    if (t.hp <= 0) {
-      t.hp = 0; t.state = 'dead'; t.target = null; t.path = null;
-      this.events.push({ type: 'death', id: t.id, kind: t.kind, side: t.side, x: t.x, z: t.z });
-    }
+    if (t.hp <= 0) this.kill(t);
+  }
+
+  /** Une unité tombe (sa chute est annoncée à la vue) */
+  private kill(t: HellUnit) {
+    t.hp = 0; t.hurt = 0; t.state = 'dead'; t.target = null; t.path = null;
+    this.events.push({ type: 'death', id: t.id, kind: t.kind, side: t.side, x: t.x, z: t.z });
   }
 
   private destroy(b: HellBuilding) {
@@ -798,6 +806,8 @@ export class Hell {
     if (b.kind === 'fortress' || b.kind === 'kingdom') {
       this.conquered[b.zone] = true;
       this.alert[b.zone] = 0;
+      // le gardien est lié à sa forteresse : il tombe avec elle (sans quoi il abattait le camp tout juste dressé sur les ruines)
+      if (b.kind === 'fortress') for (const g of this.guardians(b.zone)) this.kill(g);
       this.events.push({ type: 'conquered', zone: b.zone });
     }
     if (b.kind === 'kingdom') { this.victory = true; this.events.push({ type: 'victory' }); }
@@ -1042,6 +1052,8 @@ export class Hell {
       u.maxHp = Math.max(u.maxHp, u.hp);
       if (r.patrol) { const zn = map.zones[r.zone]; u.patrol = zn.patrol; u.state = 'patrol'; }
     }
+    // (avant le 27 nov. 2026, chaque reprise ajoutait un gardien : un seul par zone, le plus solide, et aucun dans une zone conquise)
+    for (let z = 1; z < Z_KINGDOM; z++) h.guardians(z).forEach((g, i) => { if (i > 0 || h.conquered[z]) h.units.delete(g.id); });
     return h;
   }
 }
