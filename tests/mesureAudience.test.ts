@@ -323,8 +323,8 @@ describe('mesure d’audience : rapport calculé par la base', () => {
     pl.run('b', NOW - 4 * day, NOW - 3 * day, 1200, 2, 'en', 'x');
     pl.run('c', NOW - 11 * day, NOW - 10 * day, 60, 0, '<b>', 'x');
     pl.run('d', NOW - 2 * day, NOW - 2 * day, 0, -1, 'fr', 'x');
-    const se = db.sql.prepare("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, 0, 0, 'normal', 'normal', 'new', 'x')");
-    se.run('s1', 'a', NOW, NOW, 300); se.run('s2', 'a', NOW - day, NOW - day, 300); se.run('s3', 'b', NOW - 3 * day, NOW - 3 * day, 1260);
+    const se = db.sql.prepare("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, 0, ?, 'normal', 'normal', 'new', 'x')");
+    se.run('s1', 'a', NOW, NOW, 300, 1); se.run('s2', 'a', NOW - day, NOW - day, 300, 0); se.run('s3', 'b', NOW - 3 * day, NOW - 3 * day, 1260, 2);
     db.sql.exec("INSERT INTO days VALUES ('2026-11-26', 'a', 600), ('2026-11-23', 'b', 1260), ('2026-01-01', 'z', 9)");
     const r = await loadReport(db, NOW);
     expect(r.players).toEqual({ today: 1, week: 3, total: 4, idle: 1 });
@@ -345,6 +345,21 @@ describe('mesure d’audience : rapport calculé par la base', () => {
     expect(html).toContain('10 min');
     expect(loginPage('refuse')).toContain('Ce compte GitHub n’a pas accès');
     expect(loginPage()).toContain('href="/bo/login"');
+  });
+  it('âge atteint en jouant : rouvrir une vieille sauvegarde ne compte pas (cas réel, 27 nov. 2026)', async () => {
+    const db = fakeD1();
+    db.sql.prepare("INSERT INTO players VALUES ('ami', ?, ?, 4269, 4, 'fr', 'x', 4)").run(NOW - 9000, NOW);
+    const se = db.sql.prepare("INSERT INTO sessions VALUES (?, 'ami', ?, ?, ?, ?, ?, 'normal', 'normal', ?, 'x')");
+    se.run('o1', NOW - 9000, NOW - 9000, 20, 4, 4, 'continue');
+    se.run('o2', NOW - 8900, NOW - 8900, 53, 0, 0, 'new');
+    se.run('o3', NOW - 8800, NOW - 7000, 1465, 0, 1, 'continue');
+    se.run('o4', NOW - 7000, NOW, 2731, 1, 2, 'continue');
+    // un autre joueur n'a fait que rouvrir une partie au Moderne : faute de mieux, cet âge
+    db.sql.prepare("INSERT INTO players VALUES ('vieux', ?, ?, 30, 4, 'fr', 'x', 1)").run(NOW - 100, NOW - 100);
+    db.sql.prepare("INSERT INTO sessions VALUES ('v1', 'vieux', ?, ?, 30, 4, 4, 'normal', 'normal', 'continue', 'x')").run(NOW - 100, NOW - 100);
+    const r = await loadReport(db, NOW);
+    expect(r.ages.map((a) => a.players)).toEqual([0, 0, 1, 0, 1, 0]);
+    expect(r.list.find((p) => p.id === 'ami')?.max_age).toBe(2);
   });
   it('médiane impaire et base vide, pagination', async () => {
     const db = fakeD1();

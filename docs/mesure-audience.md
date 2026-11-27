@@ -80,6 +80,7 @@ depuis 13 mois (`KEEP_DAYS`, `worker/ping.ts`, `purge`). Au refus, l'identifiant
   9. une base en panne répond 503, sans erreur non gérée.
 - Au bac à sable, l'âge de départ se choisit : il ne compte pas dans l'âge le plus haut du joueur (`max_age` reste à -1 s'il
   n'a joué qu'au bac à sable).
+- **L'âge atteint du rapport** (`REACHED_SQL`, `worker/stats.ts`) se calcule sur les parties : le plus haut des parties neuves (`launch` = `new`) ou de celles où l'âge a monté. Rouvrir une vieille sauvegarde ne compte pas : le 27 nov. 2026, un joueur qui avait ouvert 20 s une partie au Moderne puis mené une partie neuve de la Préhistoire au Médiéval apparaissait « Moderne ». Sans partie de ce genre, l'âge le plus haut de ses parties hors bac à sable, et sans partie du tout (purgées), `players.max_age`.
 - Les limiteurs (`ratelimits` de `wrangler.jsonc`) sont approximatifs et propres à chaque lieu de Cloudflare : ce sont des
   freins, pas des comptes exacts. Les plafonds par jour, eux, sont comptés dans la base.
 

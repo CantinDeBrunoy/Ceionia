@@ -52,6 +52,18 @@ const medianSql = (t: string) => `SELECT COALESCE(AVG(seconds), 0) AS m FROM (SE
   LIMIT 2 - (SELECT COUNT(*) FROM ${t}) % 2 OFFSET ((SELECT COUNT(*) FROM ${t}) - 1) / 2)`;
 
 /** Le rapport du back-office ; `now` en secondes, `page` à partir de 0 */
+/**
+ * L'âge le plus haut atteint EN JOUANT par un joueur : celui des parties neuves, ou des parties où l'âge a monté. Rouvrir une
+ * vieille sauvegarde ne compte pas : un joueur qui ouvre 20 s une partie au Moderne puis mène une partie neuve de la
+ * Préhistoire au Médiéval s'arrête au Médiéval (cas réel, 27 nov. 2026). Sans partie de ce genre, l'âge le plus haut vu hors
+ * bac à sable ; sans partie du tout (purgées), celui gardé sur le joueur (-1 : bac à sable seul)
+ */
+export const REACHED_SQL = `COALESCE(
+  (SELECT MAX(s.max_age) FROM sessions s WHERE s.player = p.id AND s.mode != 'sandbox' AND s.difficulty != 'sandbox'
+    AND (s.launch = 'new' OR s.max_age > s.start_age)),
+  (SELECT MAX(s.max_age) FROM sessions s WHERE s.player = p.id AND s.mode != 'sandbox' AND s.difficulty != 'sandbox'),
+  p.max_age)`;
+
 export async function loadReport(db: D1Database, now: number, page = 0): Promise<Report> {
   const today = parisDay(now), midnight = parisMidnight(now);
   // (sept jours de calendrier, aujourd'hui compris ; une heure de jeu en plus ou en moins au changement d'heure : sans effet)
@@ -62,9 +74,9 @@ export async function loadReport(db: D1Database, now: number, page = 0): Promise
     db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(started_at >= ?1), 0) AS today, COALESCE(SUM(seconds), 0) AS secs FROM sessions').bind(midnight),
     db.prepare(medianSql('players')),
     db.prepare(medianSql('sessions')),
-    db.prepare('SELECT max_age, COUNT(*) AS n FROM players GROUP BY max_age'),
+    db.prepare(`SELECT reached AS max_age, COUNT(*) AS n FROM (SELECT ${REACHED_SQL} AS reached FROM players p) GROUP BY reached`),
     db.prepare('SELECT day, COUNT(*) AS players, SUM(seconds) AS seconds FROM days WHERE day >= ?1 GROUP BY day').bind(first),
-    db.prepare(`SELECT id, first_at, last_at, seconds, max_age, lang, (SELECT COUNT(*) FROM sessions s WHERE s.player = p.id) AS sessions
+    db.prepare(`SELECT id, first_at, last_at, seconds, ${REACHED_SQL} AS max_age, lang, (SELECT COUNT(*) FROM sessions s WHERE s.player = p.id) AS sessions
       FROM players p ORDER BY last_at DESC LIMIT ?1 OFFSET ?2`).bind(PAGE, page * PAGE),
   ]);
   const one = <T>(r: { results: unknown[] }) => r.results[0] as T;
