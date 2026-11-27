@@ -29,7 +29,7 @@ Le bac à sable et Facile ne diffèrent que par `unlimited`. Les petits objectif
 
 ### Où chaque réglage agit
 - `unlimited` : `World.unlimited` (getter : `rulesOf(...).unlimited ?? unlimitedSetting`). Effets : `priceIn` renvoie `null`, `gearShort` / `payGear` ne prélèvent rien, `Expeditions.burning` vaut 0, conditions de minerai et de briques réputées remplies, fiches en « ∞ ». Le réglage « Ressources » (`unlimitedSetting`, sauvegardé avec les réglages) n'a d'effet qu'en Facile ; l'écran de réglages affiche le mode imposé en Bac à sable (« Illimitées ») et en Normal (« Comptées ») via `DIFF_TEXT.resForced`.
-- `price` : `costOf` (`economy.ts`) ; voir [economie-ressources.md](economie-ressources.md). En Normal, le premier bûcheron et la première carrière sont offerts.
+- `price` : `costOf` (`economy.ts`) ; voir [economie-ressources.md](economie-ressources.md). En Normal, le premier bûcheron et la première carrière sont offerts, et la place du village quand il n'y en a plus.
 - `startWood`, `startStone` : seulement pour une partie neuve (`Game` constructeur, `main.ts`).
 - `foodK` : `Sim.evaluate` : `food.demand = up((n + 1) × foodK)`.
 - `famine` : `Sim.hardship` : perte de `dt × famine × (1 − cap/demande) × pop` habitants ; `fled` accumule les partants et déclenche le conseil « Disette ».

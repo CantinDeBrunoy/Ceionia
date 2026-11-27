@@ -6,6 +6,7 @@ registerDict('misc', {
   'Montre ou cache la flèche au-dessus de chaque bâtiment qui peut être amélioré, pour tous les bâtiments.': 'Shows or hides the arrow above every building that can be upgraded, for all buildings.',
   'La place du village a disparu : reposez-la (le bouton qui luit) pour retrouver son bien-être et partir en expédition.': 'The village square is gone: build it again (the glowing button) to get its well-being back and send expeditions.',
   'Le volcan est rasé.': 'The volcano has been levelled.',
+  'Le village n’a plus de place : « {name} » se refait gratuitement. Ctrl+Z annule la démolition.': 'The village has no square left: “{name}” can be rebuilt for free. Ctrl+Z undoes the demolition.',
   '🔥 Contamination de l’île : {n} % · la caserne la fait reculer, sans halo autour d’elle': '🔥 Island contamination: {n}% · the barracks push it back, with no halo around them',
   'Cliquez le point A': 'Click point A',
   'Cliquez le point B': 'Click point B',
