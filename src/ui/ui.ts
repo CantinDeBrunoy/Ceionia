@@ -1,4 +1,5 @@
 import type { ShowDirector } from '../shows';
+import { isTyping } from '../core/typing';
 import { armWhy, costText, fleetCap, shipCost } from '../sim/fleet';
 import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang, bothOf, bothLangs, isEnglish } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
@@ -1038,7 +1039,7 @@ export class UI {
     // Ctrl+F (ou /) : le champ de recherche du menu, à la place de celle du navigateur
     window.addEventListener('keydown', (e) => {
       const t = e.target as HTMLElement;
-      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || this.root.querySelector('.overlay')) return;
+      if (isTyping(t) || this.root.querySelector('.overlay')) return;
       if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') || (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey)) {
         if (document.body.classList.contains('photo')) return;
         e.preventDefault();
@@ -1087,6 +1088,8 @@ export class UI {
     this.placeMenu();
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
+    // (le curseur lâché rend le clavier au jeu : les flèches ne changent pas la taille en déplaçant la vue)
+    rad.onchange = () => rad.blur();
 
     // une partie neuve s'ouvre sur le rayon de la place du village, la première chose à bâtir (voir markFirst)
     if (!host.world.buildings.size) { this.tab = 'build'; this.cat = KINDS.gather.cat; }

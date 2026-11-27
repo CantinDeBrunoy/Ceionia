@@ -1,4 +1,5 @@
 import './style.css';
+import { isTyping } from './core/typing';
 import './hudTheme.css';
 import './hudAllege.css';
 import './i18n/en';
@@ -3868,7 +3869,7 @@ class Game implements UIHost {
     const map: Record<string, ToolId> = { '0': 'mountain', '1': 'raise', '2': 'lower', '3': 'flatten', '4': 'cliff', '5': 'dig', '6': 'forest', '7': 'field', '9': 'erase', r: 'road', x: 'bulldoze', m: 'move' };
     window.addEventListener('keydown', (e) => {
       const t = e.target as HTMLElement;
-      if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement) return;
+      if (isTyping(t)) return;
       const k = e.key.toLowerCase();
       // chiffres par touche physique : en AZERTY, la rangée du haut marche sans Maj
       const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code)?.[1];

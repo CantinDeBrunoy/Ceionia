@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTyping } from './typing';
 import { clamp } from './rng';
 import { N } from '../world/world';
 
@@ -102,7 +103,7 @@ export class CameraRig {
     el.addEventListener('wheel', (e) => { e.preventDefault(); const r = this.el.getBoundingClientRect(); this.zoomAt(Math.exp(e.deltaY * 0.0012 * this.sens), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
     // touches physiques (e.code) : ZQSD + A/E en AZERTY, WASD + Q/E en QWERTY, sans rien régler ; rien avec Ctrl (Ctrl+Z)
     window.addEventListener('keydown', (e) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
       this.keys.add(e.code);
       if (!e.repeat) { this.downAt.set(e.code, performance.now()); this.letGo.delete(e.code); }
     });
