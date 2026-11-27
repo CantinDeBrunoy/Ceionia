@@ -197,6 +197,7 @@ registerDict('menu', {
   'Modèles sous licence CC-BY 3.0': 'Models under the CC-BY 3.0 licence',
   '« Greek Temple » par {author} : temple et asclépiéion de l’Antiquité.': '“Greek Temple” by {author}: the temple and asclepieion of Antiquity.',
   '« Amphora » par {a1} et « Eight Vases » par {a2} : atelier du potier.': '“Amphora” by {a1} and “Eight Vases” by {a2}: the potter’s workshop.',
+  'Version {v}, bêta.': 'Version {v}, beta.',
   'Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.': 'The models were adjusted (colours, scale) to fit the game’s style. The licences: {cc0} and {ccby}.',
   'https://creativecommons.org/publicdomain/zero/1.0/deed.fr': 'https://creativecommons.org/publicdomain/zero/1.0/deed.en',
   'https://creativecommons.org/licenses/by/3.0/deed.fr': 'https://creativecommons.org/licenses/by/3.0/deed.en',

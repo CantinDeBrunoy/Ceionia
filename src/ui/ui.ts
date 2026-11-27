@@ -68,6 +68,7 @@ import { placeCard } from './xcard';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
 import type { CalamityKind } from '../sim/calamity';
 import { audienceOff, setAudienceOff } from '../audience';
+import { VERSION } from '../version';
 import { esc } from '../core/esc';
 
 export interface UIHost {
@@ -4039,6 +4040,7 @@ export function showCredits(root: HTMLElement) {
       </ul>
     </section>
     ${privacyCard()}
+    <p class="hint">${tr('Version {v}, bêta.', { v: VERSION })}</p>
     <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>
   </div>`, undefined, tr('Les artistes des modèles 3D, des sons et des musiques, et leurs licences.'));
 }

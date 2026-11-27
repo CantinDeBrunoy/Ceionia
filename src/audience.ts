@@ -6,8 +6,7 @@
  * Le joueur peut la refuser (Paramètres › Divers) : l'identifiant est alors effacé. Rien ne part en développement ni dans les tests, sauf `?mesure` en
  * développement (le serveur de Vite renvoie alors /api vers `wrangler dev`, port 8787)
  */
-
-declare const __BUILD__: string;
+import { VERSION } from './version';
 
 const KEY = 'ceionia.audience';
 /** secondes de jeu entre deux signaux */
@@ -82,7 +81,7 @@ function wanted(): boolean {
 export function payload(player: string, session: string, kind: 'start' | 'tick' | 'age', seconds: number, st: AudienceState, launch?: 'new' | 'continue') {
   const o: Record<string, unknown> = {
     p: player, s: session, k: kind, t: Math.max(0, Math.round(seconds)), a: st.age(), m: st.mode(), d: st.difficulty(), l: st.lang(),
-    b: typeof __BUILD__ === 'string' ? __BUILD__ : 'inconnu',
+    b: VERSION,
   };
   if (launch) o.r = launch;
   return JSON.stringify(o);

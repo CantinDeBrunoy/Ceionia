@@ -1,13 +1,14 @@
 {
   "name": "village-lowpoly",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "nouvelle-version": "node scripts/version.mjs",
     "deploy": "npm run build && npx --yes wrangler@4.147.0 deploy --env=\"\""
   },
   "dependencies": {

@@ -3,6 +3,7 @@
  * Voir docs/mesure-audience.md
  */
 import { duration, PAGE, type Report } from './stats';
+import { VERSION } from '../src/version';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const n = (x: number) => Math.round(x).toLocaleString('fr-FR');
@@ -28,7 +29,8 @@ h1 { font-size: 24px; margin: 0 0 4px; } h2 { font-size: 17px; margin: 28px 0 10
 .row i { display: block; height: 16px; background: var(--bar); border-radius: 3px; min-width: 1px; }
 .row em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
 .days { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding-top: 18px; }
-.days div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-size: 11px; color: var(--soft); }
+.days a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-size: 11px; color: var(--soft); }
+.days a { text-decoration: none; } .days a:hover i { filter: brightness(1.15); } .days a.on i { background: var(--bar); }
 .days i { display: block; width: 100%; background: var(--bar2); border-radius: 3px 3px 0 0; min-height: 1px; }
 .days b { font-weight: 600; color: var(--ink); font-size: 11px; }
 .axis { display: flex; gap: 3px; font-size: 10px; color: var(--soft); } .axis span { flex: 1; text-align: center; overflow: hidden; }
@@ -127,9 +129,12 @@ export function reportPage(r: Report): string {
   const who = (id: string) => `${playerName(id)} (${id.slice(0, 8)})`;
   // un clic sur un joueur le choisit (un lien, la page n'a pas de script) ; les autres pâlissent
   const focusId = r.focus?.player.id;
+  // (un jour choisi : ses joueurs restent vifs, les autres pâlissent)
+  const dayIds = r.day && !r.focus ? new Set(r.day.players.map((x) => x.player)) : null;
+  const lit = (id: string) => (focusId ? id === focusId : dayIds ? dayIds.has(id) : true);
   const href = (id: string) => `/bo?joueur=${encodeURIComponent(id)}`;
   const seg = (id: string, title: string, size: string) =>
-    `<a href="${href(id)}" title="${esc(title)}"${focusId && id !== focusId ? ' class="dim"' : ''} style="${size};background:${color(id)}"></a>`;
+    `<a href="${href(id)}" title="${esc(title)}"${lit(id) ? '' : ' class="dim"'} style="${size};background:${color(id)}"></a>`;
   const ageRow = (name: string, age: number) => {
     const ids = r.reached.filter((x) => (age < 0 ? x.age < 0 : Math.min(x.age, r.ages.length - 1) === age)).map((x) => x.player);
     const parts = ids.map((id) => seg(id, who(id), 'flex:1')).join('');
@@ -147,17 +152,23 @@ export function reportPage(r: Report): string {
   const ageName = (a: number) => (a < 0 ? 'bac à sable' : esc(r.ages[a]?.name ?? String(a)));
   const f = r.focus;
   const mine = f ? r.ageTime.filter((x) => x.player === f.player.id) : [];
+  const d = r.day;
+  const dayPanel = !d ? '' : `<div class="focus"><h2>Le ${dayLabel(d.day)} : ${d.players.length} joueur(s), ${duration(d.players.reduce((s, x) => s + x.seconds, 0))} de jeu</h2>
+${d.players.length ? `<div class="scroll"><table><thead><tr><th>Joueur</th><th>Temps ce jour-là</th></tr></thead><tbody>
+${d.players.map((x) => `<tr><td><a class="who" href="${href(x.player)}"><i class="dot" style="background:${color(x.player)}"></i>${esc(playerName(x.player))}</a> <code class="id">${esc(x.player.slice(0, 8))}</code></td><td>${duration(x.seconds)}</td></tr>`).join('')}
+</tbody></table></div>` : '<div>Personne ce jour-là.</div>'}
+<p class="sub">${r.focus ? '' : 'Ces joueurs restent vifs dans les barres, les autres pâlissent. '}Un clic sur un nom montre sa fiche. <a href="/bo">Tout voir</a></p></div>`;
   const focusPanel = !f ? '' : `<div class="focus"><h2><i class="dot" style="background:${color(f.player.id)}"></i>${esc(playerName(f.player.id))} <code class="id">${esc(f.player.id.slice(0, 8))}</code></h2>
-<div>Venu le ${when(f.player.first_at)}, dernière visite le ${when(f.player.last_at)}. ${duration(f.player.seconds)} de jeu en ${f.player.sessions} partie(s), jusqu'à : ${ageName(f.player.max_age)}. Langue : ${esc(f.player.lang)}.</div>
+<div>Venu le ${when(f.player.first_at)}, dernière visite le ${when(f.player.last_at)}. ${duration(f.player.seconds)} de jeu en ${f.player.sessions} partie(s), jusqu'à : ${ageName(f.player.max_age)}. Langue : ${esc(f.player.lang)}. Version : ${esc(f.player.version)}.</div>
 <div>${mine.length ? 'Temps par âge : ' + mine.map((x) => `${ageName(x.age)} ${duration(x.seconds)}`).join(', ') + '.' : 'Pas de temps compté hors bac à sable.'}</div>
-<div class="scroll" style="margin-top:8px"><table><thead><tr><th>Lancée</th><th>Dernier signal</th><th>Temps</th><th>Âges</th><th>Mode</th><th>Difficulté</th><th>Lancement</th></tr></thead><tbody>
-${f.sessions.map((x) => `<tr><td>${when(x.started_at)}</td><td>${when(x.last_at)}</td><td>${duration(x.seconds)}</td><td>${ageName(x.start_age)}${x.max_age > x.start_age ? ' → ' + ageName(x.max_age) : ''}</td><td>${esc(x.mode)}</td><td>${esc(x.difficulty)}</td><td>${x.launch === 'new' ? 'nouvelle partie' : x.launch === 'continue' ? 'sauvegarde reprise' : '–'}</td></tr>`).join('')}
+<div class="scroll" style="margin-top:8px"><table><thead><tr><th>Lancée</th><th>Dernier signal</th><th>Temps</th><th>Âges</th><th>Mode</th><th>Difficulté</th><th>Lancement</th><th>Version</th></tr></thead><tbody>
+${f.sessions.map((x) => `<tr><td>${when(x.started_at)}</td><td>${when(x.last_at)}</td><td>${duration(x.seconds)}</td><td>${ageName(x.start_age)}${x.max_age > x.start_age ? ' → ' + ageName(x.max_age) : ''}</td><td>${esc(x.mode)}</td><td>${esc(x.difficulty)}</td><td>${x.launch === 'new' ? 'nouvelle partie' : x.launch === 'continue' ? 'sauvegarde reprise' : '–'}</td><td>${esc(x.version)}</td></tr>`).join('')}
 </tbody></table></div>
 <p class="sub">Ce joueur est mis en avant dans les barres, les autres pâlissent. <a href="/bo">Tout voir</a></p></div>`;
   const list = r.list, pages = Math.max(1, Math.ceil(r.players.total / PAGE));
   return page('Ceionia : audience', `<h1>Ceionia : audience</h1>
-<div class="sub">Aujourd'hui : ${dayLabel(r.today)} (heure de Paris). Mesure anonyme, sans nom ni adresse IP enregistrée. <form class="inline" method="post" action="/bo/sortie"><button class="link">Se déconnecter</button></form></div>
-${focusPanel}
+<div class="sub">Version du jeu en ligne : <b>${VERSION}</b> (bêta). Aujourd'hui : ${dayLabel(r.today)} (heure de Paris). Mesure anonyme, sans nom ni adresse IP enregistrée. <form class="inline" method="post" action="/bo/sortie"><button class="link">Se déconnecter</button></form></div>
+${focusPanel}${dayPanel}
 
 <h2>Joueurs différents</h2>
 <div class="grid">${card(n(r.players.today), "aujourd'hui")}${card(n(r.players.week), '7 derniers jours')}${card(n(r.players.total), 'en tout')}
@@ -178,12 +189,12 @@ ${card(duration(t.perSession.mean), 'moyen par partie')}${card(duration(t.perSes
 <p class="sub">Chaque couleur est un joueur (la même partout sur la page, survol : son nom et son temps). Un joueur compte dans chaque âge qu'il a joué, hors bac à sable. Avant le 27 nov. 2026, le temps d'une partie est partagé à parts égales entre les âges qu'elle a traversés.</p>
 
 <h2>Joueurs par jour, sur 30 jours</h2>
-<div class="bars"><div class="days">${r.days.map((d) => `<div title="${dayLabel(d.day)} : ${d.players} joueur(s), ${duration(d.seconds)}">${d.players ? `<b>${d.players}</b>` : ''}<i style="height:${(d.players / maxDay) * 100}%"></i></div>`).join('')}</div>
+<div class="bars"><div class="days">${r.days.map((d) => `<a href="/bo?jour=${d.day}"${r.day?.day === d.day ? ' class="on"' : ''} title="${dayLabel(d.day)} : ${d.players} joueur(s), ${duration(d.seconds)}">${d.players ? `<b>${d.players}</b>` : ''}<i style="height:${(d.players / maxDay) * 100}%"></i></a>`).join('')}</div>
 <div class="axis">${r.days.map((d, i) => `<span>${i % 5 === 4 || i === 29 ? dayLabel(d.day) : ''}</span>`).join('')}</div></div>
 
 <h2>Joueurs, du dernier venu au plus ancien (page ${r.page + 1} sur ${pages})</h2>
-<div class="scroll"><table><thead><tr><th>Joueur</th><th>Première visite</th><th>Dernière visite</th><th>Temps total</th><th>Parties</th><th>Âge max</th><th>Langue</th></tr></thead><tbody>
-${list.map((p) => `<tr><td><a class="who" href="${href(p.id)}"><i class="dot" style="background:${color(p.id)}"></i>${esc(playerName(p.id))}</a> <code class="id">${esc(p.id.slice(0, 8))}</code></td><td>${when(p.first_at)}</td><td>${when(p.last_at)}</td><td>${duration(p.seconds)}</td><td>${p.sessions}</td><td>${p.max_age < 0 ? 'bac à sable' : esc(r.ages[p.max_age]?.name ?? String(p.max_age))}</td><td>${esc(p.lang)}</td></tr>`).join('')}
+<div class="scroll"><table><thead><tr><th>Joueur</th><th>Première visite</th><th>Dernière visite</th><th>Temps total</th><th>Parties</th><th>Âge max</th><th>Langue</th><th>Version</th></tr></thead><tbody>
+${list.map((p) => `<tr><td><a class="who" href="${href(p.id)}"><i class="dot" style="background:${color(p.id)}"></i>${esc(playerName(p.id))}</a> <code class="id">${esc(p.id.slice(0, 8))}</code></td><td>${when(p.first_at)}</td><td>${when(p.last_at)}</td><td>${duration(p.seconds)}</td><td>${p.sessions}</td><td>${p.max_age < 0 ? 'bac à sable' : esc(r.ages[p.max_age]?.name ?? String(p.max_age))}</td><td>${esc(p.lang)}</td><td>${esc(p.version)}</td></tr>`).join('')}
 </tbody></table></div>
 <div class="pages">${r.page > 0 ? `<a href="/bo?page=${r.page - 1}">← Page précédente</a>` : ''}${r.page + 1 < pages ? `<a href="/bo?page=${r.page + 1}">Page suivante →</a>` : ''}</div>`);
 }

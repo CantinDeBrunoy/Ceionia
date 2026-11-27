@@ -8,6 +8,7 @@ import { newSession, sessionValid, SESSION_DAYS, STATE_SECONDS } from '../worker
 import { backOffice, ping, recordPing, type Env } from '../worker/index';
 import type { D1Database, D1Statement, RateLimit } from '../worker/d1';
 import { AGES } from '../src/build/catalog';
+import { VERSION } from '../src/version';
 import { audienceOff, ID_DAYS, payload, playerId, setAudienceOff, startAudience, uuid } from '../src/audience';
 
 // ---------- un faux D1 : la vraie base SQLite en mémoire, avec le schéma des migrations ----------
@@ -406,6 +407,19 @@ describe('mesure d’audience : rapport calculé par la base', () => {
     expect(fh).toContain('Préhistoire → Médiéval');
     expect(fh.split('class="dim"')).toHaveLength(2); // le seul morceau de « bac » (bac à sable seul)
     expect((await loadReport(db, NOW, 0, 'personne')).focus).toBeNull();
+    // un clic sur un jour : ses joueurs, les autres pâlissent
+    db.sql.exec("INSERT INTO days VALUES ('2026-11-26', 'bac', 600)");
+    expect(html).toContain('href="/bo?jour=2026-11-26"');
+    const j = await loadReport(db, NOW, 0, '', '2026-11-26');
+    expect(j.day).toEqual({ day: '2026-11-26', players: [{ player: 'bac', seconds: 600 }] });
+    const jh = reportPage(j);
+    expect(jh).toContain('Le 26/11 : 1 joueur(s), 10 min de jeu');
+    expect(jh.split('class="dim"')).toHaveLength(4 + 1); // les quatre morceaux de « ami », pas celui de « bac »
+    expect((await loadReport(db, NOW, 0, '', '2026-11-20')).day?.players).toEqual([]);
+    // la version du jeu, la même que celle des signaux
+    expect(html).toContain(`Version du jeu en ligne : <b>${VERSION}</b>`);
+    expect(VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(JSON.parse(readFileSync('package.json', 'utf8')).version).toBe(VERSION);
     expect(new Set(Array.from({ length: 50 }, () => playerName(uuid()))).size).toBeGreaterThan(40);
   });
   it('médiane impaire et base vide, pagination', async () => {

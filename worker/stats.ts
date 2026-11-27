@@ -14,6 +14,8 @@ export interface PlayerRow {
   /** âge le plus haut atteint hors bac à sable ; -1 : n'a joué qu'au bac à sable */
   max_age: number;
   lang: string;
+  /** la version du jeu au dernier signal */
+  version: string;
   sessions: number;
 }
 export interface SessionRow {
@@ -25,6 +27,7 @@ export interface SessionRow {
   mode: string;
   difficulty: string;
   launch: string | null;
+  version: string;
 }
 export interface DayRow { day: string; players: number; seconds: number }
 
@@ -54,6 +57,8 @@ export interface Report {
   page: number;
   /** le joueur choisi d'un clic (`/bo?joueur=…`) : sa fiche et ses parties, de la plus récente à la plus ancienne ; null sinon */
   focus: { player: PlayerRow; sessions: SessionRow[] } | null;
+  /** le jour choisi d'un clic (`/bo?jour=AAAA-MM-JJ`) : ses joueurs et leur temps ce jour-là, du plus long au plus court ; null sinon */
+  day: { day: string; players: { player: string; seconds: number }[] } | null;
 }
 
 /** Le jour `n` jours avant `day` (AAAA-MM-JJ) */
@@ -80,11 +85,11 @@ export const REACHED_SQL = `COALESCE(
   (SELECT MAX(s.max_age) FROM sessions s WHERE s.player = p.id AND s.mode != 'sandbox' AND s.difficulty != 'sandbox'),
   p.max_age)`;
 
-export async function loadReport(db: D1Database, now: number, page = 0, focus = ''): Promise<Report> {
+export async function loadReport(db: D1Database, now: number, page = 0, focus = '', day = ''): Promise<Report> {
   const today = parisDay(now), midnight = parisMidnight(now);
   // (sept jours de calendrier, aujourd'hui compris ; une heure de jeu en plus ou en moins au changement d'heure : sans effet)
   const week = midnight - 6 * 86400, first = dayBefore(today, 29);
-  const [p, s, mp, ms, ages, days, list, ageTime, fp, fs] = await db.batch([
+  const [p, s, mp, ms, ages, days, list, ageTime, fp, fs, fd] = await db.batch([
     db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(last_at >= ?1), 0) AS today, COALESCE(SUM(last_at >= ?2), 0) AS week,
       COALESCE(SUM(seconds), 0) AS secs, COALESCE(SUM(seconds = 0), 0) AS idle FROM players`).bind(midnight, week),
     db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(started_at >= ?1), 0) AS today, COALESCE(SUM(seconds), 0) AS secs FROM sessions').bind(midnight),
@@ -92,14 +97,15 @@ export async function loadReport(db: D1Database, now: number, page = 0, focus = 
     db.prepare(medianSql('sessions')),
     db.prepare(`SELECT id AS player, ${REACHED_SQL} AS age FROM players p ORDER BY first_at, id`),
     db.prepare('SELECT day, COUNT(*) AS players, SUM(seconds) AS seconds FROM days WHERE day >= ?1 GROUP BY day').bind(first),
-    db.prepare(`SELECT id, first_at, last_at, seconds, ${REACHED_SQL} AS max_age, lang, (SELECT COUNT(*) FROM sessions s WHERE s.player = p.id) AS sessions
+    db.prepare(`SELECT id, first_at, last_at, seconds, ${REACHED_SQL} AS max_age, lang, version, (SELECT COUNT(*) FROM sessions s WHERE s.player = p.id) AS sessions
       FROM players p ORDER BY last_at DESC LIMIT ?1 OFFSET ?2`).bind(PAGE, page * PAGE),
     db.prepare('SELECT player, age, seconds FROM player_ages WHERE seconds > 0 ORDER BY age, seconds DESC'),
     // (le joueur choisi : rien sans choix, la liste du batch reste la même)
-    db.prepare(`SELECT id, first_at, last_at, seconds, ${REACHED_SQL} AS max_age, lang, (SELECT COUNT(*) FROM sessions s WHERE s.player = p.id) AS sessions
+    db.prepare(`SELECT id, first_at, last_at, seconds, ${REACHED_SQL} AS max_age, lang, version, (SELECT COUNT(*) FROM sessions s WHERE s.player = p.id) AS sessions
       FROM players p WHERE id = ?1`).bind(focus),
-    db.prepare(`SELECT started_at, last_at, seconds, start_age, max_age, mode, difficulty, launch FROM sessions WHERE player = ?1
+    db.prepare(`SELECT started_at, last_at, seconds, start_age, max_age, mode, difficulty, launch, version FROM sessions WHERE player = ?1
       ORDER BY started_at DESC LIMIT ?2`).bind(focus, PAGE),
+    db.prepare('SELECT player, seconds FROM days WHERE day = ?1 ORDER BY seconds DESC, player').bind(day),
   ]);
   const one = <T>(r: { results: unknown[] }) => r.results[0] as T;
   const P = one<{ total: number; today: number; week: number; secs: number; idle: number }>(p);
@@ -133,6 +139,7 @@ export async function loadReport(db: D1Database, now: number, page = 0, focus = 
     days: last30,
     list: list.results as PlayerRow[],
     page,
+    day: day ? { day, players: fd.results as { player: string; seconds: number }[] } : null,
     focus: fp.results.length ? { player: fp.results[0] as PlayerRow, sessions: fs.results as SessionRow[] } : null,
   };
 }
