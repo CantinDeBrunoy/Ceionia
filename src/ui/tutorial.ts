@@ -2,6 +2,7 @@ import { KINDS, KindId } from '../build/catalog';
 import { ic } from './icons';
 import { tr, localize } from '../i18n';
 import type { UI, UIHost } from './ui';
+import { DEFAULT_DIFFICULTY, type Difficulty } from '../sim/difficulty';
 import { layoutKeys } from '../core/controls';
 import { GEAR, GEAR_BY, GearId, dangersOf, gearCurrent } from '../sim/gear';
 import { MISSIONS } from '../sim/missions';
@@ -33,6 +34,11 @@ export const TUTO_TEXT = {
     on: 'Activé',
     off: 'Désactivé',
     restart: 'Recommencer',
+    guided: 'Nouvelle partie guidée',
+    guidedHint: 'Une partie neuve, guidée depuis le début. « Recommencer » reprend plutôt le tutoriel dans ce village.',
+    guidedHintSandbox: 'Une partie neuve dans le mode conseillé, guidée depuis le début.',
+    guidedAsk: 'Une nouvelle partie commence, guidée depuis la première étape. Elle remplace votre village actuel : exportez-le d’abord si vous voulez le garder.',
+    guidedOk: 'Nouvelle partie',
     hintOn: (i: number, n: number, title: string) => tr('Une bulle vous guide pas à pas. Étape {i} sur {n} : « {title} ».', { i, n, title }),
     hintOff: (i: number, n: number, title: string) => tr('Mis de côté à l’étape {i} sur {n} (« {title} ») : le réactiver le reprend là, « Recommencer » repart du début.', { i, n, title }),
     hintNew: 'Une bulle vous guide pas à pas : caméra, construction, besoins, âges et expéditions.',
@@ -256,6 +262,19 @@ export function setAside(s: TutoState | null): boolean {
 export function chapterDue(s: TutoState | null, id: ChapterId): boolean {
   if ((s?.seen ?? []).includes(id)) return false;
   return ALWAYS.includes(id) ? !s?.off : !setAside(s);
+}
+
+/**
+ * « Nouvelle partie guidée » : l'état qui fait rejouer tout le tutoriel dans la partie neuve, chapitres compris. Il lève aussi
+ * la désactivation de l'accueil (`off`) : le joueur vient de demander le tutoriel
+ */
+export function guidedState(): TutoState {
+  return { on: true, step: 0, id: 'welcome', seen: [] };
+}
+
+/** Le mode de cette partie neuve : celui de la partie en cours, sauf le bac à sable (sans tutoriel) qui donne le mode conseillé */
+export function guidedMode(d: Difficulty): Difficulty {
+  return d === 'sandbox' ? DEFAULT_DIFFICULTY : d;
 }
 
 /**
@@ -963,10 +982,12 @@ export class Tutorial {
   /** Sa ligne dans l'onglet Partie des réglages */
   settingsHtml() {
     const T = TUTO_TEXT.settings;
-    if (this.off) return `<h4>${T.title}</h4><p class="hint">${TUTO_TEXT.sandbox}</p>`;
+    const guided = `<div class="row"><button id="gTutoGuided">${ic('book', 16)} ${T.guided}</button></div>`;
+    if (this.off) return `<h4>${T.title}</h4><p class="hint">${TUTO_TEXT.sandbox}</p>${guided}<p class="hint">${T.guidedHintSandbox}</p>`;
     return `<h4>${T.title}</h4>
       <div class="row"><label>${T.label}</label><button id="gTuto" class="${this.on ? 'active' : ''}">${this.on ? T.on : T.off}</button><button id="gTutoRestart">${ic('restart', 16)} ${T.restart}</button></div>
-      <p class="hint" id="gTutoHint">${this.settingsHint()}</p>`;
+      <p class="hint" id="gTutoHint">${this.settingsHint()}</p>
+      ${guided}<p class="hint">${T.guidedHint}</p>`;
   }
 
   private settingsHint() {
@@ -975,10 +996,19 @@ export class Tutorial {
     return this.on ? T.hintOn(this.i + 1, n, title) : this.i ? T.hintOff(this.i + 1, n, title) : T.hintNew;
   }
 
-  /** Activé : la bulle reprend là où on l'avait laissée (la fenêtre se ferme pour la laisser voir) ; « Recommencer » : au début */
-  bindSettings(ov: HTMLElement, close: () => void) {
+  /**
+   * Activé : la bulle reprend là où on l'avait laissée (la fenêtre se ferme pour la laisser voir) ; « Recommencer » : au début,
+   * dans ce village. « Nouvelle partie guidée » : après confirmation (`ask`), une partie neuve qui rejoue tout le tutoriel
+   */
+  bindSettings(ov: HTMLElement, close: () => void, ask: (message: string, ok: string) => Promise<boolean>) {
+    const T = TUTO_TEXT.settings;
+    ov.querySelector<HTMLButtonElement>('#gTutoGuided')!.onclick = async () => {
+      if (!(await ask(T.guidedAsk, T.guidedOk))) return;
+      writeState(guidedState());
+      this.host.newGame(guidedMode(this.host.world.difficulty));
+    };
     if (this.off) return;
-    const T = TUTO_TEXT.settings, b = ov.querySelector<HTMLButtonElement>('#gTuto')!;
+    const b = ov.querySelector<HTMLButtonElement>('#gTuto')!;
     b.onclick = () => {
       if (!this.on) { close(); this.show(this.i); return; }
       this.stop();

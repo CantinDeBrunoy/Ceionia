@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { TUTO_TEXT, tutoGear } from '../src/ui/tutorial';
+import { TUTO_TEXT, tutoGear, guidedState, guidedMode, parseState, startsOn, stepIndex, chapterDue, setAside } from '../src/ui/tutorial';
+import { DEFAULT_DIFFICULTY } from '../src/sim/difficulty';
 import { isZoned } from '../src/build/zones';
 
 describe('tutoriel : une phrase simple par étape', () => {
@@ -36,5 +37,22 @@ describe('tutoriel : l’équipement avant les expéditions', () => {
     expect(tutoGear(1, () => false)).toBe('bow');
     const ids = Object.keys(TUTO_TEXT.steps);
     expect(ids.indexOf('gear')).toBe(ids.indexOf('expeditions') - 1);
+  });
+});
+
+describe('tutoriel : nouvelle partie guidée', () => {
+  it('rejoue tout depuis la première étape, chapitres compris, même désactivé à l’accueil', () => {
+    const s = parseState(JSON.parse(JSON.stringify(guidedState())))!;
+    expect(s.off).toBeUndefined();
+    expect(startsOn(s, true)).toBe(true);
+    expect(setAside(s)).toBe(false);
+    expect(stepIndex(s, Object.keys(TUTO_TEXT.steps))).toBe(0);
+    expect(chapterDue(s, 'hell')).toBe(true);
+  });
+
+  it('garde le mode de la partie, sauf le bac à sable qui passe au mode conseillé', () => {
+    expect(guidedMode('easy')).toBe('easy');
+    expect(guidedMode('normal')).toBe('normal');
+    expect(guidedMode('sandbox')).toBe(DEFAULT_DIFFICULTY);
   });
 });

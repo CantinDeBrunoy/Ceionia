@@ -3944,7 +3944,7 @@ export class UI {
     fi.onchange = () => { if (fi.files?.[0]) h.importFile(fi.files[0]); };
     q('#gNew').onclick = async () => { const r = await chooseDifficulty(this.root, { current: h.world.difficulty, age: h.world.sandbox ? h.sim.age : 0, note: DIFF_TEXT.restartNote, ok: DIFF_TEXT.restart }); if (r) h.newGame(r.d, r.age); };
     q('#gMenu').onclick = () => h.toMenu();
-    this.tutorial?.bindSettings(ov, close);
+    this.tutorial?.bindSettings(ov, close, (m, ok) => confirmBox(this.root, m, ok));
   }
 }
 

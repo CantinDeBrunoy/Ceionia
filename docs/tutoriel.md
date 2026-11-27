@@ -81,6 +81,16 @@ de l'allié, la première ligne de train. Ils ne se montrent qu'une fois.
   montrent les étapes `gear` et `expeditions`, garde son bouton ; seuls Peuples, Enfers et la cloche passent dans le menu
   `#bMenu`, qu'aucune étape ne montre. L'étape `time` montre `#timePanel`, qui contient désormais pause et vitesse.
 - **Fin** : « Terminer » à la dernière étape. Le temps encore en pause repart à vitesse ×1. Le tutoriel reste dans les réglages (« Recommencer »).
+- **Rejouer** (27 nov. 2026, demande de l'auteur) : deux boutons dans Paramètres › Divers › Tutoriel.
+  - « Recommencer » : la bulle repart de la première étape **dans ce village**. Les étapes de pose déjà faites passent
+    d'elles-mêmes.
+  - « Nouvelle partie guidée » : après une confirmation (« Elle remplace votre village actuel : exportez-le d'abord… »),
+    une partie neuve sur la même carte, au même mode (le bac à sable donne le mode conseillé, `DEFAULT_DIFFICULTY`), avec tout le tutoriel depuis
+    la première étape, chapitres compris, même s'il avait été désactivé à l'accueil. La sauvegarde de la carte est
+    remplacée, comme « Recommencer cette carte ». Le bouton est aussi là au bac à sable, sous « Pas de tutoriel au bac à sable ».
+  - Code : `Tutorial.bindSettings(ov, close, ask)` (`ask` : `confirmBox`, passé par `ui.ts`) écrit `guidedState()` (en
+    cours, étape 0, aucun chapitre vu, sans `off`) puis `host.newGame(guidedMode(difficulté))`, qui efface la sauvegarde
+    de la carte et recharge la page. La partie neuve (`startsOn`) montre l'étape 1.
 - **Chapitre « Affronter les démons »** (`pve`) : **plus lancé** depuis le passage direct (22 nov. 2026, décision de l'auteur :
   le choix « Les Enfers » joue la cinématique et mène tout droit aux Enfers, voir [enfers.md](enfers.md)). Le code reste
   (`Game.pveStart` ne l'appelle que si `War.direct` est faux, c'est-à-dire jamais en jeu). Ce qu'il faisait (3 étapes depuis le 17 nov. 2026 : plus d'invasion, plus de tour de garde), lancé par le bouton « Affronter les démons » de la carte du
