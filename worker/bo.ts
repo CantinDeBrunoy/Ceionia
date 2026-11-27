@@ -43,6 +43,7 @@ button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; backgr
 .inline { display: inline; } .link { background: none; color: inherit; padding: 0; text-decoration: underline; font-size: inherit; }
 .stack { display: flex; height: 16px; border-radius: 3px; overflow: hidden; min-width: 1px; }
 .stack b { display: block; height: 100%; min-width: 2px; border-right: 1px solid var(--card); }
+.id { color: var(--soft); font-size: 11px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
 .pages { display: flex; gap: 14px; margin-top: 10px; } .pages a { color: inherit; }
 `;
@@ -81,11 +82,34 @@ export function noDbPage(): string {
   return page('Ceionia : back-office', `<h1>Ceionia : back-office</h1><p class="sub">La base D1 n’est pas encore branchée : les signaux sont ignorés. Voir la mise en service dans docs/mesure-audience.md.</p>`);
 }
 
-/** La couleur d'un joueur, toujours la même : une teinte tirée de son identifiant (pour suivre chacun d'un graphique à l'autre) */
-export function playerColor(id: string): string {
-  let h = 0;
+/**
+ * La couleur d'un joueur, d'après son rang d'arrivée : chaque nouveau venu tourne la teinte de l'angle d'or (137,5°), ce qui
+ * écarte au mieux les couleurs de joueurs proches. La clarté change à chaque tour, pour que les teintes qui reviennent se
+ * distinguent. Le rang ne bouge pas, sauf quand la purge efface les plus anciens
+ */
+export function playerColor(rank: number): string {
+  const lum = [50, 38, 62][Math.floor(rank * 137.508 / 360) % 3];
+  return `hsl(${Math.round((rank * 137.508) % 360)} 65% ${lum}%)`;
+}
+
+// les noms des joueurs : un animal et un adjectif (qui ne change pas au féminin), tirés de l'identifiant
+const ANIMALS = ['Renard', 'Loutre', 'Hibou', 'Castor', 'Belette', 'Blaireau', 'Lynx', 'Marmotte', 'Héron', 'Chouette', 'Ours', 'Tortue',
+  'Faucon', 'Biche', 'Loup', 'Hérisson', 'Corbeau', 'Grue', 'Chamois', 'Mouette', 'Bison', 'Salamandre', 'Cerf', 'Pie', 'Sanglier',
+  'Hermine', 'Aigle', 'Fouine', 'Taupe', 'Lièvre', 'Martin-pêcheur', 'Libellule', 'Phoque', 'Bouquetin', 'Mésange', 'Ecureuil'];
+const ADJECTIVES = ['agile', 'brave', 'calme', 'sage', 'rapide', 'timide', 'fidèle', 'habile', 'libre', 'drôle', 'tranquille', 'rouge',
+  'jaune', 'rose', 'mauve', 'aimable', 'solide', 'robuste', 'féroce', 'farouche', 'modeste', 'énorme', 'minuscule', 'célèbre',
+  'étrange', 'sauvage', 'paisible', 'intrépide', 'docile', 'magnifique'];
+
+function hash(id: string, seed: number): number {
+  let h = seed;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360} ${55 + (h >> 9) % 25}% ${45 + (h >> 17) % 15}%)`;
+  return h;
+}
+
+/** Le nom d'un joueur, toujours le même pour un identifiant (la mesure est anonyme : un surnom, pas une personne) */
+export function playerName(id: string): string {
+  const h = hash(id, 7);
+  return `${ANIMALS[h % ANIMALS.length]} ${ADJECTIVES[(h >>> 8) % ADJECTIVES.length]}`;
 }
 
 /** La page du rapport */
@@ -93,13 +117,21 @@ export function reportPage(r: Report): string {
   const t = r.time;
   const card = (v: string, label: string) => `<div class="card"><b>${v}</b><span>${label}</span></div>`;
   const maxAge = Math.max(1, ...r.ages.map((a) => a.players), r.sandboxOnly);
-  const ageRow = (name: string, x: number) => `<div class="row"><span>${esc(name)}</span><i style="width:${(x / maxAge) * 100}%"></i><em>${x}</em></div>`;
+  const rank = new Map(r.reached.map((x, i) => [x.player, i]));
+  const color = (id: string) => playerColor(rank.get(id) ?? hash(id, 0) % 997);
+  // une barre par âge, un morceau de la couleur de chaque joueur arrêté là
+  const who = (id: string) => `${playerName(id)} (${id.slice(0, 8)})`;
+  const ageRow = (name: string, age: number) => {
+    const ids = r.reached.filter((x) => (age < 0 ? x.age < 0 : Math.min(x.age, r.ages.length - 1) === age)).map((x) => x.player);
+    const parts = ids.map((id) => `<b title="${esc(who(id))}" style="flex:1;background:${color(id)}"></b>`).join('');
+    return `<div class="row"><span>${esc(name)}</span><div class="stack" style="width:${(ids.length / maxAge) * 100}%">${parts}</div><em>${ids.length}</em></div>`;
+  };
   // le temps passé dans chaque âge : une barre par âge, un morceau coloré par joueur, à la taille de son temps
   const byAge = r.ages.map((_, i) => r.ageTime.filter((x) => x.age === i));
   const maxTime = Math.max(1, ...byAge.map((xs) => xs.reduce((s, x) => s + x.seconds, 0)));
   const timeRow = (name: string, xs: Report['ageTime']) => {
     const sum = xs.reduce((s, x) => s + x.seconds, 0);
-    const parts = xs.map((x) => `<b title="${esc(x.player.slice(0, 8))} : ${duration(x.seconds)}" style="width:${(x.seconds / sum) * 100}%;background:${playerColor(x.player)}"></b>`).join('');
+    const parts = xs.map((x) => `<b title="${esc(who(x.player))} : ${duration(x.seconds)}" style="width:${(x.seconds / sum) * 100}%;background:${color(x.player)}"></b>`).join('');
     return `<div class="row"><span>${esc(name)}</span><div class="stack" style="width:${(sum / maxTime) * 100}%">${parts}</div><em title="${xs.length} joueur(s)">${sum ? duration(sum) : '–'}</em></div>`;
   };
   const maxDay = Math.max(1, ...r.days.map((d) => d.players));
@@ -118,12 +150,12 @@ ${card(duration(t.perSession.mean), 'moyen par partie')}${card(duration(t.perSes
 <p class="sub">Le temps compte pendant une partie (pas au menu), onglet visible, avec un geste du joueur (souris, clavier) dans les 2 dernières minutes.</p>
 
 <h2>Âge le plus haut atteint par joueur</h2>
-<div class="bars">${r.ages.map((a) => ageRow(a.name, a.players)).join('')}${ageRow('Bac à sable seul', r.sandboxOnly)}</div>
+<div class="bars">${r.ages.map((a, i) => ageRow(a.name, i)).join('')}${ageRow('Bac à sable seul', -1)}</div>
 <p class="sub">Là où chacun s'est arrêté, hors bac à sable (où l'on choisit son âge de départ).</p>
 
 <h2>Temps passé dans chaque âge</h2>
 <div class="bars">${r.ages.map((a, i) => timeRow(a.name, byAge[i])).join('')}</div>
-<p class="sub">Chaque couleur est un joueur (la même que dans la liste plus bas, survol : son temps). Un joueur compte dans chaque âge qu'il a joué, hors bac à sable. Avant le 27 nov. 2026, le temps d'une partie est partagé à parts égales entre les âges qu'elle a traversés.</p>
+<p class="sub">Chaque couleur est un joueur (la même partout sur la page, survol : son nom et son temps). Un joueur compte dans chaque âge qu'il a joué, hors bac à sable. Avant le 27 nov. 2026, le temps d'une partie est partagé à parts égales entre les âges qu'elle a traversés.</p>
 
 <h2>Joueurs par jour, sur 30 jours</h2>
 <div class="bars"><div class="days">${r.days.map((d) => `<div title="${dayLabel(d.day)} : ${d.players} joueur(s), ${duration(d.seconds)}">${d.players ? `<b>${d.players}</b>` : ''}<i style="height:${(d.players / maxDay) * 100}%"></i></div>`).join('')}</div>
@@ -131,7 +163,7 @@ ${card(duration(t.perSession.mean), 'moyen par partie')}${card(duration(t.perSes
 
 <h2>Joueurs, du dernier venu au plus ancien (page ${r.page + 1} sur ${pages})</h2>
 <div class="scroll"><table><thead><tr><th>Joueur</th><th>Première visite</th><th>Dernière visite</th><th>Temps total</th><th>Parties</th><th>Âge max</th><th>Langue</th></tr></thead><tbody>
-${list.map((p) => `<tr><td><i class="dot" style="background:${playerColor(p.id)}"></i><code>${esc(p.id.slice(0, 8))}</code></td><td>${when(p.first_at)}</td><td>${when(p.last_at)}</td><td>${duration(p.seconds)}</td><td>${p.sessions}</td><td>${p.max_age < 0 ? 'bac à sable' : esc(r.ages[p.max_age]?.name ?? String(p.max_age))}</td><td>${esc(p.lang)}</td></tr>`).join('')}
+${list.map((p) => `<tr><td><i class="dot" style="background:${color(p.id)}"></i>${esc(playerName(p.id))} <code class="id">${esc(p.id.slice(0, 8))}</code></td><td>${when(p.first_at)}</td><td>${when(p.last_at)}</td><td>${duration(p.seconds)}</td><td>${p.sessions}</td><td>${p.max_age < 0 ? 'bac à sable' : esc(r.ages[p.max_age]?.name ?? String(p.max_age))}</td><td>${esc(p.lang)}</td></tr>`).join('')}
 </tbody></table></div>
 <div class="pages">${r.page > 0 ? `<a href="/bo?page=${r.page - 1}">← Page précédente</a>` : ''}${r.page + 1 < pages ? `<a href="/bo?page=${r.page + 1}">Page suivante →</a>` : ''}</div>`);
 }

@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGE_NAMES, creditedSeconds, MAX_NEW_PLAYERS_DAY, MAX_SECONDS, parisDay, parisMidnight, parsePing, readBody, type Ping } from '../worker/ping';
 import { dayBefore, duration, loadReport, PAGE, purge } from '../worker/stats';
-import { loginPage, playerColor, reportPage } from '../worker/bo';
+import { loginPage, playerColor, playerName, reportPage } from '../worker/bo';
 import { newSession, sessionValid, SESSION_DAYS, STATE_SECONDS } from '../worker/auth';
 import { backOffice, ping, recordPing, type Env } from '../worker/index';
 import type { D1Database, D1Statement, RateLimit } from '../worker/d1';
@@ -385,9 +385,16 @@ describe('mesure d’audience : rapport calculé par la base', () => {
     const r = await loadReport(db, NOW);
     expect(r.ageTime).toEqual([{ player: 'ami', age: 0, seconds: 200 }, { player: 'ami', age: 1, seconds: 200 }, { player: 'ami', age: 2, seconds: 500 }]);
     const html = reportPage(r);
-    expect(html.match(/<b title="ami :/g)).toHaveLength(3);
-    expect(html).toContain(`background:${playerColor('ami')}`);
-    expect(playerColor('ami')).not.toBe(playerColor('bac'));
+    // des noms et des couleurs, partout les mêmes : trois âges joués, plus la barre de l'âge atteint
+    expect(r.reached).toEqual([{ player: 'ami', age: 2 }, { player: 'bac', age: -1 }]);
+    expect(html.split(`title="${playerName('ami')} (ami) :`)).toHaveLength(4);
+    expect(html.split(`background:${playerColor(0)}`)).toHaveLength(6);
+    expect(html.split(`background:${playerColor(1)}`)).toHaveLength(3);
+    // des voisins d'arrivée bien écartés
+    const hue = (i: number) => Number(/hsl\((\d+)/.exec(playerColor(i))![1]);
+    for (let i = 0; i < 20; i++) expect(Math.min(Math.abs(hue(i) - hue(i + 1)), 360 - Math.abs(hue(i) - hue(i + 1)))).toBeGreaterThan(100);
+    expect(playerName('ami')).toBe(playerName('ami'));
+    expect(new Set(Array.from({ length: 50 }, () => playerName(uuid()))).size).toBeGreaterThan(40);
   });
   it('médiane impaire et base vide, pagination', async () => {
     const db = fakeD1();

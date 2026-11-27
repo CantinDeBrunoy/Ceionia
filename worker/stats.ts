@@ -33,6 +33,8 @@ export interface Report {
   /** joueurs par âge le plus haut atteint (indice de `AGE_NAMES`), et ceux qui n'ont joué qu'au bac à sable */
   ages: { name: string; players: number }[];
   sandboxOnly: number;
+  /** l'âge le plus haut atteint, joueur par joueur (-1 : bac à sable seul), du premier venu au dernier : son rang donne sa couleur */
+  reached: { player: string; age: number }[];
   /** le temps passé dans chaque âge (indice de `AGE_NAMES`), joueur par joueur : un joueur compte dans chaque âge joué */
   ageTime: { player: string; age: number; seconds: number }[];
   /** les 30 derniers jours, du plus ancien à aujourd'hui (les jours sans joueur à zéro) */
@@ -76,7 +78,7 @@ export async function loadReport(db: D1Database, now: number, page = 0): Promise
     db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(started_at >= ?1), 0) AS today, COALESCE(SUM(seconds), 0) AS secs FROM sessions').bind(midnight),
     db.prepare(medianSql('players')),
     db.prepare(medianSql('sessions')),
-    db.prepare(`SELECT reached AS max_age, COUNT(*) AS n FROM (SELECT ${REACHED_SQL} AS reached FROM players p) GROUP BY reached`),
+    db.prepare(`SELECT id AS player, ${REACHED_SQL} AS age FROM players p ORDER BY first_at, id`),
     db.prepare('SELECT day, COUNT(*) AS players, SUM(seconds) AS seconds FROM days WHERE day >= ?1 GROUP BY day').bind(first),
     db.prepare(`SELECT id, first_at, last_at, seconds, ${REACHED_SQL} AS max_age, lang, (SELECT COUNT(*) FROM sessions s WHERE s.player = p.id) AS sessions
       FROM players p ORDER BY last_at DESC LIMIT ?1 OFFSET ?2`).bind(PAGE, page * PAGE),
@@ -87,9 +89,10 @@ export async function loadReport(db: D1Database, now: number, page = 0): Promise
   const S = one<{ total: number; today: number; secs: number }>(s);
   const spread = AGE_NAMES.map((name) => ({ name, players: 0 }));
   let sandboxOnly = 0;
-  for (const r of ages.results as { max_age: number; n: number }[]) {
-    if (r.max_age < 0) sandboxOnly += r.n;
-    else spread[Math.min(r.max_age, spread.length - 1)].players += r.n;
+  const reached = ages.results as { player: string; age: number }[];
+  for (const r of reached) {
+    if (r.age < 0) sandboxOnly++;
+    else spread[Math.min(r.age, spread.length - 1)].players++;
   }
   const byDay = new Map((days.results as DayRow[]).map((d) => [d.day, d]));
   const last30: DayRow[] = [];
@@ -108,6 +111,7 @@ export async function loadReport(db: D1Database, now: number, page = 0): Promise
     },
     ages: spread,
     sandboxOnly,
+    reached,
     ageTime: ageTime.results as { player: string; age: number; seconds: number }[],
     days: last30,
     list: list.results as PlayerRow[],
