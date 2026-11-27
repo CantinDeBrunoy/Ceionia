@@ -183,7 +183,8 @@ export type HellEvent =
   | { type: 'destroyed'; id: number; kind: SiteKind; x: number; z: number; zone: number }
   | { type: 'alert'; zone: number; x: number; z: number }
   | { type: 'spawn'; id: number; kind: DemonKind; x: number; z: number }
-  | { type: 'conquered'; zone: number }
+  /** une forteresse (ou la citadelle) abattue ; `first` : la zone n'avait encore jamais été conquise (un progrès, pas une reconquête) */
+  | { type: 'conquered'; zone: number; first?: boolean }
   /** une zone reperdue (sa base est tombée : la forteresse se relève) ; un ordre arrêté par la brume d'une zone fermée */
   | { type: 'lost'; zone: number }
   | { type: 'sealed'; zone: number; /** fermée faute d'âge (et non faute de conquête) */ byAge?: boolean }
@@ -300,6 +301,8 @@ export class Hell {
   alert = new Float32Array(HELL_ZONE_N);
   alertAt: [number, number][] = Array.from({ length: HELL_ZONE_N }, () => [0, 0]);
   conquered: boolean[] = Array.from({ length: HELL_ZONE_N }, () => false);
+  /** la zone la plus profonde jamais conquise (0 : aucune) ; une reconquête n'est pas un progrès */
+  reached = 0;
   victory = false;
   /** incursions : numéro de la dernière vague, moment de la suivante (-1 : pas encore fixé) */
   wave = 0;
@@ -808,7 +811,9 @@ export class Hell {
       this.alert[b.zone] = 0;
       // le gardien est lié à sa forteresse : il tombe avec elle (sans quoi il abattait le camp tout juste dressé sur les ruines)
       if (b.kind === 'fortress') for (const g of this.guardians(b.zone)) this.kill(g);
-      this.events.push({ type: 'conquered', zone: b.zone });
+      const first = b.zone > this.reached;
+      if (first) this.reached = b.zone;
+      this.events.push({ type: 'conquered', zone: b.zone, ...(first ? { first } : {}) });
     }
     if (b.kind === 'kingdom') { this.victory = true; this.events.push({ type: 'victory' }); }
   }
@@ -1023,7 +1028,7 @@ export class Hell {
   save(players = true): HellSave {
     return {
       time: this.time, wave: this.wave, nextRaid: this.nextRaid, victory: this.victory, conquered: [...this.conquered],
-      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, reinforced: this.reinforced.map((p) => Math.round(p)),
+      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, reached: this.reached, reinforced: this.reinforced.map((p) => Math.round(p)),
       lossStreak: this.lossStreak, planned: this.planned ? [...this.planned] : null,
       buildings: [...this.buildings.values()].filter((b) => b.side === 'hell').map((b) => [b.id, Math.max(0, Math.round(b.hp))]),
       units: this.alive().filter((u) => players || u.side !== 'player').map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
@@ -1042,6 +1047,8 @@ export class Hell {
     const plan = Array.isArray(s.planned) ? s.planned.filter((k) => k in DEMONS) : [];
     h.planned = plan.length ? plan : null;
     s.conquered.forEach((c, i) => (h.conquered[i] = c));
+    // (une ancienne sauvegarde : la zone conquise la plus profonde)
+    h.reached = Number.isFinite(s.reached) ? Math.max(0, Math.floor(s.reached!)) : Math.max(0, h.conquered.lastIndexOf(true));
     // (jamais plus que sa vie pleine : la première forteresse a été allégée le 24 nov. 2026)
     for (const [id, hp] of s.buildings) { const b = h.buildings.get(id); if (b) { b.hp = Math.min(b.maxHp, hp); if (hp <= 0) { b.down = true; map.unblock(b.site); } } }
     h.units.clear();
@@ -1060,6 +1067,8 @@ export class Hell {
 
 export interface HellSave {
   time: number; wave: number; nextRaid: number; victory: boolean; conquered: boolean[];
+  /** la zone la plus profonde jamais conquise ; absente : la plus profonde des zones conquises */
+  reached?: number;
   raidsRepelled?: number; raidsLost?: number;
   // (une ancienne sauvegarde a aussi `heldSince`, depuis quand l'île tenait, que rien ne lisait : ignoré)
   /** défaites d'affilée (les vagues suivantes s'adoucissent) ; absent : 0 */

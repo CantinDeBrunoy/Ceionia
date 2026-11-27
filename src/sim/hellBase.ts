@@ -105,7 +105,8 @@ export type BaseEvent =
   | { type: 'raised'; zone: number; retaken?: boolean }
   /** les démons ont pris les ruines du camp du Seuil : il faut les en chasser */
   | { type: 'occupied'; zone: number }
-  | { type: 'zoneLost'; zone: number }
+  /** les démons ont repris une zone ; `camp` : son camp de base est tombé (et non une zone laissée sans garde) */
+  | { type: 'zoneLost'; zone: number; camp?: boolean }
   | { type: 'reclaimWarn'; zone: number };
 
 export interface HellBaseSave {
@@ -434,7 +435,7 @@ export class HellBase {
     for (const e of h.events) {
       if (this.seen.has(e)) continue;
       this.seen.add(e);
-      if (e.type === 'destroyed' && e.kind === 'camp') this.fall(e.zone);
+      if (e.type === 'destroyed' && e.kind === 'camp') this.fall(e.zone, true);
       if (e.type === 'conquered' && e.zone >= 1 && e.zone < Z_KINGDOM) won.push(e.zone);
     }
     for (const z of won) this.raise(z);
@@ -587,7 +588,7 @@ export class HellBase {
   }
 
   /** Le camp d'une zone est tombé : ses autres bâtiments s'effondrent ; la zone est reperdue (sauf le seuil du portail) */
-  private fall(zone: number) {
+  private fall(zone: number, camp = false) {
     const h = this.hell;
     if (this.camp(zone)) return;
     for (const b of this.buildings()) if (b.zone === zone) h.raze(b);
@@ -604,7 +605,7 @@ export class HellBase {
       h.retake(zone);
       const fort = [...h.buildings.values()].find((b) => b.side === 'hell' && b.zone === zone && b.kind === 'fortress');
       if (fort) for (const b of this.buildings(true)) if (b.down && b.zone === zone && Math.hypot(b.site.x - fort.site.x, b.site.z - fort.site.z) < fort.site.r + b.site.r) h.buildings.delete(b.id);
-      this.events.push({ type: 'zoneLost', zone });
+      this.events.push({ type: 'zoneLost', zone, ...(camp ? { camp } : {}) });
     } else if (zone === 0) {
       // au Seuil : les démons occupent les ruines du camp ; les en chasser le relève
       const ruin = this.buildings(true).find((b) => b.kind === 'camp' && b.zone === 0 && b.down);
