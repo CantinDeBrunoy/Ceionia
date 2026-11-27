@@ -1843,8 +1843,12 @@ class Game implements UIHost {
   /** Même chose pour la carte du grand choix (`stepCrossroads`) */
   private crossLoad = true;
 
-  /** Les conditions du passage à l'âge suivant sont toutes remplies, sauf peut-être le conflit des deux îles */
+  /**
+   * Les conditions du passage à l'âge suivant sont toutes remplies, sauf peut-être le conflit des deux îles. Au bac à sable, il
+   * n'y en a pas : toujours vrai, pour que la carte paix ou guerre et la feuille de route s'ouvrent d'elles-mêmes comme ailleurs
+   */
   private othersDone() {
+    if (this.world.sandbox) return true;
     const ap = this.sim.ageProgress();
     return !!ap && ap.items.some((i) => isChapterLabel(i.label)) && ap.items.every((i) => isChapterLabel(i.label) || i.have >= i.need);
   }

@@ -39,6 +39,28 @@ export function hellWay(w: Pick<CrossWorld, 'portal' | 'portalOpen'>, pve: 'ask'
   return pve === 'on' ? 'taken' : 'ask';
 }
 
+/** Ce qui dit d'une partie qu'elle a vraiment joué la voie des Enfers (voir `hellWayForced`) */
+export interface HellTrace {
+  sandbox: boolean;
+  /** le joueur a répondu lui-même (« Affronter », « Refermer » : `War.choiceSeen`) */
+  choiceSeen: boolean;
+  pve: 'ask' | 'on' | 'off';
+  /** troupes, recrues en route, tours et casernes de l'île, bâtiments du camp au Seuil */
+  troops: number; queued: number; towers: number; barracks: number; base: number;
+  /** une forteresse des Enfers abattue, ou le royaume tombé */
+  conquered: boolean;
+}
+
+/**
+ * La voie des Enfers prise d'office dans une ancienne partie au bac à sable : passé l'Antiquité, une sauvegarde d'avant le
+ * choix PvE comptait l'invasion faite (`War.readLegacyInvasion`), et le choix passait à `on` sans que le joueur ait rien
+ * choisi. L'onglet « Grands choix » disait alors « Choix fait ». Vrai : rien n'a été joué, la voie redevient libre
+ */
+export function hellWayForced(t: HellTrace): boolean {
+  if (!t.sandbox || t.choiceSeen || t.pve !== 'on') return false;
+  return !t.troops && !t.queued && !t.towers && !t.barracks && !t.base && !t.conquered;
+}
+
 /** La voie du monde : l'archipel accepté, ou la carte qui peut encore s'agrandir (`canExplore`) */
 export function worldWay(w: Pick<CrossWorld, 'isles'>, canExplore: boolean): WayState {
   if (archipelagoOn(w)) return 'taken';

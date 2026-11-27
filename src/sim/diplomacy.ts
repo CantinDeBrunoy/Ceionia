@@ -220,7 +220,8 @@ export const ENDGAME_AGE = FIRST_CHAPTER;
  */
 let postReady: (w: World) => boolean = () => true;
 export function bindPostReady(f: (w: World) => boolean) { postReady = f; }
-export const allyPostReadyNow = (w: World) => postReady(w);
+/** Le port et le comptoir sont-ils installés chez l'allié ? Toujours au bac à sable : pas de bâtiment préalable (voir `docs/bac-a-sable.md`) */
+export const allyPostReadyNow = (w: World) => w.sandbox || postReady(w);
 
 /** Une mission de la diplomatie est-elle proposée dans cette partie ? (les autres le sont toujours) */
 export function missionOffered(w: Pick<World, 'isles' | 'diplo' | 'exp'>, id: string): boolean {
@@ -301,7 +302,7 @@ export function chooseAlly(d: DiploState, p: People) {
  */
 export function endgameOpen(w: World, age: number) {
   if (!archipelagoOn(w) || !w.diplo.ally || w.diplo.conflict !== 'open') return false;
-  return conflictAge(age) && postReady(w);
+  return conflictAge(age) && allyPostReadyNow(w);
 }
 
 /**
@@ -321,8 +322,9 @@ export function endgameWhy(w: World, age: number): string | null {
   if (!archipelagoOn(w)) return null;
   if (!w.diplo.ally) return tr('Il faut d’abord choisir votre allié.');
   if (w.diplo.conflict !== 'open') return tr('Le conflit des deux îles est déjà réglé.');
-  if (age < FIRST_CHAPTER) return tr('Le conflit des deux îles s’ouvre au Médiéval.');
-  if (!postReady(w)) return tr('Installez d’abord un port et un comptoir sur l’île de votre allié.');
+  // (au bac à sable, l'âge se change d'un clic : on le dit)
+  if (age < FIRST_CHAPTER) return w.sandbox ? tr('Le conflit des deux îles s’ouvre au Médiéval : changez d’âge dans le panneau de l’âge, en haut à gauche.') : tr('Le conflit des deux îles s’ouvre au Médiéval.');
+  if (!allyPostReadyNow(w)) return tr('Installez d’abord un port et un comptoir sur l’île de votre allié.');
   return null;
 }
 

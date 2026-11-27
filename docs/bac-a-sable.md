@@ -1,7 +1,7 @@
 # Bac à sable
 
 > Fichiers : `src/sim/difficulty.ts` (la difficulté `sandbox` et ses textes), `src/world/world.ts` (`World.sandbox`, `World.missionDone`, `World.unlimited`), `src/sim/sim.ts` (`Sim.setAge`, croissance, conseil), `src/ui/ui.ts` (accueil, choix de la partie, panneau de l'âge, verrous), `src/ui/tutorial.ts` (tutoriel et chapitres coupés), `src/main.ts` (`Game`, lancement), `src/build/startLock.ts` (verrou de départ)
-> Tests : `tests/bacASable.test.ts`, `tests/difficulty.test.ts`
+> Tests : `tests/bacASable.test.ts`, `tests/difficulty.test.ts`, `tests/bacASableVoies.test.ts` (les deux voies, le conflit des îles)
 > Voir aussi : [difficulte.md](difficulte.md), [ages.md](ages.md), [economie-ressources.md](economie-ressources.md), [besoins-population.md](besoins-population.md), [tutoriel.md](tutoriel.md), [sauvegarde.md](sauvegarde.md), [batiments-catalogue.md](batiments-catalogue.md)
 
 ## En bref
@@ -15,6 +15,8 @@ Ce n'est pas un réglage à part : c'est `World.difficulty === 'sandbox'`. Le mo
 - **Ressources** : infinies. Aucun coût n'est prélevé, la barre affiche « ∞ » (bois, pierre, minerai, briques, carburant). L'équipement des expéditions et le recrutement sont gratuits aussi.
 - **Besoins** : aucun ne freine le village. Il grandit dès qu'il reste des places (logement). Pas de famine, pas de départs, pas de ralentissement après un manque.
 - **Portail** : dès l'Antiquité (au départ ou en changeant d'âge), le portail s'ouvre de lui-même, sans l'expédition « Le portail de l'autre rive ». Aucune carte ne s'ouvre et aucune invasion ne vient : affronter les démons se lance depuis l'onglet « Grands choix » des expéditions (voir [grand-choix.md](grand-choix.md)). Une fois ouvert, il le reste, même si l'on revient à la Préhistoire. L'expédition reste jouable.
+- **Les deux voies** : « Les Enfers » et « Explorer le monde » se prennent quand on veut depuis l'onglet « Grands choix », l'une, l'autre ou les deux dans la même partie. Les Enfers se jouent jusqu'au roi ; leurs zones les plus profondes demandent un âge (« montez à… ») : on le change dans le panneau de l'âge. Une ancienne partie dont la voie des Enfers était « Choix fait » sans choix du joueur la retrouve libre (voir [grand-choix.md](grand-choix.md)).
+- **Le conflit des îles** (avec l'archipel et l'allié) : pas de port ni de comptoir à poser chez l'allié ; la carte paix ou guerre s'ouvre d'elle-même dès le Médiéval, puis la feuille de route, comme ailleurs, et le panneau « Peuples » est là dès le départ. Chaque chapitre garde son âge (Médiéval, Industriel, Moderne) : avant, les textes disent de changer d'âge en haut à gauche. Voir [diplomatie.md](diplomatie.md).
 - **Coupé** : le tutoriel, le conseil du moment (la pastille est cachée), les bulles d'aide militaire (`warTips.update` n'est pas appelé), la liste « nouveaux bâtiments » au changement d'âge, la carte du grand choix (les deux voies sont dans l'onglet « Grands choix » des expéditions dès le départ, voir [grand-choix.md](grand-choix.md)).
 - **Marque** : le panneau de l'âge porte « Bac à sable » et sa jauge reste pleine ; le menu « Reprendre mon village » et les réglages affichent le mode.
 - **Fin de partie** : la fusée reste possible (ses expéditions sont débloquées comme les autres) ; elle ne dépend de rien d'autre.
@@ -46,6 +48,12 @@ Ce n'est pas un réglage à part : c'est `World.difficulty === 'sandbox'`. Le mo
 **Portail**
 - `Sim.update` : au bac à sable, âge ≥ 1 et île présente → `world.portalWoken = true` (sauvegardé, `portalWoken` dans `World.toJSON`). `World.portalOpen` = île et (`portalWoken` ou `exp.done` contient `portal`). `exp.done` n'est pas touché.
 - `War.active` devient vrai et `pve` vaut `ask` (pas encore choisi : aucune vague). La voie des Enfers de l'onglet « Grands choix » (`hellWay` = `open`) passe `pve` à `on`.
+
+**Voies et conflit**
+- `diplomacy.ts` › `allyPostReadyNow` : vrai au bac à sable (le port et le comptoir chez l'allié ne sont pas exigés) ; `endgameOpen` et `endgameWhy` passent par lui. `endgameWhy`, avant le Médiéval, dit de changer d'âge ; `peoples.ts` › `endWhy` aussi (`PeoplesCtx.sandbox`).
+- `main.ts` › `Game.othersDone` : vrai au bac à sable (pas de conditions d'âge), pour que `pathDue` et la feuille de route ouvrent leurs cartes d'elles-mêmes.
+- `ui.ts` : le bouton « Peuples » (`#bPeoples`) se montre au bac à sable dès le départ.
+- `war.ts` › `readLegacyInvasion` ne compte plus l'âge au bac à sable ; `freeForcedWay` (une fois par chargement) rend libre une voie des Enfers prise d'office (`crossroads.ts` › `hellWayForced`).
 
 **Besoins et conseil**
 - `Sim.canGrow` : au bac à sable, `housing.ok` seul.

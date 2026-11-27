@@ -1514,7 +1514,7 @@ export class UI {
     this.root.querySelector('.peoplesModal')?.closest<HTMLElement & { close?: () => void }>('.overlay')?.close?.();
     const h = this.host, w = h.world;
     const ways = h.ways?.(), canExplore = ways?.world !== 'none';
-    const view = peoplesView(w, { age: h.sim.age, tradeOpen: h.sim.tradeOpen, postReady: allyPostReadyNow(w), canExplore, waysTab: !!ways && waysTabShown(w, ways.hell, ways.world) });
+    const view = peoplesView(w, { age: h.sim.age, sandbox: w.sandbox, tradeOpen: h.sim.tradeOpen, postReady: allyPostReadyNow(w), canExplore, waysTab: !!ways && waysTabShown(w, ways.hell, ways.world) });
     const { ov, close } = modal(this.root, 'peoplesModal', `${ic('flag', 22)} ${tr('Les peuples de l’archipel')}`, peoplesHtml(view));
     ov.querySelectorAll<HTMLButtonElement>('[data-g]').forEach((b) => (b.onclick = () => {
       const [i, k] = b.dataset.g!.split(':').map(Number), g = view.cards[i]?.gestures[k];
@@ -2973,10 +2973,10 @@ export class UI {
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
     $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
-    // le panneau des peuples : avec l'archipel ; avant, grisé dès l'Antiquité si le monde peut encore s'agrandir (il dit comment)
+    // le panneau des peuples : avec l'archipel ; avant, grisé dès l'Antiquité (au bac à sable, dès le départ) si le monde peut encore s'agrandir (il dit comment)
     const arch = archipelagoOn(h.world), canMeet = h.ways?.().world !== 'none';
     const pb = $('#bPeoples');
-    pb.style.display = arch || (canMeet && h.sim.age >= 1 && !h.world.sandbox) ? '' : 'none';
+    pb.style.display = arch || (canMeet && (h.sim.age >= 1 || h.world.sandbox)) ? '' : 'none';
     pb.classList.toggle('off', !arch);
     // les Enfers : le portail ouvert (décision de l'auteur, 22 nov. 2026 : l'arche de l'île et ce bouton y mènent)
     $('#bHell').style.display = h.hellOpen?.() ? '' : 'none';

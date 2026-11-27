@@ -5,6 +5,7 @@ import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demon
 import { IsleBattle, defenseK } from './isleBattle';
 import { balanceOf, powerOf, type Balance } from './hellBalance';
 import { tr, plural, nplural } from '../i18n';
+import { hellWayForced } from './crossroads';
 import { gearName, Army, Troop, TroopKind, newArmy, readArmy, stepArmy, troopStats, troopStatsOf, kitMissing, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName, andJoin } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES, zoneOf, zoneOfZ, zoneThe, zoneAgeText } from '../world/hell';
@@ -452,6 +453,7 @@ export class War {
     f.armyPower = this.power(age);
     if (this.legacyInv) this.readLegacyInvasion(age);
     if (this.legacyPve) this.readLegacyPve();
+    if (!this.forcedChecked) this.freeForcedWay();
     // plus d'invasion (retour de l'auteur, 17 nov. 2026 : « enlever les 3 vagues, on va directement en enfer ») : les démons
     // affrontés, l'invasion compte pour faite et les Enfers sont ouverts. (Une vague d'une ancienne partie, sauvegardée en plein
     // combat, se joue jusqu'au bout.)
@@ -849,11 +851,29 @@ export class War {
   }
   private wasSealed = false;
 
+  /** une fois par chargement : la voie des Enfers d'une ancienne partie au bac à sable, prise d'office (`hellWayForced`) */
+  private forcedChecked = false;
+  /**
+   * Rend libre la voie des Enfers prise d'office dans une ancienne partie au bac à sable (voir `hellWayForced`) : le choix
+   * revient à `ask`, l'invasion à `wait`, et le bâton, volé sans cinématique, retourne sur la place (son vol se jouera quand le
+   * joueur prendra la voie). Rien d'autre ne bouge
+   */
+  private freeForcedWay() {
+    this.forcedChecked = true;
+    const w = this.world, f = this.faction!, d = isleDefenses(w);
+    if (!hellWayForced({
+      sandbox: w.sandbox, choiceSeen: this.choiceSeen, pve: this.pve, troops: this.army.troops.length, queued: this.army.queue.length,
+      towers: d.towers, barracks: d.barracks, base: this.base?.buildings().length ?? 0, conquered: f.victory || f.conquered.some(Boolean),
+    })) return;
+    this.pve = 'ask'; this.inv = 'wait'; this.visited = false;
+    if (w.staff === 'stolen') w.staff = 'home';
+  }
+
   /** Une ancienne sauvegarde (sans l'état de l'invasion) : faite si la partie a déjà vu une vague repoussée ou les Enfers ; ne bloque jamais */
   private readLegacyInvasion(age: number) {
     this.legacyInv = false;
     const f = this.faction!, w = this.world;
-    const seen = f.raidsRepelled > 0 || f.raidsLost > 0 || f.victory || f.conquered.some(Boolean) || w.isleGuard.waves > 0 || age >= 2
+    const seen = f.raidsRepelled > 0 || f.raidsLost > 0 || f.victory || f.conquered.some(Boolean) || w.isleGuard.waves > 0 || (age >= 2 && !w.sandbox)
       || this.visited || this.army.troops.some((t) => t.where === 'hell') || this.army.queue.some((r) => r.at === 'hell') || !!this.base?.buildings().length;
     this.inv = seen ? 'done' : f.activeRaid ? 'raid' : 'wait';
     if (this.inv === 'done') this.visited = true;
@@ -908,7 +928,7 @@ export class War {
     this.ease = num(o.ease, EASE_MAX); this.lostRow = num(o.lostRow, EASE_AFTER); this.easeAsk = o.easeAsk === true;
     this.choiceSeen = o.choiceSeen === true;
     const pv = (['ask', 'on', 'off'] as Pve[]).find((x) => x === o.pve);
-    this.pve = pv ?? 'ask'; this.legacyPve = !pv; this.wasSealed = o.sealed === true;
+    this.pve = pv ?? 'ask'; this.legacyPve = !pv; this.wasSealed = o.sealed === true; this.forcedChecked = false;
     const rw = o.reward as KingdomReward | null | undefined;
     this.reward = rw && typeof rw === 'object' && Number.isFinite(rw.ore) && Number.isFinite(rw.joy) && Array.isArray(rw.gear) ? { ore: rw.ore, joy: rw.joy, gear: rw.gear.filter((g) => Array.isArray(g) && typeof g[0] === 'string' && Number.isFinite(g[1])) } : null;
     this.unitOf.clear(); this.troopOf.clear(); this.crossing.clear();

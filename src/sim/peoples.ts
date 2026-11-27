@@ -62,6 +62,8 @@ export interface PeoplesView {
 /** Ce que le panneau lit hors du monde : l'âge, le comptoir ouvert, l'installation chez l'allié faite, l'agrandissement possible, l'onglet des grands choix */
 export interface PeoplesCtx {
   age: number; tradeOpen: boolean; postReady: boolean; canExplore: boolean;
+  /** le bac à sable : l'âge se change d'un clic dans le panneau de l'âge (les gestes d'un autre âge le disent) */
+  sandbox?: boolean;
   /** l'onglet « Grands choix » des expéditions existe (le grand choix est fait : « Explorer le monde » s'y prend encore) */
   waysTab?: boolean;
   /** la durée d'un jour de jeu (s) : la ville rivale vaincue se relève en quelques jours (130 par défaut) */
@@ -73,7 +75,7 @@ const ORDER: People[] = ['orient', 'asie'];
 /** Pourquoi le dénouement (la paix, la guerre, les éclaireurs) ne se joue pas encore (null : il se joue) */
 function endWhy(w: Pick<World, 'diplo'>, c: PeoplesCtx): string | null {
   if (!w.diplo.ally) return tr('Choisissez d’abord un allié');
-  if (c.age < ENDGAME_AGE) return tr('Au Médiéval');
+  if (c.age < ENDGAME_AGE) return c.sandbox ? tr('Au Médiéval : changez d’âge en haut à gauche') : tr('Au Médiéval');
   if (c.age > ENDGAME_AGE && w.diplo.conflict === 'open') return null;
   if (!c.postReady) return tr('Après le port et le comptoir chez votre allié');
   return null;
