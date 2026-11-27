@@ -16,6 +16,8 @@ import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
+import { patrolWhy, nextPatrolCost } from '../sim/stationPatrols';
+import { patrolsOf } from '../sim/coverage';
 import { RangeView } from './rangeView';
 import { isStart, startRefusal, START_KIND } from './startLock';
 import { traceRampart, layRampart, rampartCost, rampartMask, toggledTower } from './rampart';
@@ -94,7 +96,7 @@ export class ToolController implements ToolInput {
   /** cases posées par le trait de route en cours (mode « Ligne ») */
   private roadStroke = new Set<number>();
   private vegTimer = 0;
-  private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean } | null = null;
+  private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean; patrols: number } | null = null;
   /** bâtiment choisi d'un clic avec l'outil « Voir » : sa fiche s'affiche, on peut le déplacer, le tourner, le démolir */
   selected: number | null = null;
   /** l'habitant choisi d'un clic (sa fiche à la place de celle d'un bâtiment) */
@@ -375,6 +377,26 @@ export class ToolController implements ToolInput {
     pay(w, cost);
     this.h.audio.sfxPlace();
     this.select(nb.id);
+  }
+
+  /**
+   * Ajoute une patrouille au poste de police ou à la caserne sélectionné (annulable) : à son prix (`stationPatrols.ts`) ;
+   * au complet ou faute de quoi payer, on le dit
+   */
+  addPatrolSelected() {
+    const b = this.selectedBuilding(), w = this.h.world, age = this.h.getAge();
+    if (!b) return;
+    const why = patrolWhy(w, b, age);
+    if (why) { this.deny(why); return; }
+    const cost = nextPatrolCost(w, b, age);
+    this.beginStroke();
+    this.mark();
+    this.endStroke();
+    pay(w, cost);
+    w.setPatrols(b.id, patrolsOf(b) + 1);
+    this.h.audio.sfxPlace();
+    this.refreshVisuals();
+    this.h.changed();
   }
 
   /** Démolit le bâtiment sélectionné (annulable) */
@@ -983,7 +1005,7 @@ export class ToolController implements ToolInput {
     const b = chosen ?? (c ? this.hitBuilding : undefined);
     if (!b) return;
     this.mark();
-    this.moveOrigin = { kind: b.kind, x: b.x, z: b.z, rot: b.rot, auto: b.auto, small: !!b.small };
+    this.moveOrigin = { kind: b.kind, x: b.x, z: b.z, rot: b.rot, auto: b.auto, small: !!b.small, patrols: patrolsOf(b) };
     this.kind = b.kind;
     this.ghostRot = b.rot;
     this.rotManual = !b.auto;
@@ -1001,6 +1023,8 @@ export class ToolController implements ToolInput {
     const w = this.h.world;
     if (w.canPlace(o.kind, o.x, o.z, o.small ? smallSize(o.kind) : undefined) !== null) return;
     const b = w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
+    // (ses patrouilles le suivent)
+    if (b && o.patrols) b.patrols = o.patrols;
     // (son chemin d'accès s'était effacé en le ramassant : il se retrace)
     if (this.h.autoRoads && b) autoRoad(w, b);
   }
@@ -1087,6 +1111,8 @@ export class ToolController implements ToolInput {
     this.mark();
     pay(w, cost);
     const b = w.place(this.kind, o.x, o.z, rot, auto, this.h.getAge(), true);
+    // un poste déplacé garde ses patrouilles
+    if (this.moveOrigin?.patrols && this.moveOrigin.kind === this.kind) w.setPatrols(b.id, this.moveOrigin.patrols);
     // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
     if (this.h.autoRoads) autoRoad(w, b);
     this.moveOrigin = null;
@@ -1121,12 +1147,12 @@ export class ToolController implements ToolInput {
   /** La portée du poste de sécurité qu'on tient (sous la souris) ou qu'on a sélectionné, case par case */
   private showRange() {
     const t = this.tool, w = this.h.world, hit = this.hit, sel = t === 'none' ? this.selectedBuilding() : undefined;
-    if (sel) { this.range.show(w, sel.kind, sel.x, sel.z, sel.age, sel.id); return; }
+    if (sel) { this.range.show(w, sel.kind, sel.x, sel.z, sel.age, sel.id, patrolsOf(sel)); return; }
     if ((t === 'build' || (t === 'move' && this.moveOrigin)) && hit) {
       const an = this.anchor && this.anchor.kind === this.kind ? this.anchor : null;
       const o = an ? { x: an.x, z: an.z } : footprintOrigin(this.kind, hit.x, hit.z);
       // (un poste qu'on déplace est ôté du monde pendant le geste : il ne compte pas parmi les autres)
-      this.range.show(w, this.kind, o.x, o.z, this.h.getAge());
+      this.range.show(w, this.kind, o.x, o.z, this.h.getAge(), -1, this.moveOrigin?.kind === this.kind ? this.moveOrigin.patrols : 0);
       return;
     }
     this.range.show(w, null);

@@ -3,7 +3,8 @@ import { wrapAngle } from '../core/rng';
 import { tr } from '../i18n';
 import { World, N } from '../world/world';
 import { Building, KindId, sizeOf } from '../build/catalog';
-import { reaches } from '../sim/coverage';
+import { reaches, rangeOf, patrolsOf } from '../sim/coverage';
+import { patrolRides } from '../sim/patrols';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { Puffs } from './particles';
@@ -17,6 +18,8 @@ import { UNAIDED_WAIT } from '../sim/mishaps';
 
 /** Portée des secours (cases) : celle de la caserne pour les incendies, la même pour l'hôpital et la police */
 const RANGE = 14;
+/** Véhicules de patrouille des postes (`round`) au plus dans tout le village */
+const ROUNDS_MAX = 12;
 /** Au-delà de ce temps sur place, on remballe quoi qu'il arrive */
 const GIVE_UP = 60;
 const WATER = new THREE.Color(0.85, 0.93, 1), COAL = new THREE.Color(0.32, 0.3, 0.3);
@@ -70,6 +73,8 @@ interface Unit {
   z: number;
   heading: number;
   state: 'go' | 'work' | 'back' | 'patrol';
+  /** une patrouille ajoutée au poste (`stationPatrols.ts`) : elle fait sa ronde dans toute sa portée, et y revient après un appel */
+  round?: boolean;
   crew: Crew | null;
   /** temps passé à viser le même point du chemin (au-delà, on l'y pose) */
   stuck?: number;
@@ -1004,6 +1009,18 @@ export class Emergencies {
       const u = this.make('police', st, this.roadNear(st));
       if (u) u.t = 2;
     }
+    // les patrouilles ajoutées aux postes : un véhicule chacune, en ronde dans toute la portée du poste ; une patrouille retirée
+    // (annulation) rappelle le sien
+    for (const st of w.buildings.values()) {
+      if ((st.kind !== 'police' && st.kind !== 'fire') || !patrolRides(st, age)) continue;
+      const mine = this.units.filter((u) => u.round && u.station.id === st.id), n = patrolsOf(st);
+      for (let k = mine.length; k < n && this.units.filter((u) => u.round).length < ROUNDS_MAX; k++) {
+        const u = this.make(st.kind, st, this.roadNear(st));
+        if (!u) break;
+        u.round = true; u.t = 2 - k * 4;
+      }
+      for (const u of mine.slice(n)) if (u.state === 'patrol' || u.state === 'back') this.drop(u);
+    }
     const blink = Math.floor(this.time * 6) % 2 === 0;
     for (const u of [...this.units]) {
       u.t += dt;
@@ -1012,11 +1029,22 @@ export class Emergencies {
       if (u.state === 'go' || u.state === 'back' || u.state === 'patrol') {
         if (this.drive(u, dt)) {
           if (u.state === 'go') { u.state = 'work'; u.t = 0; u.park = this.parkFor(u); }
-          else if (u.state === 'back') { if (u.service === 'police' && this.age >= 4) { u.state = 'patrol'; u.path = []; u.t = 0; } else { this.drop(u); continue; } }
+          else if (u.state === 'back') { if (u.round || (u.service === 'police' && this.age >= 4)) { u.state = 'patrol'; u.path = []; u.t = 0; } else { this.drop(u); continue; } }
           else if (u.state === 'patrol' && u.t > 2) {
-            // ronde : une rue au hasard à portée du commissariat, puis une autre
-            const roads: number[] = [];
-            for (let dz = -10; dz <= 10; dz++) for (let dx = -10; dx <= 10; dx++) { const x = u.station.x + dx, z = u.station.z + dz; if (w.inCells(x, z) && w.road[w.ci(x, z)] && !this.avoid.has(w.ci(x, z))) roads.push(w.ci(x, z)); }
+            // ronde : une rue au hasard à portée du commissariat, puis une autre ; une patrouille du poste va dans toute sa
+            // portée, de préférence dans sa moitié extérieure (là où elle étend la zone protégée)
+            const roads: number[] = [], far: number[] = [];
+            if (u.round) {
+              const R = rangeOf(u.station, guardReach(w)), h = sizeOf(u.station) / 2, cx = u.station.x + h, cz = u.station.z + h, rc = Math.ceil(R);
+              for (let z = Math.floor(cz) - rc; z <= Math.floor(cz) + rc; z++) for (let x = Math.floor(cx) - rc; x <= Math.floor(cx) + rc; x++) {
+                if (!w.inCells(x, z) || !w.road[w.ci(x, z)] || this.avoid.has(w.ci(x, z))) continue;
+                const d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
+                if (d > R) continue;
+                roads.push(w.ci(x, z));
+                if (d >= R * 0.5) far.push(w.ci(x, z));
+              }
+              if (far.length && Math.random() < 0.7) { roads.length = 0; roads.push(...far); }
+            } else for (let dz = -10; dz <= 10; dz++) for (let dx = -10; dx <= 10; dx++) { const x = u.station.x + dx, z = u.station.z + dz; if (w.inCells(x, z) && w.road[w.ci(x, z)] && !this.avoid.has(w.ci(x, z))) roads.push(w.ci(x, z)); }
             const goal = roads[Math.floor(Math.random() * roads.length)], p = goal !== undefined ? this.route(Math.floor(u.z) * N + Math.floor(u.x), goal) : null;
             u.path = p ?? []; u.i = 0; u.t = p ? 0 : 1;
           }

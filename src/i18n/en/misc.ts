@@ -315,4 +315,13 @@ registerDict('misc', {
     'Without any name or stored IP address, the game counts how many people play, for how long and up to which age. It helps us improve it. When off, nothing is sent and your number is erased.',
   'Pour savoir combien de personnes jouent, combien de temps et jusqu’à quel âge elles vont, le jeu envoie à son serveur, pendant une partie, un petit signal par minute de jeu : un numéro tiré au hasard, l’âge du village, le mode, la difficulté, la langue et la version du jeu. Ni nom, ni empreinte du navigateur. Votre adresse IP sert un instant à bloquer les abus, elle n’est jamais enregistrée. Le numéro change au bout de 13 mois, et les chiffres de plus de 13 mois sont effacés. Ils servent seulement à améliorer le jeu. Les polices viennent aussi du serveur du jeu. Vous pouvez refuser dans Paramètres › Divers.':
     'To know how many people play, for how long and how far they go, the game sends its server a small signal for each minute of play during a game: a random number, the village age, the mode, the difficulty, the language and the game version. No name, no browser fingerprint. Your IP address is used for a moment to block abuse and is never stored. The number changes after 13 months, and figures older than 13 months are erased. They are only used to improve the game. Fonts also come from the game server. You can turn this off in Settings › More.',
+  // ---- les patrouilles des postes de police et des casernes ----
+  'Ce bâtiment n’a pas de patrouille.': 'This building has no patrol.',
+  'Trois patrouilles au plus : le poste est au complet.': 'Three patrols at most: the station is full.',
+  'Chaque patrouille fait sa ronde autour du poste : +{n} cases de portée et un emploi de plus. Trois au plus.': 'Each patrol makes its rounds around the station: +{n} cells of range and one more job. Three at most.',
+  'Patrouilles : {n} sur {max} · portée {r} cases': 'Patrols: {n} of {max} · range {r} cells',
+  'Ajouter une patrouille': 'Add a patrol',
+  'au complet': 'full',
+  'portée {a} → {b} cases': 'range {a} → {b} cells',
+  'Chaque patrouille ajoutée à un poste, sur sa fiche, porte sa portée {n} cases plus loin.': 'Each patrol added to a station, from its card, takes its range {n} cells further.',
 });

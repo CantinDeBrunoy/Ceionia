@@ -5,6 +5,7 @@ import { tr } from '../i18n';
 import { smoothstep } from '../core/rng';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
+import { patrolsOf } from '../sim/coverage';
 import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/difficulty';
 import { GEN, GEN_FIXED, GEN_VAR, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
 import { archLayout, ARCH_N, type ArchLayout } from './archipelago';
@@ -1654,6 +1655,16 @@ export class World {
     for (const n of this.buildings.values()) if (n.x >= b.x - 2 && n.x <= b.x + s + 1 && n.z >= b.z - 2 && n.z <= b.z + s + 1) for (const l of this.listeners) l.onChange(n);
   }
 
+  /** Le nombre de patrouilles d'un poste de police ou d'une caserne (0 : aucune, le champ disparaît) */
+  setPatrols(id: number, n: number) {
+    const b = this.buildings.get(id);
+    if (!b) return;
+    if (n > 0) b.patrols = n;
+    else delete b.patrols;
+    this.version++;
+    for (const l of this.listeners) l.onChange(b);
+  }
+
   /** Force la tour d'un pan de rempart (vrai), le simple pan (faux), ou rend le choix au tracé (undefined) */
   setRampartTower(id: number, tower: boolean | undefined) {
     const b = this.buildings.get(id);
@@ -2015,8 +2026,10 @@ export class World {
       // (7e case, pour un pan de rempart : 1 tour forcée, 2 simple pan forcé)
       buildings: [...this.buildings.values()].map((b) => {
         const r: (string | number)[] = [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age];
-        if (b.small || b.tower !== undefined) r.push(b.small ? 1 : 0);
-        if (b.tower !== undefined) r.push(b.tower ? 1 : 2);
+        if (b.small || b.tower !== undefined || b.patrols) r.push(b.small ? 1 : 0);
+        if (b.tower !== undefined || b.patrols) r.push(b.tower === undefined ? 0 : b.tower ? 1 : 2);
+        // (9e case : les patrouilles d'un poste de police ou d'une caserne)
+        if (b.patrols) r.push(b.patrols);
         return r;
       }),
       nextId: this.nextId,
@@ -2132,7 +2145,7 @@ export class World {
       if (r[0] === 'paving') { ids.push(-1); const k = (r[2] | 0) * N + (r[1] | 0); if (k >= 0 && k < N * N) paving[k] = 1; continue; }
       ids.push(KINDS[r[0] as KindId] ? id : -1);
       if (!KINDS[r[0] as KindId]) continue;
-      buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0, ...(r[6] ? { small: true } : {}), ...(r[7] === 1 ? { tower: true } : r[7] === 2 ? { tower: false } : {}) });
+      buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0, ...(r[6] ? { small: true } : {}), ...(r[7] === 1 ? { tower: true } : r[7] === 2 ? { tower: false } : {}), ...(patrolsOf({ kind: r[0], patrols: r[8] }) ? { patrols: patrolsOf({ kind: r[0], patrols: r[8] }) } : {}) });
     }
     // le château devenait la gare à l'âge industriel : ceux qui servent d'arrêt à une ligne deviennent la gare centrale, les
     // autres redeviennent des châteaux

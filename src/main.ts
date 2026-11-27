@@ -47,7 +47,7 @@ import { Funeral } from './render/funeral';
 import { doorCells, doorSide, FRONT } from './build/placement';
 import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
-import { Patrols, PATROL_MAX } from './sim/patrols';
+import { Patrols, PATROL_MAX, stationWalks, stationRole, STATION_WALK_MAX, STATION_WALK_SIZE } from './sim/patrols';
 import { Sentinels, SENTINEL_MAX } from './sim/sentinels';
 import { PatrolView, HoundView } from './render/patrols';
 import { Fauna } from './render/fauna';
@@ -305,6 +305,9 @@ class Game implements UIHost {
   /** les sentinelles qui font les cent pas sur les remparts et veillent sur les tours de garde, et leur vue */
   sentinels: Sentinels;
   sentinelView: PatrolView;
+  /** les patrouilles à pied des postes de police et des casernes (avant l'âge industriel, ou d'un poste resté petit) */
+  postWalks: { police: Patrols; fire: Patrols };
+  postWalkViews: PatrolView[];
   fauna: Fauna;
   eruptions: Eruptions;
   streams: Streams;
@@ -686,6 +689,12 @@ class Game implements UIHost {
     this.sentinels = new Sentinels(w);
     this.sentinelView = new PatrolView(w, () => this.sentinels.all(), SENTINEL_MAX, 100);
     this.sentinelView.camera = this.cam.camera;
+    this.postWalks = { police: new Patrols(w, stationWalks('police'), 11), fire: new Patrols(w, stationWalks('fire'), 13) };
+    this.postWalkViews = (['police', 'fire'] as const).map((sv, i) => {
+      const v = new PatrolView(w, () => this.postWalks[sv].all(), STATION_WALK_MAX * STATION_WALK_SIZE, 200 + i * 50, (age) => stationRole(sv, age));
+      v.camera = this.cam.camera;
+      return v;
+    });
     this.fauna = new Fauna(w, this.veg);
     this.fauna.people = () => this.agents.agents;
     this.eruptions = new Eruptions(w);
@@ -809,7 +818,7 @@ class Game implements UIHost {
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.houndView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.calam.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.funeral.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.fleetMoor.group, this.harborBeacon.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.houndView.group, this.sentinelView.group, ...this.postWalkViews.map((v) => v.group), this.fauna.group, this.eruptions.group, this.calam.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.funeral.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group, this.fleetMoor.group, this.harborBeacon.group);
     this.applyQuality();
 
     const host = this;
@@ -3677,6 +3686,7 @@ class Game implements UIHost {
     this.patrolView.detail = p.faunaDetail;
     this.houndView.detail = p.faunaDetail;
     this.sentinelView.detail = p.faunaDetail;
+    for (const v of this.postWalkViews) v.detail = p.faunaDetail;
     this.veg.lodDist = p.vegLod;
     this.blightView.density = p.density;
     this.blightView.mist = p.mist;
@@ -4148,6 +4158,9 @@ class Game implements UIHost {
     this.houndView.update(gdt);
     this.sentinels.update(gdt);
     this.sentinelView.update(this.sim.age, this.env.night > 0.5);
+    this.postWalks.police.update(gdt, this.sim.age);
+    this.postWalks.fire.update(gdt, this.sim.age);
+    for (const v of this.postWalkViews) v.update(this.sim.age, this.env.night > 0.5);
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
     this.expeditions.update(gdt);

@@ -45,14 +45,14 @@ export class RangeView {
   }
 
   /** La portée d'un genre (0 : il n'en a pas) */
-  static range(w: World, kind: KindId, age: number) { return rangeOf({ kind, age: Math.max(age, KINDS[kind].minAge) }, guardReach(w)); }
+  static range(w: World, kind: KindId, age: number, patrols = 0) { return rangeOf({ kind, age: Math.max(age, KINDS[kind].minAge), patrols }, guardReach(w)); }
 
   /**
    * Montre la portée de `kind` posé en (x, z) (son origine), ou rien (`kind` null, ou sans portée). `self` : l'identifiant du
-   * poste montré, qu'on ne compte pas parmi les autres
+   * poste montré, qu'on ne compte pas parmi les autres ; `patrols` : ses patrouilles, qui étendent sa portée
    */
-  show(w: World, kind: KindId | null, x = 0, z = 0, age = 0, self = -1) {
-    const r = kind ? RangeView.range(w, kind, age) : 0;
+  show(w: World, kind: KindId | null, x = 0, z = 0, age = 0, self = -1, patrols = 0) {
+    const r = kind ? RangeView.range(w, kind, age, patrols) : 0;
     if (!kind || !r) { this.mine.visible = this.others.visible = this.bare.visible = false; this.key = ''; return; }
     const key = `${kind}|${x},${z}|${r}|${self}|${w.version}|${w.buildings.size}`;
     if (key === this.key) { this.mine.visible = this.others.visible = true; this.bare.visible = this.bareN > 0; return; }

@@ -8,7 +8,8 @@ import { rampartTower } from '../build/rampart';
 import { isZoned } from '../build/zones';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
 import { Sim, NeedId, ageGo } from '../sim/sim';
-import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
+import { hasPatrols, patrolWhy, patrolRanges, nextPatrolCost } from '../sim/stationPatrols';
+import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX, PATROLS_MAX, PATROL_REACH, patrolsOf } from '../sim/coverage';
 import { hasCemetery, recentDeaths, MOURN, UNBURIED_HEALTH, DEATH_LOG_DAYS, NATURAL } from '../sim/mishaps';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
@@ -1725,6 +1726,8 @@ export class UI {
     const show = st ? `<div class="acts showAct"><button data-act="show" class="${st.why ? '' : 'primary'}"${st.why ? ' disabled' : ''} title="${attr(st.def.tip)}">${pic(st.def.icon, 16)} ${st.here ? tr('Voir le spectacle') : st.def.act}</button></div>${st.here ? `<p class="stat showOn">${pic(st.def.icon, 14)} ${st.def.running}</p>` : st.why ? `<p class="stat showWhy">${st.why}</p>` : ''}` : '';
     // le chantier naval : notre flotte de guerre (chantier B), armer un navire
     const fleet = b.kind === 'shipyard' && h.sim.age >= 2 && h.armShip ? this.fleetBlock() : '';
+    // le poste de police et la caserne de pompiers : leurs patrouilles, qui étendent leur portée
+    const patrol = hasPatrols(b) ? this.patrolBlock(b) : '';
     // améliorations : ce qu'il peut devenir à cet âge, et leur prix (ou ce qui manque pour les débloquer)
     const ups = UPGRADES.filter((u) => u.from === b.kind && h.sim.age >= KINDS[u.to].minAge).map((u) => {
       const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
@@ -1745,7 +1748,7 @@ export class UI {
     // ce qu'il produit ou consomme par jour, gare de marchandises comprise
     const flow = flowChips(flowOfBuilding(h.world, b));
     // (« Commander la garnison » n'a de sens que le portail ouvert : avant, le bouton ne menait à rien, testeur v6)
-    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${flow}|${railChip}|${rails}|${show}|${fleet}|${upgrades}|${h.world.portalOpen}`;
+    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${flow}|${railChip}|${rails}|${show}|${fleet}|${patrol}|${upgrades}|${h.world.portalOpen}`;
     if (key === this.selKey) return;
     const same = box.dataset.id === String(b.id) && box.classList.contains('show');
     this.selKey = key;
@@ -1760,7 +1763,7 @@ export class UI {
     const perk = d.perk ? `<details class="perk" data-k="perk"><summary>✦ <span>${perkHead}</span></summary>${perkRest}</details>` : '';
     const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = tr(b.auto ? 'façade tournée vers la route' : 'orientée à la main');
     box.innerHTML = `<div class="ihead">${this.cardThumb(b.kind, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub" title="${attr(`${AGES[b.age].name}${size ? tr(' · {size} cases', { size }) : ''} · ${facing}`)}">${sizeOf(b)} × ${sizeOf(b)} · ${AGES[b.age].name}</small></div><button class="xfold" data-act="fold" title="${tr('Replier ou déplier')}" aria-label="${tr('Replier ou déplier')}">▾</button><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
-      ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${show}${fleet}${upgrades}
+      ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${show}${fleet}${patrol}${upgrades}
       ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle && h.world.portalOpen && h.isleGarrison?.() ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
       <div class="acts xacts"><button data-act="move">${hudPic('deplacer', 18)} ${tr('Déplacer')}</button><button data-act="rot">${ic('rotate', 16, 2)} ${tr('Tourner')} <kbd>R</kbd></button><button data-act="del" class="danger xdel" title="${tr('Démolir')}" aria-label="${tr('Démolir')}">${ic('demolish', 17, 2)}</button></div>`;
     box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
@@ -1784,6 +1787,7 @@ export class UI {
       else if (act === 'show') { if (h.shows.run?.b.id === b.id) h.shows.goSee(); else { const why = h.shows.launch(b); if (why) { h.audio.sfxDeny(); this.toast(why); } } this.selKey = ''; }
       else if (act === 'badges') { h.setHideUpBadges(!h.hideUpBadges); h.audio.sfxClick(); this.selKey = ''; }
       else if (act === 'tower') tl.toggleSelectedTower();
+      else if (act === 'patrol') { tl.addPatrolSelected(); this.selKey = ''; }
       else if (act?.startsWith('up:')) tl.upgradeSelected(act.slice(3) as KindId);
       else if (act?.startsWith('follow:')) h.followTrain(+act.slice(7));
       else if (act?.startsWith('cit:')) { tl.selectCitizen(+act.slice(4)); return; }
@@ -1795,6 +1799,22 @@ export class UI {
       }
       this.renderSelection();
     }));
+  }
+
+  /**
+   * Les patrouilles d'un poste de police ou d'une caserne : combien il en a, sa portée, et le bouton « Ajouter une
+   * patrouille » avec la portée d'après et son prix, ou ce qui l'empêche, écrit sur le bouton
+   */
+  private patrolBlock(b: Building) {
+    const h = this.host, w = h.world, n = patrolsOf(b), [now, next] = patrolRanges(w, b), why = patrolWhy(w, b, h.sim.age), c = nextPatrolCost(w, b, h.sim.age);
+    const full = n >= PATROLS_MAX;
+    const tip = tr('Chaque patrouille fait sa ronde autour du poste : +{n} cases de portée et un emploi de plus. Trois au plus.', { n: PATROL_REACH });
+    const stat = `<p class="stat">${pic('🛡️', 14)} ${tr('Patrouilles : {n} sur {max} · portée {r} cases', { n, max: PATROLS_MAX, r: now })}</p>`;
+    // (le libellé sur une ligne, la portée d'après et le prix, ou la raison du refus, sur la suivante)
+    const btn = full
+      ? `<button disabled title="${attr(tip)}">${pic('🛡️', 16)} ${tr('Ajouter une patrouille')}<span class="pd"><small>${tr('au complet')}</small></span></button>`
+      : `<button data-act="patrol" class="${why ? '' : 'primary'}"${why ? ' disabled' : ''} title="${attr(tip)}">${pic('🛡️', 16)} ${tr('Ajouter une patrouille')}<span class="pd"><small>${tr('portée {a} → {b} cases', { a: now, b: next })}</small>${why ? ` · <small>${why}</small>` : c ? ` · <small>${costLabel(c)}</small>` : ''}</span></button>`;
+    return `${stat}<div class="acts showAct patrolAct">${btn}</div>`;
   }
 
   /**
@@ -2795,7 +2815,7 @@ export class UI {
       <h4>${ic(SECURITY_NEED.icon, 18, 2)} ${tr(SECURITY_NEED.label)}<em class="${state}">${pc(c.share)}</em></h4>
       <div class="sub">${tr('couverture moyenne des habitations')}</div>
       <div class="bar ${state}"><i style="width:${Math.round(c.share * 100)}%"></i></div>
-      <p class="hint">${tr('Pompiers : {fire} cases autour de la caserne. Police : {p1} à {p5} cases selon l’âge du poste. Un bonus, pas une obligation : +{joy} de bien-être par maison protégée par les deux (jusqu’à +{max}).', { fire: FIRE_RANGE, p1: policeRange(1), p5: policeRange(5), joy: COVER_JOY, max: COVER_JOY_MAX })}</p>
+      <p class="hint">${tr('Pompiers : {fire} cases autour de la caserne. Police : {p1} à {p5} cases selon l’âge du poste. Un bonus, pas une obligation : +{joy} de bien-être par maison protégée par les deux (jusqu’à +{max}).', { fire: FIRE_RANGE, p1: policeRange(1), p5: policeRange(5), joy: COVER_JOY, max: COVER_JOY_MAX })} ${tr('Chaque patrouille ajoutée à un poste, sur sa fiche, porte sa portée {n} cases plus loin.', { n: PATROL_REACH })}</p>
       <div class="src">
         ${row('flame', 'Couverture des pompiers', pc(c.fireShare), nplural(c.stations.fire.length, 'caserne de pompiers', 'casernes de pompiers'))}
         ${row('shield', 'Couverture de la police', pc(c.policeShare), nplural(c.stations.police.length, 'poste', 'postes'))}
