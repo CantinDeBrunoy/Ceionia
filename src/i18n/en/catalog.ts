@@ -526,7 +526,7 @@ registerDict('catalog', {
 registerDict('catalog', {
   'Posez d’abord « {name} » : c’est la place du village': 'Place “{name}” first: it is the village square',
   'Pas assez de place libre autour pour {name} ({size} × {size}, sans route ni bâtiment derrière).': 'Not enough free space around it for {name} ({size} × {size}, with no road or building behind).',
-  'Hors de votre île : on ne bâtit pas sur les autres îles': 'Outside your island: you can’t build on the other islands',
+  'Hors de votre île, on ne bâtit que sur les petites îles libres et chez votre allié': 'Outside your island, you can only build on the free small islands and at your ally’s',
   'Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).': 'The brush touches a building: the terrain won’t change there. Move it away, or reduce its size ([ and ]).',
   'Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.': 'A cave goes on solid ground, away from buildings, roads and other entrances.',
   'On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.': 'You can’t lay a road here: a building, a slope that is too steep or water that is too deep is in the way.',

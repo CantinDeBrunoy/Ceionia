@@ -1,5 +1,5 @@
 import type { World } from '../world/world';
-import type { RivalIsle } from '../world/archipelago';
+import { smallIsleCells, type RivalIsle } from '../world/archipelago';
 import { tr } from '../i18n';
 import { KINDS } from '../build/catalog';
 import { archipelagoOn, isleOf, isleName, onRival } from './diplomacy';
@@ -10,12 +10,33 @@ import { zoneOf } from '../world/concession';
 /**
  * Bâtir chez l'allié. Avec l'archipel et un allié choisi, le joueur bâtit aussi sur l'île de son allié, hors de la ville de
  * décor (remparts, lots, champs, port et rues de `townPlan`) : routes, relief, plantations et biomes suivent la même règle
- * (`World.playable`). L'île de l'autre peuple et les petites îles restent interdites.
- * Le lien entre les deux îles : les ports suffisent, sans route continue. Chaque île a son réseau de routes ; les ressources
+ * (`World.playable`). L'île de l'autre peuple reste interdite.
+ * Les petites îles (`small` de l'archipel, sans peuple) se bâtissent dès que l'archipel est ouvert (demande de l'auteur du
+ * 27 nov. 2026 : la grande île entre l'allié et le rival) : elles ne sont à personne, nul n'a à les céder. Les toutes
+ * petites îles (rochers, îlots, atolls) restent du décor.
+ * Le lien entre les îles : les ports suffisent, sans route continue. Chaque île a son réseau de routes ; les ressources
  * et les besoins sont communs (ils n'ont pas de portée), les habitants ne traversent pas la mer
  */
 
 type Land = Pick<World, 'isles' | 'diplo' | 'seed' | 'inCells' | 'ci'>;
+
+/** La petite île de cette case, sa terre et l'eau qui la borde (son numéro dans `isles.small`, -1 : aucune) */
+export function smallIsleAt(w: Pick<World, 'isles' | 'seed' | 'inCells' | 'ci'>, x: number, z: number): number {
+  if (!w.isles || !w.isles.small.length || !w.inCells(x, z)) return -1;
+  // (le côté de la carte : `ci(0, 1)`)
+  const k = w.ci(x, z), m = smallIsleCells(w.isles, w.seed, w.ci(0, 1));
+  return m[k] ?? -1;
+}
+
+/**
+ * L'île d'une case, pour les routes automatiques (chaque île a son réseau) : 0 l'île principale, 1 + son numéro une petite
+ * île, -1 ailleurs (chez l'allié, dans la tête de pont)
+ */
+export function landOf(w: Pick<World, 'isles' | 'seed' | 'inCells' | 'ci' | 'inMain'>, x: number, z: number): number {
+  if (w.inMain(x, z)) return 0;
+  const i = smallIsleAt(w, x, z);
+  return i >= 0 ? i + 1 : -1;
+}
 
 /** L'île de l'allié (null sans archipel ou sans allié) */
 export function allyIsle(w: Pick<World, 'isles' | 'diplo'>): RivalIsle | null {
@@ -30,16 +51,17 @@ export function inAllyTown(w: Land, x: number, z: number) {
 }
 
 /**
- * La case est-elle jouable chez les autres peuples ? La concession de l'allié (la zone bornée qu'il nous cède, décision de
- * l'auteur du 24 nov. 2026 : avant, toute son île hors de sa ville), et la tête de pont chez le rival une fois la plage prise
- * (voir `sim/concession.ts`). La terre est vérifiée à part
+ * La case est-elle jouable hors de l'île principale ? Les petites îles, la concession de l'allié (la zone bornée qu'il nous
+ * cède, décision de l'auteur du 24 nov. 2026 : avant, toute son île hors de sa ville), et la tête de pont chez le rival une
+ * fois la plage prise (voir `sim/concession.ts`). La terre est vérifiée à part
  */
 export function allyLand(w: Land, x: number, z: number) {
-  return inAllyZone(w as World, x, z) || inFront(w as World, x, z);
+  return smallIsleAt(w, x, z) >= 0 || inAllyZone(w as World, x, z) || inFront(w as World, x, z);
 }
 
 /** Pourquoi le joueur ne bâtit pas sur cette case hors de son île (null : il y bâtit) ; à n'appeler qu'hors de l'île principale */
 export function awayWhy(w: Land, x: number, z: number): string | null {
+  if (smallIsleAt(w, x, z) >= 0) return null;
   const isle = allyIsle(w);
   if (isle && onRival(isle, x + 0.5, z + 0.5)) {
     if (inAllyZone(w as World, x, z)) return null;
@@ -48,7 +70,7 @@ export function awayWhy(w: Land, x: number, z: number): string | null {
   const front = rivalZone(w as World);
   if (front && w.inCells(x, z) && front.cells.has(w.ci(x, z))) return inFront(w as World, x, z) ? null : tr('La tête de pont s’ouvre une fois la plage de l’île rivale prise (la voie de la guerre)');
   if (archipelagoOn(w) && !w.diplo.ally && w.isles!.rivals.some((r) => onRival(r, x + 0.5, z + 0.5))) return tr('Choisissez d’abord votre allié : vous bâtirez sur son île');
-  return tr('Hors de votre île : on ne bâtit pas sur les autres îles');
+  return tr('Hors de votre île, on ne bâtit que sur les petites îles libres et chez votre allié');
 }
 
 /** Un point de l'île alliée où poser la vue pour y bâtir : le milieu de la concession (ou le lobe le plus loin de la ville) */

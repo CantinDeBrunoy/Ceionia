@@ -2,6 +2,7 @@ import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS } from '../world
 import { Building, hasDoor, isDecor, sizeOf } from './catalog';
 import { FRONT, doorCells, doorSide, facingRoadRot, nearRoadSide, sideCells } from './placement';
 import { Heap } from '../sim/agents';
+import { landOf } from '../sim/allyLand';
 
 /** Longueur maximale d'un chemin d'accès, et d'une jonction entre un hameau et le village */
 const MAX_LINK = 14, MAX_JOIN = 18;
@@ -112,10 +113,10 @@ function doors(w: World, b: Building, side: number) {
  * But « devant la porte d'un autre bâtiment » (hors lampadaires), pour les tout premiers chemins : orienté de lui-même, ce
  * voisin l'ouvre sur n'importe quel côté, et `welcome` (la case d'arrivée) tourne sa façade vers le chemin
  */
-/** Les cases de la même île que le bâtiment : l'île principale, ou celle de l'allié (`World.inMain`) */
+/** Les cases de la même île que le bâtiment : l'île principale, une petite île, ou celle de l'allié (`landOf`) */
 function sameLand(w: World, b: Building) {
-  const home = w.inMain(b.x, b.z);
-  return (k: number) => w.inMain(k % N, Math.floor(k / N)) === home;
+  const home = landOf(w, b.x, b.z);
+  return (k: number) => landOf(w, k % N, Math.floor(k / N)) === home;
 }
 
 function nearDoor(w: World, self: Building, same: (k: number) => boolean = () => true) {

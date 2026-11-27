@@ -192,6 +192,35 @@ export function isleHeight(lobes: Isle[], x: number, z: number, s: Simplex, s2: 
   return lerp(land, -1.3, smoothstep(0.92, 1.12, t));
 }
 
+/**
+ * Jusqu'où va une petite île pour le joueur, en distance rapportée à son bord (`lobeT`) : sa terre (la côte est vers 1 à
+ * 1,1) et l'eau qui la borde, assez pour les quais d'un port (3 cases environ)
+ */
+export const SMALL_REACH = 1.3;
+const smallMasks = new WeakMap<ArchLayout, Int8Array>();
+/**
+ * Les cases de chaque petite île (son numéro dans `small`, -1 ailleurs), sa terre et l'eau qui la borde, pour la carte de
+ * côté `n`. Le joueur y bâtit (voir `sim/allyLand.ts`). Une case d'une île rivale n'en est jamais. En cache par plan
+ */
+export function smallIsleCells(lay: ArchLayout, seed: number, n: number): Int8Array {
+  let m = smallMasks.get(lay);
+  if (m && m.length === n * n) return m;
+  m = new Int8Array(n * n).fill(-1);
+  const { s, s2 } = noises(seed);
+  lay.small.forEach((q, i) => {
+    const R = Math.ceil(q.r * SMALL_REACH * 1.25);
+    for (let z = Math.max(0, Math.floor(q.z - R)); z < Math.min(n, Math.ceil(q.z + R)); z++)
+      for (let x = Math.max(0, Math.floor(q.x - R)); x < Math.min(n, Math.ceil(q.x + R)); x++) {
+        const cx = x + 0.5, cz = z + 0.5;
+        if (lobeT([q], cx, cz, s, s2) > SMALL_REACH) continue;
+        if (lay.rivals.some((r) => r.lobes.some((l) => Math.hypot(cx - l.x, cz - l.z) <= l.r + 3))) continue;
+        if (m![z * n + x] < 0) m![z * n + x] = i;
+      }
+  });
+  smallMasks.set(lay, m);
+  return m;
+}
+
 /** Les îles rivales et les petites îles, posées sur le relief (le plus haut l'emporte) */
 export function addIsles(hts: Float32Array, n: number, seed: number, lay: ArchLayout) {
   const { s, s2 } = noises(seed), S = n + 1;
