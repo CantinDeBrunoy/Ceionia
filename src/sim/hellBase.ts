@@ -587,16 +587,31 @@ export class HellBase {
     if (this.raiseAt(0, o.x, o.z, true)) this.occupied = null;
   }
 
+  /** Où repartent les démons d'une contre-attaque : devant la forteresse (ou la citadelle) de la zone d'où ils venaient */
+  private depths(from: number): [number, number] {
+    const h = this.hell, m = this.map, zn = Math.min(from, HELL_ZONE_N - 1);
+    const fort = [...h.buildings.values()].find((b) => b.side === 'hell' && b.zone === zn && (b.kind === 'fortress' || b.kind === 'kingdom'));
+    if (fort) return [fort.site.x, fort.site.z - fort.site.r - 1.5];
+    const z0 = HELL_ZONES[zn].z0 + 6;
+    return [m.spine[z0] + 0.5, z0 + 0.5];
+  }
+
   /** Le camp d'une zone est tombé : ses autres bâtiments s'effondrent ; la zone est reperdue (sauf le seuil du portail) */
   private fall(zone: number, camp = false) {
     const h = this.hell;
     if (this.camp(zone)) return;
     for (const b of this.buildings()) if (b.zone === zone) h.raze(b);
-    // les démons de la contre-attaque restent : ils gardent désormais la zone
+    // les démons de la contre-attaque : au Seuil, ils gardent les ruines ; ailleurs, ils repartent dans les profondeurs, et la
+    // zone n'a que la garnison de la reprise (testeur des Enfers, 27 nov. 2026 : 19 à 46 démons restaient en garnison derrière
+    // l'armée, et le front reculait pendant qu'on avançait)
+    const back = zone > 0 ? this.depths(zone + 1) : null;
     for (const [id, z] of this.attackers) {
       if (z !== zone) continue;
       const u = h.units.get(id);
-      if (u && u.hp > 0) { u.zone = Math.max(1, zone); u.home = [u.x, u.z]; u.state = 'guard'; }
+      if (u && u.hp > 0) {
+        if (back) { u.leave = back; u.path = null; u.target = null; }
+        else { u.zone = Math.max(1, zone); u.home = [u.x, u.z]; u.state = 'guard'; }
+      }
       this.attackers.delete(id);
     }
     this.next[zone] = -1;

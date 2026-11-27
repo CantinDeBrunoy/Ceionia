@@ -162,6 +162,8 @@ export interface HellUnit {
   boost?: number; guard?: number; paceK?: number;
   /** une cible hors d'atteinte (aucun chemin : lave, paroi) qu'on laisse de côté quelques secondes, pour en viser une autre */
   blocked?: number; blockedT?: number;
+  /** un démon qui repart dans les profondeurs (sa contre-attaque finie) : il y marche sans combattre, puis disparaît */
+  leave?: [number, number];
 }
 
 export interface HellBuilding {
@@ -644,6 +646,12 @@ export class Hell {
   private thinkDemon(u: HellUnit, dt: number, live: HellUnit[]) {
     // un démon d'incursion : droit sur la défense la plus proche (il ne lâche sa cible que pour une plus proche qui le gêne)
     if (u.zone < 0) {
+      if (u.leave) {
+        u.state = 'move'; u.target = null;
+        // (arrivé, ou plus de chemin : il a rejoint les profondeurs)
+        if (Math.hypot(u.leave[0] - u.x, u.leave[1] - u.z) < 1.5 || !this.moveTo(u, u.leave[0], u.leave[1], dt)) this.units.delete(u.id);
+        return;
+      }
       let t = this.entity(u.target);
       const near = this.nearestFoe(u, live, t ? Math.min(this.gap(u, t), u.stats.sight) : Infinity);
       if (near) t = near;
@@ -1031,7 +1039,7 @@ export class Hell {
       raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, reached: this.reached, reinforced: this.reinforced.map((p) => Math.round(p)),
       lossStreak: this.lossStreak, planned: this.planned ? [...this.planned] : null,
       buildings: [...this.buildings.values()].filter((b) => b.side === 'hell').map((b) => [b.id, Math.max(0, Math.round(b.hp))]),
-      units: this.alive().filter((u) => players || u.side !== 'player').map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
+      units: this.alive().filter((u) => (players || u.side !== 'player') && !u.leave).map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
     };
   }
 
