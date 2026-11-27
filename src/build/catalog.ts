@@ -310,7 +310,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   explorers: {
     id: 'explorers', size: 2, minAge: 2, icon: '🧭', cat: 'service',
-    names: ['', '', 'Maison des explorateurs', 'Société de géographie', 'Club des explorateurs', 'Base des explorateurs'],
+    names: ['', '', 'Maison des explorateurs', 'Compagnie des explorateurs', 'Club des explorateurs', 'Base des explorateurs'],
     desc: 'Cartes, globe, malles et trophées de voyage : les explorateurs du village s’y retrouvent et y préparent leurs départs.',
     joy: [0, 0, 2, 3, 4, 5], jobs: [0, 0, 2, 3, 4, 5],
     perk: 'Une équipe d’expédition de plus : le village peut en envoyer une de plus à la fois. Une seule maison suffit, une deuxième n’ajoute rien.',

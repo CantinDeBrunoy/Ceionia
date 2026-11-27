@@ -9,7 +9,7 @@ import { Fr, ModelKit, PI, H, dk, lt, person, quad } from './frame';
  * l'essai, le mât au fanion, des explorateurs sac au dos.
  * Médiéval : rez-de-chaussée de pierre, étage à colombages, toit de tuiles pentu, lucarne, cheminée qui fume, porte cintrée
  * sous des bois de cerf, enseigne à la rose des vents ; tour ronde de pierre à toit conique et girouette, mule bâtée.
- * Industriel (Société de géographie) : brique à chaînages de pierre blanche, deux étages de hautes fenêtres, corniche, toit
+ * Industriel (Compagnie des explorateurs) : brique à chaînages de pierre blanche, deux étages de hautes fenêtres, corniche, toit
  * d'ardoise à la Mansart, fronton au globe doré ; tour à coupole de cuivre vert et sa sphère armillaire, réverbères, ballon
  * captif amarré.
  * Moderne (Club des explorateurs) : béton blanc et bardage de bois, grande baie vitrée, carte du monde peinte sur le pignon,

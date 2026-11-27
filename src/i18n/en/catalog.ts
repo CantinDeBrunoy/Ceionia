@@ -139,7 +139,7 @@ registerDict('catalog', {
   'Observatoire': 'Observatory',
   'Radiotélescope': 'Radio telescope',
   'Maison des explorateurs': 'Explorers’ house',
-  'Société de géographie': 'Geographical society',
+  'Compagnie des explorateurs': "Explorers' company",
   'Club des explorateurs': 'Explorers’ club',
   'Base des explorateurs': 'Explorers’ base',
   'Tertre des ancêtres': 'Ancestors’ mound',
