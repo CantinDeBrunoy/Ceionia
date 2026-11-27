@@ -105,7 +105,8 @@ export type BaseEvent =
   | { type: 'raised'; zone: number; retaken?: boolean }
   /** les démons ont pris les ruines du camp du Seuil : il faut les en chasser */
   | { type: 'occupied'; zone: number }
-  | { type: 'zoneLost'; zone: number }
+  /** les démons ont repris une zone ; `camp` : son camp de base est tombé (et non une zone laissée sans garde) */
+  | { type: 'zoneLost'; zone: number; camp?: boolean }
   | { type: 'reclaimWarn'; zone: number };
 
 export interface HellBaseSave {
@@ -434,7 +435,7 @@ export class HellBase {
     for (const e of h.events) {
       if (this.seen.has(e)) continue;
       this.seen.add(e);
-      if (e.type === 'destroyed' && e.kind === 'camp') this.fall(e.zone);
+      if (e.type === 'destroyed' && e.kind === 'camp') this.fall(e.zone, true);
       if (e.type === 'conquered' && e.zone >= 1 && e.zone < Z_KINGDOM) won.push(e.zone);
     }
     for (const z of won) this.raise(z);
@@ -586,16 +587,31 @@ export class HellBase {
     if (this.raiseAt(0, o.x, o.z, true)) this.occupied = null;
   }
 
+  /** Où repartent les démons d'une contre-attaque : devant la forteresse (ou la citadelle) de la zone d'où ils venaient */
+  private depths(from: number): [number, number] {
+    const h = this.hell, m = this.map, zn = Math.min(from, HELL_ZONE_N - 1);
+    const fort = [...h.buildings.values()].find((b) => b.side === 'hell' && b.zone === zn && (b.kind === 'fortress' || b.kind === 'kingdom'));
+    if (fort) return [fort.site.x, fort.site.z - fort.site.r - 1.5];
+    const z0 = HELL_ZONES[zn].z0 + 6;
+    return [m.spine[z0] + 0.5, z0 + 0.5];
+  }
+
   /** Le camp d'une zone est tombé : ses autres bâtiments s'effondrent ; la zone est reperdue (sauf le seuil du portail) */
-  private fall(zone: number) {
+  private fall(zone: number, camp = false) {
     const h = this.hell;
     if (this.camp(zone)) return;
     for (const b of this.buildings()) if (b.zone === zone) h.raze(b);
-    // les démons de la contre-attaque restent : ils gardent désormais la zone
+    // les démons de la contre-attaque : au Seuil, ils gardent les ruines ; ailleurs, ils repartent dans les profondeurs, et la
+    // zone n'a que la garnison de la reprise (testeur des Enfers, 27 nov. 2026 : 19 à 46 démons restaient en garnison derrière
+    // l'armée, et le front reculait pendant qu'on avançait)
+    const back = zone > 0 ? this.depths(zone + 1) : null;
     for (const [id, z] of this.attackers) {
       if (z !== zone) continue;
       const u = h.units.get(id);
-      if (u && u.hp > 0) { u.zone = Math.max(1, zone); u.home = [u.x, u.z]; u.state = 'guard'; }
+      if (u && u.hp > 0) {
+        if (back) { u.leave = back; u.path = null; u.target = null; }
+        else { u.zone = Math.max(1, zone); u.home = [u.x, u.z]; u.state = 'guard'; }
+      }
       this.attackers.delete(id);
     }
     this.next[zone] = -1;
@@ -604,7 +620,7 @@ export class HellBase {
       h.retake(zone);
       const fort = [...h.buildings.values()].find((b) => b.side === 'hell' && b.zone === zone && b.kind === 'fortress');
       if (fort) for (const b of this.buildings(true)) if (b.down && b.zone === zone && Math.hypot(b.site.x - fort.site.x, b.site.z - fort.site.z) < fort.site.r + b.site.r) h.buildings.delete(b.id);
-      this.events.push({ type: 'zoneLost', zone });
+      this.events.push({ type: 'zoneLost', zone, ...(camp ? { camp } : {}) });
     } else if (zone === 0) {
       // au Seuil : les démons occupent les ruines du camp ; les en chasser le relève
       const ruin = this.buildings(true).find((b) => b.kind === 'camp' && b.zone === 0 && b.down);

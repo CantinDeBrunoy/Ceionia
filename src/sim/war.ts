@@ -627,7 +627,7 @@ export class War {
       else if (e.type === 'counter') this.news.push({ kind: 'counter', text: tr('🔥 Les démons marchent sur votre base {zone} ! {n} démons approchent : vos troupes sur place comptent pour la défense.', { zone: zoneOf(e.zone), n: e.n }) });
       else if (e.type === 'frontCleared') this.news.push({ kind: 'zone', text: tr('🌋 Les démons ont repris tous vos postes avancés : le front est revenu au portail.') });
       else if (e.type === 'counterEnd') { this.lostRow = 0; this.news.push({ kind: 'repelled', text: tr('🛡️ Contre-attaque repoussée : la base {zone} tient bon.', { zone: zoneOf(e.zone) }) }); }
-      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: tr('💥 Les démons ont repris la zone {zone} : sa forteresse se relève, le front recule. Vous pourrez la reprendre quand vous voudrez.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'zoneLost') { if (e.camp) this.baseLost(); this.news.push({ kind: 'zone', text: tr('💥 Les démons ont repris la zone {zone} : sa forteresse se relève, le front recule. Vous pourrez la reprendre quand vous voudrez.', { zone: zoneOf(e.zone) }) }); }
       else if (e.type === 'reclaimWarn') this.news.push({ kind: 'zone', text: tr('⚠️ Les démons se rassemblent pour reprendre la zone {zone}, que personne ne garde ! Posez-y un camp de base ou envoyez des troupes.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'raised') this.news.push({ kind: 'zone', text: e.retaken ? tr('⛺ Les démons sont chassés des ruines : le camp se relève au Seuil.') : tr('⛺ Votre camp se dresse sur les ruines de la forteresse {zone} : votre nouveau point de ralliement.', { zone: zoneOf(e.zone) }) });
       else if (e.type === 'occupied') { this.baseLost(); this.news.push({ kind: 'zone', text: tr('💥 Le camp du Seuil est tombé : les démons occupent ses ruines. Chassez-les pour le relever.') }); }
@@ -696,7 +696,8 @@ export class War {
       }
       // la progression dans les Enfers
       if (sim === this.faction) {
-        if (e.type === 'conquered') this.lostRow = 0;
+        // (une zone nouvelle remet le compte à zéro, pas la reconquête d'une zone reperdue : le joueur fait alors du sur-place)
+        if (e.type === 'conquered' && e.first) this.lostRow = 0;
         if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: tr('🏴 La zone {zone} est conquise ! La brume se lève sur {next}.', { zone: zoneOf(e.zone), next: zoneThe(e.zone + 1) }) });
         else if (e.type === 'sealed') this.news.push({ kind: 'info', text: e.byAge ? tr('🌫️ Les démons {zone} sont trop forts : montez à {age} pour y aller.', { zone: zoneOf(e.zone), age: zoneAgeText(e.zone) }) : tr('🌫️ La brume infernale barre {zone} : abattez d’abord la forteresse {prev}.', { zone: zoneThe(e.zone), prev: zoneOf(e.zone - 1) }) });
         // le combat du roi

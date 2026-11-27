@@ -39,7 +39,7 @@ import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, GearGap, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent, gearKnown, gearPower } from '../sim/gear';
 import { choiceStyles, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
-import { priceIn, canPay, costLabel, haveLabel, shortLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, RES_NAME } from '../sim/economy';
+import { priceIn, canPay, costLabel, haveLabel, shortLabel, lastPlace, Resource, GIFTS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL, RES_NAME } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
 import { waysTabShown, type Way, type WayState } from '../sim/crossroads';
 import { waysHtml, type ConflictWay } from './ways';
@@ -1633,7 +1633,7 @@ export class UI {
     // ce qu'il produirait ou consommerait par jour à cet âge (sans gare de marchandises), puis ce qu'il apporte au village
     const effs = flowChips(flowOf(k, a, 1, this.host.world.unlimited)) + GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff give n-${g.k}">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
     // les grands bâtiments se paient en bois et en pierre, tous en Normal (sauf en ressources illimitées) ; le premier bûcheron est offert
-    const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
+    const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && GIFTS.includes(k);
     // (les défenses se comptent au village et sur l'île du portail)
     const isle = k === 'watchtower' || k === 'barracks' ? [...w.buildings.values()].filter((b) => b.kind === k && w.onPortalIsland(b.x, b.z)).length : 0;
     const count = !n ? tr('pas encore construit') : isle === n ? tr('{n} sur l’île du portail', { n }) : isle ? tr('{n} dans le village, {m} sur l’île du portail', { n: n - isle, m: isle }) : tr('{n} dans le village', { n });
@@ -1644,7 +1644,7 @@ export class UI {
     // (effets, conseil) quand on le survole dans la barre, pas quand on l'a en main
     box.innerHTML = `<div class="ihead">${this.cardThumb(k, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub">${d.size} × ${d.size} · ${AGES[a].name}</small><small class="xcount">${count}</small></div></div>
       <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${this.needUse(k, a)}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
-      ${tl.tracingWall && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${rich ? tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) }) : shortLabel(w, cost)}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
+      ${tl.tracingWall && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${rich ? tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) }) : shortLabel(w, cost)}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${k === START_KIND ? tr('Offert : le village n’a plus de place') : DIFF_TEXT.firstFree}</p>` : ''}
       ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && placeWhy && !(cost && !rich && placeWhy === shortLabel(w, cost)) ? `<p class="lock">✗ ${placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : tl.tracingWall ? tr(tl.freeStage === 2 ? 'Cliquez le point B : la ligne se pose d’un trait, en angles droits' : 'Cliquez le point A, puis le point B : la ligne se pose d’un trait') : `${tr(tl.placeStage === 2 ? 'Cliquez du côté de la porte, ou sur le bâtiment pour la laisser où elle est' : tl.placeStage === 1 ? 'Un clic : l’endroit, un second : le côté de l’entrée (en or)' : hasDoor(k) ? 'L’entrée est marquée en or' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap ou clic droit : lâcher')}</p>` : ''}
       ${tl.tool === 'build' && brief && !lock && k !== 'wall' && !tl.tracingWall ? `<p class="keys glegend"><span><i class="gok"></i>${tr('Vert : on peut bâtir ici')}</span><span><i class="gno"></i>${tr('Rouge : pas ici')}</span>${hasDoor(k) ? `<span><i class="gdoor"></i>${tr('Or : la porte')}</span>` : ''}</p>` : ''}
       ${tl.tool === 'build' && brief && !lock && isZoned(k) ? `<button type="button" class="zoneGo">${ic('target', 14, 2.2)} ${tr('Montrer un endroit possible')}</button>` : ''}`;
@@ -2249,7 +2249,9 @@ export class UI {
     if (w.unlimited) return tr('Démolir {what}', { what });
     const back = refundTotal(w, list);
     // (le premier bûcheron ou la première carrière, offerts en Normal, ne rendent rien : on dit pourquoi)
-    const gift = list.length === 1 && PRODUCERS.includes(b.kind) && ![...w.buildings.values()].some((o) => o.kind === b.kind && o.id !== b.id);
+    const gift = list.length === 1 && GIFTS.includes(b.kind) && ![...w.buildings.values()].some((o) => o.kind === b.kind && o.id !== b.id);
+    // (la dernière place du village : on prévient avant le clic, elle se refera gratuitement)
+    if (lastPlace(w, list)) return tr('Démolir {what} : le village n’aura plus de place. La refaire sera gratuit.', { what });
     return back ? tr('Démolir {what} : rend <b>{cost}</b>', { what, cost: costLabel(back) }) : tr(gift ? 'Démolir {what} : ne rend rien (il était offert)' : 'Démolir {what} : ne rend rien', { what });
   }
 

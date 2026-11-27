@@ -11,7 +11,7 @@ import { facingRoadRot, footprintOrigin, doorCells, doorSide, orientable, sideTo
 import { autoRoad, unlayAccess } from './autoroads';
 import { planRoad, RoadPlan } from './freeRoad';
 import { sampleCurve } from '../world/curves';
-import { priceIn, canPay, pay, shortLabel, refund, Cost } from '../sim/economy';
+import { priceIn, canPay, pay, shortLabel, refund, lastPlace, Cost } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
@@ -408,8 +408,15 @@ export class ToolController implements ToolInput {
     this.endStroke();
     this.refunded(refund(this.h.world, b));
     this.h.world.removeBuilding(b.id);
+    this.placeGone(b);
     this.h.audio.sfxDestroy();
     this.select(null);
+  }
+
+  /** La dernière place du village démolie (Normal) : on dit qu'elle se refait gratuitement, et comment l'annuler */
+  private placeGone(b: Building) {
+    if (!lastPlace(this.h.world, [b])) return;
+    this.h.toast(tr('Le village n’a plus de place : « {name} » se refait gratuitement. Ctrl+Z annule la démolition.', { name: KINDS[b.kind].names[Math.max(this.h.getAge(), KINDS[b.kind].minAge)] }));
   }
 
   /** Ce que les démolitions du geste en cours ont rendu, dit en une fois quand on lâche le bouton */
@@ -930,7 +937,7 @@ export class ToolController implements ToolInput {
     const b = this.hitBuilding;
     if (b) {
       // (plus de double confirmation : Ctrl+Z annule)
-      this.mark(); this.addBack(refund(w, b)); w.removeBuilding(b.id); this.h.audio.sfxDestroy();
+      this.mark(); this.addBack(refund(w, b)); w.removeBuilding(b.id); this.placeGone(b); this.h.audio.sfxDestroy();
       if (!disc) return;
     }
     if (disc) { this.bulldozeDisc(this.hit!.x, this.hit!.z, this.radius); return; }

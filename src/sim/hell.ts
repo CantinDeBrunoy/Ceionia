@@ -162,6 +162,8 @@ export interface HellUnit {
   boost?: number; guard?: number; paceK?: number;
   /** une cible hors d'atteinte (aucun chemin : lave, paroi) qu'on laisse de côté quelques secondes, pour en viser une autre */
   blocked?: number; blockedT?: number;
+  /** un démon qui repart dans les profondeurs (sa contre-attaque finie) : il y marche sans combattre, puis disparaît */
+  leave?: [number, number];
 }
 
 export interface HellBuilding {
@@ -183,7 +185,8 @@ export type HellEvent =
   | { type: 'destroyed'; id: number; kind: SiteKind; x: number; z: number; zone: number }
   | { type: 'alert'; zone: number; x: number; z: number }
   | { type: 'spawn'; id: number; kind: DemonKind; x: number; z: number }
-  | { type: 'conquered'; zone: number }
+  /** une forteresse (ou la citadelle) abattue ; `first` : la zone n'avait encore jamais été conquise (un progrès, pas une reconquête) */
+  | { type: 'conquered'; zone: number; first?: boolean }
   /** une zone reperdue (sa base est tombée : la forteresse se relève) ; un ordre arrêté par la brume d'une zone fermée */
   | { type: 'lost'; zone: number }
   | { type: 'sealed'; zone: number; /** fermée faute d'âge (et non faute de conquête) */ byAge?: boolean }
@@ -300,6 +303,8 @@ export class Hell {
   alert = new Float32Array(HELL_ZONE_N);
   alertAt: [number, number][] = Array.from({ length: HELL_ZONE_N }, () => [0, 0]);
   conquered: boolean[] = Array.from({ length: HELL_ZONE_N }, () => false);
+  /** la zone la plus profonde jamais conquise (0 : aucune) ; une reconquête n'est pas un progrès */
+  reached = 0;
   victory = false;
   /** incursions : numéro de la dernière vague, moment de la suivante (-1 : pas encore fixé) */
   wave = 0;
@@ -378,7 +383,10 @@ export class Hell {
       b.down = false; b.hp = Math.round(b.maxHp * 0.5); b.target = null;
       this.map.reblock?.(b.site);
       const ring = this.postsAround(b.site as HellSite, 4);
-      this.spawn('guardian', ...this.frontOf(b.site), zone);
+      // (un seul gardien par zone : celui qui serait encore debout reprend sa place devant la forteresse)
+      const keeper = this.guardians(zone)[0];
+      if (keeper) { keeper.home = this.frontOf(b.site); keeper.target = null; keeper.path = null; keeper.state = 'guard'; }
+      else this.spawn('guardian', ...this.frontOf(b.site), zone);
       (['brute', 'imp', 'imp'] as DemonKind[]).forEach((k, i) => this.spawn(k, ring[i % ring.length][0], ring[i % ring.length][1], zone));
     }
     this.events.push({ type: 'lost', zone });
@@ -560,6 +568,8 @@ export class Hell {
   alive(side?: Side) { return [...this.units.values()].filter((u) => u.hp > 0 && (!side || u.side === side)); }
   /** Garnison vivante d'une zone */
   garrison(zone: number) { return this.alive('hell').filter((u) => u.zone === zone); }
+  /** Les gardiens debout d'une zone (un seul en principe), le plus solide d'abord */
+  guardians(zone: number) { return this.garrison(zone).filter((u) => u.kind === 'guardian').sort((a, b) => b.hp - a.hp); }
   /** Bâtiments debout d'une zone */
   standing(zone?: number) { return [...this.buildings.values()].filter((b) => !b.down && (zone === undefined || b.zone === zone)); }
   /** Une unité ou un bâtiment, vivant, par son identifiant */
@@ -636,6 +646,12 @@ export class Hell {
   private thinkDemon(u: HellUnit, dt: number, live: HellUnit[]) {
     // un démon d'incursion : droit sur la défense la plus proche (il ne lâche sa cible que pour une plus proche qui le gêne)
     if (u.zone < 0) {
+      if (u.leave) {
+        u.state = 'move'; u.target = null;
+        // (arrivé, ou plus de chemin : il a rejoint les profondeurs)
+        if (Math.hypot(u.leave[0] - u.x, u.leave[1] - u.z) < 1.5 || !this.moveTo(u, u.leave[0], u.leave[1], dt)) this.units.delete(u.id);
+        return;
+      }
       let t = this.entity(u.target);
       const near = this.nearestFoe(u, live, t ? Math.min(this.gap(u, t), u.stats.sight) : Infinity);
       if (near) t = near;
@@ -784,10 +800,13 @@ export class Hell {
       if (!cur || this.gap(t, cur) > t.stats.range) t.target = source;
       if (t.side === 'hell') this.raiseAlert(t.zone, src.x, src.z);
     }
-    if (t.hp <= 0) {
-      t.hp = 0; t.state = 'dead'; t.target = null; t.path = null;
-      this.events.push({ type: 'death', id: t.id, kind: t.kind, side: t.side, x: t.x, z: t.z });
-    }
+    if (t.hp <= 0) this.kill(t);
+  }
+
+  /** Une unité tombe (sa chute est annoncée à la vue) */
+  private kill(t: HellUnit) {
+    t.hp = 0; t.hurt = 0; t.state = 'dead'; t.target = null; t.path = null;
+    this.events.push({ type: 'death', id: t.id, kind: t.kind, side: t.side, x: t.x, z: t.z });
   }
 
   private destroy(b: HellBuilding) {
@@ -798,7 +817,11 @@ export class Hell {
     if (b.kind === 'fortress' || b.kind === 'kingdom') {
       this.conquered[b.zone] = true;
       this.alert[b.zone] = 0;
-      this.events.push({ type: 'conquered', zone: b.zone });
+      // le gardien est lié à sa forteresse : il tombe avec elle (sans quoi il abattait le camp tout juste dressé sur les ruines)
+      if (b.kind === 'fortress') for (const g of this.guardians(b.zone)) this.kill(g);
+      const first = b.zone > this.reached;
+      if (first) this.reached = b.zone;
+      this.events.push({ type: 'conquered', zone: b.zone, ...(first ? { first } : {}) });
     }
     if (b.kind === 'kingdom') { this.victory = true; this.events.push({ type: 'victory' }); }
   }
@@ -1013,10 +1036,10 @@ export class Hell {
   save(players = true): HellSave {
     return {
       time: this.time, wave: this.wave, nextRaid: this.nextRaid, victory: this.victory, conquered: [...this.conquered],
-      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, reinforced: this.reinforced.map((p) => Math.round(p)),
+      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, reached: this.reached, reinforced: this.reinforced.map((p) => Math.round(p)),
       lossStreak: this.lossStreak, planned: this.planned ? [...this.planned] : null,
       buildings: [...this.buildings.values()].filter((b) => b.side === 'hell').map((b) => [b.id, Math.max(0, Math.round(b.hp))]),
-      units: this.alive().filter((u) => players || u.side !== 'player').map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
+      units: this.alive().filter((u) => (players || u.side !== 'player') && !u.leave).map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
     };
   }
 
@@ -1032,6 +1055,8 @@ export class Hell {
     const plan = Array.isArray(s.planned) ? s.planned.filter((k) => k in DEMONS) : [];
     h.planned = plan.length ? plan : null;
     s.conquered.forEach((c, i) => (h.conquered[i] = c));
+    // (une ancienne sauvegarde : la zone conquise la plus profonde)
+    h.reached = Number.isFinite(s.reached) ? Math.max(0, Math.floor(s.reached!)) : Math.max(0, h.conquered.lastIndexOf(true));
     // (jamais plus que sa vie pleine : la première forteresse a été allégée le 24 nov. 2026)
     for (const [id, hp] of s.buildings) { const b = h.buildings.get(id); if (b) { b.hp = Math.min(b.maxHp, hp); if (hp <= 0) { b.down = true; map.unblock(b.site); } } }
     h.units.clear();
@@ -1042,12 +1067,16 @@ export class Hell {
       u.maxHp = Math.max(u.maxHp, u.hp);
       if (r.patrol) { const zn = map.zones[r.zone]; u.patrol = zn.patrol; u.state = 'patrol'; }
     }
+    // (avant le 27 nov. 2026, chaque reprise ajoutait un gardien : un seul par zone, le plus solide, et aucun dans une zone conquise)
+    for (let z = 1; z < Z_KINGDOM; z++) h.guardians(z).forEach((g, i) => { if (i > 0 || h.conquered[z]) h.units.delete(g.id); });
     return h;
   }
 }
 
 export interface HellSave {
   time: number; wave: number; nextRaid: number; victory: boolean; conquered: boolean[];
+  /** la zone la plus profonde jamais conquise ; absente : la plus profonde des zones conquises */
+  reached?: number;
   raidsRepelled?: number; raidsLost?: number;
   // (une ancienne sauvegarde a aussi `heldSince`, depuis quand l'île tenait, que rien ne lisait : ignoré)
   /** défaites d'affilée (les vagues suivantes s'adoucissent) ; absent : 0 */

@@ -23,6 +23,11 @@ export const START_WOOD = 100, START_STONE = 100;
 
 /** Ceux qui produisent bois et pierre : en Normal, le premier est offert, pour ne jamais rester sans rien pour bâtir */
 export const PRODUCERS: KindId[] = ['lumber', 'quarry'];
+/**
+ * Offerts en Normal quand le village n'en a aucun : les producteurs, et la place du village (testeur, 27 nov. 2026 : le feu de
+ * camp démoli sans 5 bois et 3 pierres pour le refaire, tout restait verrouillé et la partie était perdue sans le dire)
+ */
+export const GIFTS: KindId[] = [...PRODUCERS, 'gather'];
 
 /**
  * Briques qu'exigent, en plus du bois et de la pierre, les grands bâtiments industriels (en Facile) : les gares sont de
@@ -46,7 +51,7 @@ export function costOf(kind: KindId, age: number, diff: Difficulty = 'easy', own
     if (d.size < 2 || plaza) return null;
     return { wood: 8 + a * 4, stone: pens ? 2 + a : 6 + a * 4, ...(brick ? { brick } : {}) };
   }
-  if (!owned && PRODUCERS.includes(kind)) return null;
+  if (!owned && GIFTS.includes(kind)) return null;
   // (un pan de rempart : le tiers d'un petit bâtiment, un mur en compte des dizaines ; une décoration, le quart)
   const s = plaza ? 1 : kind === 'wall' ? 0.34 : isDecor(kind) ? 0.25 : d.size;
   // ce qui produit une matière ne la demande pas : jamais bloqué faute de la matière même qu'il donnerait (le bûcheron ne
@@ -58,26 +63,34 @@ export function costOf(kind: KindId, age: number, diff: Difficulty = 'easy', own
 export function priceIn(w: World, kind: KindId, age: number): Cost | null {
   if (w.unlimited) return null;
   let owned = 0;
-  if (PRODUCERS.includes(kind)) for (const b of w.buildings.values()) if (b.kind === kind) owned++;
+  if (GIFTS.includes(kind)) for (const b of w.buildings.values()) if (b.kind === kind) owned++;
   return costOf(kind, age, w.difficulty, owned);
 }
 
 /**
  * Ce que rend la démolition d'un bâtiment : une part (`refund` de la difficulté : tout en Facile, la moitié en Normal) de
- * son prix à son âge, arrondie vers le bas ; rien en ressources illimitées. Le premier producteur, offert en Normal, ne
- * rend rien (`owned` compte les autres du même genre)
+ * son prix à son âge, arrondie vers le bas ; rien en ressources illimitées. Le premier producteur et la seule place du
+ * village, offerts en Normal, ne rendent rien (`owned` compte les autres du même genre)
  */
 export function refundOf(w: World, b: { id: number; kind: KindId; age: number; patrols?: number }): Cost | null {
   const k = rulesOf(w.difficulty).refund;
   if (w.unlimited || !k) return null;
   let owned = 0;
-  if (PRODUCERS.includes(b.kind)) for (const o of w.buildings.values()) if (o.kind === b.kind && o.id !== b.id) owned++;
+  if (GIFTS.includes(b.kind)) for (const o of w.buildings.values()) if (o.kind === b.kind && o.id !== b.id) owned++;
   const c0 = costOf(b.kind, b.age, w.difficulty, owned);
   if (!c0) return null;
   // (un poste de police ou une caserne rend aussi la part de ses patrouilles)
   const p = patrolsSpent(w, b), c = p ? { wood: c0.wood + p.wood, stone: c0.stone + p.stone, brick: (c0.brick ?? 0) + (p.brick ?? 0) } : c0;
   const r = { wood: Math.floor(c.wood * k), stone: Math.floor(c.stone * k), ...(c.brick ? { brick: Math.floor(c.brick * k) } : {}) };
   return r.wood || r.stone || r.brick ? r : null;
+}
+
+/** Ces démolitions emportent la dernière place du village (en Normal : on prévient, et la refaire est offert) */
+export function lastPlace(w: World, gone: { id: number; kind: KindId }[]): boolean {
+  if (w.unlimited || w.sandbox || !rulesOf(w.difficulty).price || !gone.some((b) => b.kind === 'gather')) return false;
+  const ids = new Set(gone.map((b) => b.id));
+  for (const b of w.buildings.values()) if (b.kind === 'gather' && !ids.has(b.id)) return false;
+  return true;
 }
 
 /** Rend au village ce que rapporte une démolition (voir `refundOf`) ; le prix rendu, ou null */

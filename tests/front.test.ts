@@ -113,3 +113,36 @@ describe('le front : les démons reprennent les postes un par un', () => {
     expect(h2.frontPosts).toBe(1);
   });
 });
+
+describe('le front qui recule (testeur des Enfers, 27 nov. 2026)', () => {
+  it('le camp d’une zone abattu par une contre-attaque : ses démons repartent, la zone n’a que la garnison de la reprise', () => {
+    const { h, b } = setup(Z_RIVER);
+    const camp = b.raise(Z_RIVER)!;
+    expect(camp).toBeTruthy();
+    (b as unknown as { counter(z: number): void }).counter(Z_RIVER);
+    const raiders = h.alive('hell').filter((u) => u.zone < 0);
+    expect(raiders.length).toBeGreaterThan(3);
+    h.damage(camp, 1e6, -1);
+    const seen = run(h, b, 0.2);
+    expect(seen).toContain(`zoneLost:${Z_RIVER}`);
+    expect(h.conquered[Z_RIVER]).toBe(false);
+    // la reprise : un gardien, une brute, deux diablotins ; aucun démon de la contre-attaque n'est devenu garnison
+    expect(h.garrison(Z_RIVER).length).toBeLessThanOrEqual(4);
+    expect(raiders.every((u) => u.leave)).toBe(true);
+    // ils marchent vers les profondeurs puis disparaissent ; une sauvegarde ne les garde pas
+    expect(h.save().units.some((r) => r.zone < 0)).toBe(false);
+    run(h, b, 90);
+    expect(raiders.some((u) => h.units.has(u.id))).toBe(false);
+  });
+
+  it('au Seuil, les démons de la contre-attaque gardent les ruines du camp, comme avant', () => {
+    const { h, b } = setup(0);
+    const [x, z] = h.map.arrival;
+    const camp = b.place('camp', x, z + 4);
+    (b as unknown as { counter(z: number): void }).counter(0);
+    h.damage(camp, 1e6, -1);
+    const seen = run(h, b, 0.2);
+    expect(seen).toContain('occupied:0');
+    expect(h.alive('hell').some((u) => u.leave)).toBe(false);
+  });
+});

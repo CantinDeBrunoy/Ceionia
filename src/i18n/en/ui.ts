@@ -538,6 +538,8 @@ registerDict('ui', {
   "Démolir {what}": "Demolish {what}",
   "Démolir {what} : ne rend rien": "Demolish {what}: no refund",
   "Démolir {what} : ne rend rien (il était offert)": "Demolish {what}: no refund (it was free)",
+  "Démolir {what} : le village n’aura plus de place. La refaire sera gratuit.": "Demolish {what}: the village will have no square left. Rebuilding it will be free.",
+  "Offert : le village n’a plus de place": "Free: the village has no square left",
   "Démolir {what} : rend <b>{cost}</b>": "Demolish {what}: refunds <b>{cost}</b>",
   "Déplacer (aussi les flèches)": "Move (arrow keys too)",
   "Déplacer un bâtiment": "Move a building",
