@@ -42,7 +42,11 @@ button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; backgr
 .err { color: #c0392b; }
 .inline { display: inline; } .link { background: none; color: inherit; padding: 0; text-decoration: underline; font-size: inherit; }
 .stack { display: flex; height: 16px; border-radius: 3px; overflow: hidden; min-width: 1px; }
-.stack b { display: block; height: 100%; min-width: 2px; border-right: 1px solid var(--card); }
+.stack a { display: block; height: 100%; min-width: 2px; border-right: 1px solid var(--card); }
+.stack a.dim { opacity: 0.18; } .stack a:hover { filter: brightness(1.15); }
+a.who { color: inherit; text-decoration: none; } a.who:hover { text-decoration: underline; }
+.focus { background: var(--card); border: 2px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 14px 0; }
+.focus h2 { margin: 0 0 8px; } .focus .sub { margin: 8px 0 0; }
 .id { color: var(--soft); font-size: 11px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
 .pages { display: flex; gap: 14px; margin-top: 10px; } .pages a { color: inherit; }
@@ -121,9 +125,14 @@ export function reportPage(r: Report): string {
   const color = (id: string) => playerColor(rank.get(id) ?? hash(id, 0) % 997);
   // une barre par âge, un morceau de la couleur de chaque joueur arrêté là
   const who = (id: string) => `${playerName(id)} (${id.slice(0, 8)})`;
+  // un clic sur un joueur le choisit (un lien, la page n'a pas de script) ; les autres pâlissent
+  const focusId = r.focus?.player.id;
+  const href = (id: string) => `/bo?joueur=${encodeURIComponent(id)}`;
+  const seg = (id: string, title: string, size: string) =>
+    `<a href="${href(id)}" title="${esc(title)}"${focusId && id !== focusId ? ' class="dim"' : ''} style="${size};background:${color(id)}"></a>`;
   const ageRow = (name: string, age: number) => {
     const ids = r.reached.filter((x) => (age < 0 ? x.age < 0 : Math.min(x.age, r.ages.length - 1) === age)).map((x) => x.player);
-    const parts = ids.map((id) => `<b title="${esc(who(id))}" style="flex:1;background:${color(id)}"></b>`).join('');
+    const parts = ids.map((id) => seg(id, who(id), 'flex:1')).join('');
     return `<div class="row"><span>${esc(name)}</span><div class="stack" style="width:${(ids.length / maxAge) * 100}%">${parts}</div><em>${ids.length}</em></div>`;
   };
   // le temps passé dans chaque âge : une barre par âge, un morceau coloré par joueur, à la taille de son temps
@@ -131,13 +140,24 @@ export function reportPage(r: Report): string {
   const maxTime = Math.max(1, ...byAge.map((xs) => xs.reduce((s, x) => s + x.seconds, 0)));
   const timeRow = (name: string, xs: Report['ageTime']) => {
     const sum = xs.reduce((s, x) => s + x.seconds, 0);
-    const parts = xs.map((x) => `<b title="${esc(who(x.player))} : ${duration(x.seconds)}" style="width:${(x.seconds / sum) * 100}%;background:${color(x.player)}"></b>`).join('');
+    const parts = xs.map((x) => seg(x.player, `${who(x.player)} : ${duration(x.seconds)}`, `width:${(x.seconds / sum) * 100}%`)).join('');
     return `<div class="row"><span>${esc(name)}</span><div class="stack" style="width:${(sum / maxTime) * 100}%">${parts}</div><em title="${xs.length} joueur(s)">${sum ? duration(sum) : '–'}</em></div>`;
   };
   const maxDay = Math.max(1, ...r.days.map((d) => d.players));
+  const ageName = (a: number) => (a < 0 ? 'bac à sable' : esc(r.ages[a]?.name ?? String(a)));
+  const f = r.focus;
+  const mine = f ? r.ageTime.filter((x) => x.player === f.player.id) : [];
+  const focusPanel = !f ? '' : `<div class="focus"><h2><i class="dot" style="background:${color(f.player.id)}"></i>${esc(playerName(f.player.id))} <code class="id">${esc(f.player.id.slice(0, 8))}</code></h2>
+<div>Venu le ${when(f.player.first_at)}, dernière visite le ${when(f.player.last_at)}. ${duration(f.player.seconds)} de jeu en ${f.player.sessions} partie(s), jusqu'à : ${ageName(f.player.max_age)}. Langue : ${esc(f.player.lang)}.</div>
+<div>${mine.length ? 'Temps par âge : ' + mine.map((x) => `${ageName(x.age)} ${duration(x.seconds)}`).join(', ') + '.' : 'Pas de temps compté hors bac à sable.'}</div>
+<div class="scroll" style="margin-top:8px"><table><thead><tr><th>Lancée</th><th>Dernier signal</th><th>Temps</th><th>Âges</th><th>Mode</th><th>Difficulté</th><th>Lancement</th></tr></thead><tbody>
+${f.sessions.map((x) => `<tr><td>${when(x.started_at)}</td><td>${when(x.last_at)}</td><td>${duration(x.seconds)}</td><td>${ageName(x.start_age)}${x.max_age > x.start_age ? ' → ' + ageName(x.max_age) : ''}</td><td>${esc(x.mode)}</td><td>${esc(x.difficulty)}</td><td>${x.launch === 'new' ? 'nouvelle partie' : x.launch === 'continue' ? 'sauvegarde reprise' : '–'}</td></tr>`).join('')}
+</tbody></table></div>
+<p class="sub">Ce joueur est mis en avant dans les barres, les autres pâlissent. <a href="/bo">Tout voir</a></p></div>`;
   const list = r.list, pages = Math.max(1, Math.ceil(r.players.total / PAGE));
   return page('Ceionia : audience', `<h1>Ceionia : audience</h1>
 <div class="sub">Aujourd'hui : ${dayLabel(r.today)} (heure de Paris). Mesure anonyme, sans nom ni adresse IP enregistrée. <form class="inline" method="post" action="/bo/sortie"><button class="link">Se déconnecter</button></form></div>
+${focusPanel}
 
 <h2>Joueurs différents</h2>
 <div class="grid">${card(n(r.players.today), "aujourd'hui")}${card(n(r.players.week), '7 derniers jours')}${card(n(r.players.total), 'en tout')}
@@ -163,7 +183,7 @@ ${card(duration(t.perSession.mean), 'moyen par partie')}${card(duration(t.perSes
 
 <h2>Joueurs, du dernier venu au plus ancien (page ${r.page + 1} sur ${pages})</h2>
 <div class="scroll"><table><thead><tr><th>Joueur</th><th>Première visite</th><th>Dernière visite</th><th>Temps total</th><th>Parties</th><th>Âge max</th><th>Langue</th></tr></thead><tbody>
-${list.map((p) => `<tr><td><i class="dot" style="background:${color(p.id)}"></i>${esc(playerName(p.id))} <code class="id">${esc(p.id.slice(0, 8))}</code></td><td>${when(p.first_at)}</td><td>${when(p.last_at)}</td><td>${duration(p.seconds)}</td><td>${p.sessions}</td><td>${p.max_age < 0 ? 'bac à sable' : esc(r.ages[p.max_age]?.name ?? String(p.max_age))}</td><td>${esc(p.lang)}</td></tr>`).join('')}
+${list.map((p) => `<tr><td><a class="who" href="${href(p.id)}"><i class="dot" style="background:${color(p.id)}"></i>${esc(playerName(p.id))}</a> <code class="id">${esc(p.id.slice(0, 8))}</code></td><td>${when(p.first_at)}</td><td>${when(p.last_at)}</td><td>${duration(p.seconds)}</td><td>${p.sessions}</td><td>${p.max_age < 0 ? 'bac à sable' : esc(r.ages[p.max_age]?.name ?? String(p.max_age))}</td><td>${esc(p.lang)}</td></tr>`).join('')}
 </tbody></table></div>
 <div class="pages">${r.page > 0 ? `<a href="/bo?page=${r.page - 1}">← Page précédente</a>` : ''}${r.page + 1 < pages ? `<a href="/bo?page=${r.page + 1}">Page suivante →</a>` : ''}</div>`);
 }

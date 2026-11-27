@@ -394,6 +394,18 @@ describe('mesure d’audience : rapport calculé par la base', () => {
     const hue = (i: number) => Number(/hsl\((\d+)/.exec(playerColor(i))![1]);
     for (let i = 0; i < 20; i++) expect(Math.min(Math.abs(hue(i) - hue(i + 1)), 360 - Math.abs(hue(i) - hue(i + 1)))).toBeGreaterThan(100);
     expect(playerName('ami')).toBe(playerName('ami'));
+    // un clic sur un joueur : sa fiche, ses parties, les autres pâlissent
+    expect(r.focus).toBeNull();
+    expect(html).toContain('href="/bo?joueur=ami"');
+    expect(html).not.toContain('class="dim"');
+    const f = await loadReport(db, NOW, 0, 'ami');
+    expect(f.focus?.player.max_age).toBe(2);
+    expect(f.focus?.sessions).toHaveLength(2);
+    const fh = reportPage(f);
+    expect(fh).toContain('class="focus"');
+    expect(fh).toContain('Préhistoire → Médiéval');
+    expect(fh.split('class="dim"')).toHaveLength(2); // le seul morceau de « bac » (bac à sable seul)
+    expect((await loadReport(db, NOW, 0, 'personne')).focus).toBeNull();
     expect(new Set(Array.from({ length: 50 }, () => playerName(uuid()))).size).toBeGreaterThan(40);
   });
   it('médiane impaire et base vide, pagination', async () => {

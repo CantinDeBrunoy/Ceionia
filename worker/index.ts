@@ -142,7 +142,9 @@ export async function backOffice(req: Request, env: Env, now = nowSec()): Promis
   if (!env.DB) return html(noDbPage());
   const page = Math.max(0, Math.min(10000, Math.floor(Number(url.searchParams.get('page')) || 0)));
   try {
-    return html(reportPage(await loadReport(env.DB, now, page)));
+    // (un joueur choisi d'un clic : seuls les identifiants du jeu, des chiffres hexadécimaux et des tirets)
+    const who = url.searchParams.get('joueur') ?? '';
+    return html(reportPage(await loadReport(env.DB, now, page, /^[0-9a-f-]{8,64}$/i.test(who) ? who : '')));
   } catch {
     return html('<p>La base ne répond pas (schéma appliqué ?). Voir docs/mesure-audience.md.</p>', 503);
   }
