@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { World } from '../world/world';
 import { patrolRole, PatrolMember } from '../sim/patrols';
-import { makeSoldier, soldierStep, Soldier } from './soldiers';
+import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
 import { makeBeast } from './beasts';
 import { Actor, play } from './assets';
 import { hasPerk } from '../sim/legacy';
@@ -21,11 +21,12 @@ export class PatrolView {
   private rigs: Soldier[] = [];
   private key = '';
 
-  constructor(private world: World, private source: () => PatrolMember[], private max: number, private seed = 0) {}
+  /** `roleOf` : la tenue selon l'âge (par défaut, le soldat de l'époque ; le guet ou les vigiles pour les patrouilles de poste) */
+  constructor(private world: World, private source: () => PatrolMember[], private max: number, private seed = 0, private roleOf: (age: number) => SoldierRole = patrolRole) {}
 
   /** `night` : les soldats portent une torche (dès que la nuit tombe) */
   update(age: number, night: boolean) {
-    const members = this.source(), role = patrolRole(age), key = `${Math.min(5, age)}|${role}|${+night}`;
+    const members = this.source(), role = this.roleOf(age), key = `${Math.min(5, age)}|${role}|${+night}`;
     // la tenue change avec l'âge, la torche avec la nuit : on refait les soldats (ils sont peu nombreux)
     if (key !== this.key) { this.key = key; for (const r of this.rigs) this.group.remove(r.root); this.rigs = []; }
     while (this.rigs.length < Math.min(members.length, this.max)) {

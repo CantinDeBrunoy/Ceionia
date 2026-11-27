@@ -9,6 +9,8 @@ Sept ressources en stock dans `World` : `wood`, `stone`, `ore`, `brick`, `crude`
 
 ## Règles du jeu
 
+- **Patrouilles des postes** : une dépense de plus, hors bâtiments : chaque patrouille d'un poste de police ou d'une caserne coûte une, deux puis trois fois le prix du poste, avec des briques dès l'âge industriel (voir [incidents.md](incidents.md)).
+
 ### Production par jour (`YIELD`, `economy.ts`)
 Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un jour = `time.dayLen` secondes de jeu, 100 par défaut).
 

@@ -3,6 +3,8 @@ import { Building, GARRISONS, sizeOf } from '../build/catalog';
 import { mulberry32 } from '../core/rng';
 import { sidewalkAt, sideStep } from './agents';
 import type { SoldierRole } from '../render/soldiers';
+import { patrolsOf, rangeOf } from './coverage';
+import { guardReach } from './legacy';
 
 /**
  * Les patrouilles du village : quand une tour de garde ou une caserne est bâtie au village (pas sur l'île du portail), un
@@ -35,9 +37,11 @@ export const patrolRole = (age: number): SoldierRole => (age <= 1 ? 'spearman' :
 export type PatrolMode = 'walk' | 'guard';
 
 export interface PatrolGroup {
-  /** le bâtiment d'où part la ronde, et son centre */
-  home: number; hx: number; hz: number;
+  /** le bâtiment d'où part la ronde, et son centre ; `key` : le groupe (un poste peut en avoir plusieurs) */
+  home: number; key: number; hx: number; hz: number;
   size: number;
+  /** rayon de la ronde (cases) */
+  radius: number;
   /** le meneur : où il est, où il va (centre de case visé, décalé sur le trottoir), d'où il vient */
   x: number; z: number; heading: number;
   cell: number; prev: number; tx: number; tz: number;
@@ -54,30 +58,38 @@ export interface PatrolGroup {
 /** Un soldat de la patrouille, pour la vue (`y` : sa hauteur quand il ne marche pas au sol, les sentinelles des remparts) */
 export interface PatrolMember { x: number; y?: number; z: number; heading: number; mode: PatrolMode; phase: number }
 
+/** Une ronde à faire : son bâtiment, sa clé (un poste peut en avoir plusieurs), ses hommes, son rayon */
+export interface PatrolHome { key: number; b: Building; size: number; radius: number }
+
 export class Patrols {
   groups: PatrolGroup[] = [];
-  private rnd = mulberry32(7);
+  private rnd: () => number;
   private version = -1;
   private age = 0;
+  private tick = 0;
 
-  constructor(private world: World) {}
+  /** `homes` : les rondes à faire (par défaut, celles des tours de garde et des casernes) ; `seed` : leurs hasards */
+  constructor(private world: World, private homes: (w: World, age: number) => PatrolHome[] = (w) => Patrols.garrisons(w).map((b) => ({ key: b.id, b, size: patrolSize(b.kind), radius: PATROL_RADIUS })), seed = 7) { this.rnd = mulberry32(seed); }
 
   /** Les bâtiments militaires du village (hors île du portail), dans l'ordre où ils ont été bâtis : un groupe chacun, PATROL_MAX au plus */
   static garrisons(w: World): Building[] {
     return [...w.buildings.values()].filter((b) => GARRISONS.includes(b.kind) && !w.onPortalIsland(b.x, b.z)).sort((a, b) => a.id - b.id).slice(0, PATROL_MAX);
   }
 
-  /** Les groupes suivent les bâtiments : un nouveau par bâtiment militaire, ceux des bâtiments démolis disparaissent */
+  /** Les groupes suivent les bâtiments : un nouveau par ronde à faire, ceux des bâtiments démolis disparaissent */
   private plan() {
-    const w = this.world, homes = Patrols.garrisons(w), ids = new Set(homes.map((b) => b.id));
-    this.groups = this.groups.filter((g) => ids.has(g.home));
-    for (const b of homes) {
-      const g = this.groups.find((x) => x.home === b.id);
-      if (g) { this.station(g, b); continue; }
-      const s = sizeOf(b), ng: PatrolGroup = { home: b.id, hx: b.x + s / 2, hz: b.z + s / 2, size: patrolSize(b.kind), x: b.x + s / 2, z: b.z + s / 2, heading: 0, cell: -1, prev: -1, tx: 0, tz: 0, mode: 'guard', timer: 1 + this.rnd() * 3, posted: true, trail: [], phase: this.rnd() * 6 };
+    const w = this.world, homes = this.homes(w, this.age), keys = new Set(homes.map((h) => h.key));
+    this.groups = this.groups.filter((g) => keys.has(g.key));
+    for (const { key, b, size, radius } of homes) {
+      const g = this.groups.find((x) => x.key === key);
+      if (g) { g.radius = radius; this.station(g, b); continue; }
+      const s = sizeOf(b), ng: PatrolGroup = { home: b.id, key, hx: b.x + s / 2, hz: b.z + s / 2, size, radius, x: b.x + s / 2, z: b.z + s / 2, heading: 0, cell: -1, prev: -1, tx: 0, tz: 0, mode: 'guard', timer: 1 + this.rnd() * 3, posted: true, trail: [], phase: this.rnd() * 6 };
       this.station(ng, b);
-      // (il part de sa porte, déjà en file)
+      // (il part de sa porte, déjà en file ; la deuxième ronde d'un même poste attend un peu, la troisième un peu plus : sans
+      // cela, elles partaient ensemble et marchaient l'une dans l'autre)
       ng.x = ng.tx; ng.z = ng.tz; ng.trail = [ng.x, ng.z];
+      const before = this.groups.filter((x) => x.home === b.id).length;
+      if (before && !ng.posted) { ng.mode = 'guard'; ng.timer = 7 * before; }
       this.groups.push(ng);
     }
   }
@@ -121,7 +133,7 @@ export class Patrols {
    */
   private chooseNext(g: PatrolGroup): number {
     const w = this.world, c = g.cell, around = this.roadNeighbors(c);
-    const inRange = (k: number) => Math.hypot((k % N) + 0.5 - g.hx, Math.floor(k / N) + 0.5 - g.hz) <= PATROL_RADIUS;
+    const inRange = (k: number) => Math.hypot((k % N) + 0.5 - g.hx, Math.floor(k / N) + 0.5 - g.hz) <= g.radius;
     let options = around.filter((k) => k !== g.prev && inRange(k));
     // (un carrefour : une fois sur trois, demi-tour ; un bout de rue : demi-tour)
     if (!options.length || (around.length >= 3 && this.rnd() < 0.33)) options = g.prev >= 0 && w.road[g.prev] ? [g.prev] : around.filter(inRange);
@@ -136,8 +148,9 @@ export class Patrols {
 
   update(dt: number, age: number) {
     const w = this.world;
-    this.age = age;
-    if (w.version !== this.version) { this.version = w.version; this.plan(); }
+    // (l'âge change qui fait la ronde à pied : les postes ont leurs véhicules dès l'âge industriel ; un bâtiment prend l'âge du
+    // village sans changer `world.version`, d'où un nouveau plan toutes les 60 images)
+    if (w.version !== this.version || age !== this.age || ++this.tick % 60 === 0) { this.age = age; this.version = w.version; this.plan(); }
     const lat = sidewalkAt(age);
     for (const g of this.groups) {
       if (g.posted) { g.x += (g.tx - g.x) * Math.min(1, dt * 4); g.z += (g.tz - g.z) * Math.min(1, dt * 4); continue; }
@@ -209,3 +222,29 @@ export class Patrols {
   all(): PatrolMember[] { return this.groups.flatMap((g) => this.members(g)); }
   get role() { return patrolRole(this.age); }
 }
+
+/** Rondes à pied des patrouilles de poste, au plus, par service (police, pompiers) */
+export const STATION_WALK_MAX = 6;
+/** Hommes d'une patrouille de poste à pied */
+export const STATION_WALK_SIZE = 2;
+
+/**
+ * Une patrouille de poste roule-t-elle ? Comme les secours (`Emergencies`) : dès l'âge industriel, d'un poste de cet âge qui
+ * n'est pas resté petit. Sinon, elle fait sa ronde à pied
+ */
+export const patrolRides = (b: Building, age: number) => age >= 3 && b.age >= 3 && !b.small;
+
+/**
+ * Les rondes à pied des patrouilles d'un service (`police` ou `fire`) : une par patrouille ajoutée à un poste (voir
+ * `stationPatrols.ts`), deux hommes chacune, dans toute la portée du poste ; dans l'ordre de construction, `STATION_WALK_MAX`
+ * au plus. Les postes qui ont leurs véhicules (`patrolRides`) n'en ont pas : leurs patrouilles roulent (`Emergencies`)
+ */
+export const stationWalks = (service: 'police' | 'fire') => (w: World, age: number): PatrolHome[] => {
+  const out: PatrolHome[] = [];
+  const posts = [...w.buildings.values()].filter((b) => b.kind === service && patrolsOf(b) && !patrolRides(b, age) && !w.onPortalIsland(b.x, b.z)).sort((a, b) => a.id - b.id);
+  for (const b of posts) for (let k = 0; k < patrolsOf(b); k++) out.push({ key: b.id * 4 + k, b, size: STATION_WALK_SIZE, radius: rangeOf(b, guardReach(w)) });
+  return out.slice(0, STATION_WALK_MAX);
+};
+
+/** La tenue d'une patrouille de poste à pied : le guet (hallebarde et lanterne) puis l'agent de police ; les vigiles du feu puis le pompier */
+export const stationRole = (service: 'police' | 'fire', age: number): SoldierRole => (service === 'police' ? (age <= 2 ? 'gendarme' : 'police') : age <= 2 ? 'vigil' : 'fireman');

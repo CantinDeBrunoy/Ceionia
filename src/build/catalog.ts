@@ -937,6 +937,8 @@ export interface Building {
   small?: boolean;
   /** pan de rempart : tour forcée (vrai) ou simple pan forcé (faux) ; absent, la tour vient seule aux bouts et aux angles */
   tower?: boolean;
+  /** poste de police ou caserne de pompiers : ses patrouilles (0 à 3, absent : aucune), qui étendent sa portée (`rangeOf`) */
+  patrols?: number;
 }
 
 /**

@@ -2,6 +2,7 @@ import { KINDS, KindId, isDecor } from '../build/catalog';
 import { tr } from '../i18n';
 import { Difficulty, rulesOf } from './difficulty';
 import type { World } from '../world/world';
+import { patrolsSpent } from './stationPatrols';
 
 /**
  * Ressources du village : le bois des bûcherons, la pierre des carrières et des mines, le minerai des mines et des
@@ -66,19 +67,21 @@ export function priceIn(w: World, kind: KindId, age: number): Cost | null {
  * son prix à son âge, arrondie vers le bas ; rien en ressources illimitées. Le premier producteur, offert en Normal, ne
  * rend rien (`owned` compte les autres du même genre)
  */
-export function refundOf(w: World, b: { id: number; kind: KindId; age: number }): Cost | null {
+export function refundOf(w: World, b: { id: number; kind: KindId; age: number; patrols?: number }): Cost | null {
   const k = rulesOf(w.difficulty).refund;
   if (w.unlimited || !k) return null;
   let owned = 0;
   if (PRODUCERS.includes(b.kind)) for (const o of w.buildings.values()) if (o.kind === b.kind && o.id !== b.id) owned++;
-  const c = costOf(b.kind, b.age, w.difficulty, owned);
-  if (!c) return null;
+  const c0 = costOf(b.kind, b.age, w.difficulty, owned);
+  if (!c0) return null;
+  // (un poste de police ou une caserne rend aussi la part de ses patrouilles)
+  const p = patrolsSpent(w, b), c = p ? { wood: c0.wood + p.wood, stone: c0.stone + p.stone, brick: (c0.brick ?? 0) + (p.brick ?? 0) } : c0;
   const r = { wood: Math.floor(c.wood * k), stone: Math.floor(c.stone * k), ...(c.brick ? { brick: Math.floor(c.brick * k) } : {}) };
   return r.wood || r.stone || r.brick ? r : null;
 }
 
 /** Rend au village ce que rapporte une démolition (voir `refundOf`) ; le prix rendu, ou null */
-export function refund(w: World, b: { id: number; kind: KindId; age: number }): Cost | null {
+export function refund(w: World, b: { id: number; kind: KindId; age: number; patrols?: number }): Cost | null {
   const r = refundOf(w, b);
   if (r) { w.wood += r.wood; w.stone += r.stone; w.brick += r.brick ?? 0; }
   return r;

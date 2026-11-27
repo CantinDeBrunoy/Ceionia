@@ -14,7 +14,17 @@ export const policeRange = (age: number) => 12 + Math.max(0, Math.min(5, age));
  * (la tour de garde du village veille comme un poste de police, à la même portée ; `guard` : les cases de plus que les chiens
  * de garde donnent à la police et aux tours, voir `HOUND_RANGE` de `legacy.ts`)
  */
-export const rangeOf = (b: { kind: string; age: number }, guard = 0) => (b.kind === 'fire' ? FIRE_RANGE : b.kind === 'police' || b.kind === 'watchtower' ? policeRange(b.age) + guard : 0);
+export const rangeOf = (b: { kind: string; age: number; patrols?: number }, guard = 0) => (b.kind === 'fire' ? FIRE_RANGE : b.kind === 'police' || b.kind === 'watchtower' ? policeRange(b.age) + guard : 0) + PATROL_REACH * patrolsOf(b);
+
+/**
+ * Les patrouilles d'un poste de police ou d'une caserne de pompiers (demande de l'auteur, 27 nov. 2026) : on en ajoute depuis
+ * sa fiche, trois au plus ; chacune étend sa portée de `PATROL_REACH` cases (voir `sim/stationPatrols.ts`). La tour de garde
+ * n'en a pas : sa ronde de soldats est la sienne
+ */
+export const PATROLS_MAX = 3;
+export const PATROL_REACH = 3;
+/** (borné : une sauvegarde abîmée ne donne jamais plus de `PATROLS_MAX`) */
+export const patrolsOf = (b: { kind: string; patrols?: number }) => (b.kind === 'fire' || b.kind === 'police' ? Math.max(0, Math.min(PATROLS_MAX, Math.floor(b.patrols ?? 0) || 0)) : 0);
 
 /**
  * Le poste `s` dessert-il le bâtiment `h` ? Distance de centre à centre, à la portée du poste : une seule règle pour la jauge,

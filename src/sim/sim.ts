@@ -1,6 +1,7 @@
 import { tr } from '../i18n';
+import { PATROL_JOBS } from './stationPatrols';
 import { ailing, grief, unburied, buryAll } from './mishaps';
-import { Coverage, computeCoverage } from './coverage';
+import { Coverage, computeCoverage, patrolsOf } from './coverage';
 import { World, N } from '../world/world';
 import { WISH_JOY, WISH_JOY_MAX } from './wishes';
 import { showJoy } from './shows';
@@ -196,7 +197,9 @@ export class Sim {
       // les savoir-faire des expéditions (`legacy.ts`) : chalutiers et îles de culture nourrissent davantage, la station météo
       // du sommet amène du monde aux clubs alpins, les épices aux tavernes
       const fk = perkFood(w, b.kind), alp = (k.joy?.[a] ?? 0) > 0 ? perkJoy(w, b.kind) * dk : 0;
-      const give = (need: NeedId) => v(need) * (need === 'food' ? fk : 1) + (need === 'joy' ? alp : 0);
+      // (chaque patrouille d'un poste de police ou d'une caserne emploie un habitant de plus)
+      const pj = patrolsOf(b) * PATROL_JOBS;
+      const give = (need: NeedId) => v(need) * (need === 'food' ? fk : 1) + (need === 'joy' ? alp : 0) + (need === 'jobs' ? pj : 0);
       for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) if (!decor) add(need, b.kind, give(need));
       if (decor) { const s = this.src.joy.get('decor') ?? { n: 0, v: 0 }; s.n++; this.src.joy.set('decor', s); }
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) add('water', 'riverside', v('housing'));
@@ -204,6 +207,7 @@ export class Sim {
       F += give('food');
       W += v('water');
       J += v('jobs');
+      J += pj;
       // (les décorations comptent à part, plafonnées ensemble : DECOR_JOY_MAX)
       if (DECOR.includes(b.kind)) deco += v('joy');
       else Jy += give('joy');

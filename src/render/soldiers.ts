@@ -925,6 +925,118 @@ const policeNow: Kit = {
   left() {},
 };
 
+/**
+ * Les vigiles du feu d'avant les pompiers, qui font la ronde des patrouilles d'une caserne (âges 0 à 2). Préhistoire : le
+ * guetteur en peaux, frange de fourrure, corne d'appel à la ceinture, outre d'eau et battoir de branches pour étouffer les
+ * flammes. Antiquité : le vigile romain, tunique brique et manteau court, bonnet de feutre, seau de corde poissée et hache
+ * (dolabra). Moyen Âge : l'homme du guet du feu, pourpoint ocre et tablier de cuir, chaperon, seau de cuir et grand crochet
+ */
+const BARK = 0x6a4a30, BONE = 0xece4d0, FUR = 0x8a6a48, HIDE = 0xa8845a, PITCH = 0x2e2620, ROPE = 0xc9b48a, OCHRE = 0xb8862e, BRICK_RED = 0xa0442e;
+/** Un seau tenu par son anse, qui pend sous la main : corps, cerclages, anse */
+function pail(p: Parts, body: number, hoop: number) {
+  p.box(0.003, 0.024, 0.003, -0.012, -0.012, 0, hoop); p.box(0.003, 0.024, 0.003, 0.012, -0.012, 0, hoop);
+  p.box(0.028, 0.003, 0.003, 0, 0.0, 0, hoop);
+  p.cyl(0.018, 0.014, 0.032, 8, 0, -0.04, 0, body);
+  for (const y of [-0.028, -0.052]) p.cyl(0.0185, 0.0185, 0.004, 8, 0, y, 0, hoop);
+  p.cyl(0.015, 0.015, 0.002, 8, 0, -0.0235, 0, 0x6fa8d8);
+}
+const vigilStone: Kit = {
+  leg: SKIN, boot: HIDE, hip: HIDE, torso: HIDE, arm: SKIN, hand: SKIN, hold: 'spear',
+  dress(p) {
+    // tunique de peau, frange de fourrure au bas et aux épaules, cordelière, corne d'appel sur la hanche, pochette d'herbes
+    p.box(0.08, 0.11, 0.055, 0, 0.1, 0, HIDE);
+    p.box(0.084, 0.016, 0.058, 0, 0.05, 0, FUR);
+    for (let k = 0; k < 5; k++) p.box(0.008, 0.012, 0.004, -0.03 + k * 0.015, 0.038, 0.029, dark(FUR, 0.8));
+    for (const s of [-1, 1]) p.box(0.028, 0.02, 0.06, s * 0.046, 0.188, 0, FUR);
+    p.box(0.086, 0.006, 0.06, 0, 0.12, 0, ROPE);
+    // (la corne pend au côté, pavillon en bas ; une cape de fourrure sur le dos)
+    p.add(new THREE.ConeGeometry(0.009, 0.045, 6).rotateZ(Math.PI - 0.35), 0.048, 0.095, 0.006, BONE);
+    p.box(0.012, 0.004, 0.004, 0.044, 0.122, 0.006, ROPE);
+    p.box(0.076, 0.08, 0.012, 0, 0.15, -0.032, FUR); p.box(0.07, 0.01, 0.014, 0, 0.11, -0.033, dark(FUR, 0.8));
+    p.box(0.02, 0.022, 0.012, -0.03, 0.11, 0.03, dark(HIDE, 0.75));
+    p.box(0.012, 0.012, 0.004, 0, 0.17, 0.029, BONE);
+  },
+  shin(p) { for (const y of [-0.06, -0.045]) p.box(0.032, 0.005, 0.036, 0, y, 0, ROPE); },
+  head(p) {
+    // tignasse nouée d'un bandeau, une plume
+    p.box(0.046, 0.022, 0.046, 0, 0.24, -0.002, 0x3a2a1e);
+    p.box(0.046, 0.03, 0.012, 0, 0.222, -0.019, 0x3a2a1e);
+    p.box(0.048, 0.006, 0.048, 0, 0.236, 0, BRICK_RED);
+    p.add(new THREE.BoxGeometry(0.004, 0.04, 0.01), 0.022, 0.262, -0.012, 0xe8e0c8, 0, false, -0.4);
+  },
+  // le battoir de branches : un bâton, une gerbe de rameaux feuillus liée au bout
+  right(p) {
+    p.box(0.008, 0.2, 0.008, 0, 0.05, 0, BARK);
+    p.box(0.012, 0.006, 0.012, 0, 0.13, 0, ROPE);
+    for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.006, 0.05, 0.004), (k - 2) * 0.007, 0.17, 0, k % 2 ? 0x4a7a32 : 0x5e8a3c, 0, false, (k - 2) * 0.18);
+  },
+  // l'outre d'eau en bandoulière, tenue par le col
+  left(p) { p.box(0.004, 0.014, 0.004, 0, -0.008, 0, ROPE); p.sphere(0.02, 0, -0.035, 0, HIDE, 0, 1.3); p.cyl(0.006, 0.008, 0.012, 6, 0, -0.012, 0, dark(HIDE, 0.8)); },
+};
+const vigilRoman: Kit = {
+  leg: SKIN, boot: LEATHER, hip: BRICK_RED, torso: BRICK_RED, arm: SKIN, hand: SKIN,
+  dress(p) {
+    // tunique brique en jupe, ceinture de cuir à boucle, manteau court agrafé sur l'épaule, gourde, trousse à éponges
+    p.box(0.082, 0.12, 0.056, 0, 0.1, 0, BRICK_RED);
+    p.box(0.084, 0.008, 0.058, 0, 0.042, 0, dark(BRICK_RED, 0.75));
+    p.box(0.086, 0.01, 0.06, 0, 0.13, 0, LEATHER); p.box(0.012, 0.012, 0.004, 0, 0.13, 0.031, GOLD);
+    p.box(0.09, 0.05, 0.02, 0, 0.17, -0.034, 0x7a6a52);
+    p.box(0.03, 0.03, 0.06, -0.045, 0.19, 0, 0x7a6a52); p.box(0.01, 0.01, 0.004, -0.03, 0.2, 0.031, GOLD);
+    p.box(0.018, 0.026, 0.014, 0.048, 0.11, 0.01, 0xd8c8a0);
+    p.box(0.024, 0.02, 0.012, -0.03, 0.115, 0.034, LEATHER);
+    // la couverture roulée en travers du dos (les centons mouillés qui étouffaient les flammes) et sa sangle
+    p.add(new THREE.CylinderGeometry(0.016, 0.016, 0.09, 8).rotateZ(Math.PI / 2), 0, 0.2, -0.04, 0x9a8a6a);
+    for (const x of [-0.03, 0.03]) p.add(new THREE.CylinderGeometry(0.0175, 0.0175, 0.006, 8).rotateZ(Math.PI / 2), x, 0.2, -0.04, LEATHER);
+  },
+  shin(p) { for (const y of [-0.064, -0.05, -0.036]) p.box(0.031, 0.004, 0.035, 0, y, 0, LEATHER); },
+  head(p) {
+    // bonnet de feutre (pileus), ses bords roulés
+    p.cyl(0.024, 0.026, 0.024, 10, 0, 0.246, 0, 0x8a6a48);
+    p.cyl(0.027, 0.027, 0.006, 10, 0, 0.236, 0, dark(0x8a6a48, 0.8));
+    p.sphere(0.012, 0, 0.262, 0, 0x8a6a48, 0, 0.7);
+  },
+  // la dolabra : manche, fer de hache d'un côté, pic de l'autre
+  right(p) {
+    p.box(0.008, 0.11, 0.008, 0, 0.02, 0, 0x7a5a3e);
+    p.box(0.004, 0.024, 0.03, 0, 0.07, 0.016, STEEL); p.box(0.004, 0.008, 0.026, 0, 0.074, -0.014, STEEL);
+    p.box(0.01, 0.012, 0.01, 0, 0.074, 0, dark(STEEL, 0.75));
+  },
+  // le seau de corde poissée (hama)
+  left(p) { pail(p, PITCH, ROPE); },
+};
+const vigilMedieval: Kit = {
+  leg: 0x5a4a3a, boot: LEATHER, hip: OCHRE, torso: OCHRE, arm: OCHRE, hand: LEATHER, hold: 'spear',
+  dress(p) {
+    // pourpoint ocre lacé, tablier de cuir contre les braises, ceinture et sa sacoche, sifflet d'alerte au cou
+    p.box(0.08, 0.11, 0.055, 0, 0.11, 0, OCHRE);
+    for (let k = 0; k < 4; k++) p.box(0.016, 0.003, 0.004, 0, 0.14 + k * 0.016, 0.029, 0x5a3420);
+    p.box(0.07, 0.1, 0.006, 0, 0.09, 0.031, 0x6a4024);
+    p.box(0.086, 0.01, 0.06, 0, 0.13, 0, 0x3a2a1e); p.box(0.01, 0.01, 0.004, 0, 0.13, 0.035, STEEL);
+    p.box(0.022, 0.024, 0.012, 0.046, 0.11, -0.01, 0x5a3420);
+    p.box(0.004, 0.012, 0.003, 0.01, 0.19, 0.03, STEEL);
+    // la clochette d'alerte pendue à la ceinture
+    p.add(new THREE.ConeGeometry(0.01, 0.016, 8), -0.046, 0.108, 0.012, 0xd8b050); p.box(0.004, 0.012, 0.004, -0.046, 0.122, 0.012, 0x3a2a1e);
+  },
+  shin(p) { p.box(0.032, 0.03, 0.036, 0, -0.055, 0, 0x4a3a2c); },
+  head(p) {
+    // chaperon rouge sombre : le capuchon, sa pèlerine sur les épaules, la cornette qui pend
+    p.sphere(0.03, 0, 0.245, -0.002, 0x7a3a22, 1, 0.9);
+    p.box(0.1, 0.022, 0.066, 0, 0.196, 0, 0x7a3a22);
+    // (la cornette pend dans le dos)
+    p.box(0.014, 0.06, 0.01, 0, 0.17, -0.04, dark(0x7a3a22, 0.85));
+  },
+  // le grand crochet à abattre les toits en feu : longue hampe, fer en croc et pointe
+  right(p) {
+    p.box(0.008, 0.26, 0.008, 0, 0.08, 0, 0x7a5a3e);
+    p.add(new THREE.ConeGeometry(0.005, 0.03, 4), 0, 0.225, 0, STEEL);
+    p.box(0.004, 0.004, 0.026, 0, 0.198, 0.013, STEEL); p.box(0.004, 0.018, 0.004, 0, 0.19, 0.026, STEEL);
+    p.box(0.012, 0.01, 0.012, 0, 0.18, 0, dark(STEEL, 0.75));
+  },
+  // le seau de cuir cerclé
+  left(p) { pail(p, 0x5a3420, 0x2e2620); },
+};
+const VIGILS = [vigilStone, vigilRoman, vigilMedieval, fireman, firemanNow, firemanNow];
+
 /** Gendarmes (sergents du guet au Moyen Âge) et mineurs de chaque époque */
 const GENDARMES = [watchman, watchman, watchman, gendarme, gendarmeNow, gendarmeNow];
 /** Ambulanciers et policiers des secours (ils n'existent qu'à partir de l'âge industriel) */
@@ -934,7 +1046,7 @@ const MINERS = [miner2, miner2, miner2, miner3, miner4, miner4];
 const FIREMEN = [fireman, fireman, fireman, fireman, firemanNow, firemanNow];
 
 /** Qui est-ce : un soldat de l'époque, un gendarme, un mineur */
-export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight' | 'gunner' | 'rifleman' | PeopleRole;
+export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'vigil' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight' | 'gunner' | 'rifleman' | PeopleRole;
 /** Les soldats des deux peuples des îles rivales, fantassin et archer (tenues dans `peopleSoldiers.ts`, inscrites par `registerKits`) */
 export type PeopleRole = 'orient' | 'orientArcher' | 'asie' | 'asieArcher';
 /** Les troupes de la garnison (leurs géométries sont partagées d'un soldat à l'autre : `makeSoldier` les garde en cache) */
@@ -960,7 +1072,7 @@ function torch(): Parts {
 
 /** Fantassin de l'époque `age` ; `v` varie son teint ; `withTorch` : une torche dans la main gauche à la place de l'écu */
 export function makeSoldier(age: number, v = 0, withTorch = false, role: SoldierRole = 'soldier'): Soldier {
-  const era = Math.min(5, Math.max(0, age)), kit = (TROOP_ROLES[role] ?? (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : role === 'fireman' ? FIREMEN : role === 'medic' ? MEDICS : role === 'police' ? POLICE : KITS))[era], si = ((v % SKINS.length) + SKINS.length) % SKINS.length, skin = SKINS[si];
+  const era = Math.min(5, Math.max(0, age)), kit = (TROOP_ROLES[role] ?? (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : role === 'fireman' ? FIREMEN : role === 'vigil' ? VIGILS : role === 'medic' ? MEDICS : role === 'police' ? POLICE : KITS))[era], si = ((v % SKINS.length) + SKINS.length) % SKINS.length, skin = SKINS[si];
   const tint = (c: number) => (c === SKIN ? skin : c);
   // tous partagent leurs géométries (une par rôle, époque, teint et pièce) : une recrue de plus ne coûte presque rien, et
   // un pompier, un gendarme ou un garde à torche rentré ne laisse rien derrière lui (chacun avait les siennes, jamais libérées)

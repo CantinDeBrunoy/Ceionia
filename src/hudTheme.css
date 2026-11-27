@@ -1723,6 +1723,10 @@ button.round.off:hover { opacity: 0.85; }
 /* ---------- les gestes des bâtiments (le match, le feu d'artifice, la course : voir src/shows.ts) ---------- */
 #selCard .acts.showAct button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; }
 #selCard .acts.showAct button:disabled { opacity: 0.6; cursor: default; }
+/* les patrouilles d'un poste : le libellé, puis la portée d'après et le prix (ou la raison du refus) sur une seconde ligne */
+#selCard .acts.patrolAct button { flex-wrap: wrap; row-gap: 2px; }
+#selCard .acts.patrolAct .pd { flex-basis: 100%; display: block; text-align: center; font-size: 0.86em; font-weight: 600; opacity: 0.85; }
+#selCard .acts.patrolAct .pd small { font-size: 1em; }
 #selCard .stat.showWhy { color: var(--hInk2); font-style: italic; }
 #selCard .stat.showOn { color: #2c7a36; font-weight: 700; }
 /* le tableau d'affichage au-dessus du bâtiment, suivi à l'écran : les deux camps et le score (ou le classement de la course) */
